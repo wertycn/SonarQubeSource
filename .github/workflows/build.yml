@@ -41,17 +41,19 @@ jobs:
           version_date=`date "+%Y%m%d"`
       - name: 上传编译产物到COS
         run: |
+          pwd
+          ls
           build_result=`ls mybuild/`
           chmod 765 -R ./bin/
           ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/${bild_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
           ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/mysonar-application-latest.zip --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-      - name: 部署服务
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_HOST_USERNAME }}
-          key: ${{ secrets.DEPLOY_HOST_SSH }}
-          port: 22
-          script: |
-            htool-cli cos --method download --key sonarqube/mysonar-application-latest.zip --path /docker/mysonar/app.jar --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-            sh /docker/deploy_mysonar.sh
+#      - name: 部署服务
+#        uses: appleboy/ssh-action@master
+#        with:
+#          host: ${{ secrets.DEPLOY_HOST }}
+#          username: ${{ secrets.DEPLOY_HOST_USERNAME }}
+#          key: ${{ secrets.DEPLOY_HOST_SSH }}
+#          port: 22
+#          script: |
+#            htool-cli cos --method download --key sonarqube/mysonar-application-latest.zip --path /docker/mysonar/app.jar --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
+#            sh /docker/deploy_mysonar.sh
