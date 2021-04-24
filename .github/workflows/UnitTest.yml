@@ -30,6 +30,7 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle
       - name: run unit test
         run: |
+          git config --system core.longpaths true
           ./gradlew test
   unit_test_windows:
     # The type of runner that the job will run on
@@ -52,6 +53,7 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle
       - name: run unit test
         run: |
+
           ./gradlew test
   unit_test_macos:
     # The type of runner that the job will run on
