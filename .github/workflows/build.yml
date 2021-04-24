@@ -40,11 +40,11 @@ jobs:
           key: ${{ runner.os }}-sonar-docs-node-${{ hashFiles('server/sonar-docs/package.json') }}
           restore-keys: ${{ runner.os }}-sonar-docs-node
       - name: web模块前端缓存
-          uses: actions/cache@v2
-          with:
-            path: server/sonar-web/node_modules
-            key: ${{ runner.os }}-sonar-web-node-${{ hashFiles('server/sonar-docs/package.json') }}
-            restore-keys: ${{ runner.os }}-sonar-web-node
+        uses: actions/cache@v2
+        with:
+          path: server/sonar-web/node_modules
+          key: ${{ runner.os }}-sonar-web-node-${{ hashFiles('server/sonar-docs/package.json') }}
+          restore-keys: ${{ runner.os }}-sonar-web-node
       - name: 项目构建
         run: |
           ./gradlew build
