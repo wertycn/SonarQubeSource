@@ -1,0 +1,177 @@
+Starting a Gradle Daemon, 3 busy and 16 incompatible and 1 stopped Daemons could not be reused, use --status for details
+> Task :plugins:compileJava NO-SOURCE
+> Task :plugins:processResources NO-SOURCE
+> Task :plugins:classes UP-TO-DATE
+> Task :plugins:compileTestJava NO-SOURCE
+> Task :plugins:processTestResources NO-SOURCE
+> Task :plugins:testClasses UP-TO-DATE
+> Task :plugins:test NO-SOURCE
+> Task :server:compileJava NO-SOURCE
+> Task :server:processResources NO-SOURCE
+> Task :server:classes UP-TO-DATE
+> Task :server:compileTestJava NO-SOURCE
+> Task :server:processTestResources NO-SOURCE
+> Task :server:testClasses UP-TO-DATE
+> Task :server:test NO-SOURCE
+> Task :sonar-check-api:compileJava FROM-CACHE
+> Task :sonar-check-api:processResources NO-SOURCE
+> Task :sonar-check-api:classes UP-TO-DATE
+> Task :sonar-check-api:jar
+> Task :sonar-plugin-api:compileJava FROM-CACHE
+> Task :sonar-plugin-api:processResources
+> Task :sonar-plugin-api:classes
+> Task :sonar-plugin-api:shadowJar
+> Task :sonar-core:extractIncludeProto
+> Task :sonar-core:extractProto
+> Task :sonar-core:generateProto
+> Task :sonar-core:compileJava FROM-CACHE
+> Task :sonar-core:processResources
+> Task :sonar-core:classes
+> Task :sonar-core:jar
+> Task :sonar-plugin-api:jar
+> Task :sonar-duplications:compileJava FROM-CACHE
+> Task :sonar-duplications:processResources NO-SOURCE
+> Task :sonar-duplications:classes UP-TO-DATE
+> Task :sonar-duplications:jar
+> Task :sonar-markdown:compileJava FROM-CACHE
+> Task :sonar-markdown:processResources NO-SOURCE
+> Task :sonar-markdown:classes UP-TO-DATE
+> Task :sonar-markdown:jar
+> Task :sonar-scanner-protocol:extractIncludeProto
+> Task :sonar-scanner-protocol:extractProto
+> Task :sonar-scanner-protocol:generateProto
+> Task :sonar-scanner-protocol:compileJava FROM-CACHE
+> Task :sonar-scanner-protocol:processResources
+> Task :sonar-scanner-protocol:classes
+> Task :sonar-scanner-protocol:jar
+> Task :sonar-ws:extractIncludeProto
+> Task :sonar-ws:extractProto
+> Task :sonar-ws:generateProto
+> Task :sonar-ws:compileJava FROM-CACHE
+> Task :sonar-ws:processResources
+> Task :sonar-ws:classes
+> Task :sonar-ws:jar
+> Task :server:sonar-process:extractIncludeProto
+> Task :server:sonar-process:extractProto
+> Task :server:sonar-process:generateProto
+> Task :server:sonar-process:compileJava FROM-CACHE
+> Task :server:sonar-process:processResources
+> Task :server:sonar-process:classes
+> Task :server:sonar-process:jar
+> Task :server:sonar-db-core:compileJava FROM-CACHE
+> Task :server:sonar-db-core:processResources
+> Task :server:sonar-db-core:classes
+> Task :server:sonar-db-core:jar
+> Task :server:sonar-db-migration:compileJava FROM-CACHE
+> Task :server:sonar-db-migration:processResources NO-SOURCE
+> Task :server:sonar-db-migration:classes UP-TO-DATE
+> Task :server:sonar-db-migration:jar
+> Task :server:sonar-db-dao:extractIncludeProto
+> Task :server:sonar-db-dao:extractProto
+> Task :server:sonar-db-dao:generateProto
+> Task :server:sonar-db-dao:compileJava FROM-CACHE
+> Task :server:sonar-db-dao:processResources
+> Task :server:sonar-db-dao:classes
+> Task :server:sonar-db-dao:jar
+> Task :server:sonar-server-common:compileJava FROM-CACHE
+> Task :server:sonar-server-common:processResources NO-SOURCE
+> Task :server:sonar-server-common:classes UP-TO-DATE
+> Task :server:sonar-server-common:jar
+> Task :server:sonar-ce-task:compileJava FROM-CACHE
+> Task :server:sonar-ce-task:processResources NO-SOURCE
+> Task :server:sonar-ce-task:classes UP-TO-DATE
+> Task :server:sonar-ce-task:jar
+> Task :server:sonar-ce-common:compileJava FROM-CACHE
+> Task :server:sonar-ce-common:processResources NO-SOURCE
+> Task :server:sonar-ce-common:classes UP-TO-DATE
+> Task :server:sonar-ce-common:jar
+> Task :server:sonar-ce-task-projectanalysis:compileJava FROM-CACHE
+> Task :server:sonar-ce-task-projectanalysis:processResources NO-SOURCE
+> Task :server:sonar-ce-task-projectanalysis:classes UP-TO-DATE
+> Task :server:sonar-ce-task-projectanalysis:jar
+> Task :server:sonar-ce:compileJava FROM-CACHE
+> Task :server:sonar-ce:processResources NO-SOURCE
+> Task :server:sonar-ce:classes UP-TO-DATE
+> Task :server:sonar-ce:jar
+> Task :server:sonar-main:compileJava FROM-CACHE
+> Task :server:sonar-main:processResources
+> Task :server:sonar-main:classes
+> Task :server:sonar-main:jar
+> Task :server:sonar-server:compileJava FROM-CACHE
+> Task :server:sonar-server:processResources
+> Task :server:sonar-server:classes
+> Task :server:sonar-server:jar
+> Task :sonar-application:compileJava
+> Task :sonar-application:processResources NO-SOURCE
+> Task :sonar-application:classes
+> Task :sonar-application:compileTestJava NO-SOURCE
+> Task :sonar-application:processTestResources NO-SOURCE
+> Task :sonar-application:testClasses UP-TO-DATE
+> Task :sonar-application:test NO-SOURCE
+> Task :sonar-check-api:compileTestJava NO-SOURCE
+> Task :sonar-check-api:processTestResources NO-SOURCE
+> Task :sonar-check-api:testClasses UP-TO-DATE
+> Task :sonar-check-api:test NO-SOURCE
+> Task :sonar-testing-harness:compileJava FROM-CACHE
+> Task :sonar-testing-harness:processResources NO-SOURCE
+> Task :sonar-testing-harness:classes UP-TO-DATE
+> Task :sonar-testing-harness:jar
+> Task :sonar-core:extractIncludeTestProto
+> Task :sonar-core:extractTestProto
+> Task :sonar-core:generateTestProto
+> Task :sonar-core:compileTestJava FROM-CACHE
+> Task :sonar-core:processTestResources
+> Task :sonar-core:testClasses
+
+> Task :sonar-core:test
+
+org.sonar.core.util.FileUtilsTest > deleteDirectory_throws_IOE_if_file_is_symbolicLink SKIPPED
+
+org.sonar.core.util.FileUtilsTest > deleteQuietly_deletes_symbolicLink SKIPPED
+
+org.sonar.core.util.FileUtilsTest > cleanDirectory_follows_symlink_to_target_directory SKIPPED
+
+> Task :sonar-duplications:compileTestJava FROM-CACHE
+> Task :sonar-duplications:processTestResources NO-SOURCE
+> Task :sonar-duplications:testClasses UP-TO-DATE
+> Task :sonar-duplications:test
+> Task :sonar-markdown:compileTestJava FROM-CACHE
+> Task :sonar-markdown:processTestResources NO-SOURCE
+> Task :sonar-markdown:testClasses UP-TO-DATE
+> Task :sonar-markdown:test
+> Task :sonar-plugin-api:compileTestJava FROM-CACHE
+> Task :sonar-plugin-api:processTestResources
+> Task :sonar-plugin-api:testClasses
+> Task :sonar-plugin-api:test
+> Task :sonar-scanner-engine:compileJava FROM-CACHE
+> Task :sonar-scanner-engine:processResources
+> Task :sonar-scanner-engine:classes
+> Task :plugins:sonar-xoo-plugin:compileJava FROM-CACHE
+> Task :plugins:sonar-xoo-plugin:processResources NO-SOURCE
+> Task :plugins:sonar-xoo-plugin:classes UP-TO-DATE
+> Task :plugins:sonar-xoo-plugin:jar
+> Task :sonar-scanner-engine:compileTestJava FROM-CACHE
+> Task :sonar-scanner-engine:processTestResources
+> Task :sonar-scanner-engine:testClasses
+
+> Task :sonar-scanner-engine:test
+
+org.sonar.scanner.bootstrap.GlobalTempFolderProviderTest > homeIsSymbolicLink SKIPPED
+
+org.sonar.scanner.mediumtest.fs.FileSystemMediumTest > scanProjectWithWrongCase FAILED
+    java.lang.AssertionError: 
+    Expected size:<3> but was:<8> in:
+    <[testx/ClassOneTest.xoo.measures,
+        xources/hello/helloscala.xoo.measures,
+        xources/hello/HelloJava.xoo.measures,
+        testx/ClassOneTest.xoo,
+        xources/hello/HelloJava.xoo.scm,
+        xources/hello/helloscala.xoo,
+        testx/ClassOneTest.xoo.scm,
+        xources/hello/HelloJava.xoo]>
+        at org.sonar.scanner.mediumtest.fs.FileSystemMediumTest.scanProjectWithWrongCase(FileSystemMediumTest.java:815)
+
+org.sonar.scanner.mediumtest.fs.FileSystemMediumTest > scanProjectWithSourceSymlink SKIPPED
+
+> Task :sonar-scanner-engine:test FAILED
+84 actionable tasks: 58 executed, 26 from cache

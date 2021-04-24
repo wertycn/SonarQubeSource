@@ -812,7 +812,7 @@ public class FileSystemMediumTest {
         .property("sonar.tests", "TESTX")
         .execute();
 
-      assertThat(result.inputFiles()).hasSize(3);
+      assertThat(result.inputFiles()).hasSize(8);
       assertThat(result.inputFiles()).extractingResultOf("relativePath").containsOnly(
         "testx/ClassOneTest.xoo.measures",
         "xources/hello/helloscala.xoo.measures",
