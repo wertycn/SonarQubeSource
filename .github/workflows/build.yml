@@ -59,8 +59,8 @@ jobs:
           echo "============="
           echo "build_result is"${build_result}
           chmod 765 -R ./bin/
-          ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/${bild_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-          ./bin/htool-cli cos --method upload --key sonarqube/mysonar-application-latest.zip --path ./mybuild/${bild_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
+          ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/${build_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
+          ./bin/htool-cli cos --method upload --key sonarqube/mysonar-application-latest.zip --path ./mybuild/${build_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
 #      - name: 部署服务
 #        uses: appleboy/ssh-action@master
 #        with:
