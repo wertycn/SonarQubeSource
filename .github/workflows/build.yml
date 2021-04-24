@@ -36,15 +36,13 @@ jobs:
       - name: docs模块前端缓存
         uses: actions/cache@v2
         with:
-          path: server/sonar-docs/node_modules
-          key: ${{ runner.os }}-sonar-docs-node-${{ hashFiles('server/sonar-docs/package.json') }}
-          restore-keys: ${{ runner.os }}-sonar-docs-node
+          path: /home/runner/work/sonarqube/sonarqube/server/sonar-docs/node_modules
+          key: ${{ runner.os }}-sonar-docs-node-${{ hashFiles('/home/runner/work/sonarqube/sonarqube/server/sonar-docs/package.json') }}
       - name: web模块前端缓存
         uses: actions/cache@v2
         with:
-          path: server/sonar-web/node_modules
-          key: ${{ runner.os }}-sonar-web-node-${{ hashFiles('server/sonar-docs/package.json') }}
-          restore-keys: ${{ runner.os }}-sonar-web-node
+          path: /home/runner/work/sonarqube/sonarqube/server/sonar-web/node_modules
+          key: ${{ runner.os }}-sonar-web-node-${{ hashFiles('/home/runner/work/sonarqube/sonarqube/server/sonar-web/package.json') }}
       - name: 项目构建
         run: |
           ./gradlew build
@@ -62,7 +60,7 @@ jobs:
           echo "build_result is"${build_result}
           chmod 765 -R ./bin/
           ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/${bild_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-          ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/mysonar-application-latest.zip --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
+          ./bin/htool-cli cos --method upload --key sonarqube/mysonar-application-latest.zip --path ./mybuild/${bild_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
 #      - name: 部署服务
 #        uses: appleboy/ssh-action@master
 #        with:
