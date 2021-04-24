@@ -61,13 +61,21 @@ jobs:
           chmod 765 -R ./bin/
           ./bin/htool-cli cos --method upload --key sonarqube/${build_result} --path ./mybuild/${build_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
           ./bin/htool-cli cos --method upload --key sonarqube/mysonar-application-latest.zip --path ./mybuild/${build_result} --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-#      - name: 部署服务
-#        uses: appleboy/ssh-action@master
-#        with:
-#          host: ${{ secrets.DEPLOY_HOST }}
-#          username: ${{ secrets.DEPLOY_HOST_USERNAME }}
-#          key: ${{ secrets.DEPLOY_HOST_SSH }}
-#          port: 22
-#          script: |
-#            htool-cli cos --method download --key sonarqube/mysonar-application-latest.zip --path /docker/mysonar/app.jar --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
-#            sh /docker/deploy_mysonar.sh
+      - name: 部署服务
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DOCKER_DEPLOY_HOST }}
+          username: ${{ secrets.DOCKER_DEPLOY_USERNAME }}
+          key: ${{ secrets.DOCKER_DEPLOY_SSH }}
+          port: 22
+          script: |
+            mkdir -p /docker/mysonar/temp/
+            htool-cli cos --method download --key sonarqube/mysonar-application-latest.zip --path /docker/mysonar/mysonar.zip --sk ${{ secrets.TENCENT_COS_SK }} --ak  ${{ secrets.TENCENT_COS_AK }} --url ${{ secrets.TENCENT_COS_URL }}
+            unzip /docker/mysonar/mysonar.zip -d /docker/mysonar/temp/
+            dir_name=`ls /docker/mysonar/temp/`
+            cd /docker/mysonar/temp/
+            mv $dir_name sonarqube
+            \cp -rf /docker/mysonar/temp/sonarqube ../
+            rm -rf /docker/mysonar/temp/
+            docker restart mysonar
+
