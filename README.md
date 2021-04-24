@@ -72,7 +72,7 @@ Then open the root file `build.gradle` as a project in Intellij or Eclipse.
 
 容器启动sonar 开放端口，并增加远程调试端口
 ```shell
-docker run --name mysonar --link mysonar_pgsql -e SONARQUBE_JDBC_USERNAME=sonar -e SONARQUBE_JDBC_PASSWORD=sonar -e SONARQUBE_JDBC_URL=jdbc:postgresql://mysonar_pgsql:5432/sonar -p 9000:9000 -p 9301:9301 -p 5006:5006 -p 5007:5007 -v /docker/mysonar/sonarqube/data:/opt/sonarqube/data -v /docker/mysonar/sonarqube/extensions:/opt/sonarqube/extensions -v /docker/mysonar/sonarqube/logs:/opt/sonarqube/logs -v /docker/mysonar/sonarqube/conf:/opt/sonarqube/conf -d sonarqube:7.9-community
+docker run --name mysonar --link mysonar_pgsql -e SONARQUBE_JDBC_USERNAME=sonar -e SONARQUBE_JDBC_PASSWORD=sonar -e SONARQUBE_JDBC_URL=jdbc:postgresql://mysonar_pgsql:5432/sonar -p 9000:9000 -p 9301:9301 -p 5006:5006 -p 5007:5007 -v /docker/mysonar/sonarqube/:/opt/sonarqube/ -d sonarqube:7.9-community
 ```
 
 
