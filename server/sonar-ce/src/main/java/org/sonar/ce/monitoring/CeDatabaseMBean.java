@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,23 +21,18 @@ package org.sonar.ce.monitoring;
 
 public interface CeDatabaseMBean {
 
-  String OBJECT_NAME = "SonarQube:name=ComputeEngineDatabaseConnection";
-
   int getPoolActiveConnections();
 
-  int getPoolMaxActiveConnections();
+  int getPoolMaxConnections();
+
+  int getPoolTotalConnections();
 
   int getPoolIdleConnections();
 
-  int getPoolMaxIdleConnections();
-
   int getPoolMinIdleConnections();
 
-  int getPoolInitialSize();
+  long getPoolMaxLifeTimeMillis();
 
   long getPoolMaxWaitMillis();
 
-  boolean getPoolRemoveAbandoned();
-
-  int getPoolRemoveAbandonedTimeoutSeconds();
 }

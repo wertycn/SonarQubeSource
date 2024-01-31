@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,12 @@
  */
 package org.sonar.scanner.scan;
 
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.batch.bootstrap.ProjectReactor;
+import org.springframework.context.annotation.Bean;
 
-public class MutableProjectReactorProvider extends ProviderAdapter {
-  private ProjectReactor reactor = null;
-
+public class MutableProjectReactorProvider {
+  @Bean("ProjectReactor")
   public ProjectReactor provide(ProjectReactorBuilder builder) {
-    if (reactor == null) {
-      reactor = builder.execute();
-    }
-    return reactor;
+    return builder.execute();
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,97 +19,103 @@
  */
 import { omit, uniqBy } from 'lodash';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { highlightTerm } from 'sonar-ui-common/helpers/search';
-import ListStyleFacet from '../../../components/facet/ListStyleFacet';
-import { getLanguages, Store } from '../../../store/rootReducer';
+import withLanguagesContext from '../../../app/components/languages/withLanguagesContext';
+import { translate } from '../../../helpers/l10n';
+import { highlightTerm } from '../../../helpers/search';
 import { Facet, ReferencedLanguage } from '../../../types/issues';
+import { Language, Languages } from '../../../types/languages';
+import { Dict } from '../../../types/types';
 import { Query } from '../utils';
-
-interface InstalledLanguage {
-  key: string;
-  name: string;
-}
+import { ListStyleFacet } from './ListStyleFacet';
 
 interface Props {
-  fetching: boolean;
-  installedLanguages: InstalledLanguage[];
-  languages: string[];
-  loadSearchResultCount: (property: string, changes: Partial<Query>) => Promise<Facet>;
+  fetching?: boolean;
+  languages: Languages;
+  maxInitialItems?: number;
+  selectedLanguages: string[];
+  loadSearchResultCount?: (property: string, changes: Partial<Query>) => Promise<Facet>;
   onChange: (changes: Partial<Query>) => void;
   onToggle: (property: string) => void;
   open: boolean;
-  query: Query;
-  referencedLanguages: T.Dict<ReferencedLanguage>;
-  stats: T.Dict<number> | undefined;
+  query?: Query;
+  referencedLanguages?: Dict<ReferencedLanguage>;
+  stats: Dict<number> | undefined;
+  disabled?: boolean;
+  disabledHelper?: string;
 }
 
-class LanguageFacet extends React.PureComponent<Props> {
-  getLanguageName = (language: string) => {
-    const { referencedLanguages } = this.props;
-    return referencedLanguages[language] ? referencedLanguages[language].name : language;
+class LanguageFacetClass extends React.PureComponent<Props> {
+  getLanguageName = (languageKey: string) => {
+    const { referencedLanguages, languages } = this.props;
+    const language = referencedLanguages
+      ? referencedLanguages[languageKey]
+      : languages[languageKey];
+    return language ? language.name : languageKey;
   };
 
   handleSearch = (query: string) => {
     const options = this.getAllPossibleOptions();
-    const results = options.filter(language =>
-      language.name.toLowerCase().includes(query.toLowerCase())
+
+    const results = options.filter((language) =>
+      language.name.toLowerCase().includes(query.toLowerCase()),
     );
+
     const paging = { pageIndex: 1, pageSize: results.length, total: results.length };
+
     return Promise.resolve({ paging, results });
   };
 
   getAllPossibleOptions = () => {
-    const { installedLanguages, stats = {} } = this.props;
+    const { languages, stats = {} } = this.props;
 
     // add any language that presents in the facet, but might not be installed
     // for such language we don't know their display name, so let's just use their key
     // and make sure we reference each language only once
     return uniqBy(
-      [...installedLanguages, ...Object.keys(stats).map(key => ({ key, name: key }))],
-      language => language.key
+      [...Object.values(languages), ...Object.keys(stats).map((key) => ({ key, name: key }))],
+      (language) => language.key,
     );
   };
 
-  loadSearchResultCount = (languages: InstalledLanguage[]) => {
-    return this.props.loadSearchResultCount('languages', {
-      languages: languages.map(language => language.key)
+  loadSearchResultCount = (languages: Language[]) => {
+    const { loadSearchResultCount = () => Promise.resolve({}) } = this.props;
+    return loadSearchResultCount('languages', {
+      languages: languages.map((language) => language.key),
     });
   };
 
-  renderSearchResult = ({ name }: InstalledLanguage, term: string) => {
+  renderSearchResult = ({ name }: Language, term: string) => {
     return highlightTerm(name, term);
   };
 
   render() {
     return (
-      <ListStyleFacet<InstalledLanguage>
+      <ListStyleFacet<Language>
+        disabled={this.props.disabled}
+        disabledHelper={this.props.disabledHelper}
         facetHeader={translate('issues.facet.languages')}
-        fetching={this.props.fetching}
+        fetching={this.props.fetching ?? false}
         getFacetItemText={this.getLanguageName}
-        getSearchResultKey={language => language.key}
-        getSearchResultText={language => language.name}
+        getSearchResultKey={(language) => language.key}
+        getSearchResultText={(language) => language.name}
         loadSearchResultCount={this.loadSearchResultCount}
+        maxInitialItems={this.props.maxInitialItems}
         minSearchLength={1}
         onChange={this.props.onChange}
         onSearch={this.handleSearch}
         onToggle={this.props.onToggle}
         open={this.props.open}
         property="languages"
-        query={omit(this.props.query, 'languages')}
+        query={this.props.query ? omit(this.props.query, 'languages') : undefined}
         renderFacetItem={this.getLanguageName}
         renderSearchResult={this.renderSearchResult}
         searchPlaceholder={translate('search.search_for_languages')}
+        searchInputAriaLabel={translate('search.search_for_languages')}
         stats={this.props.stats}
-        values={this.props.languages}
+        values={this.props.selectedLanguages}
       />
     );
   }
 }
 
-const mapStateToProps = (state: Store) => ({
-  installedLanguages: Object.values(getLanguages(state))
-});
-
-export default connect(mapStateToProps)(LanguageFacet);
+export const LanguageFacet = withLanguagesContext(LanguageFacetClass);

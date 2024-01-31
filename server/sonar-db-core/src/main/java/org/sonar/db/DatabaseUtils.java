@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.db;
 
-import com.google.common.base.Function;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -42,21 +41,27 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
+import java.util.function.IntSupplier;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.collect.Lists.newArrayList;
 import static java.lang.String.format;
 
 public class DatabaseUtils {
-
+  private static final String TABLE_NOT_EXIST_MESSAGE = "Can not check that table %s exists";
   public static final int PARTITION_SIZE_FOR_ORACLE = 1000;
-
+  public static final String ORACLE_DRIVER_NAME = "Oracle JDBC driver";
+  public static final Pattern ORACLE_OBJECT_NAME_RULE = Pattern.compile("\"[^\"\\u0000]+\"|\\p{L}[\\p{L}\\p{N}_$#@]*");
+  public static final String INDEX_NAME_VARIATION = "^idx_\\d+_%s$";
   /**
    * @see DatabaseMetaData#getTableTypes()
    */
@@ -71,7 +76,7 @@ public class DatabaseUtils {
       try {
         connection.close();
       } catch (SQLException e) {
-        Loggers.get(DatabaseUtils.class).warn("Fail to close connection", e);
+        LoggerFactory.getLogger(DatabaseUtils.class).warn("Fail to close connection", e);
         // ignore
       }
     }
@@ -82,7 +87,7 @@ public class DatabaseUtils {
       try {
         stmt.close();
       } catch (SQLException e) {
-        Loggers.get(DatabaseUtils.class).warn("Fail to close statement", e);
+        LoggerFactory.getLogger(DatabaseUtils.class).warn("Fail to close statement", e);
         // ignore
       }
     }
@@ -93,7 +98,7 @@ public class DatabaseUtils {
       try {
         rs.close();
       } catch (SQLException e) {
-        Loggers.get(DatabaseUtils.class).warn("Fail to close result set", e);
+        LoggerFactory.getLogger(DatabaseUtils.class).warn("Fail to close result set", e);
         // ignore
       }
     }
@@ -101,7 +106,7 @@ public class DatabaseUtils {
 
   /**
    * Partition by 1000 elements a list of input and execute a function on each part.
-   *
+   * <p>
    * The goal is to prevent issue with ORACLE when there's more than 1000 elements in a 'in ('X', 'Y', ...)'
    * and with MsSQL when there's more than 2000 parameters in a query
    */
@@ -111,7 +116,7 @@ public class DatabaseUtils {
 
   /**
    * Partition by 1000 elements a list of input and execute a function on each part.
-   *
+   * <p>
    * The goal is to prevent issue with ORACLE when there's more than 1000 elements in a 'in ('X', 'Y', ...)'
    * and with MsSQL when there's more than 2000 parameters in a query
    */
@@ -142,7 +147,7 @@ public class DatabaseUtils {
 
   /**
    * Partition by 1000 elements a list of input and execute a consumer on each part.
-   *
+   * <p>
    * The goal is to prevent issue with ORACLE when there's more than 1000 elements in a 'in ('X', 'Y', ...)'
    * and with MsSQL when there's more than 2000 parameters in a query
    */
@@ -152,12 +157,12 @@ public class DatabaseUtils {
 
   /**
    * Partition by 1000 elements a list of input and execute a consumer on each part.
-   *
+   * <p>
    * The goal is to prevent issue with ORACLE when there's more than 1000 elements in a 'in ('X', 'Y', ...)'
    * and with MsSQL when there's more than 2000 parameters in a query
    *
-   * @param inputs the whole list of elements to be partitioned
-   * @param consumer the mapper method to be executed, for example {@code mapper(dbSession)::selectByUuids}
+   * @param inputs                     the whole list of elements to be partitioned
+   * @param consumer                   the mapper method to be executed, for example {@code mapper(dbSession)::selectByUuids}
    * @param partitionSizeManipulations the function that computes the number of usages of a partition, for example
    *                                   {@code partitionSize -> partitionSize / 2} when the partition of elements
    *                                   in used twice in the SQL request.
@@ -201,7 +206,7 @@ public class DatabaseUtils {
 
   /**
    * Partition by 1000 elements a list of input and execute a consumer on each part.
-   *
+   * <p>
    * The goal is to prevent issue with ORACLE when there's more than 1000 elements in a 'in ('X', 'Y', ...)'
    * and with MsSQL when there's more than 2000 parameters in a query
    */
@@ -210,7 +215,7 @@ public class DatabaseUtils {
       return;
     }
 
-    List<List<T>> partitions = Lists.partition(newArrayList(input), PARTITION_SIZE_FOR_ORACLE);
+    List<List<T>> partitions = Lists.partition(new ArrayList<>(input), PARTITION_SIZE_FOR_ORACLE);
     for (List<T> partition : partitions) {
       consumer.accept(partition);
     }
@@ -307,7 +312,7 @@ public class DatabaseUtils {
       }
       return false;
     } catch (SQLException e) {
-      throw wrapSqlException(e, "Can not check that table %s exists", table);
+      throw wrapSqlException(e, TABLE_NOT_EXIST_MESSAGE, table);
     }
   }
 
@@ -325,29 +330,63 @@ public class DatabaseUtils {
    * Finds an index by searching by its lower case or upper case name. If an index is found, it's name is returned with the matching case.
    * This is useful when we need to drop an index that could exist with either lower case or upper case name.
    * See SONAR-13594
+   * Related to ticket SONAR-17737, some index name can be changed to pattern idx_{number}_index_name. We also want to be able to identify and return them
    */
   public static Optional<String> findExistingIndex(Connection connection, String tableName, String indexName) {
-    Optional<String> result = findIndex(connection, tableName.toLowerCase(Locale.US), indexName);
-    if (result.isPresent()) {
-      return result;
-    }
-    // in tests, tables have uppercase name
-    return findIndex(connection, tableName.toUpperCase(Locale.US), indexName);
+    Predicate<String> indexSelector = idx -> indexName.equalsIgnoreCase(idx) || indexMatchesPattern(idx, format(INDEX_NAME_VARIATION, indexName));
+
+    return findIndex(connection, tableName.toLowerCase(Locale.US), indexSelector)
+      .or(() -> findIndex(connection, tableName.toUpperCase(Locale.US), indexSelector));
+  }
+
+  private static boolean indexMatchesPattern(@Nullable String idx, String pattern) {
+    return idx != null && Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(idx).matches();
   }
 
   private static Optional<String> findIndex(Connection connection, String tableName, String indexName) {
+    return findIndex(connection, tableName, indexName::equalsIgnoreCase);
+  }
+
+  private static Optional<String> findIndex(Connection connection, String tableName, Predicate<String> indexMatcher) {
     String schema = getSchema(connection);
 
+    if (StringUtils.isNotEmpty(schema)) {
+      String driverName = getDriver(connection);
+//      Fix for double quoted schema name in Oracle
+      if (ORACLE_DRIVER_NAME.equals(driverName) && !ORACLE_OBJECT_NAME_RULE.matcher(schema).matches()) {
+        return getOracleIndex(connection, tableName, indexMatcher, schema);
+      }
+    }
+
+    return getIndex(connection, tableName, indexMatcher, schema);
+  }
+
+  private static Optional<String> getIndex(Connection connection, String tableName, Predicate<String> indexMatcher, @Nullable String schema) {
     try (ResultSet rs = connection.getMetaData().getIndexInfo(connection.getCatalog(), schema, tableName, false, true)) {
       while (rs.next()) {
         String idx = rs.getString("INDEX_NAME");
-        if (indexName.equalsIgnoreCase(idx)) {
+        if (indexMatcher.test(idx)) {
           return Optional.of(idx);
         }
       }
       return Optional.empty();
     } catch (SQLException e) {
-      throw wrapSqlException(e, "Can not check that table %s exists", tableName);
+      throw wrapSqlException(e, TABLE_NOT_EXIST_MESSAGE, tableName);
+    }
+  }
+
+  private static Optional<String> getOracleIndex(Connection connection, String tableName, Predicate<String> indexMatcher, @Nonnull String schema) {
+    try (ResultSet rs = connection.getMetaData().getIndexInfo(connection.getCatalog(), null, tableName, false, true)) {
+      while (rs.next()) {
+        String idx = rs.getString("INDEX_NAME");
+        String tableSchema = rs.getString("TABLE_SCHEM");
+        if (schema.equalsIgnoreCase(tableSchema) && indexMatcher.test(idx)) {
+          return Optional.of(idx);
+        }
+      }
+      return Optional.empty();
+    } catch (SQLException e) {
+      throw wrapSqlException(e, TABLE_NOT_EXIST_MESSAGE, tableName);
     }
   }
 
@@ -364,6 +403,8 @@ public class DatabaseUtils {
     String schema = getSchema(connection);
     try (ResultSet rs = connection.getMetaData().getColumns(connection.getCatalog(), schema, tableName, null)) {
       while (rs.next()) {
+        // this is wrong and could lead to bugs, there is no point of going through each column - only one column contains column name
+        // see the contract (javadoc) of java.sql.DatabaseMetaData.getColumns
         for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
           String name = rs.getString(i);
           if (columnName.equalsIgnoreCase(name)) {
@@ -372,6 +413,41 @@ public class DatabaseUtils {
         }
       }
       return false;
+    }
+  }
+  @CheckForNull
+  public static ColumnMetadata getColumnMetadata(Connection connection, String tableName, String columnName) throws SQLException {
+    ColumnMetadata columnMetadataLowerCase = getColumnMetadataWithCaseSensitiveTableName(connection, tableName.toLowerCase(Locale.US), columnName);
+    if (columnMetadataLowerCase != null) {
+      return columnMetadataLowerCase;
+    }
+    return getColumnMetadataWithCaseSensitiveTableName(connection, tableName.toUpperCase(Locale.US), columnName);
+  }
+
+  @CheckForNull
+  public static ColumnMetadata getColumnMetadataWithCaseSensitiveTableName(Connection connection, String tableName, String columnName) throws SQLException {
+    String schema = getSchema(connection);
+    try (ResultSet rs = connection.getMetaData().getColumns(connection.getCatalog(), schema, tableName, null)) {
+      while (rs.next()) {
+        String name = rs.getString(4);
+        int type = rs.getInt(5);
+        int limit = rs.getInt(7);
+        boolean nullable = rs.getBoolean(11);
+        if (columnName.equalsIgnoreCase(name)) {
+          return new ColumnMetadata(name, nullable, type, limit);
+        }
+      }
+      return null;
+    }
+  }
+
+  @CheckForNull
+  static String getDriver(Connection connection) {
+    try {
+      return connection.getMetaData().getDriverName();
+    } catch (SQLException e) {
+      LoggerFactory.getLogger(DatabaseUtils.class).warn("Fail to determine database driver.", e);
+      return null;
     }
   }
 
@@ -386,7 +462,7 @@ public class DatabaseUtils {
         schema = connection.getSchema();
       }
     } catch (SQLException e) {
-      Loggers.get(DatabaseUtils.class).warn("Fail to determine schema. Keeping it null for searching tables", e);
+      LoggerFactory.getLogger(DatabaseUtils.class).warn("Fail to determine schema. Keeping it null for searching tables", e);
     }
     return schema;
   }
@@ -398,10 +474,10 @@ public class DatabaseUtils {
   /**
    * This method can be used as a method reference, for not to have to handle the checked exception {@link SQLException}
    */
-  public static Consumer<String> setStrings(PreparedStatement stmt, Supplier<Integer> index) {
+  public static Consumer<String> setStrings(PreparedStatement stmt, IntSupplier index) {
     return value -> {
       try {
-        stmt.setString(index.get(), value);
+        stmt.setString(index.getAsInt(), value);
       } catch (SQLException e) {
         Throwables.propagate(e);
       }
@@ -410,11 +486,12 @@ public class DatabaseUtils {
 
   /**
    * @throws IllegalArgumentException if the collection is not null and has strictly more
-   * than {@link #PARTITION_SIZE_FOR_ORACLE} values.
+   *                                  than {@link #PARTITION_SIZE_FOR_ORACLE} values.
    */
   public static void checkThatNotTooManyConditions(@Nullable Collection<?> values, String message) {
     if (values != null) {
       checkArgument(values.size() <= PARTITION_SIZE_FOR_ORACLE, message);
     }
   }
+
 }

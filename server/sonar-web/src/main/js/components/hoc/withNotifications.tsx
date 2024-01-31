@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,28 +20,33 @@
 import { uniqWith } from 'lodash';
 import * as React from 'react';
 import { addNotification, getNotifications, removeNotification } from '../../api/notifications';
+import {
+  Notification,
+  NotificationGlobalType,
+  NotificationProjectType,
+} from '../../types/notifications';
 import { getWrappedDisplayName } from './utils';
 
 interface State {
   channels: string[];
-  globalTypes: string[];
+  globalTypes: NotificationGlobalType[];
   loading: boolean;
-  notifications: T.Notification[];
-  perProjectTypes: string[];
+  notifications: Notification[];
+  perProjectTypes: NotificationProjectType[];
 }
 
 export interface WithNotificationsProps {
-  addNotification: (added: T.Notification) => void;
+  addNotification: (added: Notification) => void;
   channels: string[];
-  globalTypes: string[];
+  globalTypes: NotificationGlobalType[];
   loading: boolean;
-  notifications: T.Notification[];
-  perProjectTypes: string[];
-  removeNotification: (removed: T.Notification) => void;
+  notifications: Notification[];
+  perProjectTypes: NotificationProjectType[];
+  removeNotification: (removed: Notification) => void;
 }
 
 export function withNotifications<P>(
-  WrappedComponent: React.ComponentType<P & WithNotificationsProps>
+  WrappedComponent: React.ComponentType<React.PropsWithChildren<P & WithNotificationsProps>>,
 ) {
   class Wrapper extends React.Component<P, State> {
     mounted = false;
@@ -52,7 +57,7 @@ export function withNotifications<P>(
       globalTypes: [],
       loading: true,
       notifications: [],
-      perProjectTypes: []
+      perProjectTypes: [],
     };
 
     componentDidMount() {
@@ -66,14 +71,14 @@ export function withNotifications<P>(
 
     fetchNotifications = () => {
       getNotifications().then(
-        response => {
+        (response) => {
           if (this.mounted) {
             this.setState({
               channels: response.channels,
               globalTypes: response.globalTypes,
               loading: false,
               notifications: response.notifications,
-              perProjectTypes: response.perProjectTypes
+              perProjectTypes: response.perProjectTypes,
             });
           }
         },
@@ -81,27 +86,27 @@ export function withNotifications<P>(
           if (this.mounted) {
             this.setState({ loading: false });
           }
-        }
+        },
       );
     };
 
-    addNotificationToState = (added: T.Notification) => {
-      this.setState(state => {
+    addNotificationToState = (added: Notification) => {
+      this.setState((state) => {
         const notifications = uniqWith([...state.notifications, added], this.areNotificationsEqual);
         return { notifications };
       });
     };
 
-    removeNotificationFromState = (removed: T.Notification) => {
-      this.setState(state => {
+    removeNotificationFromState = (removed: Notification) => {
+      this.setState((state) => {
         const notifications = state.notifications.filter(
-          notification => !this.areNotificationsEqual(notification, removed)
+          (notification) => !this.areNotificationsEqual(notification, removed),
         );
         return { notifications };
       });
     };
 
-    addNotification = (added: T.Notification) => {
+    addNotification = (added: Notification) => {
       // optimistic update
       this.addNotificationToState(added);
 
@@ -112,7 +117,7 @@ export function withNotifications<P>(
       });
     };
 
-    removeNotification = (removed: T.Notification) => {
+    removeNotification = (removed: Notification) => {
       // optimistic update
       this.removeNotificationFromState(removed);
 
@@ -123,7 +128,7 @@ export function withNotifications<P>(
       });
     };
 
-    areNotificationsEqual = (a: T.Notification, b: T.Notification) => {
+    areNotificationsEqual = (a: Notification, b: Notification) => {
       return a.channel === b.channel && a.type === b.type && a.project === b.project;
     };
 

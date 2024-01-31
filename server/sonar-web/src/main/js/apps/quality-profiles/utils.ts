@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as differenceInYears from 'date-fns/difference_in_years';
+import { differenceInYears } from 'date-fns';
 import { sortBy } from 'lodash';
-import { isValidDate, parseDate } from 'sonar-ui-common/helpers/dates';
 import { Profile as BaseProfile } from '../../api/quality-profiles';
+import { isValidDate, parseDate } from '../../helpers/dates';
+import { queryToSearch } from '../../helpers/urls';
+import { PROFILE_COMPARE_PATH, PROFILE_PATH } from './constants';
 import { Profile } from './types';
 
 export function sortProfiles(profiles: BaseProfile[]): Profile[] {
@@ -29,7 +31,8 @@ export function sortProfiles(profiles: BaseProfile[]): Profile[] {
 
   function retrieveChildren(parent: BaseProfile | null) {
     return sorted.filter(
-      p => (parent == null && p.parentKey == null) || (parent != null && p.parentKey === parent.key)
+      (p) =>
+        (parent == null && p.parentKey == null) || (parent != null && p.parentKey === parent.key),
     );
   }
 
@@ -40,14 +43,15 @@ export function sortProfiles(profiles: BaseProfile[]): Profile[] {
       result.push({ ...profile, childrenCount: children.length, depth });
     }
 
-    children.forEach(child => putProfile(child, depth + 1));
+    children.forEach((child) => putProfile(child, depth + 1));
   }
 
   sorted
     .filter(
-      profile => profile.parentKey == null || sorted.find(p => p.key === profile.parentKey) == null
+      (profile) =>
+        profile.parentKey == null || sorted.find((p) => p.key === profile.parentKey) == null,
     )
-    .forEach(profile => putProfile(profile));
+    .forEach((profile) => putProfile(profile));
 
   return result;
 }
@@ -62,16 +66,14 @@ export function isStagnant(profile: Profile): boolean {
   return false;
 }
 
-export const PROFILE_PATH = '/profiles';
-
 export const getProfilesForLanguagePath = (language: string) => ({
   pathname: PROFILE_PATH,
-  query: { language }
+  search: queryToSearch({ language }),
 });
 
 export const getProfilePath = (name: string, language: string) => ({
   pathname: `${PROFILE_PATH}/show`,
-  query: { name, language }
+  search: queryToSearch({ name, language }),
 });
 
 export const getProfileComparePath = (name: string, language: string, withKey?: string) => {
@@ -80,15 +82,15 @@ export const getProfileComparePath = (name: string, language: string, withKey?: 
     Object.assign(query, { withKey });
   }
   return {
-    pathname: `${PROFILE_PATH}/compare`,
-    query
+    pathname: PROFILE_COMPARE_PATH,
+    search: queryToSearch(query),
   };
 };
 
 export const getProfileChangelogPath = (
   name: string,
   language: string,
-  filter?: { since?: string; to?: string }
+  filter?: { since?: string; to?: string },
 ) => {
   const query = { language, name };
   if (filter) {
@@ -101,6 +103,10 @@ export const getProfileChangelogPath = (
   }
   return {
     pathname: `${PROFILE_PATH}/changelog`,
-    query
+    search: queryToSearch(query),
   };
+};
+
+export const isProfileComparePath = (pathname: string): boolean => {
+  return pathname === PROFILE_COMPARE_PATH;
 };

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, ButtonSecondary, FlagMessage, Link } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { useIntl } from 'react-intl';
 import { Actions } from '../../../api/quality-profiles';
-import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
+import { useLocation, useRouter } from '../../../components/hoc/withRouter';
+import { useDocUrl } from '../../../helpers/docs';
+import { translate } from '../../../helpers/l10n';
 import { Profile } from '../types';
 import { getProfilePath } from '../utils';
 import CreateProfileForm from './CreateProfileForm';
@@ -32,109 +32,81 @@ import RestoreProfileForm from './RestoreProfileForm';
 interface Props {
   actions: Actions;
   languages: Array<{ key: string; name: string }>;
-  location: Location;
   profiles: Profile[];
-  router: Pick<Router, 'push'>;
   updateProfiles: () => Promise<void>;
 }
 
-interface State {
-  createFormOpen: boolean;
-  restoreFormOpen: boolean;
-}
+export default function PageHeader(props: Readonly<Props>) {
+  const { actions, languages, profiles } = props;
+  const intl = useIntl();
+  const location = useLocation();
+  const router = useRouter();
+  const docUrl = useDocUrl();
 
-export class PageHeader extends React.PureComponent<Props, State> {
-  state: State = {
-    createFormOpen: false,
-    restoreFormOpen: false
-  };
+  const [modal, setModal] = React.useState<'' | 'createProfile' | 'restoreProfile'>('');
 
-  handleCreateClick = () => {
-    this.setState({ createFormOpen: true });
-  };
-
-  handleCreate = (profile: Profile) => {
-    this.props.updateProfiles().then(
+  const handleCreate = (profile: Profile) => {
+    props.updateProfiles().then(
       () => {
-        this.props.router.push(getProfilePath(profile.name, profile.language));
+        router.push(getProfilePath(profile.name, profile.language));
       },
-      () => {}
+      () => {},
     );
   };
 
-  closeCreateForm = () => {
-    this.setState({ createFormOpen: false });
-  };
+  const closeModal = () => setModal('');
 
-  handleRestoreClick = () => {
-    this.setState({ restoreFormOpen: true });
-  };
+  return (
+    <header className="sw-grid sw-grid-cols-3 sw-gap-12">
+      <div className="sw-col-span-2">
+        <h1 className="sw-heading-lg sw-mb-4">{translate('quality_profiles.page')}</h1>
+        <div className="sw-body-sm">
+          {intl.formatMessage({ id: 'quality_profiles.intro' })}
 
-  closeRestoreForm = () => {
-    this.setState({ restoreFormOpen: false });
-  };
-
-  render() {
-    const { actions, languages, location, profiles } = this.props;
-    return (
-      <header className="page-header">
-        <h1 className="page-title">{translate('quality_profiles.page')}</h1>
-
-        {actions.create && (
-          <div className="page-actions">
-            <Button
-              disabled={languages.length === 0}
-              id="quality-profiles-create"
-              onClick={this.handleCreateClick}>
-              {translate('create')}
-            </Button>
-            <Button
-              className="little-spacer-left"
-              id="quality-profiles-restore"
-              onClick={this.handleRestoreClick}>
-              {translate('restore')}
-            </Button>
-            {languages.length === 0 && (
-              <Alert className="spacer-top" variant="warning">
-                {translate('quality_profiles.no_languages_available')}
-              </Alert>
-            )}
-          </div>
-        )}
-
-        <div className="page-description markdown">
-          {translate('quality_profiles.intro1')}
-          <br />
-          {translate('quality_profiles.intro2')}
-          <Link
-            className="spacer-left"
-            target="_blank"
-            to={{
-              pathname: '/documentation/instance-administration/quality-profiles/'
-            }}>
-            {translate('learn_more')}
+          <Link className="sw-ml-2" to={docUrl('/instance-administration/quality-profiles/')}>
+            {intl.formatMessage({ id: 'learn_more' })}
           </Link>
         </div>
+      </div>
+      {actions.create && (
+        <div className="sw-flex sw-flex-col sw-items-end">
+          <div>
+            <ButtonPrimary
+              disabled={languages.length === 0}
+              id="quality-profiles-create"
+              onClick={() => setModal('createProfile')}
+            >
+              {intl.formatMessage({ id: 'create' })}
+            </ButtonPrimary>
+            <ButtonSecondary
+              className="sw-ml-2"
+              id="quality-profiles-restore"
+              onClick={() => setModal('restoreProfile')}
+            >
+              {intl.formatMessage({ id: 'restore' })}
+            </ButtonSecondary>
+          </div>
+          {languages.length === 0 && (
+            <FlagMessage className="sw-mt-2" variant="warning">
+              {intl.formatMessage({ id: 'quality_profiles.no_languages_available' })}
+            </FlagMessage>
+          )}
+        </div>
+      )}
 
-        {this.state.restoreFormOpen && (
-          <RestoreProfileForm
-            onClose={this.closeRestoreForm}
-            onRestore={this.props.updateProfiles}
-          />
-        )}
+      {modal === 'restoreProfile' && (
+        <RestoreProfileForm onClose={closeModal} onRestore={props.updateProfiles} />
+      )}
 
-        {this.state.createFormOpen && (
-          <CreateProfileForm
-            languages={languages}
-            location={location}
-            onClose={this.closeCreateForm}
-            onCreate={this.handleCreate}
-            profiles={profiles}
-          />
-        )}
-      </header>
-    );
-  }
+      {modal === 'createProfile' && (
+        <CreateProfileForm
+          languages={languages}
+          location={location}
+          onClose={closeModal}
+          onCreate={handleCreate}
+          profiles={profiles}
+        />
+      )}
+    </header>
+  );
 }
-
-export default withRouter(PageHeader);

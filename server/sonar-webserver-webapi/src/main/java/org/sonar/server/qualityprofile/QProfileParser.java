@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,7 +48,6 @@ public class QProfileParser {
   private static final String ATTRIBUTE_PROFILE = "profile";
   private static final String ATTRIBUTE_NAME = "name";
   private static final String ATTRIBUTE_LANGUAGE = "language";
-
   private static final String ATTRIBUTE_RULES = "rules";
   private static final String ATTRIBUTE_RULE = "rule";
   private static final String ATTRIBUTE_REPOSITORY_KEY = "repositoryKey";
@@ -80,7 +79,7 @@ public class QProfileParser {
       if (ruleToExport.isCustomRule()) {
         xml.prop(ATTRIBUTE_NAME, ruleToExport.getName());
         xml.prop(ATTRIBUTE_TEMPLATE_KEY, ruleToExport.getTemplateRuleKey().rule());
-        xml.prop(ATTRIBUTE_DESCRIPTION, ruleToExport.getDescription());
+        xml.prop(ATTRIBUTE_DESCRIPTION, ruleToExport.getDescriptionOrThrow());
       }
 
       xml.begin(ATTRIBUTE_PARAMETERS);
@@ -144,39 +143,10 @@ public class QProfileParser {
     while (rulesCursor.getNext() != null) {
       SMInputCursor ruleCursor = rulesCursor.childElementCursor();
       Map<String, String> parameters = new HashMap<>();
-      String repositoryKey = null;
-      String key = null;
-      String templateKey = null;
       ImportedRule rule = new ImportedRule();
-      while (ruleCursor.getNext() != null) {
-        String nodeName = ruleCursor.getLocalName();
-        if (StringUtils.equals(ATTRIBUTE_REPOSITORY_KEY, nodeName)) {
-          repositoryKey = StringUtils.trim(ruleCursor.collectDescendantText(false));
-        } else if (StringUtils.equals(ATTRIBUTE_KEY, nodeName)) {
-          key = StringUtils.trim(ruleCursor.collectDescendantText(false));
-        } else if (StringUtils.equals(ATTRIBUTE_TEMPLATE_KEY, nodeName)) {
-          templateKey = StringUtils.trim(ruleCursor.collectDescendantText(false));
-        } else if (StringUtils.equals(ATTRIBUTE_NAME, nodeName)) {
-          rule.setName(StringUtils.trim(ruleCursor.collectDescendantText(false)));
-        } else if (StringUtils.equals(ATTRIBUTE_TYPE, nodeName)) {
-          rule.setType(StringUtils.trim(ruleCursor.collectDescendantText(false)));
-        } else if (StringUtils.equals(ATTRIBUTE_DESCRIPTION, nodeName)) {
-          rule.setDescription(StringUtils.trim(ruleCursor.collectDescendantText(false)));
-        } else if (StringUtils.equals(ATTRIBUTE_PRIORITY, nodeName)) {
-          rule.setSeverity(StringUtils.trim(ruleCursor.collectDescendantText(false)));
-        } else if (StringUtils.equals(ATTRIBUTE_PARAMETERS, nodeName)) {
-          SMInputCursor propsCursor = ruleCursor.childElementCursor(ATTRIBUTE_PARAMETER);
-          readParameters(propsCursor, parameters);
-          rule.setParameters(parameters);
-        }
-      }
-      RuleKey ruleKey = RuleKey.of(repositoryKey, key);
-      rule.setRuleKey(ruleKey);
+      readRule(ruleCursor, parameters, rule);
 
-      if (templateKey != null) {
-        rule.setTemplateKey(RuleKey.of(repositoryKey, templateKey));
-      }
-
+      var ruleKey = rule.getRuleKey();
       if (activatedKeys.contains(ruleKey)) {
         duplicatedKeys.add(ruleKey);
       }
@@ -188,6 +158,31 @@ public class QProfileParser {
         duplicatedKeys.stream().map(RuleKey::toString).filter(Objects::nonNull).collect(Collectors.joining(", ")));
     }
     return activations;
+  }
+
+  private static void readRule(SMInputCursor ruleCursor, Map<String, String> parameters, ImportedRule rule) throws XMLStreamException {
+    while (ruleCursor.getNext() != null) {
+      String nodeName = ruleCursor.getLocalName();
+      if (StringUtils.equals(ATTRIBUTE_REPOSITORY_KEY, nodeName)) {
+        rule.setRepository(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_KEY, nodeName)) {
+        rule.setKey(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_TEMPLATE_KEY, nodeName)) {
+        rule.setTemplate(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_NAME, nodeName)) {
+        rule.setName(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_TYPE, nodeName)) {
+        rule.setType(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_DESCRIPTION, nodeName)) {
+        rule.setDescription(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_PRIORITY, nodeName)) {
+        rule.setSeverity(StringUtils.trim(ruleCursor.collectDescendantText(false)));
+      } else if (StringUtils.equals(ATTRIBUTE_PARAMETERS, nodeName)) {
+        SMInputCursor propsCursor = ruleCursor.childElementCursor(ATTRIBUTE_PARAMETER);
+        readParameters(propsCursor, parameters);
+        rule.setParameters(parameters);
+      }
+    }
   }
 
   private static void readParameters(SMInputCursor propsCursor, Map<String, String> parameters) throws XMLStreamException {

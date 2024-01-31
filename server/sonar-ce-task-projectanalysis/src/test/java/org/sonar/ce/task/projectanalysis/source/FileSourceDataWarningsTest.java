@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,9 +26,7 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.utils.System2;
 import org.sonar.ce.task.log.CeTaskMessages;
@@ -37,18 +35,17 @@ import org.sonar.ce.task.projectanalysis.component.ReportComponent;
 import org.sonar.ce.task.projectanalysis.source.linereader.LineReader;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.ce.task.projectanalysis.source.linereader.LineReader.Data.HIGHLIGHTING;
 import static org.sonar.ce.task.projectanalysis.source.linereader.LineReader.Data.SYMBOLS;
 
 @RunWith(DataProviderRunner.class)
 public class FileSourceDataWarningsTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private CeTaskMessages taskMessages = mock(CeTaskMessages.class);
   private System2 system2 = mock(System2.class);
@@ -63,40 +60,36 @@ public class FileSourceDataWarningsTest {
   public void addWarning_fails_with_NPE_if_file_is_null() {
     LineReader.ReadError readError = new LineReader.ReadError(HIGHLIGHTING, 2);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("file can't be null");
-
-    underTest.addWarning(null, readError);
+    assertThatThrownBy(() -> underTest.addWarning(null, readError))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("file can't be null");
   }
 
   @Test
   public void addWarning_fails_with_NPE_if_readError_is_null() {
     Component component = mock(Component.class);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("readError can't be null");
-
-    underTest.addWarning(component, null);
+    assertThatThrownBy(() -> underTest.addWarning(component, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("readError can't be null");
   }
 
   @Test
   public void addWarnings_fails_with_ISE_if_called_after_commitWarnings() {
     underTest.commitWarnings();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("warnings already commit");
-
-    underTest.addWarning(null /*doesn't matter*/, null /*doesn't matter*/);
+    assertThatThrownBy(() -> underTest.addWarning(null /*doesn't matter*/, null /*doesn't matter*/))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("warnings already commit");
   }
 
   @Test
   public void commitWarnings_fails_with_ISE_if_called_after_commitWarnings() {
     underTest.commitWarnings();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("warnings already commit");
-
-    underTest.commitWarnings();
+    assertThatThrownBy(() -> underTest.commitWarnings())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("warnings already commit");
   }
 
   @Test
@@ -110,7 +103,7 @@ public class FileSourceDataWarningsTest {
 
     underTest.addWarning(file, readError);
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -132,7 +125,7 @@ public class FileSourceDataWarningsTest {
 
     Arrays.stream(readErrors).forEach(readError -> underTest.addWarning(file, readError));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -155,7 +148,7 @@ public class FileSourceDataWarningsTest {
     Arrays.stream(files).forEach(file -> IntStream.range(0, 1 + random.nextInt(10))
       .forEach(i -> underTest.addWarning(file, new LineReader.ReadError(HIGHLIGHTING, line + i))));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -180,7 +173,7 @@ public class FileSourceDataWarningsTest {
     Arrays.stream(files).forEach(file -> IntStream.range(0, 1 + random.nextInt(10))
       .forEach(i -> underTest.addWarning(file, new LineReader.ReadError(HIGHLIGHTING, line + i))));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -202,7 +195,7 @@ public class FileSourceDataWarningsTest {
 
     underTest.addWarning(file, readError);
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -224,7 +217,7 @@ public class FileSourceDataWarningsTest {
 
     Arrays.stream(readErrors).forEach(readError -> underTest.addWarning(file, readError));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -247,7 +240,7 @@ public class FileSourceDataWarningsTest {
     Arrays.stream(files).forEach(file -> IntStream.range(0, 1 + random.nextInt(10))
       .forEach(i -> underTest.addWarning(file, new LineReader.ReadError(SYMBOLS, line + i))));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -272,7 +265,7 @@ public class FileSourceDataWarningsTest {
     Arrays.stream(files).forEach(file -> IntStream.range(0, 1 + random.nextInt(10))
       .forEach(i -> underTest.addWarning(file, new LineReader.ReadError(SYMBOLS, line + i))));
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
@@ -295,11 +288,11 @@ public class FileSourceDataWarningsTest {
 
     underTest.addWarning(file, readError);
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
 
     underTest.commitWarnings();
 
-    verifyZeroInteractions(taskMessages);
+    verifyNoInteractions(taskMessages);
   }
 
   @DataProvider

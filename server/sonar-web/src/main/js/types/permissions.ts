@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 export enum Permissions {
   Admin = 'admin',
+  Browse = 'user',
   ProjectCreation = 'provisioning',
-  ApplicationCreation = 'applicationcreator'
+  ApplicationCreation = 'applicationcreator',
+  PortfolioCreation = 'portfoliocreator',
+  QualityGateAdmin = 'gateadmin',
+  QualityProfileAdmin = 'profileadmin',
+  Scan = 'scan',
+  CodeViewer = 'codeviewer',
+  IssueAdmin = 'issueadmin',
+  SecurityHotspotAdmin = 'securityhotspotadmin',
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ import org.sonar.api.web.page.PageDefinition;
 import org.sonar.core.extension.CoreExtensionRepository;
 import org.sonar.core.platform.PluginRepository;
 import org.sonar.server.ui.page.CorePageDefinition;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.copyOf;
@@ -42,7 +43,6 @@ import static java.util.Comparator.comparing;
 import static java.util.Objects.requireNonNull;
 import static org.sonar.api.web.page.Page.Scope.COMPONENT;
 import static org.sonar.api.web.page.Page.Scope.GLOBAL;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
 
 @ServerSide
 public class PageRepository implements Startable {
@@ -53,8 +53,9 @@ public class PageRepository implements Startable {
   private List<Page> pages;
 
   /**
-   * Used by Pico when there is no {@link PageDefinition}.
+   * Used by the ioc container when there is no {@link PageDefinition}.
    */
+  @Autowired(required = false)
   public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository) {
     this.pluginRepository = pluginRepository;
     this.coreExtensionRepository = coreExtensionRepository;
@@ -64,10 +65,10 @@ public class PageRepository implements Startable {
   }
 
   /**
-   * Used by Pico when there is only {@link PageDefinition} provided both by Plugin(s).
+   * Used by the ioc container when there is only {@link PageDefinition} provided both by Plugin(s).
    */
-  public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository,
-    PageDefinition[] pageDefinitions) {
+  @Autowired(required = false)
+  public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository, PageDefinition[] pageDefinitions) {
     this.pluginRepository = pluginRepository;
     this.coreExtensionRepository = coreExtensionRepository;
     this.definitions = copyOf(pageDefinitions);
@@ -75,10 +76,10 @@ public class PageRepository implements Startable {
   }
 
   /**
-   * Used by Pico when there is only {@link PageDefinition} provided both by Core Extension(s).
+   * Used by the ioc container when there is only {@link PageDefinition} provided both by Core Extension(s).
    */
-  public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository,
-    CorePageDefinition[] corePageDefinitions) {
+  @Autowired(required = false)
+  public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository, CorePageDefinition[] corePageDefinitions) {
     this.pluginRepository = pluginRepository;
     this.coreExtensionRepository = coreExtensionRepository;
     this.definitions = emptyList();
@@ -86,8 +87,9 @@ public class PageRepository implements Startable {
   }
 
   /**
-   * Used by Pico when there is {@link PageDefinition} provided both by Core Extension(s) and Plugin(s).
+   * Used by the ioc container when there is {@link PageDefinition} provided both by Core Extension(s) and Plugin(s).
    */
+  @Autowired(required = false)
   public PageRepository(PluginRepository pluginRepository, CoreExtensionRepository coreExtensionRepository,
     PageDefinition[] pageDefinitions, CorePageDefinition[] corePageDefinitions) {
     this.pluginRepository = pluginRepository;
@@ -132,7 +134,7 @@ public class PageRepository implements Startable {
       .filter(p -> p.getScope().equals(scope))
       .filter(p -> p.isAdmin() == isAdmin)
       .filter(p -> !COMPONENT.equals(p.getScope()) || p.getComponentQualifiers().contains(qualifier))
-      .collect(toList());
+      .toList();
   }
 
   @VisibleForTesting

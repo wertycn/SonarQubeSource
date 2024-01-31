@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,13 +30,14 @@ public class QProfileTest {
     QProfile q2 = new QProfile("k1", "name2", null, null);
     QProfile q3 = new QProfile("k3", "name3", null, null);
 
-    assertThat(q1).isEqualTo(q2);
-    assertThat(q1).isNotEqualTo(q3);
+    assertThat(q1)
+      .isEqualTo(q2)
+      .isNotEqualTo(q3)
+      .isNotNull()
+      .isNotEqualTo("str");
     assertThat(q2).isNotEqualTo(q3);
-    assertThat(q1).isNotEqualTo(null);
-    assertThat(q1).isNotEqualTo("str");
 
-    assertThat(q1.hashCode()).isEqualTo(q2.hashCode());
+    assertThat(q1).hasSameHashCodeAs(q2);
     assertThat(q1.hashCode()).isNotEqualTo(q3.hashCode());
     assertThat(q2.hashCode()).isNotEqualTo(q3.hashCode());
   }

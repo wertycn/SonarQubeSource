@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,11 +21,13 @@ package org.sonar.server.almintegration.ws.github;
 
 import java.util.List;
 import java.util.Optional;
-import org.sonar.alm.client.github.GithubApplicationClient;
-import org.sonar.alm.client.github.GithubApplicationClient.Organization;
+import org.sonar.auth.github.client.GithubApplicationClient;
+import org.sonar.auth.github.client.GithubApplicationClient.Organization;
 import org.sonar.alm.client.github.GithubApplicationClientImpl;
-import org.sonar.alm.client.github.security.AccessToken;
-import org.sonar.alm.client.github.security.UserAccessToken;
+import org.sonar.auth.github.security.AccessToken;
+import org.sonar.auth.github.security.UserAccessToken;
+import org.sonar.api.config.internal.Encryption;
+import org.sonar.api.config.internal.Settings;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -53,11 +55,14 @@ public class ListGithubOrganizationsAction implements AlmIntegrationsWsAction {
   public static final String PARAM_TOKEN = "token";
 
   private final DbClient dbClient;
+  private final Encryption encryption;
   private final UserSession userSession;
   private final GithubApplicationClient githubApplicationClient;
 
-  public ListGithubOrganizationsAction(DbClient dbClient, UserSession userSession, GithubApplicationClientImpl githubApplicationClient) {
+  public ListGithubOrganizationsAction(DbClient dbClient, Settings settings, UserSession userSession,
+    GithubApplicationClientImpl githubApplicationClient) {
     this.dbClient = dbClient;
+    this.encryption = settings.getEncryption();
     this.userSession = userSession;
     this.githubApplicationClient = githubApplicationClient;
   }
@@ -68,13 +73,14 @@ public class ListGithubOrganizationsAction implements AlmIntegrationsWsAction {
       .setDescription("List GitHub organizations<br/>" +
         "Requires the 'Create Projects' permission")
       .setInternal(true)
+      .setResponseExample(getClass().getResource("example-list_github_organizations.json"))
       .setSince("8.4")
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
 
     action.createParam(PARAM_TOKEN)
       .setMaximumLength(200)
@@ -100,16 +106,17 @@ public class ListGithubOrganizationsAction implements AlmIntegrationsWsAction {
 
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("GitHub ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("GitHub Setting '%s' not found", almSettingKey)));
 
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID is not null");
-      String url = requireNonNull(almSettingDto.getUrl(), String.format("No URL set for GitHub ALM '%s'", almSettingKey));
+      String url = requireNonNull(almSettingDto.getUrl(), String.format("No URL set for GitHub '%s'", almSettingKey));
 
       AccessToken accessToken;
       if (request.hasParam(PARAM_TOKEN)) {
         String code = request.mandatoryParam(PARAM_TOKEN);
-        String clientId = requireNonNull(almSettingDto.getClientId(), String.format("No clientId set for GitHub ALM '%s'", almSettingKey));
-        String clientSecret = requireNonNull(almSettingDto.getClientSecret(), String.format("No clientSecret set for GitHub ALM '%s'", almSettingKey));
+        String clientId = requireNonNull(almSettingDto.getClientId(), String.format("No clientId set for GitHub '%s'", almSettingKey));
+        String clientSecret = requireNonNull(almSettingDto.getDecryptedClientSecret(encryption), String.format("No clientSecret set for GitHub '%s'",
+          almSettingKey));
 
         try {
           accessToken = githubApplicationClient.createUserAccessToken(url, clientId, clientSecret, code);
@@ -122,13 +129,13 @@ public class ListGithubOrganizationsAction implements AlmIntegrationsWsAction {
         if (almPatDto.isPresent()) {
           AlmPatDto almPat = almPatDto.get();
           almPat.setPersonalAccessToken(accessToken.getValue());
-          dbClient.almPatDao().update(dbSession, almPat);
+          dbClient.almPatDao().update(dbSession, almPat, userSession.getLogin(), almSettingDto.getKey());
         } else {
           AlmPatDto almPat = new AlmPatDto()
             .setPersonalAccessToken(accessToken.getValue())
             .setAlmSettingUuid(almSettingDto.getUuid())
             .setUserUuid(userUuid);
-          dbClient.almPatDao().insert(dbSession, almPat);
+          dbClient.almPatDao().insert(dbSession, almPat, userSession.getLogin(), almSettingDto.getKey());
         }
         dbSession.commit();
       } else {

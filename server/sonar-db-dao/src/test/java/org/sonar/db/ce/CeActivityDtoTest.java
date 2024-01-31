@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,21 +23,18 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
+import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @RunWith(DataProviderRunner.class)
 public class CeActivityDtoTest {
   private static final String STR_40_CHARS = "0123456789012345678901234567890123456789";
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
+  private static final String STR_100_CHARS = randomAlphabetic(100);
   private CeActivityDto underTest = new CeActivityDto();
 
   @Test
@@ -47,7 +44,7 @@ public class CeActivityDtoTest {
       .setUuid(randomAlphanumeric(10))
       .setTaskType(randomAlphanumeric(11))
       .setComponentUuid(randomAlphanumeric(12))
-      .setMainComponentUuid(randomAlphanumeric(13))
+      .setEntityUuid(randomAlphanumeric(13))
       .setSubmitterUuid(randomAlphanumeric(14))
       .setWorkerUuid(randomAlphanumeric(15))
       .setCreatedAt(now + 9_999)
@@ -58,10 +55,10 @@ public class CeActivityDtoTest {
     assertThat(underTest.getUuid()).isEqualTo(ceQueueDto.getUuid());
     assertThat(underTest.getTaskType()).isEqualTo(ceQueueDto.getTaskType());
     assertThat(underTest.getComponentUuid()).isEqualTo(ceQueueDto.getComponentUuid());
-    assertThat(underTest.getMainComponentUuid()).isEqualTo(ceQueueDto.getMainComponentUuid());
+    assertThat(underTest.getEntityUuid()).isEqualTo(ceQueueDto.getEntityUuid());
     assertThat(underTest.getIsLastKey()).isEqualTo(ceQueueDto.getTaskType() + ceQueueDto.getComponentUuid());
     assertThat(underTest.getIsLast()).isFalse();
-    assertThat(underTest.getMainIsLastKey()).isEqualTo(ceQueueDto.getTaskType() + ceQueueDto.getMainComponentUuid());
+    assertThat(underTest.getMainIsLastKey()).isEqualTo(ceQueueDto.getTaskType() + ceQueueDto.getEntityUuid());
     assertThat(underTest.getMainIsLast()).isFalse();
     assertThat(underTest.getSubmitterUuid()).isEqualTo(ceQueueDto.getSubmitterUuid());
     assertThat(underTest.getWorkerUuid()).isEqualTo(ceQueueDto.getWorkerUuid());
@@ -82,28 +79,41 @@ public class CeActivityDtoTest {
   public void setComponentUuid_throws_IAE_if_value_is_41_chars() {
     String str_41_chars = STR_40_CHARS + "a";
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Value is too long for column CE_ACTIVITY.COMPONENT_UUID: " + str_41_chars);
-
-    underTest.setComponentUuid(str_41_chars);
+    assertThatThrownBy(() -> underTest.setComponentUuid(str_41_chars))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Value is too long for column CE_ACTIVITY.COMPONENT_UUID: " + str_41_chars);
   }
 
   @Test
   public void setMainComponentUuid_accepts_null_empty_and_string_40_chars_or_less() {
-    underTest.setMainComponentUuid(null);
-    underTest.setMainComponentUuid("");
-    underTest.setMainComponentUuid("bar");
-    underTest.setMainComponentUuid(STR_40_CHARS);
+    underTest.setEntityUuid(null);
+    underTest.setEntityUuid("");
+    underTest.setEntityUuid("bar");
+    underTest.setEntityUuid(STR_40_CHARS);
   }
 
   @Test
-  public void setMainComponentUuid_throws_IAE_if_value_is_41_chars() {
+  public void seEntityUuid_throws_IAE_if_value_is_41_chars() {
     String str_41_chars = STR_40_CHARS + "a";
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Value is too long for column CE_ACTIVITY.MAIN_COMPONENT_UUID: " + str_41_chars);
+    assertThatThrownBy(() -> underTest.setEntityUuid(str_41_chars))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Value is too long for column CE_ACTIVITY.ENTITY_UUID: " + str_41_chars);
+  }
 
-    underTest.setMainComponentUuid(str_41_chars);
+  @Test
+  public void setNodeName_accepts_null_empty_and_string_100_chars_or_less() {
+    underTest.setNodeName(null);
+    underTest.setNodeName("");
+    underTest.setNodeName("bar");
+    underTest.setNodeName(STR_100_CHARS);
+    assertThat(underTest.getNodeName()).isEqualTo(STR_100_CHARS);
+  }
+
+  @Test
+  public void setNodeName_ifMoreThan100chars_truncates() {
+    underTest.setNodeName(STR_100_CHARS + "This should be truncated");
+    assertThat(underTest.getNodeName()).isEqualTo(STR_100_CHARS);
   }
 
   @Test
@@ -130,16 +140,6 @@ public class CeActivityDtoTest {
     underTest.setErrorMessage(before + "\u0000" + after + truncated);
 
     assertThat(underTest.getErrorMessage()).isEqualTo(before + after);
-  }
-
-  @Test
-  public void setWarningCount_throws_IAE_if_less_than_0() {
-    underTest.setWarningCount(0);
-    underTest.setWarningCount(1 + new Random().nextInt(10));
-
-    expectedException.expect(IllegalArgumentException.class);
-
-    underTest.setWarningCount(-1 - new Random().nextInt(10));
   }
 
   @DataProvider

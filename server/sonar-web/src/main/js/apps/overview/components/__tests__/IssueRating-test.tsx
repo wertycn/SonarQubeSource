@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,39 +17,31 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
 import { mockPullRequest } from '../../../../helpers/mocks/branch-like';
-import { mockComponent, mockMeasureEnhanced, mockMetric } from '../../../../helpers/testMocks';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { mockMeasureEnhanced, mockMetric } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
 import { IssueType } from '../../../../types/issues';
 import { MetricKey } from '../../../../types/metrics';
 import { IssueRating, IssueRatingProps } from '../IssueRating';
 
-it('should render correctly for bugs', () => {
-  expect(shallowRender()).toMatchSnapshot();
-  expect(shallowRender({ useDiffMetric: true })).toMatchSnapshot();
+it('should render correctly for vulnerabilities', async () => {
+  renderIssueRating({ type: IssueType.Vulnerability, useDiffMetric: true });
+  expect(await screen.findByLabelText('metric.has_rating_X.A')).toBeInTheDocument();
+  expect(await screen.findByText('metric.security_rating.tooltip.A')).toBeInTheDocument();
 });
 
-it('should render correctly for code smells', () => {
-  expect(shallowRender({ type: IssueType.CodeSmell })).toMatchSnapshot();
-  expect(shallowRender({ type: IssueType.CodeSmell, useDiffMetric: true })).toMatchSnapshot();
+it('should render correctly if no values are present', async () => {
+  renderIssueRating({
+    measures: [mockMeasureEnhanced({ metric: mockMetric({ key: 'NONE' }) })],
+  });
+  expect(await screen.findByText('–')).toBeInTheDocument();
 });
 
-it('should render correctly for vulnerabilities', () => {
-  expect(shallowRender({ type: IssueType.Vulnerability })).toMatchSnapshot();
-  expect(shallowRender({ type: IssueType.Vulnerability, useDiffMetric: true })).toMatchSnapshot();
-});
-
-it('should render correctly if no values are present', () => {
-  expect(
-    shallowRender({
-      measures: [mockMeasureEnhanced({ metric: mockMetric({ key: 'NONE' }) })]
-    })
-  ).toMatchSnapshot();
-});
-
-function shallowRender(props: Partial<IssueRatingProps> = {}) {
-  return shallow(
+function renderIssueRating(props: Partial<IssueRatingProps> = {}) {
+  return renderComponent(
     <IssueRating
       branchLike={mockPullRequest()}
       component={mockComponent()}
@@ -59,10 +51,10 @@ function shallowRender(props: Partial<IssueRatingProps> = {}) {
         mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_maintainability_rating }) }),
         mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.sqale_rating }) }),
         mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_security_rating }) }),
-        mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.security_rating }) })
+        mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.security_rating }) }),
       ]}
       type={IssueType.Bug}
       {...props}
-    />
+    />,
   );
 }

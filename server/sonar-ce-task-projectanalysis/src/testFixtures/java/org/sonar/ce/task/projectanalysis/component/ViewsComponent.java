@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -152,17 +152,12 @@ public class ViewsComponent implements Component {
     return uuid;
   }
 
-  @Override
-  public String getDbKey() {
-    return key;
-  }
-
   /**
    * Views has no branch feature, the public key is the same as the key
    */
   @Override
   public String getKey() {
-    return getDbKey();
+    return this.key;
   }
 
   @Override

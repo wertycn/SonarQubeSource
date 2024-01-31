@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,15 +26,17 @@ import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
+
 public class SearchRequest {
-  private List<String> actionPlans;
   private List<String> additionalFields;
   private Boolean asc;
   private Boolean assigned;
   private List<String> assigneesUuid;
   private List<String> authors;
   private List<String> componentUuids;
-  private List<String> components;
+  private List<String> componentKeys;
   private String createdAfter;
   private String createdAt;
   private String createdBefore;
@@ -44,42 +46,42 @@ public class SearchRequest {
   private List<String> facets;
   private List<String> files;
   private List<String> issues;
+  private Boolean inNewCodePeriod;
   private Set<String> scopes;
   private List<String> languages;
-  private List<String> moduleUuids;
   private Boolean onComponentOnly;
   private String branch;
   private String pullRequest;
   private int page;
   private int pageSize;
-  private List<String> projects;
+  private List<String> projectKeys;
   private List<String> resolutions;
   private Boolean resolved;
   private List<String> rules;
-  private Boolean sinceLeakPeriod;
   private String sort;
   private List<String> severities;
+  private List<String> impactSeverities;
+  private List<String> impactSoftwareQualities;
+  private List<String> cleanCodeAttributesCategories;
   private List<String> statuses;
+  private List<String> issueStatuses;
   private List<String> tags;
   private Set<String> types;
+  private List<String> pciDss32;
+  private List<String> pciDss40;
   private List<String> owaspTop10;
+  private List<String> owaspAsvs40;
+  private List<String> owaspTop10For2021;
   private List<String> sansTop25;
   private List<String> sonarsourceSecurity;
   private List<String> cwe;
   private String timeZone;
+  private Integer owaspAsvsLevel;
+  private List<String> codeVariants;
+  private String fixedInPullRequest;
 
   public SearchRequest() {
     // nothing to do here
-  }
-
-  @CheckForNull
-  public List<String> getActionPlans() {
-    return actionPlans;
-  }
-
-  public SearchRequest setActionPlans(@Nullable List<String> actionPlans) {
-    this.actionPlans = actionPlans;
-    return this;
   }
 
   @CheckForNull
@@ -228,6 +230,9 @@ public class SearchRequest {
   }
 
   public SearchRequest setIssues(@Nullable List<String> issues) {
+    if (issues != null) {
+      checkArgument(issues.size() <= MAX_PAGE_SIZE, "Number of issue keys must be less than " + MAX_PAGE_SIZE + " (got " + issues.size() + ")");
+    }
     this.issues = issues;
     return this;
   }
@@ -249,16 +254,6 @@ public class SearchRequest {
 
   public SearchRequest setLanguages(@Nullable List<String> languages) {
     this.languages = languages;
-    return this;
-  }
-
-  @CheckForNull
-  public List<String> getModuleUuids() {
-    return moduleUuids;
-  }
-
-  public SearchRequest setModuleUuids(@Nullable List<String> moduleUuids) {
-    this.moduleUuids = moduleUuids;
     return this;
   }
 
@@ -321,16 +316,6 @@ public class SearchRequest {
   }
 
   @CheckForNull
-  public Boolean getSinceLeakPeriod() {
-    return sinceLeakPeriod;
-  }
-
-  public SearchRequest setSinceLeakPeriod(@Nullable Boolean sinceLeakPeriod) {
-    this.sinceLeakPeriod = sinceLeakPeriod;
-    return this;
-  }
-
-  @CheckForNull
   public String getSort() {
     return sort;
   }
@@ -360,6 +345,16 @@ public class SearchRequest {
     return this;
   }
 
+  public SearchRequest setIssueStatuses(@Nullable List<String> issueStatuses) {
+    this.issueStatuses = issueStatuses;
+    return this;
+  }
+
+  @CheckForNull
+  public List<String> getIssueStatuses() {
+    return issueStatuses;
+  }
+
   @CheckForNull
   public List<String> getTags() {
     return tags;
@@ -381,12 +376,52 @@ public class SearchRequest {
   }
 
   @CheckForNull
+  public List<String> getPciDss32() {
+    return pciDss32;
+  }
+
+  public SearchRequest setPciDss32(@Nullable List<String> pciDss32) {
+    this.pciDss32 = pciDss32;
+    return this;
+  }
+
+  @CheckForNull
+  public List<String> getPciDss40() {
+    return pciDss40;
+  }
+
+  public SearchRequest setPciDss40(@Nullable List<String> pciDss40) {
+    this.pciDss40 = pciDss40;
+    return this;
+  }
+
+  @CheckForNull
+  public List<String> getOwaspAsvs40() {
+    return owaspAsvs40;
+  }
+
+  public SearchRequest setOwaspAsvs40(@Nullable List<String> owaspAsvs40) {
+    this.owaspAsvs40 = owaspAsvs40;
+    return this;
+  }
+
+  @CheckForNull
   public List<String> getOwaspTop10() {
     return owaspTop10;
   }
 
   public SearchRequest setOwaspTop10(@Nullable List<String> owaspTop10) {
     this.owaspTop10 = owaspTop10;
+    return this;
+  }
+
+  @CheckForNull
+  public List<String> getOwaspTop10For2021() {
+    return owaspTop10For2021;
+  }
+
+  public SearchRequest setOwaspTop10For2021(@Nullable List<String> owaspTop10For2021) {
+    this.owaspTop10For2021 = owaspTop10For2021;
     return this;
   }
 
@@ -421,22 +456,22 @@ public class SearchRequest {
   }
 
   @CheckForNull
-  public List<String> getComponents() {
-    return components;
+  public List<String> getComponentKeys() {
+    return componentKeys;
   }
 
-  public SearchRequest setComponents(@Nullable List<String> components) {
-    this.components = components;
+  public SearchRequest setComponentKeys(@Nullable List<String> componentKeys) {
+    this.componentKeys = componentKeys;
     return this;
   }
 
   @CheckForNull
-  public List<String> getProjects() {
-    return projects;
+  public List<String> getProjectKeys() {
+    return projectKeys;
   }
 
-  public SearchRequest setProjects(@Nullable List<String> projects) {
-    this.projects = projects;
+  public SearchRequest setProjectKeys(@Nullable List<String> projectKeys) {
+    this.projectKeys = projectKeys;
     return this;
   }
 
@@ -467,6 +502,72 @@ public class SearchRequest {
 
   public SearchRequest setTimeZone(@Nullable String timeZone) {
     this.timeZone = timeZone;
+    return this;
+  }
+
+  @CheckForNull
+  public Boolean getInNewCodePeriod() {
+    return inNewCodePeriod;
+  }
+
+  public SearchRequest setInNewCodePeriod(@Nullable Boolean inNewCodePeriod) {
+    this.inNewCodePeriod = inNewCodePeriod;
+    return this;
+  }
+
+  public Integer getOwaspAsvsLevel() {
+    return owaspAsvsLevel;
+  }
+
+  public SearchRequest setOwaspAsvsLevel(@Nullable Integer owaspAsvsLevel) {
+    this.owaspAsvsLevel = owaspAsvsLevel;
+    return this;
+  }
+
+  @CheckForNull
+  public List<String> getCodeVariants() {
+    return codeVariants;
+  }
+
+  public SearchRequest setCodeVariants(@Nullable List<String> codeVariants) {
+    this.codeVariants = codeVariants;
+    return this;
+  }
+
+  public List<String> getImpactSeverities() {
+    return impactSeverities;
+  }
+
+  public SearchRequest setImpactSeverities(@Nullable List<String> impactSeverities) {
+    this.impactSeverities = impactSeverities;
+    return this;
+  }
+
+  public List<String> getImpactSoftwareQualities() {
+    return impactSoftwareQualities;
+  }
+
+  public SearchRequest setImpactSoftwareQualities(@Nullable List<String> impactSoftwareQualities) {
+    this.impactSoftwareQualities = impactSoftwareQualities;
+    return this;
+  }
+
+  public List<String> getCleanCodeAttributesCategories() {
+    return cleanCodeAttributesCategories;
+  }
+
+  public SearchRequest setCleanCodeAttributesCategories(@Nullable List<String> cleanCodeAttributesCategories) {
+    this.cleanCodeAttributesCategories = cleanCodeAttributesCategories;
+    return this;
+  }
+
+  @CheckForNull
+  public String getFixedInPullRequest() {
+    return fixedInPullRequest;
+  }
+
+  public SearchRequest setFixedInPullRequest(@Nullable String fixedInPullRequest) {
+    this.fixedInPullRequest = fixedInPullRequest;
     return this;
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,29 +18,36 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { uniq } from 'lodash';
+import { LinearIssueLocation } from '../../../types/types';
+
+export interface TokenModifiers {
+  isHighlighted?: boolean;
+  isLocation?: boolean;
+  isSelected?: boolean;
+  isUnderlined?: boolean;
+}
 
 export interface Token {
   className: string;
   markers: number[];
+  modifiers: TokenModifiers;
   text: string;
 }
 
 const ISSUE_LOCATION_CLASS = 'source-line-code-issue';
 
-export function splitByTokens(code: string, rootClassName = ''): Token[] {
-  const container = document.createElement('div');
+export function splitByTokens(code: NodeListOf<ChildNode>, rootClassName = ''): Token[] {
   let tokens: Token[] = [];
-  container.innerHTML = code;
-  [].forEach.call(container.childNodes, (node: Element) => {
+  Array.prototype.forEach.call(code, (node: Element) => {
     if (node.nodeType === 1) {
       // ELEMENT NODE
       const fullClassName = rootClassName ? rootClassName + ' ' + node.className : node.className;
-      const innerTokens = splitByTokens(node.innerHTML, fullClassName);
+      const innerTokens = splitByTokens(node.childNodes, fullClassName);
       tokens = tokens.concat(innerTokens);
     }
     if (node.nodeType === 3 && node.nodeValue) {
       // TEXT NODE
-      tokens.push({ className: rootClassName, markers: [], text: node.nodeValue });
+      tokens.push({ className: rootClassName, markers: [], text: node.nodeValue, modifiers: {} });
     }
   });
   return tokens;
@@ -48,10 +55,10 @@ export function splitByTokens(code: string, rootClassName = ''): Token[] {
 
 export function highlightSymbol(tokens: Token[], symbol: string): Token[] {
   const symbolRegExp = new RegExp(`\\b${symbol}\\b`);
-  return tokens.map(token =>
+  return tokens.map((token) =>
     symbolRegExp.test(token.className)
       ? { ...token, className: `${token.className} highlighted` }
-      : token
+      : token,
   );
 }
 
@@ -83,14 +90,15 @@ function part(str: string, from: number, to: number, acc: number): string {
  */
 export function highlightIssueLocations(
   tokens: Token[],
-  issueLocations: T.LinearIssueLocation[],
-  rootClassName: string = ISSUE_LOCATION_CLASS
+  issueLocations: LinearIssueLocation[],
+  modifier: keyof TokenModifiers,
+  rootClassName: string = ISSUE_LOCATION_CLASS,
 ): Token[] {
-  issueLocations.forEach(location => {
+  issueLocations.forEach((location) => {
     const nextTokens: Token[] = [];
     let acc = 0;
     let markerAdded = location.line !== location.startLine;
-    tokens.forEach(token => {
+    tokens.forEach((token) => {
       const x = intersect(acc, acc + token.text.length, location.from, location.to);
       const p1 = part(token.text, acc, x.from, acc);
       const p2 = part(token.text, x.from, x.to, acc);
@@ -105,11 +113,15 @@ export function highlightIssueLocations(
             : token.className;
         nextTokens.push({
           className: newClassName,
+          modifiers: {
+            ...token.modifiers,
+            [modifier]: true,
+          },
           markers:
             !markerAdded && location.index != null
               ? uniq([...token.markers, location.index])
               : token.markers,
-          text: p2
+          text: p2,
         });
         markerAdded = true;
       }
@@ -122,3 +134,53 @@ export function highlightIssueLocations(
   });
   return tokens;
 }
+
+export const getHighlightedTokens = (params: {
+  code: string | undefined;
+  highlightedLocationMessage: { index: number; text: string | undefined } | undefined;
+  highlightedSymbols: string[] | undefined;
+  issueLocations: LinearIssueLocation[];
+  secondaryIssueLocations: LinearIssueLocation[];
+}) => {
+  const {
+    code,
+    highlightedLocationMessage,
+    highlightedSymbols,
+    issueLocations,
+    secondaryIssueLocations,
+  } = params;
+
+  const container = document.createElement('div');
+  container.innerHTML = code ?? '';
+  let tokens = splitByTokens(container.childNodes);
+
+  if (highlightedSymbols) {
+    highlightedSymbols.forEach((symbol) => {
+      tokens = highlightSymbol(tokens, symbol);
+    });
+  }
+
+  if (issueLocations.length > 0) {
+    tokens = highlightIssueLocations(tokens, issueLocations, 'isUnderlined', 'isUnderlined');
+  }
+
+  if (secondaryIssueLocations) {
+    tokens = highlightIssueLocations(
+      tokens,
+      secondaryIssueLocations,
+      'isLocation',
+      'issue-location',
+    );
+
+    if (highlightedLocationMessage) {
+      const location = secondaryIssueLocations.find(
+        (location) => location.index === highlightedLocationMessage.index,
+      );
+      if (location) {
+        tokens = highlightIssueLocations(tokens, [location], 'isSelected', 'selected');
+      }
+    }
+  }
+
+  return tokens;
+};

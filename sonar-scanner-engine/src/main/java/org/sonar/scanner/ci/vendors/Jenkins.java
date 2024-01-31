@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,14 +20,16 @@
 package org.sonar.scanner.ci.vendors;
 
 import java.nio.file.Path;
+import java.util.Optional;
 import org.apache.commons.lang.StringUtils;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryBuilder;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.ci.CiConfiguration;
 import org.sonar.scanner.ci.CiConfigurationImpl;
 import org.sonar.scanner.ci.CiVendor;
@@ -35,7 +37,7 @@ import org.sonar.scanner.ci.CiVendor;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 public class Jenkins implements CiVendor {
-  private static final Logger LOG = Loggers.get(Jenkins.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Jenkins.class);
   private final System2 system;
   private final DefaultInputProject inputProject;
 
@@ -99,10 +101,10 @@ public class Jenkins implements CiVendor {
 
     String refName = "refs/remotes/origin/" + gitBranch;
     try (Repository repo = builder.build()) {
-      Ref ref = repo.exactRef(refName);
-      if (ref != null) {
-        return ref.getObjectId().getName();
-      }
+      return Optional.ofNullable(repo.exactRef(refName))
+        .map(Ref::getObjectId)
+        .map(ObjectId::getName)
+        .orElse(null);
     } catch (Exception e) {
       LOG.debug("Couldn't find git sha1 in '{}': {}", refName, e.getMessage());
     }

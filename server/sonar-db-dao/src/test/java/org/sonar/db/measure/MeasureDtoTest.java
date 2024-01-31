@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,12 +32,9 @@ public class MeasureDtoTest {
   public void test_getter_and_setter() {
     underTest
       .setValue(2d)
-      .setData("text value")
-      .setVariation(1d);
-
+      .setData("text value");
     assertThat(underTest.getValue()).isEqualTo(2d);
     assertThat(underTest.getData()).isNotNull();
-    assertThat(underTest.getVariation()).isEqualTo(1d);
   }
 
   @Test

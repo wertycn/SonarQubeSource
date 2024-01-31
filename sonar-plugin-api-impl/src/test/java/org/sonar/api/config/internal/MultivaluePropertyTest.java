@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,14 +23,13 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Random;
-import java.util.function.Function;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
+import static java.util.function.UnaryOperator.identity;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.api.config.internal.MultivalueProperty.parseAsCsv;
 import static org.sonar.api.config.internal.MultivalueProperty.trimFieldsAndRemoveEmptyFields;
 
@@ -38,24 +37,20 @@ import static org.sonar.api.config.internal.MultivalueProperty.trimFieldsAndRemo
 public class MultivaluePropertyTest {
   private static final String[] EMPTY_STRING_ARRAY = {};
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   @Test
   @UseDataProvider("testParseAsCsv")
   public void parseAsCsv_for_coverage(String value, String[] expected) {
     // parseAsCsv is extensively tested in org.sonar.server.config.ConfigurationProviderTest
     assertThat(parseAsCsv("key", value))
-      .isEqualTo(parseAsCsv("key", value, Function.identity()))
+      .isEqualTo(parseAsCsv("key", value, identity()))
       .isEqualTo(expected);
   }
 
   @Test
   public void parseAsCsv_fails_with_ISE_if_value_can_not_be_parsed() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Property: 'multi' doesn't contain a valid CSV value: '\"a ,b'");
-
-    parseAsCsv("multi", "\"a ,b");
+    assertThatThrownBy(() -> parseAsCsv("multi", "\"a ,b"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Property: 'multi' doesn't contain a valid CSV value: '\"a ,b'");
   }
 
   @DataProvider
@@ -81,15 +76,14 @@ public class MultivaluePropertyTest {
 
   @Test
   public void trimFieldsAndRemoveEmptyFields_throws_NPE_if_arg_is_null() {
-    expectedException.expect(NullPointerException.class);
-
-    trimFieldsAndRemoveEmptyFields(null);
+    assertThatThrownBy(() -> trimFieldsAndRemoveEmptyFields(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   @UseDataProvider("plains")
   public void trimFieldsAndRemoveEmptyFields_ignores_EmptyFields(String str) {
-    assertThat(trimFieldsAndRemoveEmptyFields("")).isEqualTo("");
+    assertThat(trimFieldsAndRemoveEmptyFields("")).isEmpty();
     assertThat(trimFieldsAndRemoveEmptyFields(str)).isEqualTo(str);
 
     assertThat(trimFieldsAndRemoveEmptyFields(',' + str)).isEqualTo(str);

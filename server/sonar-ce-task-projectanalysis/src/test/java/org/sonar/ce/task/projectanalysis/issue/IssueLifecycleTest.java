@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,13 @@
  */
 package org.sonar.ce.task.projectanalysis.issue;
 
-import com.google.common.collect.ImmutableMap;
 import java.util.Date;
+import java.util.Set;
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
+import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
@@ -55,11 +58,13 @@ import static org.sonar.api.issue.Issue.STATUS_RESOLVED;
 import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
 import static org.sonar.api.rule.Severity.BLOCKER;
 import static org.sonar.api.utils.DateUtils.parseDate;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
 import static org.sonar.db.rule.RuleTesting.XOO_X1;
 
 public class IssueLifecycleTest {
   private static final Date DEFAULT_DATE = new Date();
   private static final Duration DEFAULT_DURATION = Duration.create(10);
+  private static final String TEST_CONTEXT_KEY = "test_context_key";
 
   private final DumbRule rule = new DumbRule(XOO_X1);
 
@@ -68,7 +73,7 @@ public class IssueLifecycleTest {
   @Rule
   public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule();
 
-  private final IssueChangeContext issueChangeContext = IssueChangeContext.createUser(DEFAULT_DATE, "default_user_uuid");
+  private final IssueChangeContext issueChangeContext = issueChangeContextByUserBuilder(DEFAULT_DATE, "default_user_uuid").build();
   private final IssueWorkflow workflow = mock(IssueWorkflow.class);
   private final IssueFieldsSetter updater = mock(IssueFieldsSetter.class);
   private final DebtCalculator debtCalculator = mock(DebtCalculator.class);
@@ -89,6 +94,7 @@ public class IssueLifecycleTest {
     assertThat(issue.effort()).isEqualTo(DEFAULT_DURATION);
     assertThat(issue.isNew()).isTrue();
     assertThat(issue.isCopied()).isFalse();
+    assertThat(issue.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
   }
 
   @Test
@@ -115,9 +121,11 @@ public class IssueLifecycleTest {
     DefaultIssue raw = new DefaultIssue()
       .setKey("raw");
     DefaultIssue fromShort = new DefaultIssue()
-      .setKey("short");
+      .setKey("short")
+      .setIsNewCodeReferenceIssue(true);
     fromShort.setResolution("resolution");
     fromShort.setStatus("status");
+    fromShort.setCleanCodeAttribute(CleanCodeAttribute.COMPLETE);
 
     Date commentDate = new Date();
     fromShort.addComment(new DefaultIssueComment()
@@ -149,18 +157,20 @@ public class IssueLifecycleTest {
 
     assertThat(raw.resolution()).isEqualTo("resolution");
     assertThat(raw.status()).isEqualTo("status");
+    assertThat(raw.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.COMPLETE);
     assertThat(raw.defaultIssueComments())
       .extracting(DefaultIssueComment::issueKey, DefaultIssueComment::createdAt, DefaultIssueComment::userUuid, DefaultIssueComment::markdownText)
       .containsOnly(tuple("raw", commentDate, "user_uuid", "A comment"));
     assertThat(raw.changes()).hasSize(2);
     assertThat(raw.changes().get(0).creationDate()).isEqualTo(diffDate);
-    assertThat(raw.changes().get(0).userUuid()).isEqualTo("user_uuid");
-    assertThat(raw.changes().get(0).issueKey()).isEqualTo("raw");
+    assertThat(raw.changes().get(0).userUuid()).contains("user_uuid");
+    assertThat(raw.changes().get(0).issueKey()).contains("raw");
     assertThat(raw.changes().get(0).diffs()).containsOnlyKeys("severity");
-    assertThat(raw.changes().get(1).userUuid()).isEqualTo("default_user_uuid");
+    assertThat(raw.changes().get(1).userUuid()).contains("default_user_uuid");
     assertThat(raw.changes().get(1).diffs()).containsOnlyKeys(IssueFieldsSetter.FROM_BRANCH);
     assertThat(raw.changes().get(1).get(IssueFieldsSetter.FROM_BRANCH).oldValue()).isEqualTo("#2");
     assertThat(raw.changes().get(1).get(IssueFieldsSetter.FROM_BRANCH).newValue()).isEqualTo("master");
+    assertThat(raw.isNewCodeReferenceIssue()).isTrue();
   }
 
   @Test
@@ -178,6 +188,7 @@ public class IssueLifecycleTest {
       .setKey("short");
     fromShort.setResolution("resolution");
     fromShort.setStatus("status");
+    fromShort.setCleanCodeAttribute(CleanCodeAttribute.DISTINCT);
 
     Date commentDate = new Date();
     fromShort.addComment(new DefaultIssueComment()
@@ -205,18 +216,51 @@ public class IssueLifecycleTest {
 
     assertThat(raw.resolution()).isEqualTo("resolution");
     assertThat(raw.status()).isEqualTo("status");
+    assertThat(raw.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.DISTINCT);
     assertThat(raw.defaultIssueComments())
       .extracting(DefaultIssueComment::issueKey, DefaultIssueComment::createdAt, DefaultIssueComment::userUuid, DefaultIssueComment::markdownText)
       .containsOnly(tuple("raw", commentDate, "user_uuid", "A comment"));
     assertThat(raw.changes()).hasSize(2);
     assertThat(raw.changes().get(0).creationDate()).isEqualTo(diffDate);
-    assertThat(raw.changes().get(0).userUuid()).isEqualTo("user_uuid");
-    assertThat(raw.changes().get(0).issueKey()).isEqualTo("raw");
+    assertThat(raw.changes().get(0).userUuid()).contains("user_uuid");
+    assertThat(raw.changes().get(0).issueKey()).contains("raw");
     assertThat(raw.changes().get(0).diffs()).containsOnlyKeys("severity");
-    assertThat(raw.changes().get(1).userUuid()).isEqualTo("default_user_uuid");
+    assertThat(raw.changes().get(1).userUuid()).contains("default_user_uuid");
     assertThat(raw.changes().get(1).diffs()).containsOnlyKeys(IssueFieldsSetter.FROM_BRANCH);
     assertThat(raw.changes().get(1).get(IssueFieldsSetter.FROM_BRANCH).oldValue()).isEqualTo("sourceBranch-1");
     assertThat(raw.changes().get(1).get(IssueFieldsSetter.FROM_BRANCH).newValue()).isEqualTo("#1");
+  }
+
+  @Test
+  public void copyExistingIssuesFromSourceBranchOfPullRequest_copyFieldDiffsCorrectly() {
+    String pullRequestKey = "1";
+    Branch branch = mock(Branch.class);
+    when(branch.getType()).thenReturn(BranchType.PULL_REQUEST);
+    when(branch.getName()).thenReturn("sourceBranch-1");
+    when(branch.getPullRequestKey()).thenReturn(pullRequestKey);
+    analysisMetadataHolder.setBranch(branch);
+    analysisMetadataHolder.setPullRequestKey(pullRequestKey);
+    DefaultIssue destIssue = new DefaultIssue()
+      .setKey("raw");
+    DefaultIssue sourceIssue = new DefaultIssue()
+      .setKey("issue");
+    sourceIssue.setResolution("resolution");
+    sourceIssue.setStatus("status");
+
+    FieldDiffs sourceFieldDiffs = new FieldDiffs();
+    sourceIssue.addChange(sourceFieldDiffs
+      .setCreationDate(new Date())
+      .setIssueKey("short")
+      .setUserUuid("user_uuid")
+      .setExternalUser("toto")
+      .setWebhookSource("github")
+      .setDiff("severity", "MINOR", "MAJOR"));
+
+    underTest.copyExistingIssueFromSourceBranchToPullRequest(destIssue, sourceIssue);
+
+    FieldDiffs actualFieldDiffs = destIssue.changes().iterator().next();
+    assertThat(actualFieldDiffs.issueKey()).contains(destIssue.key());
+    assertThat(actualFieldDiffs).usingRecursiveComparison().ignoringFields("issueKey").isEqualTo(sourceFieldDiffs);
   }
 
   @Test
@@ -243,7 +287,8 @@ public class IssueLifecycleTest {
       .setKey("RAW_KEY")
       .setCreationDate(parseDate("2015-10-01"))
       .setUpdateDate(parseDate("2015-10-02"))
-      .setCloseDate(parseDate("2015-10-03"));
+      .setCloseDate(parseDate("2015-10-03"))
+      .setRuleDescriptionContextKey(TEST_CONTEXT_KEY);
 
     DbIssues.Locations issueLocations = DbIssues.Locations.newBuilder()
       .setTextRange(DbCommons.TextRange.newBuilder()
@@ -256,10 +301,12 @@ public class IssueLifecycleTest {
       .setCreationDate(parseDate("2015-01-01"))
       .setUpdateDate(parseDate("2015-01-02"))
       .setCloseDate(parseDate("2015-01-03"))
+      .setCleanCodeAttribute(CleanCodeAttribute.FOCUSED)
       .setResolution(RESOLUTION_FIXED)
       .setStatus(STATUS_CLOSED)
       .setSeverity(BLOCKER)
       .setAssigneeUuid("base assignee uuid")
+      .setAssigneeLogin("base assignee login")
       .setAuthorLogin("base author")
       .setTags(newArrayList("base tag"))
       .setOnDisabledRule(true)
@@ -281,6 +328,7 @@ public class IssueLifecycleTest {
 
     assertThat(raw.isNew()).isFalse();
     assertThat(raw.isCopied()).isTrue();
+    assertThat(raw.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.FOCUSED);
     assertThat(raw.key()).isNotNull();
     assertThat(raw.key()).isNotEqualTo(base.key());
     assertThat(raw.creationDate()).isEqualTo(base.creationDate());
@@ -289,6 +337,7 @@ public class IssueLifecycleTest {
     assertThat(raw.resolution()).isEqualTo(RESOLUTION_FIXED);
     assertThat(raw.status()).isEqualTo(STATUS_CLOSED);
     assertThat(raw.assignee()).isEqualTo("base assignee uuid");
+    assertThat(raw.assigneeLogin()).isEqualTo("base assignee login");
     assertThat(raw.authorLogin()).isEqualTo("base author");
     assertThat(raw.tags()).containsOnly("base tag");
     assertThat(raw.effort()).isEqualTo(DEFAULT_DURATION);
@@ -296,6 +345,7 @@ public class IssueLifecycleTest {
     assertThat(raw.selectedAt()).isEqualTo(1000L);
     assertThat(raw.changes().get(0).get(IssueFieldsSetter.FROM_BRANCH).oldValue()).isEqualTo("master");
     assertThat(raw.changes().get(0).get(IssueFieldsSetter.FROM_BRANCH).newValue()).isEqualTo("release-2.x");
+    assertThat(raw.getRuleDescriptionContextKey()).contains(TEST_CONTEXT_KEY);
 
     verifyNoInteractions(updater);
   }
@@ -310,11 +360,44 @@ public class IssueLifecycleTest {
   }
 
   @Test
+  public void doManualTransition() {
+    DefaultIssue issue = new DefaultIssue();
+    String transitionKey = "transitionKey";
+    String userUuid = "userUuid";
+
+    underTest.doManualTransition(issue, transitionKey, userUuid);
+
+    verify(workflow).doManualTransition(issue, transitionKey, getIssueChangeContextWithUser(userUuid));
+  }
+
+  @Test
+  public void addComment() {
+    DefaultIssue issue = new DefaultIssue();
+    String comment = "comment";
+    String userUuid = "userUuid";
+
+    underTest.addComment(issue, comment, userUuid);
+
+    verify(updater).addComment(issue, comment, getIssueChangeContextWithUser(userUuid));
+  }
+
+  private IssueChangeContext getIssueChangeContextWithUser(String userUuid) {
+    return IssueChangeContext.newBuilder()
+      .setDate(issueChangeContext.date())
+      .setWebhookSource(issueChangeContext.getWebhookSource())
+      .setUserUuid(userUuid).build();
+  }
+
+  @Test
   public void mergeExistingOpenIssue() {
     DefaultIssue raw = new DefaultIssue()
       .setNew(true)
       .setKey("RAW_KEY")
       .setRuleKey(XOO_X1)
+      .setRuleDescriptionContextKey("spring")
+      .setCleanCodeAttribute(CleanCodeAttribute.IDENTIFIABLE)
+      .setCodeVariants(Set.of("foo", "bar"))
+      .addImpact(SoftwareQuality.MAINTAINABILITY, Severity.HIGH)
       .setCreationDate(parseDate("2015-10-01"))
       .setUpdateDate(parseDate("2015-10-02"))
       .setCloseDate(parseDate("2015-10-03"));
@@ -325,21 +408,37 @@ public class IssueLifecycleTest {
         .setEndLine(12)
         .build())
       .build();
+
+    DbIssues.MessageFormattings messageFormattings = DbIssues.MessageFormattings.newBuilder()
+      .addMessageFormatting(DbIssues.MessageFormatting
+        .newBuilder()
+        .setStart(13)
+        .setEnd(17)
+        .setType(DbIssues.MessageFormattingType.CODE)
+        .build())
+      .build();
+
     DefaultIssue base = new DefaultIssue()
       .setKey("BASE_KEY")
       .setCreationDate(parseDate("2015-01-01"))
       .setUpdateDate(parseDate("2015-01-02"))
+      .setCleanCodeAttribute(CleanCodeAttribute.FOCUSED)
       .setResolution(RESOLUTION_FALSE_POSITIVE)
       .setStatus(STATUS_RESOLVED)
       .setSeverity(BLOCKER)
       .setAssigneeUuid("base assignee uuid")
+      .setAssigneeLogin("base assignee login")
       .setAuthorLogin("base author")
       .setTags(newArrayList("base tag"))
       .setOnDisabledRule(true)
       .setSelectedAt(1000L)
       .setLine(10)
-      .setMessage("message")
+      .setMessage("message with code")
+      .setMessageFormattings(messageFormattings)
       .setGap(15d)
+      .setRuleDescriptionContextKey("hibernate")
+      .setCodeVariants(Set.of("donut"))
+      .addImpact(SoftwareQuality.RELIABILITY, Severity.LOW)
       .setEffort(Duration.create(15L))
       .setManualSeverity(false)
       .setLocations(issueLocations)
@@ -357,8 +456,10 @@ public class IssueLifecycleTest {
     assertThat(raw.resolution()).isEqualTo(RESOLUTION_FALSE_POSITIVE);
     assertThat(raw.status()).isEqualTo(STATUS_RESOLVED);
     assertThat(raw.assignee()).isEqualTo("base assignee uuid");
+    assertThat(raw.assigneeLogin()).isEqualTo("base assignee login");
     assertThat(raw.authorLogin()).isEqualTo("base author");
     assertThat(raw.tags()).containsOnly("base tag");
+    assertThat(raw.codeVariants()).containsOnly("foo", "bar");
     assertThat(raw.effort()).isEqualTo(DEFAULT_DURATION);
     assertThat(raw.isOnDisabledRule()).isTrue();
     assertThat(raw.selectedAt()).isEqualTo(1000L);
@@ -368,12 +469,16 @@ public class IssueLifecycleTest {
       .containsOnly(entry("foo", new FieldDiffs.Diff<>("bar", "donut")));
     assertThat(raw.changes().get(1).diffs())
       .containsOnly(entry("file", new FieldDiffs.Diff<>("A", "B")));
-
+    assertThat(raw.impacts())
+      .containsEntry(SoftwareQuality.MAINTAINABILITY, Severity.HIGH);
     verify(updater).setPastSeverity(raw, BLOCKER, issueChangeContext);
     verify(updater).setPastLine(raw, 10);
-    verify(updater).setPastMessage(raw, "message", issueChangeContext);
+    verify(updater).setRuleDescriptionContextKey(raw, "hibernate");
+    verify(updater).setCodeVariants(raw, Set.of("donut"), issueChangeContext);
+    verify(updater).setPastMessage(raw, "message with code", messageFormattings, issueChangeContext);
     verify(updater).setPastEffort(raw, Duration.create(15L), issueChangeContext);
     verify(updater).setPastLocations(raw, issueLocations);
+    verify(updater).setCleanCodeAttribute(raw, CleanCodeAttribute.FOCUSED, issueChangeContext);
   }
 
   @Test
@@ -415,20 +520,42 @@ public class IssueLifecycleTest {
   }
 
   @Test
-  public void mergeExistingOpenIssue_with_attributes() {
+  public void mergeExistingOpenIssue_with_rule_description_context_key_added() {
     DefaultIssue raw = new DefaultIssue()
       .setNew(true)
       .setKey("RAW_KEY")
-      .setRuleKey(XOO_X1);
+      .setRuleKey(XOO_X1)
+      .setRuleDescriptionContextKey(TEST_CONTEXT_KEY);
     DefaultIssue base = new DefaultIssue()
-      .setKey("BASE_KEY")
-      .setResolution(RESOLUTION_FIXED)
-      .setStatus(STATUS_CLOSED)
-      .setSeverity(BLOCKER)
-      .setAttributes(ImmutableMap.of("JIRA", "SONAR-01"));
+      .setChanged(true)
+      .setKey("RAW_KEY")
+      .setResolution(RESOLUTION_FALSE_POSITIVE)
+      .setStatus(STATUS_RESOLVED)
+      .setRuleDescriptionContextKey(null);
 
     underTest.mergeExistingOpenIssue(raw, base);
 
-    assertThat(raw.attributes()).containsEntry("JIRA", "SONAR-01");
+    assertThat(raw.isChanged()).isTrue();
+    assertThat(raw.getRuleDescriptionContextKey()).isEqualTo(raw.getRuleDescriptionContextKey());
+  }
+
+  @Test
+  public void mergeExistingOpenIssue_with_rule_description_context_key_removed() {
+    DefaultIssue raw = new DefaultIssue()
+      .setNew(true)
+      .setKey("RAW_KEY")
+      .setRuleKey(XOO_X1)
+      .setRuleDescriptionContextKey(null);
+    DefaultIssue base = new DefaultIssue()
+      .setChanged(true)
+      .setKey("RAW_KEY")
+      .setResolution(RESOLUTION_FALSE_POSITIVE)
+      .setStatus(STATUS_RESOLVED)
+      .setRuleDescriptionContextKey(TEST_CONTEXT_KEY);
+
+    underTest.mergeExistingOpenIssue(raw, base);
+
+    assertThat(raw.isChanged()).isTrue();
+    assertThat(raw.getRuleDescriptionContextKey()).isEmpty();
   }
 }

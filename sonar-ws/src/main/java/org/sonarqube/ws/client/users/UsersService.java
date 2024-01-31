@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -148,7 +148,9 @@ public class UsersService extends BaseService {
       new GetRequest(path("search"))
         .setParam("p", request.getP())
         .setParam("ps", request.getPs())
-        .setParam("q", request.getQ()),
+        .setParam("q", request.getQ())
+        .setParam("deactivated", request.getDeactivated())
+        .setParam("managed", request.getManaged()),
       SearchWsResponse.parser());
   }
 
@@ -164,34 +166,6 @@ public class UsersService extends BaseService {
       new PostRequest(path("set_homepage"))
         .setParam("parameter", request.getParameter())
         .setParam("type", request.getType())
-        .setMediaType(MediaTypes.JSON)).content();
-  }
-
-  /**
-   *
-   * This is part of the internal API.
-   * This is a POST request.
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/users/set_setting">Further information about this action online (including a response example)</a>
-   * @since 7.6
-   */
-  public void setSetting(SetSettingRequest request) {
-    call(
-      new PostRequest(path("set_setting"))
-        .setParam("key", request.getKey())
-        .setParam("value", request.getValue())
-        .setMediaType(MediaTypes.JSON)).content();
-  }
-
-  /**
-   *
-   * This is part of the internal API.
-   * This is a POST request.
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/users/skip_onboarding_tutorial">Further information about this action online (including a response example)</a>
-   * @since 6.5
-   */
-  public void skipOnboardingTutorial() {
-    call(
-      new PostRequest(path("skip_onboarding_tutorial"))
         .setMediaType(MediaTypes.JSON)).content();
   }
 
@@ -244,4 +218,19 @@ public class UsersService extends BaseService {
             .setMediaType(MediaTypes.JSON)
     ).content();
   }
+
+  /**
+   *
+   * This is part of the internal API.
+   * This is a POST request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/users/dismiss_notice">Further information about this action online (including a response example)</a>
+   * @since 9.6
+   */
+  public void dismissNotice(String notice) {
+    call(
+      new PostRequest(path("dismiss_notice"))
+        .setParam("notice", notice)
+    ).content();
+  }
+
 }

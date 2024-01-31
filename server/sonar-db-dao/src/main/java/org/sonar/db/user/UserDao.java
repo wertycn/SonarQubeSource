@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,31 +26,33 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
-import org.sonar.api.user.UserQuery;
+import org.apache.commons.lang.StringUtils;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
-import org.sonar.db.project.ProjectDto;
+import org.sonar.db.Pagination;
+import org.sonar.db.audit.AuditPersister;
+import org.sonar.db.audit.model.UserNewValue;
+import org.sonar.db.entity.EntityDto;
 
 import static java.util.Locale.ENGLISH;
 import static java.util.concurrent.TimeUnit.DAYS;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 import static org.sonar.db.DatabaseUtils.executeLargeInputsWithoutOutput;
-import static org.sonar.db.user.UserDto.SCM_ACCOUNTS_SEPARATOR;
 
 public class UserDao implements Dao {
   private static final long WEEK_IN_MS = DAYS.toMillis(7L);
   private final System2 system2;
   private final UuidFactory uuidFactory;
+  private final AuditPersister auditPersister;
 
-  public UserDao(System2 system2, UuidFactory uuidFactory) {
+  public UserDao(System2 system2, UuidFactory uuidFactory, AuditPersister auditPersister) {
     this.system2 = system2;
     this.uuidFactory = uuidFactory;
+    this.auditPersister = auditPersister;
   }
 
   @CheckForNull
@@ -75,6 +77,8 @@ public class UserDao implements Dao {
   /**
    * Select users by uuids, including disabled users. An empty list is returned
    * if list of uuids is empty, without any db round trips.
+   *
+   * @return
    */
   public List<UserDto> selectByUuids(DbSession session, Collection<String> uuids) {
     return executeLargeInputs(uuids, mapper(session)::selectByUuids);
@@ -91,25 +95,63 @@ public class UserDao implements Dao {
     return logins.stream()
       .map(new LoginToUser(unordered))
       .filter(Objects::nonNull)
-      .collect(Collectors.toList());
+      .toList();
   }
 
-  public List<UserDto> selectUsers(DbSession dbSession, UserQuery query) {
-    return mapper(dbSession).selectUsers(query);
+  public List<UserDto> selectUsers(DbSession dbSession, UserQuery userQuery) {
+    return selectUsers(dbSession, userQuery, Pagination.all());
   }
 
-  public long countRootUsersButLogin(DbSession dbSession, String login) {
-    return mapper(dbSession).countRootUsersButLogin(login);
+  public List<UserDto> selectUsers(DbSession dbSession, UserQuery userQuery, int offset, int limit) {
+    Pagination pagination = Pagination.forPage(offset).andSize(limit);
+    return selectUsers(dbSession, userQuery, pagination);
+  }
+
+  private static List<UserDto> selectUsers(DbSession dbSession, UserQuery userQuery, Pagination pagination) {
+    if (userQuery.getUserUuids() != null) {
+      return executeLargeInputs(
+        userQuery.getUserUuids(),
+        partialSetOfUsers -> mapper(dbSession).selectUsers(
+          UserQuery.copyWithNewRangeOfUserUuids(userQuery, partialSetOfUsers),
+          pagination)
+      );
+    }
+    return mapper(dbSession).selectUsers(userQuery, pagination);
+  }
+
+  public int countUsers(DbSession dbSession, UserQuery userQuery) {
+    return mapper(dbSession).countByQuery(userQuery);
+  }
+
+  public List<UserTelemetryDto> selectUsersForTelemetry(DbSession dbSession) {
+    return mapper(dbSession).selectUsersForTelemetry();
   }
 
   public UserDto insert(DbSession session, UserDto dto) {
     long now = system2.now();
     mapper(session).insert(dto.setUuid(uuidFactory.create()).setCreatedAt(now).setUpdatedAt(now));
+    insertScmAccounts(session, dto.getUuid(), dto.getSortedScmAccounts());
+    auditPersister.addUser(session, new UserNewValue(dto.getUuid(), dto.getLogin()));
     return dto;
   }
 
+  private static void insertScmAccounts(DbSession session, String userUuid, List<String> scmAccounts) {
+    scmAccounts.stream()
+      .filter(StringUtils::isNotBlank)
+      .forEach(scmAccount -> mapper(session).insertScmAccount(userUuid, scmAccount.toLowerCase(ENGLISH)));
+  }
+
   public UserDto update(DbSession session, UserDto dto) {
+    return update(session, dto, true);
+  }
+
+  public UserDto update(DbSession session, UserDto dto, boolean track) {
     mapper(session).update(dto.setUpdatedAt(system2.now()));
+    mapper(session).deleteAllScmAccounts(dto.getUuid());
+    insertScmAccounts(session, dto.getUuid(), dto.getSortedScmAccounts());
+    if (track) {
+      auditPersister.updateUser(session, new UserNewValue(dto));
+    }
     return dto;
   }
 
@@ -117,20 +159,14 @@ public class UserDao implements Dao {
     mapper(session).updateSonarlintLastConnectionDate(login, system2.now());
   }
 
-  public void setRoot(DbSession session, String login, boolean root) {
-    mapper(session).setRoot(login, root, system2.now());
-  }
-
   public void deactivateUser(DbSession dbSession, UserDto user) {
     mapper(dbSession).deactivateUser(user.getLogin(), system2.now());
+    mapper(dbSession).deleteAllScmAccounts(user.getUuid());
+    auditPersister.deactivateUser(dbSession, new UserNewValue(user.getUuid(), user.getLogin()));
   }
 
-  public void cleanHomepage(DbSession dbSession, ProjectDto project) {
-    mapper(dbSession).clearHomepages("PROJECT", project.getUuid(), system2.now());
-  }
-
-  public void cleanHomepage(DbSession dbSession, ComponentDto project) {
-    mapper(dbSession).clearHomepages("PROJECT", project.uuid(), system2.now());
+  public void cleanHomepage(DbSession dbSession, EntityDto entityDto) {
+    mapper(dbSession).clearHomepages("PROJECT", entityDto.getUuid(), system2.now());
   }
 
   public void cleanHomepage(DbSession dbSession, UserDto user) {
@@ -143,15 +179,18 @@ public class UserDao implements Dao {
   }
 
   public List<UserDto> selectByScmAccountOrLoginOrEmail(DbSession session, String scmAccountOrLoginOrEmail) {
-    String like = new StringBuilder().append("%")
-      .append(SCM_ACCOUNTS_SEPARATOR).append(scmAccountOrLoginOrEmail)
-      .append(SCM_ACCOUNTS_SEPARATOR).append("%").toString();
-    return mapper(session).selectNullableByScmAccountOrLoginOrEmail(scmAccountOrLoginOrEmail, like);
+    return mapper(session).selectNullableByScmAccountOrLoginOrEmail(scmAccountOrLoginOrEmail);
+  }
+
+  /**
+   * This method is optimized for the first analysis: we tried to keep performance optimal (<10ms) for projects with large number of contributors
+   */
+  public List<UserIdDto> selectActiveUsersByScmAccountOrLoginOrEmail(DbSession session, String scmAccountOrLoginOrEmail) {
+    return mapper(session).selectActiveUsersByScmAccountOrLoginOrEmail(scmAccountOrLoginOrEmail);
   }
 
   /**
    * Search for an active user with the given emailCaseInsensitive exits in database
-   *
    * Select is case insensitive. Result for searching 'mail@emailCaseInsensitive.com' or 'Mail@Email.com' is the same
    */
   public List<UserDto> selectByEmail(DbSession dbSession, String emailCaseInsensitive) {
@@ -179,6 +218,10 @@ public class UserDao implements Dao {
   public long countSonarlintWeeklyUsers(DbSession dbSession) {
     long threshold = system2.now() - WEEK_IN_MS;
     return mapper(dbSession).countActiveSonarlintUsers(threshold);
+  }
+
+  public long countActiveUsers(DbSession dbSession) {
+    return mapper(dbSession).countActiveUsers();
   }
 
   public void scrollByUuids(DbSession dbSession, Collection<String> uuids, Consumer<UserDto> consumer) {

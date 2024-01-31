@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,11 @@
  */
 package org.sonar.scanner.platform;
 
-import org.sonar.api.SonarEdition;
 import org.junit.Test;
 import org.sonar.api.CoreProperties;
-import org.sonar.api.SonarQubeSide;
-import org.sonar.api.config.internal.Settings;
 import org.sonar.api.config.internal.MapSettings;
-import org.sonar.api.internal.SonarRuntimeImpl;
 import org.sonar.api.utils.Version;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,33 +34,28 @@ public class DefaultServerTest {
 
   @Test
   public void shouldLoadServerProperties() {
-    Settings settings = new MapSettings();
+    MapSettings settings = new MapSettings();
     settings.setProperty(CoreProperties.SERVER_ID, "123");
     settings.setProperty(CoreProperties.SERVER_STARTTIME, "2010-05-18T17:59:00+0000");
     DefaultScannerWsClient client = mock(DefaultScannerWsClient.class);
     when(client.baseUrl()).thenReturn("http://foo.com");
 
-    DefaultServer metadata = new DefaultServer(((MapSettings) settings).asConfig(), client,
-      SonarRuntimeImpl.forSonarQube(Version.parse("2.2"), SonarQubeSide.SCANNER, SonarEdition.COMMUNITY));
+    DefaultServer metadata = new DefaultServer((settings).asConfig(), client, new SonarQubeVersion(Version.parse("2.2")));
 
     assertThat(metadata.getId()).isEqualTo("123");
     assertThat(metadata.getVersion()).isEqualTo("2.2");
     assertThat(metadata.getStartedAt()).isNotNull();
-    assertThat(metadata.getURL()).isEqualTo("http://foo.com");
-    assertThat(metadata.getPermanentServerId()).isEqualTo("123");
+    assertThat(metadata.getPublicRootUrl()).isEqualTo("http://foo.com");
 
-    assertThat(metadata.getRootDir()).isNull();
     assertThat(metadata.getContextPath()).isNull();
-    assertThat(metadata.isDev()).isFalse();
-    assertThat(metadata.isSecured()).isFalse();
   }
 
   @Test
   public void publicRootUrl() {
-    Settings settings = new MapSettings();
+    MapSettings settings = new MapSettings();
     DefaultScannerWsClient client = mock(DefaultScannerWsClient.class);
     when(client.baseUrl()).thenReturn("http://foo.com/");
-    DefaultServer metadata = new DefaultServer(((MapSettings) settings).asConfig(), client, null);
+    DefaultServer metadata = new DefaultServer(settings.asConfig(), client, null);
 
     settings.setProperty(CoreProperties.SERVER_BASE_URL, "http://server.com/");
     assertThat(metadata.getPublicRootUrl()).isEqualTo("http://server.com");
@@ -74,10 +66,10 @@ public class DefaultServerTest {
 
   @Test(expected = RuntimeException.class)
   public void invalid_startup_date_throws_exception() {
-    Settings settings = new MapSettings();
+    MapSettings settings = new MapSettings();
     settings.setProperty(CoreProperties.SERVER_STARTTIME, "invalid");
     DefaultScannerWsClient client = mock(DefaultScannerWsClient.class);
-    DefaultServer metadata = new DefaultServer(((MapSettings) settings).asConfig(), client, null);
+    DefaultServer metadata = new DefaultServer(settings.asConfig(), client, null);
     metadata.getStartedAt();
   }
 }

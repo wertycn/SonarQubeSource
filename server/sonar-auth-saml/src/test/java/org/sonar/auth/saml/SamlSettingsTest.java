@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,21 +22,18 @@ package org.sonar.auth.saml;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.System2;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @RunWith(DataProviderRunner.class)
 public class SamlSettingsTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private MapSettings settings = new MapSettings(new PropertyDefinitions(System2.INSTANCE, SamlSettings.definitions()));
 
@@ -90,6 +87,29 @@ public class SamlSettingsTest {
   }
 
   @Test
+  public void is_sign_requests_enabled() {
+    settings.setProperty("sonar.auth.saml.signature.enabled", true);
+    assertThat(underTest.isSignRequestsEnabled()).isTrue();
+
+    settings.setProperty("sonar.auth.saml.signature.enabled", false);
+    assertThat(underTest.isSignRequestsEnabled()).isFalse();
+  }
+
+  @Test
+  public void return_service_provider_certificate() {
+    settings.setProperty("sonar.auth.saml.sp.certificate.secured", "my_certificate");
+
+    assertThat(underTest.getServiceProviderCertificate()).isEqualTo("my_certificate");
+  }
+
+  @Test
+  public void return_service_provider_private_key() {
+    settings.setProperty("sonar.auth.saml.sp.privateKey.secured", "my_private_secret_private_key");
+
+    assertThat(underTest.getServiceProviderPrivateKey()).hasValue("my_private_secret_private_key");
+  }
+
+  @Test
   public void return_user_login_attribute() {
     settings.setProperty("sonar.auth.saml.user.login", "userLogin");
 
@@ -107,7 +127,7 @@ public class SamlSettingsTest {
   public void return_user_email_attribute() {
     settings.setProperty("sonar.auth.saml.user.email", "userEmail");
 
-    assertThat(underTest.getUserEmail().get()).isEqualTo("userEmail");
+    assertThat(underTest.getUserEmail()).contains("userEmail");
   }
 
   @Test
@@ -119,7 +139,7 @@ public class SamlSettingsTest {
   public void return_group_name_attribute() {
     settings.setProperty("sonar.auth.saml.group.name", "groupName");
 
-    assertThat(underTest.getGroupName().get()).isEqualTo("groupName");
+    assertThat(underTest.getGroupName()).contains("groupName");
   }
 
   @Test
@@ -177,42 +197,37 @@ public class SamlSettingsTest {
 
   @Test
   public void fail_to_get_provider_id_when_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Provider ID is missing");
-
-    underTest.getProviderId();
+    assertThatThrownBy(() -> underTest.getProviderId())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Provider ID is missing");
   }
 
   @Test
   public void fail_to_get_login_url_when_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Login URL is missing");
-
-    underTest.getLoginUrl();
+    assertThatThrownBy(() -> underTest.getLoginUrl())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Login URL is missing");
   }
 
   @Test
   public void fail_to_get_certificate_when_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Certificate is missing");
-
-    underTest.getCertificate();
+    assertThatThrownBy(() -> underTest.getCertificate())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Identity provider certificate is missing");
   }
 
   @Test
   public void fail_to_get_user_login_attribute_when_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("User login attribute is missing");
-
-    underTest.getUserLogin();
+    assertThatThrownBy(() -> underTest.getUserLogin())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("User login attribute is missing");
   }
 
   @Test
   public void fail_to_get_user_name_attribute_when_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("User name attribute is missing");
-
-    underTest.getUserName();
+    assertThatThrownBy(() -> underTest.getUserName())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("User name attribute is missing");
   }
 
   private void initAllSettings() {

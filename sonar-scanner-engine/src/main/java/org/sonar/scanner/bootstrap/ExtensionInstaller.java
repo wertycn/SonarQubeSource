@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,13 @@
  */
 package org.sonar.scanner.bootstrap;
 
-import java.util.List;
+import java.util.Collection;
 import javax.annotation.Nullable;
-import org.sonar.api.ExtensionProvider;
 import org.sonar.api.Plugin;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.internal.PluginContextImpl;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ExtensionContainer;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
 
@@ -42,15 +41,20 @@ public class ExtensionInstaller {
     this.bootConfiguration = bootConfiguration;
   }
 
-  public ExtensionInstaller install(ComponentContainer container, ExtensionMatcher matcher) {
-
+  public ExtensionInstaller install(ExtensionContainer container, ExtensionMatcher matcher) {
     // core components
     for (Object o : BatchComponents.all()) {
       doInstall(container, matcher, null, o);
     }
 
     // plugin extensions
-    for (PluginInfo pluginInfo : pluginRepository.getPluginInfos()) {
+    installExtensionsForPlugins(container, matcher, pluginRepository.getPluginInfos());
+
+    return this;
+  }
+
+  public void installExtensionsForPlugins(ExtensionContainer container, ExtensionMatcher matcher, Collection<PluginInfo> pluginInfos) {
+    for (PluginInfo pluginInfo : pluginInfos) {
       Plugin plugin = pluginRepository.getPluginInstance(pluginInfo.getKey());
       Plugin.Context context = new PluginContextImpl.Builder()
         .setSonarRuntime(sonarRuntime)
@@ -62,21 +66,9 @@ public class ExtensionInstaller {
         doInstall(container, matcher, pluginInfo, extension);
       }
     }
-    List<ExtensionProvider> providers = container.getComponentsByType(ExtensionProvider.class);
-    for (ExtensionProvider provider : providers) {
-      Object object = provider.provide();
-      if (object instanceof Iterable) {
-        for (Object extension : (Iterable) object) {
-          doInstall(container, matcher, null, extension);
-        }
-      } else {
-        doInstall(container, matcher, null, object);
-      }
-    }
-    return this;
   }
 
-  private static void doInstall(ComponentContainer container, ExtensionMatcher matcher, @Nullable PluginInfo pluginInfo, Object extension) {
+  private static void doInstall(ExtensionContainer container, ExtensionMatcher matcher, @Nullable PluginInfo pluginInfo, Object extension) {
     if (matcher.accept(extension)) {
       container.addExtension(pluginInfo, extension);
     } else {

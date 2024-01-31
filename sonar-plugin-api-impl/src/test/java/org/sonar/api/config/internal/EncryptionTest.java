@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -89,6 +89,16 @@ public class EncryptionTest {
   public void decrypt_uncrypted_text() {
     Encryption encryption = new Encryption(null);
     assertThat(encryption.decrypt("foo")).isEqualTo("foo");
+  }
+
+  @Test
+  public void should_notDecryptText_whenBadBraceSyntax(){
+    Encryption encryption = new Encryption(null);
+    assertThat(encryption.decrypt("}xxx{Zm9v")).isEqualTo("}xxx{Zm9v");
+    assertThat(encryption.decrypt("}dcd}59LK")).isEqualTo("}dcd}59LK");
+    assertThat(encryption.decrypt("}rrrRg6")).isEqualTo("}rrrRg6");
+    assertThat(encryption.decrypt("{closedjdk")).isEqualTo("{closedjdk");
+
   }
 
   private String pathToSecretKey() throws Exception {

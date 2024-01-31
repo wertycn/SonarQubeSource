@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,30 +24,25 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TextBlockTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void constructor_throws_IAE_if_start_is_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("First line index must be >= 1");
-
-    new TextBlock(0, 2);
+    assertThatThrownBy(() -> new TextBlock(0, 2))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("First line index must be >= 1");
   }
 
   @Test
   public void constructor_throws_IAE_if_end_is_less_than_start() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Last line index must be >= first line index");
-
-    new TextBlock(1, 0);
+    assertThatThrownBy(() -> new TextBlock(1, 0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Last line index must be >= first line index");
   }
 
   @Test
@@ -73,8 +68,8 @@ public class TextBlockTest {
 
   @Test
   public void hashcode_is_based__on_start_and_end() {
-    assertThat(new TextBlock(15, 15).hashCode()).isEqualTo(new TextBlock(15, 15).hashCode());
-    assertThat(new TextBlock(15, 300).hashCode()).isEqualTo(new TextBlock(15, 300).hashCode());
+    assertThat(new TextBlock(15, 15)).hasSameHashCodeAs(new TextBlock(15, 15));
+    assertThat(new TextBlock(15, 300)).hasSameHashCodeAs(new TextBlock(15, 300));
     assertThat(new TextBlock(15, 300).hashCode()).isNotEqualTo(new TextBlock(15, 15).hashCode());
   }
 
@@ -95,7 +90,7 @@ public class TextBlockTest {
 
   @Test
   public void verify_toString() {
-    assertThat(new TextBlock(13, 400).toString()).isEqualTo("TextBlock{start=13, end=400}");
+    assertThat(new TextBlock(13, 400)).hasToString("TextBlock{start=13, end=400}");
 
   }
 }

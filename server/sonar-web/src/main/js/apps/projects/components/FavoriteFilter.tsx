@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ToggleButton } from 'design-system';
 import * as React from 'react';
-import { IndexLink, Link } from 'react-router';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { save } from 'sonar-ui-common/helpers/storage';
-import { isLoggedIn } from '../../../helpers/users';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
+import { withRouter, WithRouterProps } from '../../../components/hoc/withRouter';
+import { translate } from '../../../helpers/l10n';
+import { save } from '../../../helpers/storage';
+import { CurrentUser, isLoggedIn } from '../../../types/users';
 import { PROJECTS_ALL, PROJECTS_DEFAULT_FILTER, PROJECTS_FAVORITE } from '../utils';
 
-interface Props {
-  currentUser: T.CurrentUser;
-  query?: T.RawQuery;
+interface Props extends WithRouterProps {
+  currentUser: CurrentUser;
 }
 
-export default class FavoriteFilter extends React.PureComponent<Props> {
+export const FAVORITE_PATHNAME = '/projects/favorite';
+export const ALL_PATHNAME = '/projects';
+
+export class FavoriteFilter extends React.PureComponent<Props> {
   handleSaveFavorite = () => {
     save(PROJECTS_DEFAULT_FILTER, PROJECTS_FAVORITE);
   };
@@ -38,35 +42,38 @@ export default class FavoriteFilter extends React.PureComponent<Props> {
     save(PROJECTS_DEFAULT_FILTER, PROJECTS_ALL);
   };
 
+  onFavoriteChange = (favorite: boolean) => {
+    if (favorite) {
+      this.handleSaveFavorite();
+      this.props.router.push({ pathname: FAVORITE_PATHNAME, query: this.props.location.query });
+    } else {
+      this.handleSaveAll();
+      this.props.router.push({ pathname: ALL_PATHNAME, query: this.props.location.query });
+    }
+  };
+
   render() {
+    const {
+      location: { pathname },
+    } = this.props;
+
     if (!isLoggedIn(this.props.currentUser)) {
       return null;
     }
 
-    const pathnameForFavorite = '/projects/favorite';
-    const pathnameForAll = '/projects';
-
     return (
-      <div className="page-header text-center">
-        <div className="button-group little-spacer-top">
-          <Link
-            activeClassName="button-active"
-            className="button"
-            id="favorite-projects"
-            onClick={this.handleSaveFavorite}
-            to={{ pathname: pathnameForFavorite, query: this.props.query }}>
-            {translate('my_favorites')}
-          </Link>
-          <IndexLink
-            activeClassName="button-active"
-            className="button"
-            id="all-projects"
-            onClick={this.handleSaveAll}
-            to={{ pathname: pathnameForAll, query: this.props.query }}>
-            {translate('all')}
-          </IndexLink>
-        </div>
+      <div className="sw-mb-8">
+        <ToggleButton
+          options={[
+            { value: true, label: translate('my_favorites') },
+            { value: false, label: translate('all') },
+          ]}
+          onChange={this.onFavoriteChange}
+          value={pathname === FAVORITE_PATHNAME}
+        />
       </div>
     );
   }
 }
+
+export default withRouter(withCurrentUserContext(FavoriteFilter));

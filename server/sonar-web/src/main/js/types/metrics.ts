@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -69,12 +69,14 @@ export enum MetricKey {
   line_coverage = 'line_coverage',
   lines = 'lines',
   lines_to_cover = 'lines_to_cover',
+  maintainability_rating_distribution = 'maintainability_rating_distribution',
   maintainability_rating_effort = 'maintainability_rating_effort',
   major_violations = 'major_violations',
   minor_violations = 'minor_violations',
   ncloc = 'ncloc',
   ncloc_data = 'ncloc_data',
   ncloc_language_distribution = 'ncloc_language_distribution',
+  new_accepted_issues = 'new_accepted_issues',
   new_blocker_violations = 'new_blocker_violations',
   new_branch_coverage = 'new_branch_coverage',
   new_bugs = 'new_bugs',
@@ -91,15 +93,19 @@ export enum MetricKey {
   new_lines = 'new_lines',
   new_lines_to_cover = 'new_lines_to_cover',
   new_maintainability_rating = 'new_maintainability_rating',
+  new_maintainability_rating_distribution = 'new_maintainability_rating_distribution',
   new_major_violations = 'new_major_violations',
   new_minor_violations = 'new_minor_violations',
   new_reliability_rating = 'new_reliability_rating',
   new_reliability_remediation_effort = 'new_reliability_remediation_effort',
+  new_reliability_rating_distribution = 'new_reliability_rating_distribution',
   new_security_hotspots = 'new_security_hotspots',
   new_security_hotspots_reviewed = 'new_security_hotspots_reviewed',
   new_security_rating = 'new_security_rating',
+  new_security_rating_distribution = 'new_security_rating_distribution',
   new_security_remediation_effort = 'new_security_remediation_effort',
   new_security_review_rating = 'new_security_review_rating',
+  new_security_review_rating_distribution = 'new_security_review_rating_distribution',
   new_sqale_debt_ratio = 'new_sqale_debt_ratio',
   new_technical_debt = 'new_technical_debt',
   new_uncovered_conditions = 'new_uncovered_conditions',
@@ -111,20 +117,25 @@ export enum MetricKey {
   public_api = 'public_api',
   public_documented_api_density = 'public_documented_api_density',
   public_undocumented_api = 'public_undocumented_api',
+  pull_request_fixed_issues = 'pull_request_fixed_issues',
   quality_gate_details = 'quality_gate_details',
   quality_profiles = 'quality_profiles',
   releasability_effort = 'releasability_effort',
   releasability_rating = 'releasability_rating',
+  releasability_rating_distribution = 'releasability_rating_distribution',
   reliability_rating = 'reliability_rating',
   reliability_rating_effort = 'reliability_rating_effort',
+  reliability_rating_distribution = 'reliability_rating_distribution',
   reliability_remediation_effort = 'reliability_remediation_effort',
   reopened_issues = 'reopened_issues',
   security_hotspots = 'security_hotspots',
   security_hotspots_reviewed = 'security_hotspots_reviewed',
   security_rating = 'security_rating',
   security_rating_effort = 'security_rating_effort',
+  security_rating_distribution = 'security_rating_distribution',
   security_remediation_effort = 'security_remediation_effort',
   security_review_rating = 'security_review_rating',
+  security_review_rating_distribution = 'security_review_rating_distribution',
   security_review_rating_effort = 'security_review_rating_effort',
   skipped_tests = 'skipped_tests',
   sonarjava_feedback = 'sonarjava_feedback',
@@ -143,7 +154,20 @@ export enum MetricKey {
   uncovered_lines = 'uncovered_lines',
   violations = 'violations',
   vulnerabilities = 'vulnerabilities',
-  wont_fix_issues = 'wont_fix_issues'
+  accepted_issues = 'accepted_issues',
+  high_impact_accepted_issues = 'high_impact_accepted_issues',
+  wont_fix_issues = 'wont_fix_issues',
+}
+
+export enum MetricType {
+  Rating = 'RATING',
+  Percent = 'PERCENT',
+  Integer = 'INT',
+  Level = 'LEVEL',
+  ShortInteger = 'SHORT_INT',
+  ShortWorkDuration = 'SHORT_WORK_DUR',
+  Data = 'DATA',
+  Distribution = 'DISTRIB',
 }
 
 export function isMetricKey(key: string): key is MetricKey {

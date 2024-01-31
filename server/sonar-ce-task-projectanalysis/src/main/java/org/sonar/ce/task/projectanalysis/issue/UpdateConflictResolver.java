@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,11 +20,10 @@
 package org.sonar.ce.task.projectanalysis.issue;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.issue.IssueMapper;
 
 /**
  * Support concurrent modifications on issues made by analysis and users at the same time
@@ -32,12 +31,12 @@ import org.sonar.db.issue.IssueMapper;
  */
 public class UpdateConflictResolver {
 
-  private static final Logger LOG = Loggers.get(UpdateConflictResolver.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UpdateConflictResolver.class);
 
-  public void resolve(DefaultIssue issue, IssueDto dbIssue, IssueMapper mapper) {
+  public IssueDto resolve(DefaultIssue issue, IssueDto dbIssue) {
     LOG.debug("Resolve conflict on issue {}", issue.key());
     mergeFields(dbIssue, issue);
-    mapper.update(IssueDto.toDtoForUpdate(issue, System.currentTimeMillis()));
+    return IssueDto.toDtoForUpdate(issue, System.currentTimeMillis());
   }
 
   @VisibleForTesting
@@ -49,19 +48,19 @@ public class UpdateConflictResolver {
     resolveStatus(dbIssue, issue);
   }
 
-  private void resolveStatus(IssueDto dbIssue, DefaultIssue issue) {
+  private static void resolveStatus(IssueDto dbIssue, DefaultIssue issue) {
     issue.setStatus(dbIssue.getStatus());
   }
 
-  private void resolveResolution(IssueDto dbIssue, DefaultIssue issue) {
+  private static void resolveResolution(IssueDto dbIssue, DefaultIssue issue) {
     issue.setResolution(dbIssue.getResolution());
   }
 
-  private void resolveEffortToFix(IssueDto dbIssue, DefaultIssue issue) {
+  private static void resolveEffortToFix(IssueDto dbIssue, DefaultIssue issue) {
     issue.setGap(dbIssue.getGap());
   }
 
-  private void resolveSeverity(IssueDto dbIssue, DefaultIssue issue) {
+  private static void resolveSeverity(IssueDto dbIssue, DefaultIssue issue) {
     if (dbIssue.isManualSeverity()) {
       issue.setManualSeverity(true);
       issue.setSeverity(dbIssue.getSeverity());
@@ -69,7 +68,7 @@ public class UpdateConflictResolver {
     // else keep severity as declared in quality profile
   }
 
-  private void resolveAssignee(IssueDto dbIssue, DefaultIssue issue) {
+  private static void resolveAssignee(IssueDto dbIssue, DefaultIssue issue) {
     issue.setAssigneeUuid(dbIssue.getAssigneeUuid());
   }
 }

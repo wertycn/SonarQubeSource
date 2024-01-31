@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,8 @@
  */
 package org.sonar.ce.task.projectanalysis.component;
 
-import javax.annotation.Nullable;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
-import org.sonar.core.component.ComponentKeys;
-import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
-
-import static org.apache.commons.lang.StringUtils.isEmpty;
-import static org.apache.commons.lang.StringUtils.trimToNull;
 
 /**
  * Implementation of {@link Branch} for default/main branch. It is used
@@ -35,8 +29,8 @@ import static org.apache.commons.lang.StringUtils.trimToNull;
 public class DefaultBranchImpl implements Branch {
   private final String branchName;
 
-  public DefaultBranchImpl() {
-    this.branchName = BranchDto.DEFAULT_MAIN_BRANCH_NAME;
+  public DefaultBranchImpl(String branch) {
+    this.branchName = branch;
   }
 
   @Override
@@ -72,13 +66,5 @@ public class DefaultBranchImpl implements Branch {
   @Override
   public String getTargetBranchName() {
     throw new IllegalStateException("Only on a pull request");
-  }
-
-  @Override
-  public String generateKey(String projectKey, @Nullable String fileOrDirPath) {
-    if (isEmpty(fileOrDirPath)) {
-      return projectKey;
-    }
-    return ComponentKeys.createEffectiveKey(projectKey, trimToNull(fileOrDirPath));
   }
 }

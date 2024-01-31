@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -128,17 +128,17 @@ public class TransitionTest {
     Transition t2 = Transition.create("resolve", "REOPENED", "RESOLVED");
     Transition t3 = Transition.create("confirm", "OPEN", "CONFIRMED");
 
-    assertThat(t1).isNotEqualTo(t2);
-    assertThat(t1).isNotEqualTo(t3);
-    assertThat(t1).isEqualTo(t1);
-
-    assertThat(t1.hashCode()).isEqualTo(t1.hashCode());
+    assertThat(t1)
+      .isNotEqualTo(t2)
+      .isNotEqualTo(t3)
+      .isEqualTo(t1)
+      .hasSameHashCodeAs(t1);
   }
 
   @Test
   public void test_toString() {
     Transition t1 = Transition.create("resolve", "OPEN", "RESOLVED");
-    assertThat(t1.toString()).isEqualTo("OPEN->resolve->RESOLVED");
+    assertThat(t1).hasToString("OPEN->resolve->RESOLVED");
   }
 
   @Test

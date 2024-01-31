@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,9 @@ import org.sonar.api.utils.PathUtils;
  */
 @Immutable
 public class DefaultIndexedFile extends DefaultInputComponent implements IndexedFile {
-  private static AtomicInteger intGenerator = new AtomicInteger(0);
+  // should match limit in org.sonar.core.component.ComponentKeys
+  private static final Integer MAX_KEY_LENGTH = 400;
+  private static final AtomicInteger intGenerator = new AtomicInteger(0);
 
   private final String projectRelativePath;
   private final String moduleRelativePath;
@@ -47,25 +49,48 @@ public class DefaultIndexedFile extends DefaultInputComponent implements Indexed
   private final Type type;
   private final Path absolutePath;
   private final SensorStrategy sensorStrategy;
+  private final String oldRelativeFilePath;
 
   /**
    * Testing purposes only!
    */
   public DefaultIndexedFile(String projectKey, Path baseDir, String relativePath, @Nullable String language) {
     this(baseDir.resolve(relativePath), projectKey, relativePath, relativePath, Type.MAIN, language, intGenerator.getAndIncrement(),
-      new SensorStrategy());
+      new SensorStrategy(), null);
   }
 
   public DefaultIndexedFile(Path absolutePath, String projectKey, String projectRelativePath, String moduleRelativePath, Type type, @Nullable String language, int batchId,
     SensorStrategy sensorStrategy) {
+    this(absolutePath, projectKey, projectRelativePath, moduleRelativePath, type, language, batchId, sensorStrategy, null);
+  }
+
+  public DefaultIndexedFile(Path absolutePath, String projectKey, String projectRelativePath, String moduleRelativePath, Type type, @Nullable String language, int batchId,
+    SensorStrategy sensorStrategy, @Nullable String oldRelativeFilePath) {
     super(batchId);
     this.projectKey = projectKey;
-    this.projectRelativePath = PathUtils.sanitize(projectRelativePath);
+    this.projectRelativePath = checkSanitize(projectRelativePath);
     this.moduleRelativePath = PathUtils.sanitize(moduleRelativePath);
     this.type = type;
     this.language = language;
     this.sensorStrategy = sensorStrategy;
     this.absolutePath = absolutePath;
+    this.oldRelativeFilePath = oldRelativeFilePath;
+    validateKeyLength();
+  }
+
+  static String checkSanitize(String relativePath) {
+    String sanitized = PathUtils.sanitize(relativePath);
+    if(sanitized == null) {
+      throw new IllegalArgumentException(String.format("The path '%s' must sanitize to a non-null value", relativePath));
+    }
+    return sanitized;
+  }
+
+  private void validateKeyLength() {
+    String key = key();
+    if (key.length() > MAX_KEY_LENGTH) {
+      throw new IllegalStateException(String.format("Component key (%s) length (%s) is longer than the maximum authorized (%s)", key, key.length(), MAX_KEY_LENGTH));
+    }
   }
 
   @Override
@@ -96,6 +121,11 @@ public class DefaultIndexedFile extends DefaultInputComponent implements Indexed
     return absolutePath;
   }
 
+  @CheckForNull
+  public String oldRelativePath() {
+    return oldRelativeFilePath;
+  }
+
   @Override
   public InputStream inputStream() throws IOException {
     return Files.newInputStream(path());
@@ -117,7 +147,7 @@ public class DefaultIndexedFile extends DefaultInputComponent implements Indexed
    */
   @Override
   public String key() {
-    return new StringBuilder().append(projectKey).append(":").append(projectRelativePath).toString();
+    return String.join(":", projectKey, projectRelativePath);
   }
 
   @Override

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,14 @@
  */
 package org.sonar.ce.task.projectanalysis.formula.coverage;
 
-import java.util.Optional;
 import org.sonar.ce.task.projectanalysis.formula.CounterInitializationContext;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 
 import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilder;
 
 public final class CoverageUtils {
-  private static final Measure DEFAULT_MEASURE = newMeasureBuilder().create(0L);
+  private static final Measure DEFAULT_MEASURE_LONG = newMeasureBuilder().create(0L);
+  private static final Measure DEFAULT_MEASURE_INT = newMeasureBuilder().create(0);
 
   private CoverageUtils() {
     // prevents instantiation
@@ -37,7 +37,7 @@ public final class CoverageUtils {
   }
 
   static long getLongMeasureValue(CounterInitializationContext counterContext, String metricKey) {
-    Measure measure = counterContext.getMeasure(metricKey).orElse(DEFAULT_MEASURE);
+    Measure measure = counterContext.getMeasure(metricKey).orElse(DEFAULT_MEASURE_LONG);
     if (measure.getValueType() == Measure.ValueType.NO_VALUE) {
       return 0L;
     }
@@ -47,12 +47,11 @@ public final class CoverageUtils {
     return measure.getLongValue();
   }
 
-  static double getMeasureVariations(CounterInitializationContext counterContext, String metricKey) {
-    Optional<Measure> measure = counterContext.getMeasure(metricKey);
-    if (!measure.isPresent() || !measure.get().hasVariation()) {
-      return 0d;
+  static int getIntMeasureValue(CounterInitializationContext counterContext, String metricKey) {
+    Measure measure = counterContext.getMeasure(metricKey).orElse(DEFAULT_MEASURE_INT);
+    if (measure.getValueType() == Measure.ValueType.NO_VALUE) {
+      return 0;
     }
-    return measure.get().getVariation();
+    return measure.getIntValue();
   }
-
 }

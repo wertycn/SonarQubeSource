@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,8 @@ import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.server.ws.Request;
@@ -32,10 +34,10 @@ import org.sonar.api.server.ws.WebService.SelectionMode;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.qualityprofile.SearchUsersQuery;
-import org.sonar.db.qualityprofile.UserMembershipDto;
+import org.sonar.db.qualityprofile.SearchQualityProfilePermissionQuery;
+import org.sonar.db.user.SearchUserMembershipDto;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.issue.AvatarResolver;
+import org.sonar.server.common.avatar.AvatarResolver;
 import org.sonarqube.ws.Common;
 import org.sonarqube.ws.Qualityprofiles.SearchUsersResponse;
 
@@ -48,14 +50,11 @@ import static org.sonar.api.server.ws.WebService.Param.TEXT_QUERY;
 import static org.sonar.api.server.ws.WebService.SelectionMode.ALL;
 import static org.sonar.api.server.ws.WebService.SelectionMode.DESELECTED;
 import static org.sonar.api.server.ws.WebService.SelectionMode.fromParam;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 import static org.sonar.db.Pagination.forPage;
-import static org.sonar.db.qualityprofile.SearchUsersQuery.ANY;
-import static org.sonar.db.qualityprofile.SearchUsersQuery.IN;
-import static org.sonar.db.qualityprofile.SearchUsersQuery.OUT;
-import static org.sonar.db.qualityprofile.SearchUsersQuery.builder;
+import static org.sonar.db.qualityprofile.SearchQualityProfilePermissionQuery.ANY;
+import static org.sonar.db.qualityprofile.SearchQualityProfilePermissionQuery.IN;
+import static org.sonar.db.qualityprofile.SearchQualityProfilePermissionQuery.OUT;
+import static org.sonar.db.qualityprofile.SearchQualityProfilePermissionQuery.builder;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.ACTION_SEARCH_USERS;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_LANGUAGE;
@@ -104,38 +103,38 @@ public class SearchUsersAction implements QProfileWsAction {
       .createParam(PARAM_LANGUAGE)
       .setDescription("Quality profile language")
       .setRequired(true)
-      .setPossibleValues(Arrays.stream(languages.all()).map(Language::getKey).collect(toSet()));
+      .setPossibleValues(Arrays.stream(languages.all()).map(Language::getKey).collect(Collectors.toSet()));
   }
 
   @Override
   public void handle(Request request, Response response) throws Exception {
-    SearchUsersRequest wsRequest = buildRequest(request);
+    SearchQualityProfileUsersRequest wsRequest = buildRequest(request);
     try (DbSession dbSession = dbClient.openSession(false)) {
       QProfileDto profile = wsSupport.getProfile(dbSession, wsRequest.getQualityProfile(), wsRequest.getLanguage());
       wsSupport.checkCanEdit(dbSession, profile);
 
-      SearchUsersQuery query = builder()
+      SearchQualityProfilePermissionQuery query = builder()
         .setProfile(profile)
         .setQuery(wsRequest.getQuery())
         .setMembership(MEMBERSHIP.get(fromParam(wsRequest.getSelected())))
         .build();
       int total = dbClient.qProfileEditUsersDao().countByQuery(dbSession, query);
-      List<UserMembershipDto> usersMembership = dbClient.qProfileEditUsersDao().selectByQuery(dbSession, query,
+      List<SearchUserMembershipDto> usersMembership = dbClient.qProfileEditUsersDao().selectByQuery(dbSession, query,
         forPage(wsRequest.getPage()).andSize(wsRequest.getPageSize()));
-      Map<String, UserDto> usersById = dbClient.userDao().selectByUuids(dbSession, usersMembership.stream().map(UserMembershipDto::getUserUuid).collect(toList()))
-        .stream().collect(uniqueIndex(UserDto::getUuid));
+      Map<String, UserDto> usersById = dbClient.userDao().selectByUuids(dbSession, usersMembership.stream().map(SearchUserMembershipDto::getUserUuid).toList())
+        .stream().collect(Collectors.toMap(UserDto::getUuid, Function.identity()));
       writeProtobuf(
         SearchUsersResponse.newBuilder()
           .addAllUsers(usersMembership.stream()
             .map(userMembershipDto -> toUser(usersById.get(userMembershipDto.getUserUuid()), userMembershipDto.isSelected()))
-            .collect(toList()))
+            .toList())
           .setPaging(buildPaging(wsRequest, total)).build(),
         request, response);
     }
   }
 
-  private static SearchUsersRequest buildRequest(Request request) {
-    return SearchUsersRequest.builder()
+  private static SearchQualityProfileUsersRequest buildRequest(Request request) {
+    return SearchQualityProfileUsersRequest.builder()
       .setQualityProfile(request.mandatoryParam(PARAM_QUALITY_PROFILE))
       .setLanguage(request.mandatoryParam(PARAM_LANGUAGE))
       .setQuery(request.param(TEXT_QUERY))
@@ -155,7 +154,7 @@ public class SearchUsersAction implements QProfileWsAction {
       .build();
   }
 
-  private static Common.Paging buildPaging(SearchUsersRequest wsRequest, int total) {
+  private static Common.Paging buildPaging(SearchQualityProfileUsersRequest wsRequest, int total) {
     return Common.Paging.newBuilder()
       .setPageIndex(wsRequest.getPage())
       .setPageSize(wsRequest.getPageSize())

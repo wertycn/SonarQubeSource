@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.ui.ws;
 
-import com.google.common.collect.ImmutableSet;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -34,15 +33,14 @@ import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService.NewController;
 import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.api.web.page.Page;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.dialect.H2;
-import org.sonar.server.almsettings.MultipleAlmFeatureProvider;
 import org.sonar.server.authentication.DefaultAdminCredentialsVerifier;
-import org.sonar.server.branch.BranchFeatureProxy;
 import org.sonar.server.issue.index.IssueIndexSyncProgressChecker;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.ui.PageRepository;
 import org.sonar.server.ui.VersionFormatter;
 import org.sonar.server.ui.WebAnalyticsLoader;
@@ -54,15 +52,11 @@ import static org.sonar.core.config.WebConstants.SONAR_LF_ENABLE_GRAVATAR;
 import static org.sonar.core.config.WebConstants.SONAR_LF_GRAVATAR_SERVER_URL;
 import static org.sonar.core.config.WebConstants.SONAR_LF_LOGO_URL;
 import static org.sonar.core.config.WebConstants.SONAR_LF_LOGO_WIDTH_PX;
-import static org.sonar.process.ProcessProperties.Property.SONARCLOUD_ENABLED;
-import static org.sonar.process.ProcessProperties.Property.SONARCLOUD_HOMEPAGE_URL;
-import static org.sonar.process.ProcessProperties.Property.SONAR_ANALYTICS_GTM_TRACKING_ID;
-import static org.sonar.process.ProcessProperties.Property.SONAR_PRISMIC_ACCESS_TOKEN;
 import static org.sonar.process.ProcessProperties.Property.SONAR_UPDATECENTER_ACTIVATE;
 
 public class GlobalAction implements NavigationWsAction, Startable {
 
-  private static final Set<String> DYNAMIC_SETTING_KEYS = ImmutableSet.of(
+  private static final Set<String> DYNAMIC_SETTING_KEYS = Set.of(
     SONAR_LF_LOGO_URL,
     SONAR_LF_LOGO_WIDTH_PX,
     SONAR_LF_ENABLE_GRAVATAR,
@@ -76,45 +70,37 @@ public class GlobalAction implements NavigationWsAction, Startable {
   private final Configuration config;
   private final ResourceTypes resourceTypes;
   private final Server server;
-  private final WebServer webServer;
+  private final NodeInformation nodeInformation;
   private final DbClient dbClient;
-  private final BranchFeatureProxy branchFeature;
   private final UserSession userSession;
   private final PlatformEditionProvider editionProvider;
-  private final MultipleAlmFeatureProvider multipleAlmFeatureProvider;
   private final WebAnalyticsLoader webAnalyticsLoader;
   private final IssueIndexSyncProgressChecker issueIndexSyncChecker;
   private final DefaultAdminCredentialsVerifier defaultAdminCredentialsVerifier;
+  private final DocumentationLinkGenerator documentationLinkGenerator;
 
   public GlobalAction(PageRepository pageRepository, Configuration config, ResourceTypes resourceTypes, Server server,
-    WebServer webServer, DbClient dbClient, BranchFeatureProxy branchFeature, UserSession userSession, PlatformEditionProvider editionProvider,
-    MultipleAlmFeatureProvider multipleAlmFeatureProvider, WebAnalyticsLoader webAnalyticsLoader, IssueIndexSyncProgressChecker issueIndexSyncChecker,
-    DefaultAdminCredentialsVerifier defaultAdminCredentialsVerifier) {
+                      NodeInformation nodeInformation, DbClient dbClient, UserSession userSession, PlatformEditionProvider editionProvider,
+                      WebAnalyticsLoader webAnalyticsLoader, IssueIndexSyncProgressChecker issueIndexSyncChecker,
+                      DefaultAdminCredentialsVerifier defaultAdminCredentialsVerifier, DocumentationLinkGenerator documentationLinkGenerator) {
     this.pageRepository = pageRepository;
     this.config = config;
     this.resourceTypes = resourceTypes;
     this.server = server;
-    this.webServer = webServer;
+    this.nodeInformation = nodeInformation;
     this.dbClient = dbClient;
-    this.branchFeature = branchFeature;
     this.userSession = userSession;
     this.editionProvider = editionProvider;
-    this.multipleAlmFeatureProvider = multipleAlmFeatureProvider;
     this.webAnalyticsLoader = webAnalyticsLoader;
     this.systemSettingValuesByKey = new HashMap<>();
     this.issueIndexSyncChecker = issueIndexSyncChecker;
     this.defaultAdminCredentialsVerifier = defaultAdminCredentialsVerifier;
+    this.documentationLinkGenerator = documentationLinkGenerator;
   }
 
   @Override
   public void start() {
     this.systemSettingValuesByKey.put(SONAR_UPDATECENTER_ACTIVATE.getKey(), config.get(SONAR_UPDATECENTER_ACTIVATE.getKey()).orElse(null));
-    boolean isOnSonarCloud = config.getBoolean(SONARCLOUD_ENABLED.getKey()).orElse(false);
-    if (isOnSonarCloud) {
-      this.systemSettingValuesByKey.put(SONAR_PRISMIC_ACCESS_TOKEN.getKey(), config.get(SONAR_PRISMIC_ACCESS_TOKEN.getKey()).orElse(null));
-      this.systemSettingValuesByKey.put(SONAR_ANALYTICS_GTM_TRACKING_ID.getKey(), config.get(SONAR_ANALYTICS_GTM_TRACKING_ID.getKey()).orElse(null));
-      this.systemSettingValuesByKey.put(SONARCLOUD_HOMEPAGE_URL.getKey(), config.get(SONARCLOUD_HOMEPAGE_URL.getKey()).orElse(null));
-    }
   }
 
   @Override
@@ -143,13 +129,12 @@ public class GlobalAction implements NavigationWsAction, Startable {
       writeQualifiers(json);
       writeVersion(json);
       writeDatabaseProduction(json);
-      writeBranchSupport(json);
       writeInstanceUsesDefaultAdminCredentials(json);
-      writeMultipleAlmEnabled(json);
       editionProvider.get().ifPresent(e -> json.prop("edition", e.name().toLowerCase(Locale.ENGLISH)));
       writeNeedIssueSync(json);
-      json.prop("standalone", webServer.isStandalone());
+      json.prop("standalone", nodeInformation.isStandalone());
       writeWebAnalytics(json);
+      writeDocumentationUrl(json);
       json.endObject();
     }
   }
@@ -198,18 +183,10 @@ public class GlobalAction implements NavigationWsAction, Startable {
     json.prop("productionDatabase", !dbClient.getDatabase().getDialect().getId().equals(H2.ID));
   }
 
-  private void writeBranchSupport(JsonWriter json) {
-    json.prop("branchesEnabled", branchFeature.isEnabled());
-  }
-
   private void writeInstanceUsesDefaultAdminCredentials(JsonWriter json) {
     if (userSession.isSystemAdministrator()) {
       json.prop("instanceUsesDefaultAdminCredentials", defaultAdminCredentialsVerifier.hasDefaultCredentialUser());
     }
-  }
-
-  private void writeMultipleAlmEnabled(JsonWriter json) {
-    json.prop("multipleAlmEnabled", multipleAlmFeatureProvider.enabled());
   }
 
   private void writeNeedIssueSync(JsonWriter json) {
@@ -220,5 +197,9 @@ public class GlobalAction implements NavigationWsAction, Startable {
 
   private void writeWebAnalytics(JsonWriter json) {
     webAnalyticsLoader.getUrlPathToJs().ifPresent(p -> json.prop("webAnalyticsJsPath", p));
+  }
+
+  private void writeDocumentationUrl(JsonWriter json) {
+    json.prop("documentationUrl", documentationLinkGenerator.getDocumentationLink(null));
   }
 }

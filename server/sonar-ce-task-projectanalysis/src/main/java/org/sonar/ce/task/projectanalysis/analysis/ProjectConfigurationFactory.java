@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,14 +21,11 @@ package org.sonar.ce.task.projectanalysis.analysis;
 
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.config.Configuration;
-import org.sonar.api.config.internal.Settings;
 import org.sonar.api.config.internal.ConfigurationBridge;
+import org.sonar.api.config.internal.Settings;
 import org.sonar.db.DbClient;
-import org.sonar.db.component.BranchType;
+import org.sonar.db.DbSession;
 import org.sonar.server.setting.ChildSettings;
-
-import static org.sonar.db.component.ComponentDto.generateBranchKey;
-import static org.sonar.db.component.ComponentDto.generatePullRequestKey;
 
 @ComputeEngineSide
 public class ProjectConfigurationFactory {
@@ -41,20 +38,17 @@ public class ProjectConfigurationFactory {
     this.dbClient = dbClient;
   }
 
-  public Configuration newProjectConfiguration(String projectKey, Branch branch) {
+  public Configuration newProjectConfiguration(String projectUuid) {
     Settings projectSettings = new ChildSettings(globalSettings);
-    addSettings(projectSettings, projectKey);
-    if (branch.getType() == BranchType.PULL_REQUEST) {
-      addSettings(projectSettings, generatePullRequestKey(projectKey, branch.getPullRequestKey()));
-    } else {
-      addSettings(projectSettings, generateBranchKey(projectKey, branch.getName()));
-    }
+    addSettings(projectSettings, projectUuid);
     return new ConfigurationBridge(projectSettings);
   }
 
-  private void addSettings(Settings settings, String componentDbKey) {
-    dbClient.propertiesDao()
-      .selectProjectProperties(componentDbKey)
-      .forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
+  private void addSettings(Settings settings, String componentUuid) {
+    try (DbSession session = dbClient.openSession(false)) {
+      dbClient.propertiesDao()
+        .selectEntityProperties(session, componentUuid)
+        .forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
+    }
   }
 }

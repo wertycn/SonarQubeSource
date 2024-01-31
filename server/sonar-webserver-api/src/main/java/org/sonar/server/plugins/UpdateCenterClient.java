@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,11 +26,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Optional;
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.Properties;
 import org.sonar.api.Property;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.utils.UriReader;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.process.ProcessProperties;
 import org.sonar.updatecenter.common.UpdateCenter;
 import org.sonar.updatecenter.common.UpdateCenterDeserializer;
@@ -47,14 +48,23 @@ import org.sonar.updatecenter.common.UpdateCenterDeserializer.Mode;
     defaultValue = "https://update.sonarsource.org/update-center.properties",
     name = "Update Center URL",
     category = "Update Center",
-    project = false,
+    // hidden from UI
+    global = false),
+  @Property(
+    key = UpdateCenterClient.CACHE_TTL_PROPERTY,
+    defaultValue = "3600000",
+    name = "Update Center cache time-to-live in milliseconds",
+    category = "Update Center",
     // hidden from UI
     global = false)
 })
 public class UpdateCenterClient {
 
+  private static final Logger LOG = LoggerFactory.getLogger(UpdateCenterClient.class);
   public static final String URL_PROPERTY = "sonar.updatecenter.url";
-  public static final int PERIOD_IN_MILLISECONDS = 60 * 60 * 1000;
+  public static final String CACHE_TTL_PROPERTY = "sonar.updatecenter.cache.ttl";
+
+  private final long periodInMilliseconds;
 
   private final URI uri;
   private final UriReader uriReader;
@@ -66,7 +76,9 @@ public class UpdateCenterClient {
     this.uriReader = uriReader;
     this.uri = new URI(config.get(URL_PROPERTY).get());
     this.isActivated = config.getBoolean(ProcessProperties.Property.SONAR_UPDATECENTER_ACTIVATE.getKey()).get();
-    Loggers.get(getClass()).info("Update center: " + uriReader.description(uri));
+    this.periodInMilliseconds = Long.parseLong(config.get(CACHE_TTL_PROPERTY).get());
+
+    LOG.info("Update center: {}", uriReader.description(uri));
   }
 
   public Optional<UpdateCenter> getUpdateCenter() {
@@ -90,7 +102,7 @@ public class UpdateCenterClient {
   }
 
   private boolean needsRefresh() {
-    return lastRefreshDate + PERIOD_IN_MILLISECONDS < System.currentTimeMillis();
+    return lastRefreshDate + periodInMilliseconds < System.currentTimeMillis();
   }
 
   private UpdateCenter init() {
@@ -103,7 +115,7 @@ public class UpdateCenterClient {
       return new UpdateCenterDeserializer(Mode.PROD, true).fromProperties(properties);
 
     } catch (Exception e) {
-      Loggers.get(getClass()).error("Fail to connect to update center", e);
+      LoggerFactory.getLogger(getClass()).error("Fail to connect to update center", e);
       return null;
 
     } finally {

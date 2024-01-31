@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,11 +35,6 @@ public interface MutableAnalysisMetadataHolder extends AnalysisMetadataHolder {
    * @throws IllegalStateException if the analysis date has already been set
    */
   MutableAnalysisMetadataHolder setAnalysisDate(long date);
-
-  /**
-   * @throws IllegalStateException if the fork date has already been set
-   */
-  MutableAnalysisMetadataHolder setForkDate(@Nullable Long date);
 
   /**
    * @throws IllegalStateException if baseAnalysis has already been set
@@ -85,4 +80,6 @@ public interface MutableAnalysisMetadataHolder extends AnalysisMetadataHolder {
    * @throws IllegalStateException if scm revision id has already been set
    */
   MutableAnalysisMetadataHolder setScmRevision(String scmRevisionId);
+
+  MutableAnalysisMetadataHolder setNewCodeReferenceBranch(String newCodeReferenceBranch);
 }

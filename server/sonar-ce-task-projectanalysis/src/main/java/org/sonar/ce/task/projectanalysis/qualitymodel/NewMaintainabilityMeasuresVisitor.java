@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,11 +22,10 @@ package org.sonar.ce.task.projectanalysis.qualitymodel;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.utils.KeyValueFormat;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.CrawlerDepthLimit;
 import org.sonar.ce.task.projectanalysis.component.PathAwareVisitorAdapter;
@@ -55,7 +54,7 @@ import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilde
  * {@link CoreMetrics#NEW_MAINTAINABILITY_RATING_KEY}
  */
 public class NewMaintainabilityMeasuresVisitor extends PathAwareVisitorAdapter<NewMaintainabilityMeasuresVisitor.Counter> {
-  private static final Logger LOG = Loggers.get(NewMaintainabilityMeasuresVisitor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(NewMaintainabilityMeasuresVisitor.class);
 
   private final MeasureRepository measureRepository;
   private final NewLinesRepository newLinesRepository;
@@ -110,11 +109,11 @@ public class NewMaintainabilityMeasuresVisitor extends PathAwareVisitorAdapter<N
     }
     double density = computeDensity(path.current());
     double newDebtRatio = 100.0 * density;
-    double newMaintainability = ratingSettings.getDebtRatingGrid().getRatingForDensity(density).getIndex();
-    long newDevelopmentCost = path.current().getDevCost().getValue();
-    measureRepository.add(component, this.newDevelopmentCostMetric, newMeasureBuilder().setVariation(newDevelopmentCost).createNoValue());
-    measureRepository.add(component, this.newDebtRatioMetric, newMeasureBuilder().setVariation(newDebtRatio).createNoValue());
-    measureRepository.add(component, this.newMaintainabilityRatingMetric, newMeasureBuilder().setVariation(newMaintainability).createNoValue());
+    int newMaintainability = ratingSettings.getDebtRatingGrid().getRatingForDensity(density).getIndex();
+    float newDevelopmentCost = path.current().getDevCost().getValue();
+    measureRepository.add(component, this.newDevelopmentCostMetric, newMeasureBuilder().create(newDevelopmentCost));
+    measureRepository.add(component, this.newDebtRatioMetric, newMeasureBuilder().create(newDebtRatio));
+    measureRepository.add(component, this.newMaintainabilityRatingMetric, newMeasureBuilder().create(newMaintainability));
   }
 
   private static double computeDensity(Counter counter) {
@@ -125,7 +124,7 @@ public class NewMaintainabilityMeasuresVisitor extends PathAwareVisitorAdapter<N
         return newDebt.getValue() / (double) developmentCost;
       }
     }
-    return 0d;
+    return 0D;
   }
 
   private static long getLongValue(Optional<Measure> measure) {
@@ -133,10 +132,7 @@ public class NewMaintainabilityMeasuresVisitor extends PathAwareVisitorAdapter<N
   }
 
   private static long getLongValue(Measure measure) {
-    if (measure.hasVariation()) {
-      return (long) measure.getVariation();
-    }
-    return 0L;
+    return measure.getLongValue();
   }
 
   private void initNewDebtRatioCounter(Component file, Path<Counter> path) {
@@ -191,7 +187,7 @@ public class NewMaintainabilityMeasuresVisitor extends PathAwareVisitorAdapter<N
       .stream()
       .filter(entry -> entry.getValue() == 1)
       .map(Map.Entry::getKey)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public static final class Counter {

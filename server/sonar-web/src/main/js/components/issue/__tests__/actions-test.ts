@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,17 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import throwGlobalError from '../../../app/utils/throwGlobalError';
+import { throwGlobalError } from '../../../helpers/error';
 import { parseIssueFromResponse } from '../../../helpers/issues';
-import { mockComponent, mockIssue } from '../../../helpers/testMocks';
+import { mockComponent } from '../../../helpers/mocks/component';
+import { mockIssue } from '../../../helpers/testMocks';
 import { updateIssue } from '../actions';
 
-jest.mock('../../../app/utils/throwGlobalError', () => ({
-  default: jest.fn()
-}));
+jest.mock('../../../helpers/error', () => ({ throwGlobalError: jest.fn() }));
 
 jest.mock('../../../helpers/issues', () => ({
-  parseIssueFromResponse: jest.fn()
+  parseIssueFromResponse: jest.fn(),
 }));
 
 describe('updateIssue', () => {
@@ -37,7 +36,7 @@ describe('updateIssue', () => {
   const parsedIssue = mockIssue(false, { key: 'parsed' });
   const successPromise = jest.fn().mockResolvedValue({
     issue: mockIssue(),
-    components: [mockComponent()]
+    components: [mockComponent()],
   });
   const errorPromise = jest.fn().mockRejectedValue(null);
   (parseIssueFromResponse as jest.Mock).mockReturnValue(parsedIssue);
@@ -46,38 +45,38 @@ describe('updateIssue', () => {
 
   it('makes successful optimistic updates', async () => {
     updateIssue(onChange, successPromise(), oldIssue, newIssue);
-    expect(onChange).toBeCalledWith(newIssue);
+    expect(onChange).toHaveBeenCalledWith(newIssue);
 
     await new Promise(setImmediate);
 
-    expect(onChange).toBeCalledTimes(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it('makes successful non-optimistic updates', async () => {
     updateIssue(onChange, successPromise());
-    expect(onChange).not.toBeCalled();
+    expect(onChange).not.toHaveBeenCalled();
 
     await new Promise(setImmediate);
-    expect(onChange).toBeCalledWith(parsedIssue);
-    expect(onChange).toBeCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(parsedIssue);
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it('makes unsuccessful optimistic updates', async () => {
     updateIssue(onChange, errorPromise(), oldIssue, newIssue);
-    expect(onChange).toBeCalledWith(newIssue);
+    expect(onChange).toHaveBeenCalledWith(newIssue);
 
     await new Promise(setImmediate);
 
-    expect(onChange).toBeCalledWith(oldIssue);
-    expect(onChange).toBeCalledTimes(2);
+    expect(onChange).toHaveBeenCalledWith(oldIssue);
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 
   it('makes unsuccessful non-optimistic updates', async () => {
     updateIssue(onChange, errorPromise());
-    expect(onChange).not.toBeCalled();
+    expect(onChange).not.toHaveBeenCalled();
 
     await new Promise(setImmediate);
-    expect(parseIssueFromResponse).not.toBeCalled();
-    expect(throwGlobalError).toBeCalled();
+    expect(parseIssueFromResponse).not.toHaveBeenCalled();
+    expect(throwGlobalError).toHaveBeenCalled();
   });
 });

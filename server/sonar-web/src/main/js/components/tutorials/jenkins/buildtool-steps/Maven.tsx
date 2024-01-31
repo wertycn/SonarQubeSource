@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,41 +18,28 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import CodeSnippet from '../../../common/CodeSnippet';
-import SentenceWithFilename from '../../components/SentenceWithFilename';
-import { mavenPomSnippet } from '../../utils';
+import { LanguageProps } from '../JenkinsStep';
 import CreateJenkinsfileBulletPoint from './CreateJenkinsfileBulletPoint';
 
-export interface MavenProps {
-  component: T.Component;
-}
-
-const JENKINSFILE_SNIPPET = `node {
+function jenkinsfileSnippet(projectKey: string, projectName: string) {
+  return `node {
   stage('SCM') {
     checkout scm
   }
   stage('SonarQube Analysis') {
     def mvn = tool 'Default Maven';
     withSonarQubeEnv() {
-      sh "\${mvn}/bin/mvn sonar:sonar"
+      sh "\${mvn}/bin/mvn clean verify sonar:sonar -Dsonar.projectKey=${projectKey} -Dsonar.projectName='${projectName}'"
     }
   }
 }`;
+}
 
-export default function Maven({ component }: MavenProps) {
+export default function Maven({ component }: LanguageProps) {
   return (
-    <>
-      <li className="abs-width-600">
-        <SentenceWithFilename
-          filename="pom.xml"
-          translationKey="onboarding.tutorial.with.jenkins.jenkinsfile.maven.step2"
-        />
-        <CodeSnippet snippet={mavenPomSnippet(component.key)} />
-      </li>
-      <CreateJenkinsfileBulletPoint
-        alertTranslationKeyPart="onboarding.tutorial.with.jenkins.jenkinsfile.maven.step3"
-        snippet={JENKINSFILE_SNIPPET}
-      />
-    </>
+    <CreateJenkinsfileBulletPoint
+      alertTranslationKeyPart="onboarding.tutorial.with.jenkins.jenkinsfile.maven.step3"
+      snippet={jenkinsfileSnippet(component.key, component.name)}
+    />
   );
 }

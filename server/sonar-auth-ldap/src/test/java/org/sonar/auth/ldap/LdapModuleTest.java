@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,18 +20,17 @@
 package org.sonar.auth.ldap;
 
 import org.junit.Test;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ListContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.sonar.core.platform.ComponentContainer.COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER;
 
 public class LdapModuleTest {
 
   @Test
   public void verify_count_of_added_components() {
-    ComponentContainer container = new ComponentContainer();
+    ListContainer container = new ListContainer();
     new LdapModule().configure(container);
-    assertThat(container.size()).isEqualTo(COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER + 3);
+    assertThat(container.getAddedObjects()).hasSize(2);
   }
 
 }

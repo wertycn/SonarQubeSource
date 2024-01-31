@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,39 +19,36 @@
  */
 package org.sonar.server.user.ws;
 
-import org.sonar.api.config.Configuration;
 import org.sonar.core.platform.Module;
-import org.sonar.process.ProcessProperties;
+import org.sonar.server.common.user.UserAnonymizer;
+import org.sonar.server.common.user.UserDeactivator;
+import org.sonar.server.common.user.service.UserService;
 
 public class UsersWsModule extends Module {
-  private final Configuration configuration;
-
-  public UsersWsModule(Configuration configuration) {
-    this.configuration = configuration;
-  }
 
   @Override
   protected void configureModule() {
     add(
       UsersWs.class,
+      AnonymizeAction.class,
       CreateAction.class,
       UpdateAction.class,
       UpdateLoginAction.class,
       DeactivateAction.class,
+      UserDeactivator.class,
       ChangePasswordAction.class,
       CurrentAction.class,
       SearchAction.class,
+      UserService.class,
+      SearchWsReponseGenerator.class,
       GroupsAction.class,
       IdentityProvidersAction.class,
       UserJsonWriter.class,
       SetHomepageAction.class,
       HomepageTypesImpl.class,
-      SetSettingAction.class,
-      UpdateIdentityProviderAction.class);
+      UserAnonymizer.class,
+      UpdateIdentityProviderAction.class,
+      DismissNoticeAction.class);
 
-    if (configuration.getBoolean(ProcessProperties.Property.SONARCLOUD_ENABLED.getKey()).orElse(false)) {
-      // onboarding tutorial is available only in SonarCloud
-      add(SkipOnboardingTutorialAction.class);
-    }
   }
 }

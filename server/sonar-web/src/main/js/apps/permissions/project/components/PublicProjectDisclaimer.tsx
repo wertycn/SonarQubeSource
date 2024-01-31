@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage } from 'design-system/lib';
 import * as React from 'react';
-import ConfirmModal from 'sonar-ui-common/components/controls/ConfirmModal';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import ConfirmModal from '../../../../components/controls/ConfirmModal';
+import { translate, translateWithParameters } from '../../../../helpers/l10n';
 
 interface Props {
   component: {
@@ -38,10 +38,11 @@ export default function PublicProjectDisclaimer({ component, onClose, onConfirm 
       confirmButtonText={translate('projects_role.turn_project_to_public', qualifier)}
       header={translateWithParameters('projects_role.turn_x_to_public', component.name)}
       onClose={onClose}
-      onConfirm={onConfirm}>
-      <Alert variant="warning">
+      onConfirm={onConfirm}
+    >
+      <FlagMessage className="sw-mb-4" variant="warning">
         {translate('projects_role.are_you_sure_to_turn_project_to_public.warning', qualifier)}
-      </Alert>
+      </FlagMessage>
       <p>{translate('projects_role.are_you_sure_to_turn_project_to_public', qualifier)}</p>
     </ConfirmModal>
   );

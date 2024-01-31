@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,6 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.sonar.process.NetworkUtilsImpl;
@@ -42,8 +41,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class HazelcastMemberImplTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public TestRule safeguardTimeout = new DisableOnDebug(Timeout.seconds(60));
 
@@ -110,12 +107,12 @@ public class HazelcastMemberImplTest {
   }
 
   private static HazelcastMember newHzMember(int port, int... otherPorts) {
-    return new HazelcastMemberBuilder(new InetAdressResolver())
+    return new HazelcastMemberBuilder(JoinConfigurationType.TCP_IP)
       .setProcessId(ProcessId.COMPUTE_ENGINE)
       .setNodeName("name" + port)
       .setPort(port)
       .setNetworkInterface(loopback.getHostAddress())
-      .setMembers(Arrays.stream(otherPorts).mapToObj(p -> loopback.getHostAddress() + ":" + p).collect(Collectors.toList()))
+      .setMembers(Arrays.stream(otherPorts).mapToObj(p -> loopback.getHostAddress() + ":" + p).collect(Collectors.joining(",")))
       .build();
   }
 
@@ -132,12 +129,12 @@ public class HazelcastMemberImplTest {
       .map(answer::getFailed)
       .filter(Optional::isPresent)
       .map(Optional::get)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private static List<Boolean> extractTimeOuts(DistributedAnswer<Long> answer) {
     return answer.getMembers().stream()
       .map(answer::hasTimedOut)
-      .collect(Collectors.toList());
+      .toList();
   }
 }

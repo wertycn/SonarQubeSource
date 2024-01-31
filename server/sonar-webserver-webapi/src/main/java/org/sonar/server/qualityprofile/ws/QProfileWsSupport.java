@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.user.UserSession;
@@ -48,9 +48,9 @@ public class QProfileWsSupport {
     this.userSession = userSession;
   }
 
-  public RuleDefinitionDto getRule(DbSession dbSession, RuleKey ruleKey) {
-    Optional<RuleDefinitionDto> ruleDefinitionDto = dbClient.ruleDao().selectDefinitionByKey(dbSession, ruleKey);
-    RuleDefinitionDto rule = checkFoundWithOptional(ruleDefinitionDto, "Rule with key '%s' not found", ruleKey);
+  public RuleDto getRule(DbSession dbSession, RuleKey ruleKey) {
+    Optional<RuleDto> ruleDefinitionDto = dbClient.ruleDao().selectByKey(dbSession, ruleKey);
+    RuleDto rule = checkFoundWithOptional(ruleDefinitionDto, "Rule with key '%s' not found", ruleKey);
     checkRequest(!rule.isExternal(), "Operation forbidden for rule '%s' imported from an external rule engine.", ruleKey);
     return rule;
   }
@@ -91,22 +91,32 @@ public class QProfileWsSupport {
   }
 
   boolean canEdit(DbSession dbSession, QProfileDto profile) {
-    if (profile.isBuiltIn() || !userSession.isLoggedIn()) {
-      return false;
-    }
-    if (userSession.hasPermission(GlobalPermission.ADMINISTER_QUALITY_PROFILES)) {
+    if (canAdministrate(profile)) {
       return true;
     }
-
     UserDto user = dbClient.userDao().selectByLogin(dbSession, userSession.getLogin());
     checkState(user != null, "User from session does not exist");
     return dbClient.qProfileEditUsersDao().exists(dbSession, profile, user)
       || dbClient.qProfileEditGroupsDao().exists(dbSession, profile, userSession.getGroups());
   }
 
+  boolean canAdministrate(QProfileDto profile) {
+    if (profile.isBuiltIn() || !userSession.isLoggedIn()) {
+      return false;
+    }
+    return userSession.hasPermission(GlobalPermission.ADMINISTER_QUALITY_PROFILES);
+  }
+
   public void checkCanEdit(DbSession dbSession, QProfileDto profile) {
     checkNotBuiltIn(profile);
     if (!canEdit(dbSession, profile)) {
+      throw insufficientPrivilegesException();
+    }
+  }
+
+  public void checkCanAdministrate(QProfileDto profile) {
+    checkNotBuiltIn(profile);
+    if (!canAdministrate(profile)) {
       throw insufficientPrivilegesException();
     }
   }

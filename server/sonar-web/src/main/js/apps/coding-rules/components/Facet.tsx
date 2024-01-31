@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,35 +17,35 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { FacetBox, FacetItem } from 'design-system';
 import { orderBy, sortBy, without } from 'lodash';
 import * as React from 'react';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import FacetBox from '../../../components/facet/FacetBox';
-import FacetHeader from '../../../components/facet/FacetHeader';
-import FacetItem from '../../../components/facet/FacetItem';
-import FacetItemsList from '../../../components/facet/FacetItemsList';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate } from '../../../helpers/l10n';
+import { formatMeasure } from '../../../helpers/measures';
+import { MetricType } from '../../../types/metrics';
+import { Dict } from '../../../types/types';
+import { FacetItemsList } from '../../issues/sidebar/FacetItemsList';
+import { MultipleSelectionHint } from '../../issues/sidebar/MultipleSelectionHint';
 import { FacetKey } from '../query';
 
 export interface BasicProps {
-  onChange: (changes: T.Dict<string | string[] | undefined>) => void;
+  onChange: (changes: Dict<string | string[] | undefined>) => void;
   onToggle: (facet: FacetKey) => void;
   open: boolean;
-  stats?: T.Dict<number>;
+  stats?: Dict<number>;
   values: string[];
+  help?: React.ReactNode;
 }
 
 interface Props extends BasicProps {
-  children?: React.ReactNode;
   disabled?: boolean;
   disabledHelper?: string;
-  halfWidth?: boolean;
   options?: string[];
   property: FacetKey;
   renderFooter?: () => React.ReactNode;
-  renderName?: (value: string) => React.ReactNode;
+  renderName?: (value: string, disabled: boolean) => React.ReactNode;
   renderTextName?: (value: string) => string;
   singleSelection?: boolean;
 }
@@ -59,7 +59,7 @@ export default class Facet extends React.PureComponent<Props> {
       newValue = itemValue === value ? undefined : itemValue;
     } else if (multiple) {
       newValue = orderBy(
-        values.includes(itemValue) ? without(values, itemValue) : [...values, itemValue]
+        values.includes(itemValue) ? without(values, itemValue) : [...values, itemValue],
       );
     } else {
       newValue = values.includes(itemValue) && values.length < 2 ? [] : [itemValue];
@@ -76,56 +76,75 @@ export default class Facet extends React.PureComponent<Props> {
   renderItem = (value: string) => {
     const active = this.props.values.includes(value);
     const stat = this.getStat(value);
+    const disabled = stat === 0 || typeof stat === 'undefined';
     const { renderName = defaultRenderName, renderTextName = defaultRenderName } = this.props;
 
     return (
       <FacetItem
+        className="it__search-navigator-facet"
         active={active}
-        halfWidth={this.props.halfWidth}
         key={value}
-        name={renderName(value)}
+        name={renderName(value, disabled)}
         onClick={this.handleItemClick}
-        stat={stat && formatMeasure(stat, 'SHORT_INT')}
-        tooltip={renderTextName(value)}
+        stat={stat && formatMeasure(stat, MetricType.ShortInteger)}
         value={value}
+        tooltip={renderTextName(value)}
       />
     );
   };
 
   render() {
-    const { disabled, renderTextName = defaultRenderName, stats } = this.props;
-    const values = this.props.values.map(renderTextName);
+    const {
+      disabled,
+      disabledHelper,
+      open,
+      property,
+      renderTextName = defaultRenderName,
+      stats,
+      help,
+      values,
+    } = this.props;
     const items =
       this.props.options ||
       (stats &&
         sortBy(
           Object.keys(stats),
-          key => -stats[key],
-          key => renderTextName(key).toLowerCase()
+          (key) => -stats[key],
+          (key) => renderTextName(key).toLowerCase(),
         ));
+    const headerId = `facet_${property}`;
+    const nbSelectableItems =
+      items?.filter((item) => (stats ? stats[item] : undefined)).length ?? 0;
+    const nbSelectedItems = values.length;
 
     return (
       <FacetBox
-        className={classNames({ 'search-navigator-facet-box-forbidden': disabled })}
-        property={this.props.property}>
-        <FacetHeader
-          name={
-            <Tooltip overlay={disabled ? this.props.disabledHelper : undefined}>
-              <span>{translate('coding_rules.facet', this.props.property)}</span>
-            </Tooltip>
-          }
-          onClear={this.handleClear}
-          onClick={disabled ? undefined : this.handleHeaderClick}
-          open={this.props.open && !disabled}
-          values={values}>
-          {this.props.children}
-        </FacetHeader>
-
-        {this.props.open && items !== undefined && (
-          <FacetItemsList>{items.map(this.renderItem)}</FacetItemsList>
+        className={classNames('it__search-navigator-facet-box', {
+          'it__search-navigator-facet-box-forbidden': disabled,
+        })}
+        data-property={property}
+        clearIconLabel={translate('clear')}
+        count={values.length}
+        id={headerId}
+        name={translate('coding_rules.facet', property)}
+        onClear={this.handleClear}
+        onClick={disabled ? undefined : this.handleHeaderClick}
+        open={open && !disabled}
+        disabled={disabled}
+        disabledHelper={disabledHelper}
+        tooltipComponent={Tooltip}
+        help={help}
+      >
+        {open && items !== undefined && (
+          <FacetItemsList labelledby={headerId}>{items.map(this.renderItem)}</FacetItemsList>
         )}
 
-        {this.props.open && this.props.renderFooter !== undefined && this.props.renderFooter()}
+        {open && this.props.renderFooter !== undefined && this.props.renderFooter()}
+
+        <MultipleSelectionHint
+          nbSelectableItems={nbSelectableItems}
+          nbSelectedItems={nbSelectedItems}
+        />
       </FacetBox>
     );
   }

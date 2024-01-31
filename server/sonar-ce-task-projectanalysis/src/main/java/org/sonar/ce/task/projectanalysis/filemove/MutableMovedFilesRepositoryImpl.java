@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,28 +30,50 @@ import static java.util.Objects.requireNonNull;
 
 public class MutableMovedFilesRepositoryImpl implements MutableMovedFilesRepository {
   private final Map<String, OriginalFile> originalFiles = new HashMap<>();
+  private final Map<String, OriginalFile> originalPullRequestFiles = new HashMap<>();
 
   @Override
   public void setOriginalFile(Component file, OriginalFile originalFile) {
-    requireNonNull(file, "file can't be null");
-    requireNonNull(originalFile, "originalFile can't be null");
-    checkArgument(file.getType() == Component.Type.FILE, "file must be of type FILE");
+    storeOriginalFileInCache(originalFiles, file, originalFile);
+  }
 
-    OriginalFile existingOriginalFile = originalFiles.get(file.getDbKey());
-    checkState(existingOriginalFile == null || existingOriginalFile.equals(originalFile),
-      "Original file %s already registered for file %s. Unable to register %s.", existingOriginalFile, file, originalFile);
-    if (existingOriginalFile == null) {
-      originalFiles.put(file.getDbKey(), originalFile);
-    }
+  @Override
+  public void setOriginalPullRequestFile(Component file, OriginalFile originalFile) {
+    storeOriginalFileInCache(originalPullRequestFiles, file, originalFile);
   }
 
   @Override
   public Optional<OriginalFile> getOriginalFile(Component file) {
+    return retrieveOriginalFileFromCache(originalFiles, file);
+  }
+
+  @Override
+  public Optional<OriginalFile> getOriginalPullRequestFile(Component file) {
+    return retrieveOriginalFileFromCache(originalPullRequestFiles, file);
+  }
+
+  private static void storeOriginalFileInCache(Map<String, OriginalFile> originalFiles, Component file, OriginalFile originalFile) {
     requireNonNull(file, "file can't be null");
+    requireNonNull(originalFile, "originalFile can't be null");
+    checkArgument(file.getType() == Component.Type.FILE, "file must be of type FILE");
+
+    OriginalFile existingOriginalFile = originalFiles.get(file.getKey());
+
+    checkState(existingOriginalFile == null || existingOriginalFile.equals(originalFile),
+      "Original file %s already registered for file %s. Unable to register %s.", existingOriginalFile, file, originalFile);
+
+    if (existingOriginalFile == null) {
+      originalFiles.put(file.getKey(), originalFile);
+    }
+  }
+
+  private static Optional<OriginalFile> retrieveOriginalFileFromCache(Map<String, OriginalFile> originalFiles, Component file) {
+    requireNonNull(file, "file can't be null");
+
     if (file.getType() != Component.Type.FILE) {
       return Optional.empty();
     }
 
-    return Optional.ofNullable(originalFiles.get(file.getDbKey()));
+    return Optional.ofNullable(originalFiles.get(file.getKey()));
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -91,7 +91,7 @@ public class ManagedProcessLifecycle {
       res = true;
       listeners.forEach(listener -> listener.onProcessState(processId, to));
     }
-    LOG.debug("{} tryToMoveTo {} from {} to {} => {}", Thread.currentThread().getName(), processId.getKey(), currentState, to, res);
+    LOG.debug("{} tryToMoveTo {} from {} to {} => {}", Thread.currentThread().getName(), processId.getHumanReadableName(), currentState, to, res);
     return res;
   }
 }

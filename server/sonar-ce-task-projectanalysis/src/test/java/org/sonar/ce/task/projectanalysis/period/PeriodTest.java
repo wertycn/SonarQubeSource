@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,7 @@
  */
 package org.sonar.ce.task.projectanalysis.period;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.db.newcodeperiod.NewCodePeriodType;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,8 +29,6 @@ public class PeriodTest {
   private static final String SOME_MODE_PARAM = "mode_para";
   private static final long SOME_SNAPSHOT_DATE = 1000L;
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void test_some_setters_and_getters() {
@@ -45,21 +41,21 @@ public class PeriodTest {
 
   @Test
   public void verify_to_string() {
-    assertThat(new Period(NewCodePeriodType.PREVIOUS_VERSION.name(), "2.3", 1420034400000L).toString())
-      .isEqualTo("Period{mode=PREVIOUS_VERSION, modeParameter=2.3, date=1420034400000}");
+    assertThat(new Period(NewCodePeriodType.PREVIOUS_VERSION.name(), "2.3", 1420034400000L))
+      .hasToString("Period{mode=PREVIOUS_VERSION, modeParameter=2.3, date=1420034400000}");
   }
 
   @Test
   public void equals_is_done_on_all_fields() {
     Period period = new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.3", 1420034400000L);
 
-    assertThat(period).isEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.3", 1420034400000L));
-
-    assertThat(period).isNotEqualTo(null);
-    assertThat(period).isNotEqualTo("sdsd");
-    assertThat(period).isNotEqualTo(new Period(NewCodePeriodType.PREVIOUS_VERSION.name(), "2.3", 1420034400000L));
-    assertThat(period).isNotEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.4", 1420034400000L));
-    assertThat(period).isNotEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.3", 1420034410000L));
+    assertThat(period)
+      .isEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.3", 1420034400000L))
+      .isNotNull()
+      .isNotEqualTo("sdsd")
+      .isNotEqualTo(new Period(NewCodePeriodType.PREVIOUS_VERSION.name(), "2.3", 1420034400000L))
+      .isNotEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.4", 1420034400000L))
+      .isNotEqualTo(new Period(NewCodePeriodType.NUMBER_OF_DAYS.name(), "2.3", 1420034410000L));
 
   }
 }

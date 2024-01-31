@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,17 @@
  */
 package org.sonar.server.es;
 
-import com.google.common.base.Function;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
+import org.apache.lucene.search.TotalHits;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+
+import static java.util.Optional.ofNullable;
 
 public class SearchIdResult<ID> {
 
@@ -36,8 +39,12 @@ public class SearchIdResult<ID> {
 
   public SearchIdResult(SearchResponse response, Function<String, ID> converter, ZoneId timeZone) {
     this.facets = new Facets(response, timeZone);
-    this.total = response.getHits().getTotalHits().value;
+    this.total = getTotalHits(response).value;
     this.uuids = convertToIds(response.getHits(), converter);
+  }
+
+  private static TotalHits getTotalHits(SearchResponse response) {
+    return ofNullable(response.getHits().getTotalHits()).orElseThrow(() -> new IllegalStateException("Could not get total hits of search results"));
   }
 
   public List<ID> getUuids() {

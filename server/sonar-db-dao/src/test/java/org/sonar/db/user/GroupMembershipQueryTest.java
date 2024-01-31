@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,13 @@
  */
 package org.sonar.db.user;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class GroupMembershipQueryTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void create_query() {
@@ -47,11 +44,12 @@ public class GroupMembershipQueryTest {
 
   @Test
   public void fail_on_invalid_membership() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Membership is not valid (got unknwown). Availables values are [ANY, IN, OUT]");
-
-    GroupMembershipQuery.builder()
-      .membership("unknwown")
-      .build();
+    assertThatThrownBy(() -> {
+      GroupMembershipQuery.builder()
+        .membership("unknwown")
+        .build();
+    })
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Membership is not valid (got unknwown). Availables values are [ANY, IN, OUT]");
   }
 }

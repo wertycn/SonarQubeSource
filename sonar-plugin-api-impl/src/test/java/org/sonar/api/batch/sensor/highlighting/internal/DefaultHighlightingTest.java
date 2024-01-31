@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,9 +22,7 @@ package org.sonar.api.batch.sensor.highlighting.internal;
 import java.util.Collection;
 import org.assertj.core.api.Assertions;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.TextRange;
@@ -33,35 +31,32 @@ import org.sonar.api.batch.fs.internal.DefaultTextRange;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.batch.sensor.internal.SensorStorage;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.api.batch.sensor.highlighting.TypeOfText.COMMENT;
-import static org.sonar.api.batch.sensor.highlighting.TypeOfText.CPP_DOC;
 import static org.sonar.api.batch.sensor.highlighting.TypeOfText.KEYWORD;
 
 public class DefaultHighlightingTest {
 
   private static final InputFile INPUT_FILE = new TestInputFileBuilder("foo", "src/Foo.java")
     .setLines(2)
-    .setOriginalLineStartOffsets(new int[] {0, 50})
-    .setOriginalLineEndOffsets(new int[] {49, 100})
+    .setOriginalLineStartOffsets(new int[]{0, 50})
+    .setOriginalLineEndOffsets(new int[]{49, 100})
     .setLastValidOffset(101)
     .build();
 
   private Collection<SyntaxHighlightingRule> highlightingRules;
-
-  @Rule
-  public ExpectedException throwable = ExpectedException.none();
 
   @Before
   public void setUpSampleRules() {
 
     DefaultHighlighting highlightingDataBuilder = new DefaultHighlighting(Mockito.mock(SensorStorage.class))
       .onFile(INPUT_FILE)
-      .highlight(0, 10, COMMENT)
+      .highlight(1, 0, 1, 10, COMMENT)
       .highlight(1, 10, 1, 12, KEYWORD)
-      .highlight(24, 38, KEYWORD)
-      .highlight(42, 50, KEYWORD)
-      .highlight(24, 65, CPP_DOC)
-      .highlight(12, 20, COMMENT);
+      .highlight(1, 24, 1, 38, KEYWORD)
+      .highlight(1, 42, 2, 0, KEYWORD)
+      .highlight(1, 24, 2, 15, COMMENT)
+      .highlight(1, 12, 1, 20, COMMENT);
 
     highlightingDataBuilder.save();
 
@@ -86,41 +81,38 @@ public class DefaultHighlightingTest {
       rangeOf(1, 24, 2, 15),
       rangeOf(1, 24, 1, 38),
       rangeOf(1, 42, 2, 0));
-    Assertions.assertThat(highlightingRules).extracting("textType").containsExactly(COMMENT, KEYWORD, COMMENT, CPP_DOC, KEYWORD, KEYWORD);
+    Assertions.assertThat(highlightingRules).extracting("textType").containsExactly(COMMENT, KEYWORD, COMMENT, COMMENT, KEYWORD, KEYWORD);
   }
 
   @Test
   public void should_support_overlapping() {
     new DefaultHighlighting(Mockito.mock(SensorStorage.class))
       .onFile(INPUT_FILE)
-      .highlight(0, 15, KEYWORD)
-      .highlight(8, 12, CPP_DOC)
+      .highlight(1, 0, 1, 15, KEYWORD)
+      .highlight(1, 8, 1, 12, COMMENT)
       .save();
   }
 
   @Test
   public void should_prevent_start_equal_end() {
-    throwable.expect(IllegalArgumentException.class);
-    throwable
-      .expectMessage("Unable to highlight file");
-
-    new DefaultHighlighting(Mockito.mock(SensorStorage.class))
+    assertThatThrownBy(() -> new DefaultHighlighting(Mockito.mock(SensorStorage.class))
       .onFile(INPUT_FILE)
-      .highlight(10, 10, KEYWORD)
-      .save();
+      .highlight(1, 10, 1, 10, KEYWORD)
+      .save())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Unable to highlight file");
   }
 
   @Test
   public void should_prevent_boudaries_overlapping() {
-    throwable.expect(IllegalStateException.class);
-    throwable
-      .expectMessage("Cannot register highlighting rule for characters at Range[from [line=1, lineOffset=8] to [line=1, lineOffset=15]] as it overlaps at least one existing rule");
-
-    new DefaultHighlighting(Mockito.mock(SensorStorage.class))
+    assertThatThrownBy(() -> new DefaultHighlighting(Mockito.mock(SensorStorage.class))
       .onFile(INPUT_FILE)
-      .highlight(0, 10, KEYWORD)
-      .highlight(8, 15, KEYWORD)
-      .save();
+      .highlight(1, 0, 1, 10, KEYWORD)
+      .highlight(1, 8, 1, 15, KEYWORD)
+      .save())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Cannot register highlighting rule for characters at Range[from [line=1, lineOffset=8] to [line=1, lineOffset=15]] " +
+        "as it overlaps at least one existing rule");
   }
 
 }

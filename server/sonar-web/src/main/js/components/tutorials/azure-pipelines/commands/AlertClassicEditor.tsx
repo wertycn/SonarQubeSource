@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,29 +17,32 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { FlagMessage, Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { ALM_DOCUMENTATION_PATHS } from '../../../../helpers/constants';
+import { useDocUrl } from '../../../../helpers/docs';
+import { translate } from '../../../../helpers/l10n';
 import { AlmKeys } from '../../../../types/alm-settings';
 
 export default function AlertClassicEditor() {
+  const docUrl = useDocUrl();
+
   return (
-    <Alert variant="info" className="big-spacer-top">
-      <FormattedMessage
-        id="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info"
-        defaultMessage={translate('onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info')}
-        values={{
-          doc_link: (
-            <Link to={ALM_DOCUMENTATION_PATHS[AlmKeys.Azure]} target="_blank">
-              {translate('onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info.doc_link')}
-            </Link>
-          )
-        }}
-      />
-    </Alert>
+    <FlagMessage variant="info" className="sw-mt-4">
+      <span>
+        <FormattedMessage
+          id="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info"
+          defaultMessage={translate('onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info')}
+          values={{
+            doc_link: (
+              <Link to={docUrl(ALM_DOCUMENTATION_PATHS[AlmKeys.Azure])}>
+                {translate('onboarding.tutorial.with.azure_pipelines.BranchAnalysis.info.doc_link')}
+              </Link>
+            ),
+          }}
+        />
+      </span>
+    </FlagMessage>
   );
 }

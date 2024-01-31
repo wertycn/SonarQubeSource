@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,63 +17,40 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { ButtonSecondary, PageTitle } from 'design-system';
 import * as React from 'react';
-import { Button, ResetButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import {
   commentSecurityHotspot,
   deleteSecurityHotspotComment,
-  editSecurityHotspotComment
+  editSecurityHotspotComment,
 } from '../../../api/security-hotspots';
-import FormattingTips from '../../../components/common/FormattingTips';
-import { isLoggedIn } from '../../../helpers/users';
+import { translate } from '../../../helpers/l10n';
 import { Hotspot } from '../../../types/security-hotspots';
+import { CurrentUser, isLoggedIn } from '../../../types/users';
+import HotspotCommentModal from './HotspotCommentModal';
 import HotspotReviewHistory from './HotspotReviewHistory';
 
 interface Props {
-  currentUser: T.CurrentUser;
+  currentUser: CurrentUser;
   hotspot: Hotspot;
-  commentTextRef: React.RefObject<HTMLTextAreaElement>;
-  commentVisible: boolean;
   onCommentUpdate: () => void;
-  onOpenComment: () => void;
-  onCloseComment: () => void;
 }
 
 interface State {
-  comment: string;
+  showAddCommentModal: boolean;
 }
 
 export default class HotspotReviewHistoryAndComments extends React.PureComponent<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      comment: ''
+      showAddCommentModal: false,
     };
   }
 
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.hotspot !== this.props.hotspot) {
-      this.setState({
-        comment: ''
-      });
-    }
-  }
-
-  handleCommentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    this.setState({ comment: event.target.value });
-  };
-
-  handleCloseComment = () => {
-    this.setState({ comment: '' });
-    this.props.onCloseComment();
-  };
-
-  handleSubmitComment = () => {
-    return commentSecurityHotspot(this.props.hotspot.key, this.state.comment).then(() => {
-      this.setState({ comment: '' });
-      this.props.onCloseComment();
+  handleSubmitComment = (comment: string) => {
+    return commentSecurityHotspot(this.props.hotspot.key, comment).then(() => {
+      this.setState({ showAddCommentModal: false });
       this.props.onCommentUpdate();
     });
   };
@@ -90,62 +67,46 @@ export default class HotspotReviewHistoryAndComments extends React.PureComponent
     });
   };
 
+  handleShowCommentModal = () => {
+    this.setState({ showAddCommentModal: true });
+  };
+
+  handleHideCommentModal = () => {
+    this.setState({ showAddCommentModal: false });
+  };
+
   render() {
-    const { currentUser, hotspot, commentTextRef, commentVisible } = this.props;
-    const { comment } = this.state;
+    const { currentUser, hotspot } = this.props;
+    const { showAddCommentModal } = this.state;
     return (
-      <>
-        <h1>{translate('hotspot.section.activity')}</h1>
-        <div className="padded it__hs-review-history">
-          <HotspotReviewHistory
-            hotspot={hotspot}
-            onDeleteComment={this.handleDeleteComment}
-            onEditComment={this.handleEditComment}
+      <div className="it__hs-review-history">
+        <PageTitle
+          as="h2"
+          className="sw-body-md-highlight"
+          text={translate('hotspot.section.activity')}
+        />
+
+        {isLoggedIn(currentUser) && (
+          <ButtonSecondary className="sw-mt-4 sw-mb-2" onClick={this.handleShowCommentModal}>
+            {translate('hotspots.status.add_comment')}
+          </ButtonSecondary>
+        )}
+
+        <HotspotReviewHistory
+          hotspot={hotspot}
+          onDeleteComment={this.handleDeleteComment}
+          onEditComment={this.handleEditComment}
+        />
+
+        {showAddCommentModal && (
+          <HotspotCommentModal
+            onCancel={this.handleHideCommentModal}
+            onSubmit={(comment) => {
+              this.handleSubmitComment(comment);
+            }}
           />
-
-          {isLoggedIn(currentUser) && (
-            <>
-              <hr />
-              <div className="big-spacer-top">
-                <Button
-                  className={classNames('it__hs-add-comment', { invisible: commentVisible })}
-                  id="hotspot-comment-box-display"
-                  onClick={this.props.onOpenComment}>
-                  {translate('hotspots.comment.open')}
-                </Button>
-
-                <div className={classNames({ invisible: !commentVisible })}>
-                  <div className="little-spacer-bottom">{translate('hotspots.comment.field')}</div>
-                  <textarea
-                    className="form-field fixed-width width-100 spacer-bottom"
-                    onChange={this.handleCommentChange}
-                    ref={commentTextRef}
-                    rows={2}
-                    value={comment}
-                  />
-                  <div className="display-flex-space-between display-flex-center ">
-                    <FormattingTips className="huge-spacer-bottom" />
-                    <div>
-                      <Button
-                        className="huge-spacer-bottom"
-                        id="hotspot-comment-box-submit"
-                        onClick={this.handleSubmitComment}>
-                        {translate('hotspots.comment.submit')}
-                      </Button>
-                      <ResetButtonLink
-                        className="spacer-left huge-spacer-bottom"
-                        id="hotspot-comment-box-cancel"
-                        onClick={this.handleCloseComment}>
-                        {translate('cancel')}
-                      </ResetButtonLink>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </>
+        )}
+      </div>
     );
   }
 }

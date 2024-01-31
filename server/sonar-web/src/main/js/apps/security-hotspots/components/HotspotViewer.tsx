@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,35 +18,48 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { scrollToElement } from 'sonar-ui-common/helpers/scrolling';
+import { getRuleDetails } from '../../../api/rules';
 import { getSecurityHotspotDetails } from '../../../api/security-hotspots';
-import { BranchLike } from '../../../types/branch-like';
-import { Hotspot } from '../../../types/security-hotspots';
+import { get } from '../../../helpers/storage';
+import { Standards } from '../../../types/security';
+import {
+  Hotspot,
+  HotspotStatusFilter,
+  HotspotStatusOption,
+} from '../../../types/security-hotspots';
+import { Component } from '../../../types/types';
+import { RuleDescriptionSection } from '../../coding-rules/rule';
+import { SHOW_STATUS_DIALOG_STORAGE_KEY } from '../constants';
+import { getStatusFilterFromStatusOption } from '../utils';
 import HotspotViewerRenderer from './HotspotViewerRenderer';
 
 interface Props {
-  branchLike?: BranchLike;
-  component: T.Component;
+  component: Component;
   hotspotKey: string;
+  hotspotsReviewedMeasure?: string;
+  onLocationClick: (index: number) => void;
+  onSwitchStatusFilter: (option: HotspotStatusFilter) => void;
   onUpdateHotspot: (hotspotKey: string) => Promise<void>;
-  securityCategories: T.StandardSecurityCategories;
+  selectedHotspotLocation?: number;
+  standards?: Standards;
 }
 
 interface State {
   hotspot?: Hotspot;
+  lastStatusChangedTo?: HotspotStatusOption;
   loading: boolean;
-  commentVisible: boolean;
+  ruleDescriptionSections?: RuleDescriptionSection[];
+  ruleLanguage?: string;
+  showStatusUpdateSuccessModal: boolean;
 }
 
 export default class HotspotViewer extends React.PureComponent<Props, State> {
   mounted = false;
   state: State;
-  commentTextRef: React.RefObject<HTMLTextAreaElement>;
 
   constructor(props: Props) {
     super(props);
-    this.commentTextRef = React.createRef<HTMLTextAreaElement>();
-    this.state = { loading: false, commentVisible: false };
+    this.state = { loading: false, showStatusUpdateSuccessModal: false };
   }
 
   componentDidMount() {
@@ -54,12 +67,9 @@ export default class HotspotViewer extends React.PureComponent<Props, State> {
     this.fetchHotspot();
   }
 
-  componentDidUpdate(prevProps: Props, prevState: State) {
+  componentDidUpdate(prevProps: Props) {
     if (prevProps.hotspotKey !== this.props.hotspotKey) {
       this.fetchHotspot();
-    }
-    if (this.commentTextRef.current && !prevState.commentVisible && this.state.commentVisible) {
-      this.commentTextRef.current.focus({ preventScroll: true });
     }
   }
 
@@ -67,61 +77,82 @@ export default class HotspotViewer extends React.PureComponent<Props, State> {
     this.mounted = false;
   }
 
-  fetchHotspot = () => {
+  fetchHotspot = async () => {
     this.setState({ loading: true });
-    return getSecurityHotspotDetails(this.props.hotspotKey)
-      .then(hotspot => {
-        if (this.mounted) {
-          this.setState({ hotspot, loading: false });
-        }
-        return hotspot;
-      })
-      .catch(() => this.mounted && this.setState({ loading: false }));
+
+    try {
+      const hotspot = await getSecurityHotspotDetails(this.props.hotspotKey);
+      const ruleDetails = await getRuleDetails({ key: hotspot.rule.key }).then((r) => r.rule);
+
+      if (this.mounted) {
+        this.setState({
+          hotspot,
+          loading: false,
+          ruleLanguage: ruleDetails.lang,
+          ruleDescriptionSections: ruleDetails.descriptionSections,
+        });
+      }
+    } catch (error) {
+      if (this.mounted) {
+        this.setState({ loading: false });
+      }
+    }
   };
 
-  handleHotspotUpdate = async (statusUpdate = false) => {
+  handleHotspotUpdate = async (statusUpdate = false, statusOption?: HotspotStatusOption) => {
     const { hotspotKey } = this.props;
 
     if (statusUpdate) {
+      this.setState({
+        lastStatusChangedTo: statusOption,
+        showStatusUpdateSuccessModal: get(SHOW_STATUS_DIALOG_STORAGE_KEY) !== 'false',
+      });
       await this.props.onUpdateHotspot(hotspotKey);
     } else {
       await this.fetchHotspot();
     }
   };
 
-  handleOpenComment = () => {
-    this.setState({ commentVisible: true });
-    if (this.commentTextRef.current) {
-      // Edge case when the comment is already open and unfocus.
-      this.commentTextRef.current.focus({ preventScroll: true });
-    }
-    if (this.commentTextRef.current) {
-      scrollToElement(this.commentTextRef.current, {
-        bottomOffset: 100
-      });
+  handleSwitchFilterToStatusOfUpdatedHotspot = () => {
+    const { lastStatusChangedTo } = this.state;
+
+    if (lastStatusChangedTo) {
+      this.props.onSwitchStatusFilter(getStatusFilterFromStatusOption(lastStatusChangedTo));
     }
   };
 
-  handleCloseComment = () => {
-    this.setState({ commentVisible: false });
+  handleCloseStatusUpdateSuccessModal = () => {
+    this.setState({ showStatusUpdateSuccessModal: false });
   };
 
   render() {
-    const { branchLike, component, securityCategories } = this.props;
-    const { hotspot, loading, commentVisible } = this.state;
+    const { component, hotspotsReviewedMeasure, selectedHotspotLocation, standards } = this.props;
+
+    const {
+      hotspot,
+      ruleDescriptionSections,
+      ruleLanguage,
+      loading,
+      showStatusUpdateSuccessModal,
+      lastStatusChangedTo,
+    } = this.state;
 
     return (
       <HotspotViewerRenderer
-        branchLike={branchLike}
         component={component}
-        commentTextRef={this.commentTextRef}
-        commentVisible={commentVisible}
         hotspot={hotspot}
+        hotspotsReviewedMeasure={hotspotsReviewedMeasure}
+        lastStatusChangedTo={lastStatusChangedTo}
         loading={loading}
-        onCloseComment={this.handleCloseComment}
-        onOpenComment={this.handleOpenComment}
+        onCloseStatusUpdateSuccessModal={this.handleCloseStatusUpdateSuccessModal}
+        onLocationClick={this.props.onLocationClick}
+        onSwitchFilterToStatusOfUpdatedHotspot={this.handleSwitchFilterToStatusOfUpdatedHotspot}
         onUpdateHotspot={this.handleHotspotUpdate}
-        securityCategories={securityCategories}
+        ruleDescriptionSections={ruleDescriptionSections}
+        ruleLanguage={ruleLanguage}
+        selectedHotspotLocation={selectedHotspotLocation}
+        showStatusUpdateSuccessModal={showStatusUpdateSuccessModal}
+        standards={standards}
       />
     );
   }

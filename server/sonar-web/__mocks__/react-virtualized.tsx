@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,7 @@ type AutoSizerProps = {
 type AutoSizerChildProps = { height?: number; width?: number };
 
 module.exports = {
-  ...require.requireActual('react-virtualized'),
+  ...jest.requireActual('react-virtualized'),
   AutoSizer: ({ children, disableHeight, disableWidth }: AutoSizerProps) => {
     const props: AutoSizerChildProps = {};
     if (!disableHeight) {

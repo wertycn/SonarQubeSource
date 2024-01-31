@@ -33,10 +33,19 @@ option optimize_for = SPEED;
 message Locations {
   optional sonarqube.db.commons.TextRange text_range = 1;
   repeated Flow flow = 2;
+  optional string checksum = 3;
 }
 
 message Flow {
   repeated Location location = 1;
+  optional string description = 2;
+  optional FlowType type = 3;
+}
+
+enum FlowType {
+  UNDEFINED = 0;
+  DATA = 1;
+  EXECUTION = 2;
 }
 
 message Location {
@@ -44,4 +53,19 @@ message Location {
   // Only when component is a file. Can be empty for a file if this is an issue global to the file.
   optional sonarqube.db.commons.TextRange text_range = 2;
   optional string msg = 3;
+  optional string checksum = 4;
+  repeated MessageFormatting msgFormatting = 5;
+}
+message MessageFormattings {
+  repeated MessageFormatting messageFormatting = 1;
+}
+
+message MessageFormatting {
+  required int32 start = 1;
+  required int32 end = 2;
+  required MessageFormattingType type = 3;
+}
+
+enum MessageFormattingType {
+  CODE = 0;
 }

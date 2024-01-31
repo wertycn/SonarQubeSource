@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,6 @@ import org.sonar.db.purge.PurgeProfiler;
 import org.sonar.db.purge.PurgeableAnalysisDto;
 
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -44,7 +43,7 @@ public class DefaultPeriodCleanerTest {
   public void doClean() {
     PurgeDao dao = mock(PurgeDao.class);
     DbSession session = mock(DbSession.class);
-    when(dao.selectPurgeableAnalyses("uuid_123", session)).thenReturn(Arrays.asList(
+    when(dao.selectProcessedAnalysisByComponentUuid("uuid_123", session)).thenReturn(Arrays.asList(
         new PurgeableAnalysisDto().setAnalysisUuid("u999").setDate(System2.INSTANCE.now()),
         new PurgeableAnalysisDto().setAnalysisUuid("u456").setDate(System2.INSTANCE.now())
         ));
@@ -57,9 +56,9 @@ public class DefaultPeriodCleanerTest {
 
     InOrder inOrder = Mockito.inOrder(dao, filter1, filter2);
     inOrder.verify(filter1).log();
-    inOrder.verify(dao, times(1)).deleteAnalyses(eq(session), eq(profiler), eq(ImmutableList.of("u999")));
+    inOrder.verify(dao, times(1)).deleteAnalyses(session, profiler, ImmutableList.of("u999"));
     inOrder.verify(filter2).log();
-    inOrder.verify(dao, times(1)).deleteAnalyses(eq(session), eq(profiler), eq(ImmutableList.of("u456")));
+    inOrder.verify(dao, times(1)).deleteAnalyses(session, profiler, ImmutableList.of("u456"));
     inOrder.verifyNoMoreInteractions();
   }
 

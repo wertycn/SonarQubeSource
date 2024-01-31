@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,8 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputTextArea } from 'design-system';
 import * as React from 'react';
-import { DefaultSpecializedInputProps } from '../../utils';
+import { DefaultSpecializedInputProps, getPropertyName } from '../../utils';
 
 export default class InputForText extends React.PureComponent<DefaultSpecializedInputProps> {
   handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -26,13 +27,15 @@ export default class InputForText extends React.PureComponent<DefaultSpecialized
   };
 
   render() {
+    const { setting, name, value } = this.props;
     return (
-      <textarea
-        className="settings-large-input text-top"
-        name={this.props.name}
+      <InputTextArea
+        size="large"
+        name={name}
         onChange={this.handleInputChange}
         rows={5}
-        value={this.props.value || ''}
+        value={value || ''}
+        aria-label={getPropertyName(setting.definition)}
       />
     );
   }

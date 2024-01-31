@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,18 +29,25 @@ import {
   getSeriesMetricType,
   isCustomGraph,
   saveActivityGraph,
-  splitSeriesInGraphs
+  splitSeriesInGraphs,
 } from '../../../components/activity-graph/utils';
-import { GraphType, MeasureHistory, Point, Serie } from '../../../types/project-activity';
-import { datesQueryChanged, historyQueryChanged, Query } from '../utils';
-import { PROJECT_ACTIVITY_GRAPH } from './ProjectActivityAppContainer';
+import {
+  GraphType,
+  MeasureHistory,
+  ParsedAnalysis,
+  Point,
+  Serie,
+} from '../../../types/project-activity';
+import { Metric } from '../../../types/types';
+import { Query, datesQueryChanged, historyQueryChanged } from '../utils';
+import { PROJECT_ACTIVITY_GRAPH } from './ProjectActivityApp';
 
 interface Props {
-  analyses: T.ParsedAnalysis[];
+  analyses: ParsedAnalysis[];
   leakPeriodDate?: Date;
   loading: boolean;
   measuresHistory: MeasureHistory[];
-  metrics: T.Metric[];
+  metrics: Metric[];
   project: string;
   query: Query;
   updateQuery: (changes: Partial<Query>) => void;
@@ -63,12 +70,12 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
       props.measuresHistory,
       props.query.graph,
       props.metrics,
-      getDisplayedHistoryMetrics(props.query.graph, props.query.customMetrics)
+      getDisplayedHistoryMetrics(props.query.graph, props.query.customMetrics),
     );
     this.state = {
       series,
       graphs: splitSeriesInGraphs(series, MAX_GRAPH_NB, MAX_SERIES_PER_GRAPH),
-      ...this.getStateZoomDates(undefined, props, series)
+      ...this.getStateZoomDates(undefined, props, series),
     };
     this.updateQueryDateRange = debounce(this.updateQueryDateRange, 500);
   }
@@ -84,7 +91,7 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
         this.props.measuresHistory,
         this.props.query.graph,
         this.props.metrics,
-        getDisplayedHistoryMetrics(this.props.query.graph, this.props.query.customMetrics)
+        getDisplayedHistoryMetrics(this.props.query.graph, this.props.query.customMetrics),
       );
       newGraphs = splitSeriesInGraphs(newSeries, MAX_GRAPH_NB, MAX_SERIES_PER_GRAPH);
     }
@@ -109,7 +116,7 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
   getStateZoomDates = (prevProps: Props | undefined, props: Props, newSeries?: Serie[]) => {
     const newDates = {
       from: props.query.from || undefined,
-      to: props.query.to || undefined
+      to: props.query.to || undefined,
     };
     if (!prevProps || datesQueryChanged(prevProps.query, props.query)) {
       return { graphEndDate: newDates.to, graphStartDate: newDates.from };
@@ -117,16 +124,16 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
 
     if (newDates.to === undefined && newDates.from === undefined && newSeries !== undefined) {
       const firstValid = minBy(
-        newSeries.map(serie => serie.data.find(p => Boolean(p.y || p.y === 0))),
-        'x'
+        newSeries.map((serie) => serie.data.find((p) => Boolean(p.y || p.y === 0))),
+        'x',
       );
       const lastValid = maxBy<Point>(
-        newSeries.map(serie => findLast(serie.data, p => Boolean(p.y || p.y === 0))!),
-        'x'
+        newSeries.map((serie) => findLast(serie.data, (p) => Boolean(p.y || p.y === 0))!),
+        'x',
       );
       return {
-        graphEndDate: lastValid && lastValid.x,
-        graphStartDate: firstValid && firstValid.x
+        graphEndDate: lastValid?.x,
+        graphStartDate: firstValid?.x,
       };
     }
     return null;
@@ -137,23 +144,25 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
       return undefined;
     }
     return this.state.graphs
-      .filter(graph => graph.length < MAX_SERIES_PER_GRAPH)
-      .map(graph => graph[0].type);
+      .filter((graph) => graph.length < MAX_SERIES_PER_GRAPH)
+      .map((graph) => graph[0].type);
   };
 
-  addCustomMetric = (metric: string) => {
+  handleAddCustomMetric = (metric: string) => {
     const customMetrics = [...this.props.query.customMetrics, metric];
     saveActivityGraph(PROJECT_ACTIVITY_GRAPH, this.props.project, GraphType.custom, customMetrics);
     this.props.updateQuery({ customMetrics });
   };
 
-  removeCustomMetric = (removedMetric: string) => {
-    const customMetrics = this.props.query.customMetrics.filter(metric => metric !== removedMetric);
+  handleRemoveCustomMetric = (removedMetric: string) => {
+    const customMetrics = this.props.query.customMetrics.filter(
+      (metric) => metric !== removedMetric,
+    );
     saveActivityGraph(PROJECT_ACTIVITY_GRAPH, this.props.project, GraphType.custom, customMetrics);
     this.props.updateQuery({ customMetrics });
   };
 
-  updateGraph = (graph: GraphType) => {
+  handleUpdateGraph = (graph: GraphType) => {
     saveActivityGraph(PROJECT_ACTIVITY_GRAPH, this.props.project, graph);
     if (isCustomGraph(graph) && this.props.query.customMetrics.length <= 0) {
       const { customGraphs } = getActivityGraph(PROJECT_ACTIVITY_GRAPH, this.props.project);
@@ -163,7 +172,7 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
     }
   };
 
-  updateGraphZoom = (graphStartDate?: Date, graphEndDate?: Date) => {
+  handleUpdateGraphZoom = (graphStartDate?: Date, graphEndDate?: Date) => {
     if (graphEndDate !== undefined && graphStartDate !== undefined) {
       const msDiff = Math.abs(graphEndDate.valueOf() - graphStartDate.valueOf());
       // 12 hours minimum between the two dates
@@ -176,7 +185,9 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
     this.updateQueryDateRange([graphStartDate, graphEndDate]);
   };
 
-  updateSelectedDate = (selectedDate?: Date) => this.props.updateQuery({ selectedDate });
+  handleUpdateSelectedDate = (selectedDate?: Date) => {
+    this.props.updateQuery({ selectedDate });
+  };
 
   updateQueryDateRange = (dates: Array<Date | undefined>) => {
     if (dates[0] === undefined || dates[1] === undefined) {
@@ -188,35 +199,35 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
   };
 
   render() {
-    const { leakPeriodDate, loading, metrics, query } = this.props;
+    const { analyses, leakPeriodDate, loading, measuresHistory, metrics, query } = this.props;
     const { graphEndDate, graphStartDate, series } = this.state;
 
     return (
-      <div className="project-activity-layout-page-main-inner boxed-group boxed-group-inner">
+      <div className="sw-px-5 sw-py-4 sw-h-full sw-flex sw-flex-col sw-box-border">
         <GraphsHeader
-          addCustomMetric={this.addCustomMetric}
-          className="big-spacer-bottom"
+          onAddCustomMetric={this.handleAddCustomMetric}
+          className="sw-mb-4"
           graph={query.graph}
           metrics={metrics}
           metricsTypeFilter={this.getMetricsTypeFilter()}
-          removeCustomMetric={this.removeCustomMetric}
-          selectedMetrics={this.props.query.customMetrics}
-          updateGraph={this.updateGraph}
+          onRemoveCustomMetric={this.handleRemoveCustomMetric}
+          selectedMetrics={query.customMetrics}
+          onUpdateGraph={this.handleUpdateGraph}
         />
         <GraphsHistory
-          analyses={this.props.analyses}
+          analyses={analyses}
           graph={query.graph}
           graphEndDate={graphEndDate}
           graphStartDate={graphStartDate}
           graphs={this.state.graphs}
           leakPeriodDate={leakPeriodDate}
           loading={loading}
-          measuresHistory={this.props.measuresHistory}
-          removeCustomMetric={this.removeCustomMetric}
-          selectedDate={this.props.query.selectedDate}
+          measuresHistory={measuresHistory}
+          removeCustomMetric={this.handleRemoveCustomMetric}
+          selectedDate={query.selectedDate}
           series={series}
-          updateGraphZoom={this.updateGraphZoom}
-          updateSelectedDate={this.updateSelectedDate}
+          updateGraphZoom={this.handleUpdateGraphZoom}
+          updateSelectedDate={this.handleUpdateSelectedDate}
         />
         <GraphsZoom
           graphEndDate={graphEndDate}
@@ -226,7 +237,7 @@ export default class ProjectActivityGraphs extends React.PureComponent<Props, St
           metricsType={getSeriesMetricType(series)}
           series={series}
           showAreas={[GraphType.coverage, GraphType.duplications].includes(query.graph)}
-          updateGraphZoom={this.updateGraphZoom}
+          onUpdateGraphZoom={this.handleUpdateGraphZoom}
         />
       </div>
     );

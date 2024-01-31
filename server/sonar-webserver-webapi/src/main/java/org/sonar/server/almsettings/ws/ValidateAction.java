@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,11 @@
  */
 package org.sonar.server.almsettings.ws;
 
-import org.sonar.alm.client.azure.AzureDevOpsHttpClient;
-import org.sonar.alm.client.bitbucket.bitbucketcloud.BitbucketCloudRestClient;
-import org.sonar.alm.client.bitbucketserver.BitbucketServerRestClient;
-import org.sonar.alm.client.github.GithubApplicationClient;
-import org.sonar.alm.client.github.GithubApplicationClientImpl;
-import org.sonar.alm.client.github.config.GithubAppConfiguration;
-import org.sonar.alm.client.gitlab.GitlabHttpClient;
+import org.sonar.alm.client.azure.AzureDevOpsValidator;
+import org.sonar.alm.client.bitbucket.bitbucketcloud.BitbucketCloudValidator;
+import org.sonar.alm.client.bitbucketserver.BitbucketServerSettingsValidator;
+import org.sonar.alm.client.github.GithubGlobalSettingsValidator;
+import org.sonar.alm.client.gitlab.GitlabGlobalSettingsValidator;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -34,8 +32,6 @@ import org.sonar.db.DbSession;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.server.user.UserSession;
 
-import static org.apache.commons.lang.StringUtils.isBlank;
-
 public class ValidateAction implements AlmSettingsWsAction {
 
   private static final String PARAM_KEY = "key";
@@ -43,38 +39,43 @@ public class ValidateAction implements AlmSettingsWsAction {
   private final DbClient dbClient;
   private final UserSession userSession;
   private final AlmSettingsSupport almSettingsSupport;
-  private final AzureDevOpsHttpClient azureDevOpsHttpClient;
-  private final GitlabHttpClient gitlabHttpClient;
-  private final GithubApplicationClient githubApplicationClient;
-  private final BitbucketServerRestClient bitbucketServerRestClient;
-  private final BitbucketCloudRestClient bitbucketCloudRestClient;
+  private final GitlabGlobalSettingsValidator gitlabSettingsValidator;
+  private final GithubGlobalSettingsValidator githubGlobalSettingsValidator;
+  private final BitbucketServerSettingsValidator bitbucketServerSettingsValidator;
+  private final BitbucketCloudValidator bitbucketCloudValidator;
+  private final AzureDevOpsValidator azureDevOpsValidator;
 
-  public ValidateAction(DbClient dbClient, UserSession userSession, AlmSettingsSupport almSettingsSupport,
-    AzureDevOpsHttpClient azureDevOpsHttpClient,
-    GithubApplicationClientImpl githubApplicationClient, GitlabHttpClient gitlabHttpClient,
-    BitbucketServerRestClient bitbucketServerRestClient, BitbucketCloudRestClient bitbucketCloudRestClient) {
+  public ValidateAction(DbClient dbClient,
+    UserSession userSession,
+    AlmSettingsSupport almSettingsSupport,
+    GithubGlobalSettingsValidator githubGlobalSettingsValidator,
+    GitlabGlobalSettingsValidator gitlabSettingsValidator,
+    BitbucketServerSettingsValidator bitbucketServerSettingsValidator,
+    BitbucketCloudValidator bitbucketCloudValidator,
+    AzureDevOpsValidator azureDevOpsValidator) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.almSettingsSupport = almSettingsSupport;
-    this.azureDevOpsHttpClient = azureDevOpsHttpClient;
-    this.githubApplicationClient = githubApplicationClient;
-    this.gitlabHttpClient = gitlabHttpClient;
-    this.bitbucketServerRestClient = bitbucketServerRestClient;
-    this.bitbucketCloudRestClient = bitbucketCloudRestClient;
+    this.githubGlobalSettingsValidator = githubGlobalSettingsValidator;
+    this.gitlabSettingsValidator = gitlabSettingsValidator;
+    this.bitbucketServerSettingsValidator = bitbucketServerSettingsValidator;
+    this.bitbucketCloudValidator = bitbucketCloudValidator;
+    this.azureDevOpsValidator = azureDevOpsValidator;
   }
 
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("validate")
-      .setDescription("Validate an ALM Setting by checking connectivity and permissions<br/>" +
+      .setDescription("Validate an DevOps Platform Setting by checking connectivity and permissions<br/>" +
         "Requires the 'Administer System' permission")
       .setSince("8.6")
+      .setResponseExample(getClass().getResource("example-validate.json"))
       .setHandler(this);
 
     action.createParam(PARAM_KEY)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("Unique key of the ALM settings");
+      .setDescription("Unique key of the DevOps Platform settings");
   }
 
   @Override
@@ -91,65 +92,21 @@ public class ValidateAction implements AlmSettingsWsAction {
       AlmSettingDto almSettingDto = almSettingsSupport.getAlmSetting(dbSession, key);
       switch (almSettingDto.getAlm()) {
         case GITLAB:
-          validateGitlab(almSettingDto);
+          gitlabSettingsValidator.validate(almSettingDto);
           break;
         case GITHUB:
-          validateGitHub(almSettingDto);
+          githubGlobalSettingsValidator.validate(almSettingDto);
           break;
         case BITBUCKET:
-          validateBitbucketServer(almSettingDto);
+          bitbucketServerSettingsValidator.validate(almSettingDto);
           break;
         case BITBUCKET_CLOUD:
-          validateBitbucketCloud(almSettingDto);
+          bitbucketCloudValidator.validate(almSettingDto);
           break;
         case AZURE_DEVOPS:
-          validateAzure(almSettingDto);
+          azureDevOpsValidator.validate(almSettingDto);
           break;
       }
     }
-  }
-
-  private void validateAzure(AlmSettingDto almSettingDto) {
-    try {
-      azureDevOpsHttpClient.checkPAT(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-    } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException("Invalid Azure URL or Personal Access Token", e);
-    }
-  }
-
-  private void validateGitlab(AlmSettingDto almSettingDto) {
-    gitlabHttpClient.checkUrl(almSettingDto.getUrl());
-    gitlabHttpClient.checkToken(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-    gitlabHttpClient.checkReadPermission(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-    gitlabHttpClient.checkWritePermission(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-  }
-
-  private void validateGitHub(AlmSettingDto settings) {
-    long appId;
-    try {
-      appId = Long.parseLong(settings.getAppId());
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException("Invalid appId; " + e.getMessage());
-    }
-    if (isBlank(settings.getClientId())) {
-      throw new IllegalArgumentException("Missing Client Id");
-    }
-    if (isBlank(settings.getClientSecret())) {
-      throw new IllegalArgumentException("Missing Client Secret");
-    }
-    GithubAppConfiguration configuration = new GithubAppConfiguration(appId, settings.getPrivateKey(), settings.getUrl());
-
-    githubApplicationClient.checkApiEndpoint(configuration);
-    githubApplicationClient.checkAppPermissions(configuration);
-  }
-
-  private void validateBitbucketServer(AlmSettingDto almSettingDto) {
-    bitbucketServerRestClient.validateUrl(almSettingDto.getUrl());
-    bitbucketServerRestClient.validateToken(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-    bitbucketServerRestClient.validateReadPermission(almSettingDto.getUrl(), almSettingDto.getPersonalAccessToken());
-  }
-
-  private void validateBitbucketCloud(AlmSettingDto almSettingDto) {
-    bitbucketCloudRestClient.validate(almSettingDto.getClientId(), almSettingDto.getClientSecret(), almSettingDto.getAppId());
   }
 }

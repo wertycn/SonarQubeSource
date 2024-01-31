@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,12 @@ public class QualityGatesWsParameters {
   public static final String ACTION_CREATE = "create";
   public static final String ACTION_CREATE_CONDITION = "create_condition";
   public static final String ACTION_UPDATE_CONDITION = "update_condition";
+  public static final String ACTION_ADD_GROUP = "add_group";
+  public static final String ACTION_ADD_USER = "add_user";
+  public static final String ACTION_REMOVE_GROUP = "remove_group";
+  public static final String ACTION_REMOVE_USER = "remove_user";
+  public static final String ACTION_SEARCH_GROUPS = "search_groups";
+  public static final String ACTION_SEARCH_USERS = "search_users";
 
   public static final String PARAM_ANALYSIS_ID = "analysisId";
   public static final String PARAM_BRANCH = "branch";
@@ -43,7 +49,6 @@ public class QualityGatesWsParameters {
   public static final String PARAM_ERROR = "error";
   public static final String PARAM_OPERATOR = "op";
   public static final String PARAM_METRIC = "metric";
-  public static final String PARAM_GATE_ID = "gateId";
   public static final String PARAM_GATE_NAME = "gateName";
   public static final String PARAM_ID = "id";
   public static final String PARAM_SOURCE_NAME = "sourceName";
@@ -51,5 +56,4 @@ public class QualityGatesWsParameters {
   private QualityGatesWsParameters() {
     // prevent instantiation
   }
-
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,9 +28,9 @@ import java.util.function.Predicate;
 import java.util.stream.StreamSupport;
 import javax.annotation.Nullable;
 import org.sonar.db.component.SnapshotDto;
+import org.sonar.server.qualitygate.QualityGateCaycStatus;
 import org.sonarqube.ws.Qualitygates.ProjectStatusResponse;
 import org.sonarqube.ws.Qualitygates.ProjectStatusResponse.NewCodePeriod;
-import org.sonarqube.ws.Qualitygates.ProjectStatusResponse.Period;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
@@ -38,11 +38,13 @@ import static org.sonar.api.utils.DateUtils.formatDateTime;
 public class QualityGateDetailsFormatter {
   private final Optional<String> optionalMeasureData;
   private final Optional<SnapshotDto> optionalSnapshot;
+  private final QualityGateCaycStatus caycStatus;
   private final ProjectStatusResponse.ProjectStatus.Builder projectStatusBuilder;
 
-  public QualityGateDetailsFormatter(Optional<String> measureData, Optional<SnapshotDto> snapshot) {
-    this.optionalMeasureData = measureData;
-    this.optionalSnapshot = snapshot;
+  public QualityGateDetailsFormatter(@Nullable String measureData, @Nullable SnapshotDto snapshot, QualityGateCaycStatus caycStatus) {
+    this.optionalMeasureData = Optional.ofNullable(measureData);
+    this.optionalSnapshot = Optional.ofNullable(snapshot);
+    this.caycStatus = caycStatus;
     this.projectStatusBuilder = ProjectStatusResponse.ProjectStatus.newBuilder();
   }
 
@@ -55,6 +57,7 @@ public class QualityGateDetailsFormatter {
 
     ProjectStatusResponse.Status qualityGateStatus = measureLevelToQualityGateStatus(json.get("level").getAsString());
     projectStatusBuilder.setStatus(qualityGateStatus);
+    projectStatusBuilder.setCaycStatus(caycStatus.toString());
 
     formatIgnoredConditions(json);
     formatConditions(json.getAsJsonArray("conditions"));
@@ -77,7 +80,6 @@ public class QualityGateDetailsFormatter {
       return;
     }
 
-    Period.Builder periodsBuilder = Period.newBuilder();
     NewCodePeriod.Builder periodBuilder = NewCodePeriod.newBuilder();
 
     SnapshotDto snapshot = this.optionalSnapshot.get();
@@ -85,21 +87,19 @@ public class QualityGateDetailsFormatter {
     if (isNullOrEmpty(snapshot.getPeriodMode())) {
       return;
     }
-    periodsBuilder.setIndex(1);
-    periodsBuilder.setMode(snapshot.getPeriodMode());
+
     periodBuilder.setMode(snapshot.getPeriodMode());
     Long periodDate = snapshot.getPeriodDate();
     if (periodDate != null) {
       String formattedDateTime = formatDateTime(periodDate);
-      periodsBuilder.setDate(formattedDateTime);
       periodBuilder.setDate(formattedDateTime);
     }
     String periodModeParameter = snapshot.getPeriodModeParameter();
     if (!isNullOrEmpty(periodModeParameter)) {
-      periodsBuilder.setParameter(periodModeParameter);
+
       periodBuilder.setParameter(periodModeParameter);
     }
-    projectStatusBuilder.addPeriods(periodsBuilder);
+
     projectStatusBuilder.setPeriod(periodBuilder);
   }
 
@@ -120,7 +120,6 @@ public class QualityGateDetailsFormatter {
     formatConditionLevel(conditionBuilder, jsonCondition);
     formatConditionMetric(conditionBuilder, jsonCondition);
     formatConditionOperation(conditionBuilder, jsonCondition);
-    formatConditionPeriod(conditionBuilder, jsonCondition);
     formatConditionWarningThreshold(conditionBuilder, jsonCondition);
     formatConditionErrorThreshold(conditionBuilder, jsonCondition);
     formatConditionActual(conditionBuilder, jsonCondition);
@@ -147,14 +146,6 @@ public class QualityGateDetailsFormatter {
     if (warning != null && !isNullOrEmpty(warning.getAsString())) {
       conditionBuilder.setWarningThreshold(warning.getAsString());
     }
-  }
-
-  private static void formatConditionPeriod(ProjectStatusResponse.Condition.Builder conditionBuilder, JsonObject jsonCondition) {
-    JsonElement periodIndex = jsonCondition.get("period");
-    if (periodIndex == null) {
-      return;
-    }
-    conditionBuilder.setPeriodIndex(periodIndex.getAsInt());
   }
 
   private static void formatConditionOperation(ProjectStatusResponse.Condition.Builder conditionBuilder, JsonObject jsonCondition) {
@@ -200,8 +191,8 @@ public class QualityGateDetailsFormatter {
     throw new IllegalStateException(String.format("Unknown quality gate comparator '%s'", measureOp));
   }
 
-  private static ProjectStatusResponse.ProjectStatus newResponseWithoutQualityGateDetails() {
-    return ProjectStatusResponse.ProjectStatus.newBuilder().setStatus(ProjectStatusResponse.Status.NONE).build();
+  private ProjectStatusResponse.ProjectStatus newResponseWithoutQualityGateDetails() {
+    return ProjectStatusResponse.ProjectStatus.newBuilder().setStatus(ProjectStatusResponse.Status.NONE).setCaycStatus(caycStatus.toString()).build();
   }
 
   private static Predicate<JsonObject> isConditionOnValidPeriod() {

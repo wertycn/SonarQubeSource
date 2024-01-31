@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,18 +38,17 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
-import org.hamcrest.core.IsInstanceOf;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonarqube.ws.MediaTypes;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static okhttp3.Credentials.basic;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.sonarqube.ws.client.HttpConnector.newBuilder;
@@ -58,8 +57,6 @@ public class HttpConnectorTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private MockWebServer server;
   private String serverUrl;
@@ -326,10 +323,9 @@ public class HttpConnectorTest {
 
   @Test
   public void fail_if_malformed_URL() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Malformed URL: 'wrong URL'");
-
-    underTest = newBuilder().url("wrong URL").build();
+    assertThatThrownBy(() -> newBuilder().url("wrong URL").build())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Malformed URL: 'wrong URL'");
   }
 
   @Test
@@ -345,6 +341,8 @@ public class HttpConnectorTest {
     // verify response
     assertThat(response.hasContent()).isTrue();
     assertThat(response.content()).isEqualTo("hello, world!");
+    assertThat(response.headers()).hasEntrySatisfying("header", headerValues -> headerValues.contains("value"));
+    assertThat(response.header("header")).hasValue("value");
 
     // verify the request received by server
     RecordedRequest recordedRequest = server.takeRequest();
@@ -367,6 +365,32 @@ public class HttpConnectorTest {
     RecordedRequest recordedRequest = server.takeRequest();
     assertThat(recordedRequest.getHeader("X-Foo")).isEqualTo("fooz");
     assertThat(recordedRequest.getHeader("X-Bar")).isEqualTo("barz");
+  }
+
+  @Test
+  public void setBody_shouldAddCorrectlyBodyPayloadToPostRequest_whenComposingAndSendingPostRequest() throws Exception {
+    answerHelloWorld();
+
+    String xGithubEventHeader = "code_scanning_alert";
+    String xHubSignatureHeader = "x-hub-signature";
+    String xHubSignature256Header = "x-hub-signature-256";
+    String bodyRaw = "{\"state\":\"open\"}";
+
+    PostRequest request = new PostRequest("api/alm_integrations/webhook_github")
+      .setHeader("X-GitHub-Event", xGithubEventHeader)
+      .setHeader("X-Hub-Signature", xHubSignatureHeader)
+      .setHeader("X-Hub-Signature-256", xHubSignature256Header)
+      .setBody(bodyRaw)
+      .setMediaType(MediaTypes.JSON);
+
+    underTest = HttpConnector.newBuilder().url(serverUrl).build();
+    underTest.call(request);
+
+    RecordedRequest recordedRequest = server.takeRequest();
+    assertThat(recordedRequest.getHeader("X-GitHub-Event")).isEqualTo(xGithubEventHeader);
+    assertThat(recordedRequest.getHeader("X-Hub-Signature")).isEqualTo(xHubSignatureHeader);
+    assertThat(recordedRequest.getHeader("X-Hub-Signature-256")).isEqualTo(xHubSignature256Header);
+    assertThat(recordedRequest.getBody().readUtf8()).isEqualTo(bodyRaw);
   }
 
   @Test
@@ -443,23 +467,26 @@ public class HttpConnectorTest {
     underTest = HttpConnector.newBuilder().url(serverUrl).build();
     server.enqueue(new MockResponse().setBodyDelay(100, TimeUnit.MILLISECONDS).setBody("Hello delayed"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectCause(IsInstanceOf.instanceOf(SocketTimeoutException.class));
-
-    WsResponse call = underTest.call(new GetRequest("/").setTimeOutInMs(5));
-    assertThat(call.content()).equals("Hello delayed");
+    assertThatThrownBy(() -> {
+      WsResponse call = underTest.call(new GetRequest("/").setTimeOutInMs(5));
+      assertThat(call.content()).equals("Hello delayed");
+    })
+      .isInstanceOf(IllegalStateException.class)
+      .hasCauseInstanceOf(SocketTimeoutException.class);
   }
 
   @Test
   public void override_timeout_on_post() {
     underTest = HttpConnector.newBuilder().url(serverUrl).build();
     // Headers are not affected by setBodyDelay, let's throttle the answer
-    server.enqueue(new MockResponse().throttleBody(1,100, TimeUnit.MILLISECONDS).setBody("Hello delayed"));
+    server.enqueue(new MockResponse().throttleBody(1, 100, TimeUnit.MILLISECONDS).setBody("Hello delayed"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectCause(IsInstanceOf.instanceOf(SocketTimeoutException.class));
-    WsResponse call = underTest.call(new PostRequest("/").setTimeOutInMs(5));
-    assertThat(call.content()).equals("Hello delayed");
+    assertThatThrownBy(() -> {
+      WsResponse call = underTest.call(new PostRequest("/").setTimeOutInMs(5));
+      assertThat(call.content()).equals("Hello delayed");
+    })
+      .isInstanceOf(IllegalStateException.class)
+      .hasCauseInstanceOf(SocketTimeoutException.class);
   }
 
   @Test
@@ -467,12 +494,14 @@ public class HttpConnectorTest {
     underTest = HttpConnector.newBuilder().url(serverUrl).build();
     server.enqueue(new MockResponse().setResponseCode(301).setHeader("Location:", "/redirect"));
     // Headers are not affected by setBodyDelay, let's throttle the answer
-    server.enqueue(new MockResponse().throttleBody(1,100, TimeUnit.MILLISECONDS).setBody("Hello delayed"));
+    server.enqueue(new MockResponse().throttleBody(1, 100, TimeUnit.MILLISECONDS).setBody("Hello delayed"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectCause(IsInstanceOf.instanceOf(SocketTimeoutException.class));
-    WsResponse call = underTest.call(new PostRequest("/").setTimeOutInMs(5));
-    assertThat(call.content()).equals("Hello delayed");
+    assertThatThrownBy(() -> {
+      WsResponse call = underTest.call(new PostRequest("/").setTimeOutInMs(5));
+      assertThat(call.content()).equals("Hello delayed");
+    })
+      .isInstanceOf(IllegalStateException.class)
+      .hasCauseInstanceOf(SocketTimeoutException.class);
   }
 
   private void assertTlsAndClearTextSpecifications(HttpConnector underTest) {
@@ -489,6 +518,6 @@ public class HttpConnectorTest {
   }
 
   private void answerHelloWorld() {
-    server.enqueue(new MockResponse().setBody("hello, world!"));
+    server.enqueue(new MockResponse().setBody("hello, world!").setHeader("header", "value"));
   }
 }

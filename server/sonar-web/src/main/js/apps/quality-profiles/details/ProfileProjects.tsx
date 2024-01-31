@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  Badge,
+  ButtonSecondary,
+  ContentCell,
+  Link,
+  Spinner,
+  SubTitle,
+  Table,
+  TableRow,
+  Tooltip,
+} from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ListFooter from 'sonar-ui-common/components/controls/ListFooter';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getProfileProjects } from '../../../api/quality-profiles';
+import ListFooter from '../../../components/controls/ListFooter';
+import { translate } from '../../../helpers/l10n';
 import { getProjectUrl } from '../../../helpers/urls';
 import { Profile } from '../types';
 import ChangeProjectsForm from './ChangeProjectsForm';
@@ -50,7 +58,7 @@ export default class ProfileProjects extends React.PureComponent<Props, State> {
     loadingMore: false,
     page: 1,
     projects: [],
-    total: 0
+    total: 0,
   };
 
   componentDidMount() {
@@ -81,13 +89,14 @@ export default class ProfileProjects extends React.PureComponent<Props, State> {
     }
 
     this.setState({ loading: true });
-    const data = { key: this.props.profile.key, page: this.state.page };
+    const data = { key: this.props.profile.key, p: 1 };
     getProfileProjects(data).then(({ paging, results }) => {
       if (this.mounted) {
         this.setState({
           projects: results,
           total: paging.total,
-          loading: false
+          loading: false,
+          page: 1,
         });
       }
     }, this.stopLoading);
@@ -95,13 +104,14 @@ export default class ProfileProjects extends React.PureComponent<Props, State> {
 
   loadMore = () => {
     this.setState({ loadingMore: true });
-    const data = { key: this.props.profile.key, page: this.state.page + 1 };
+    const data = { key: this.props.profile.key, p: this.state.page + 1 };
     getProfileProjects(data).then(({ paging, results }) => {
       if (this.mounted) {
-        this.setState(state => ({
+        this.setState((state) => ({
           projects: [...state.projects, ...results],
           total: paging.total,
-          loadingMore: false
+          loadingMore: false,
+          page: state.page + 1,
         }));
       }
     }, this.stopLoading);
@@ -118,67 +128,92 @@ export default class ProfileProjects extends React.PureComponent<Props, State> {
 
   renderDefault() {
     return (
-      <div>
-        <span className="badge spacer-right">{translate('default')}</span>
+      <>
+        <Badge className="sw-mr-2">{translate('default')}</Badge>
         {translate('quality_profiles.projects_for_default')}
-      </div>
+      </>
     );
   }
 
   renderProjects() {
     if (this.state.loading) {
-      return <i className="spinner" />;
+      return <Spinner />;
     }
 
     const { projects } = this.state;
+    const { profile } = this.props;
+
+    if (profile.activeRuleCount === 0 && projects.length === 0) {
+      return translate('quality_profiles.cannot_associate_projects_no_rules');
+    }
 
     if (projects.length === 0) {
-      return <div>{translate('quality_profiles.no_projects_associated_to_profile')}</div>;
+      return translate('quality_profiles.no_projects_associated_to_profile');
     }
 
     return (
       <>
-        <ul>
-          {projects.map(project => (
-            <li className="spacer-top js-profile-project" data-key={project.key} key={project.key}>
-              <Link className="link-with-icon" to={getProjectUrl(project.key)}>
-                <QualifierIcon qualifier="TRK" /> <span>{project.name}</span>
-              </Link>
-            </li>
+        <Table columnCount={1} noSidePadding>
+          {projects.map((project) => (
+            <TableRow key={project.key}>
+              <ContentCell>
+                <Link
+                  className="it__quality-profiles__project fs-mask"
+                  to={getProjectUrl(project.key)}
+                >
+                  {project.name}
+                </Link>
+              </ContentCell>
+            </TableRow>
           ))}
-        </ul>
-        <ListFooter
-          count={projects.length}
-          loadMore={this.loadMore}
-          ready={!this.state.loadingMore}
-          total={this.state.total}
-        />
+        </Table>
+        {projects.length > 0 && (
+          <ListFooter
+            useMIUIButtons
+            count={projects.length}
+            loadMore={this.loadMore}
+            loading={this.state.loadingMore}
+            total={this.state.total}
+          />
+        )}
       </>
     );
   }
 
   render() {
     const { profile } = this.props;
+    const hasNoActiveRules = profile.activeRuleCount === 0;
     return (
-      <div className="boxed-group quality-profile-projects">
-        {profile.actions && profile.actions.associateProjects && (
-          <div className="boxed-group-actions">
-            <Button className="js-change-projects" onClick={this.handleChangeClick}>
-              {translate('quality_profiles.change_projects')}
-            </Button>
-          </div>
-        )}
-
-        <header className="boxed-group-header">
-          <h2>{translate('projects')}</h2>
-        </header>
-
-        <div className="boxed-group-inner">
-          {profile.isDefault ? this.renderDefault() : this.renderProjects()}
+      // eslint-disable-next-line local-rules/use-metrickey-enum
+      <section className="it__quality-profiles__projects" aria-label={translate('projects')}>
+        <div className="sw-flex sw-items-center sw-gap-3 sw-mb-6">
+          {
+            // eslint-disable-next-line local-rules/use-metrickey-enum
+            <SubTitle className="sw-mb-0">{translate('projects')}</SubTitle>
+          }
+          {profile.actions?.associateProjects && (
+            <Tooltip
+              overlay={
+                hasNoActiveRules
+                  ? translate('quality_profiles.cannot_associate_projects_no_rules')
+                  : null
+              }
+            >
+              <ButtonSecondary
+                className="it__quality-profiles__change-projects"
+                onClick={this.handleChangeClick}
+                disabled={hasNoActiveRules}
+              >
+                {translate('quality_profiles.change_projects')}
+              </ButtonSecondary>
+            </Tooltip>
+          )}
         </div>
 
+        {profile.isDefault ? this.renderDefault() : this.renderProjects()}
+
         {this.state.formOpen && <ChangeProjectsForm onClose={this.closeForm} profile={profile} />}
-      </div>
+      </section>
     );
   }
 }

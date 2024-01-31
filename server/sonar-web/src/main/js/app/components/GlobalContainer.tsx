@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,50 +17,131 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ThemeProvider } from '@emotion/react';
+import classNames from 'classnames';
+import { lightTheme, ToastMessageContainer } from 'design-system';
 import * as React from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import A11yProvider from '../../components/a11y/A11yProvider';
+import A11ySkipLinks from '../../components/a11y/A11ySkipLinks';
+import SuggestionsProvider from '../../components/embed-docs-modal/SuggestionsProvider';
+import NCDAutoUpdateMessage from '../../components/new-code-definition/NCDAutoUpdateMessage';
 import Workspace from '../../components/workspace/Workspace';
-import A11yProvider from './a11y/A11yProvider';
-import A11ySkipLinks from './a11y/A11ySkipLinks';
-import SuggestionsProvider from './embed-docs-modal/SuggestionsProvider';
-import GlobalFooterContainer from './GlobalFooterContainer';
-import GlobalMessagesContainer from './GlobalMessagesContainer';
+import GlobalFooter from './GlobalFooter';
 import IndexationContextProvider from './indexation/IndexationContextProvider';
 import IndexationNotification from './indexation/IndexationNotification';
+import LanguagesContextProvider from './languages/LanguagesContextProvider';
+import MetricsContextProvider from './metrics/MetricsContextProvider';
 import GlobalNav from './nav/global/GlobalNav';
+import PromotionNotification from './promotion-notification/PromotionNotification';
 import StartupModal from './StartupModal';
+import SystemAnnouncement from './SystemAnnouncement';
+import UpdateNotification from './update-notification/UpdateNotification';
 
-export interface Props {
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  location: { pathname: string };
-}
+const TEMP_PAGELIST_WITH_NEW_BACKGROUND = [
+  '/admin/extension/governance/views_console',
+  '/admin/extension/license',
+  '/code',
+  '/coding_rules',
+  '/component_measures',
+  '/dashboard',
+  '/portfolios',
+  '/profiles',
+  '/project/activity',
+  '/project/admin/extension/governance/console',
+  '/project/admin/extension/governance/report',
+  '/project/extension/securityreport/securityreport',
+  '/project/information',
+  '/project/issues',
+  '/projects',
+  '/quality_gates',
+  '/security_hotspots',
+  '/web_api_v2',
+  '/portfolio',
+  '/account',
+];
 
-export default function GlobalContainer(props: Props) {
+const TEMP_PAGELIST_WITH_NEW_BACKGROUND_WHITE = [
+  '/tutorials',
+  '/projects/create',
+  '/project/baseline',
+  '/project/branches',
+  '/project/key',
+  '/project/deletion',
+  '/project/links',
+  '/project/import_export',
+  '/project/quality_gate',
+  '/project/quality_profiles',
+  '/project/webhooks',
+  '/admin/webhooks',
+  '/project_roles',
+  '/admin/permissions',
+  '/admin/permission_templates',
+  '/project/background_tasks',
+  '/admin/background_tasks',
+  '/admin/groups',
+  '/admin/marketplace',
+  '/admin/system',
+  '/admin/users',
+  '/admin/settings',
+  '/admin/settings/encryption',
+  '/admin/extension/license/support',
+  '/admin/audit',
+  '/admin/projects_management',
+  '/account/projects',
+];
+
+export default function GlobalContainer() {
   // it is important to pass `location` down to `GlobalNav` to trigger render on url change
-  const { footer = <GlobalFooterContainer /> } = props;
-  return (
-    <SuggestionsProvider>
-      <A11yProvider>
-        <StartupModal>
-          <A11ySkipLinks />
+  const location = useLocation();
 
+  return (
+    <ThemeProvider theme={lightTheme}>
+      <SuggestionsProvider>
+        <A11yProvider>
+          <A11ySkipLinks />
           <div className="global-container">
-            <div className="page-wrapper" id="container">
+            <div
+              className={classNames('page-wrapper', {
+                'new-background': TEMP_PAGELIST_WITH_NEW_BACKGROUND.some((element) =>
+                  location.pathname.startsWith(element),
+                ),
+                'white-background': TEMP_PAGELIST_WITH_NEW_BACKGROUND_WHITE.includes(
+                  location.pathname,
+                ),
+              })}
+              id="container"
+            >
               <div className="page-container">
                 <Workspace>
+                  <ToastMessageContainer />
                   <IndexationContextProvider>
-                    <GlobalNav location={props.location} />
-                    <GlobalMessagesContainer />
-                    <IndexationNotification />
-                    {props.children}
+                    <LanguagesContextProvider>
+                      <MetricsContextProvider>
+                        <div className="sw-sticky sw-top-0 sw-z-global-navbar">
+                          <SystemAnnouncement />
+                          <IndexationNotification />
+                          <NCDAutoUpdateMessage />
+                          <UpdateNotification dismissable />
+                          <GlobalNav location={location} />
+                          {/* The following is the portal anchor point for the component nav
+                           * See ComponentContainer.tsx
+                           */}
+                          <div id="component-nav-portal" />
+                        </div>
+                        <Outlet />
+                      </MetricsContextProvider>
+                    </LanguagesContextProvider>
                   </IndexationContextProvider>
                 </Workspace>
               </div>
+              <PromotionNotification />
             </div>
-            {footer}
+            <GlobalFooter />
           </div>
-        </StartupModal>
-      </A11yProvider>
-    </SuggestionsProvider>
+          <StartupModal />
+        </A11yProvider>
+      </SuggestionsProvider>
+    </ThemeProvider>
   );
 }

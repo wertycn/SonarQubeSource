@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,143 +17,166 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { LinkBox, TextMuted } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import IssueTypeIcon from 'sonar-ui-common/components/icons/IssueTypeIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import Measure from '../../../components/measure/Measure';
-import DrilldownLink from '../../../components/shared/DrilldownLink';
+import { Path } from 'react-router-dom';
+import IssueTypeIcon from '../../../components/icons/IssueTypeIcon';
+import MeasureIndicator from '../../../components/measure/MeasureIndicator';
+import {
+  DEFAULT_ISSUES_QUERY,
+  isIssueMeasure,
+  propsToIssueParams,
+} from '../../../components/shared/utils';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { isDiffMetric } from '../../../helpers/measures';
-import { getComponentIssuesUrl } from '../../../helpers/urls';
+import { translate } from '../../../helpers/l10n';
+import { formatMeasure, isDiffMetric, localizeMetric } from '../../../helpers/measures';
+import { getOperatorLabel } from '../../../helpers/qualityGates';
+import {
+  getComponentDrilldownUrl,
+  getComponentIssuesUrl,
+  getComponentSecurityHotspotsUrl,
+} from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
+import { IssueType } from '../../../types/issues';
+import { MetricKey, MetricType } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
+import { Component, Dict } from '../../../types/types';
+import { RATING_TO_SEVERITIES_MAPPING } from '../utils';
 
 interface Props {
   branchLike?: BranchLike;
-  component: Pick<T.Component, 'key'>;
+  component: Pick<Component, 'key'>;
   condition: QualityGateStatusConditionEnhanced;
 }
 
 export default class QualityGateCondition extends React.PureComponent<Props> {
-  getIssuesUrl = (sinceLeakPeriod: boolean, customQuery: T.Dict<string>) => {
-    const query: T.Dict<string | undefined> = {
-      resolved: 'false',
+  getIssuesUrl = (inNewCodePeriod: boolean, customQuery: Dict<string>) => {
+    const query: Dict<string | undefined> = {
+      ...DEFAULT_ISSUES_QUERY,
       ...getBranchLikeQuery(this.props.branchLike),
-      ...customQuery
+      ...customQuery,
     };
-    if (sinceLeakPeriod) {
-      Object.assign(query, { sinceLeakPeriod: 'true' });
+    if (inNewCodePeriod) {
+      Object.assign(query, { inNewCodePeriod: 'true' });
     }
     return getComponentIssuesUrl(this.props.component.key, query);
   };
 
-  getUrlForCodeSmells(sinceLeakPeriod: boolean) {
-    return this.getIssuesUrl(sinceLeakPeriod, { types: 'CODE_SMELL' });
+  getUrlForSecurityHotspot(inNewCodePeriod: boolean) {
+    const query: Dict<string | undefined> = {
+      ...getBranchLikeQuery(this.props.branchLike),
+    };
+    if (inNewCodePeriod) {
+      Object.assign(query, { inNewCodePeriod: 'true' });
+    }
+    return getComponentSecurityHotspotsUrl(this.props.component.key, query);
   }
 
-  getUrlForBugsOrVulnerabilities(type: string, sinceLeakPeriod: boolean) {
-    const RATING_TO_SEVERITIES_MAPPING = [
-      'BLOCKER,CRITICAL,MAJOR,MINOR',
-      'BLOCKER,CRITICAL,MAJOR',
-      'BLOCKER,CRITICAL',
-      'BLOCKER'
-    ];
+  getUrlForCodeSmells(inNewCodePeriod: boolean) {
+    return this.getIssuesUrl(inNewCodePeriod, { types: 'CODE_SMELL' });
+  }
 
+  getUrlForBugsOrVulnerabilities(type: string, inNewCodePeriod: boolean) {
     const { condition } = this.props;
     const threshold = condition.level === 'ERROR' ? condition.error : condition.warning;
 
-    return this.getIssuesUrl(sinceLeakPeriod, {
+    return this.getIssuesUrl(inNewCodePeriod, {
       types: type,
-      severities: RATING_TO_SEVERITIES_MAPPING[Number(threshold) - 1]
+      severities: RATING_TO_SEVERITIES_MAPPING[Number(threshold) - 1],
     });
-  }
-
-  getUrlForType(type: string, sinceLeakPeriod: boolean) {
-    return type === 'CODE_SMELL'
-      ? this.getUrlForCodeSmells(sinceLeakPeriod)
-      : this.getUrlForBugsOrVulnerabilities(type, sinceLeakPeriod);
   }
 
   wrapWithLink(children: React.ReactNode) {
     const { branchLike, component, condition } = this.props;
 
-    const className = classNames(
-      'overview-quality-gate-condition',
-      `overview-quality-gate-condition-${condition.level.toLowerCase()}`
-    );
-
     const metricKey = condition.measure.metric.key;
 
-    const RATING_METRICS_MAPPING: T.Dict<[string, boolean]> = {
-      reliability_rating: ['BUG', false],
-      new_reliability_rating: ['BUG', true],
-      security_rating: ['VULNERABILITY', false],
-      new_security_rating: ['VULNERABILITY', true],
-      sqale_rating: ['CODE_SMELL', false],
-      new_maintainability_rating: ['CODE_SMELL', true]
+    const METRICS_TO_URL_MAPPING: Dict<() => Path> = {
+      [MetricKey.reliability_rating]: () =>
+        this.getUrlForBugsOrVulnerabilities(IssueType.Bug, false),
+      [MetricKey.new_reliability_rating]: () =>
+        this.getUrlForBugsOrVulnerabilities(IssueType.Bug, true),
+      [MetricKey.security_rating]: () =>
+        this.getUrlForBugsOrVulnerabilities(IssueType.Vulnerability, false),
+      [MetricKey.new_security_rating]: () =>
+        this.getUrlForBugsOrVulnerabilities(IssueType.Vulnerability, true),
+      [MetricKey.sqale_rating]: () => this.getUrlForCodeSmells(false),
+      [MetricKey.new_maintainability_rating]: () => this.getUrlForCodeSmells(true),
+      [MetricKey.security_hotspots_reviewed]: () => this.getUrlForSecurityHotspot(false),
+      [MetricKey.new_security_hotspots_reviewed]: () => this.getUrlForSecurityHotspot(true),
     };
 
-    return RATING_METRICS_MAPPING[metricKey] ? (
-      <Link className={className} to={this.getUrlForType(...RATING_METRICS_MAPPING[metricKey])}>
-        {children}
-      </Link>
-    ) : (
-      <DrilldownLink
-        branchLike={branchLike}
-        className={className}
-        component={component.key}
-        metric={condition.measure.metric.key}
-        sinceLeakPeriod={condition.period != null}>
-        {children}
-      </DrilldownLink>
-    );
+    if (METRICS_TO_URL_MAPPING[metricKey]) {
+      return <LinkBox to={METRICS_TO_URL_MAPPING[metricKey]()}>{children}</LinkBox>;
+    }
+
+    const url = isIssueMeasure(condition.measure.metric.key)
+      ? getComponentIssuesUrl(component.key, {
+          ...propsToIssueParams(condition.measure.metric.key, condition.period != null),
+          ...getBranchLikeQuery(branchLike),
+        })
+      : getComponentDrilldownUrl({
+          componentKey: component.key,
+          metric: condition.measure.metric.key,
+          branchLike,
+          listView: true,
+        });
+
+    return <LinkBox to={url}>{children}</LinkBox>;
   }
+
+  getPrimaryText = () => {
+    const { condition } = this.props;
+    const { measure } = condition;
+    const { metric } = measure;
+    const isDiff = isDiffMetric(metric.key);
+
+    const subText =
+      !isDiff && condition.period != null
+        ? `${localizeMetric(metric.key)} ${translate('quality_gates.conditions.new_code')}`
+        : localizeMetric(metric.key);
+
+    if (metric.type !== MetricType.Rating) {
+      const actual = (condition.period ? measure.period?.value : measure.value) as string;
+      const formattedValue = formatMeasure(actual, metric.type, {
+        decimal: 2,
+        omitExtraDecimalZeros: metric.type === MetricType.Percent,
+      });
+      return `${formattedValue} ${subText}`;
+    }
+
+    return subText;
+  };
 
   render() {
     const { condition } = this.props;
     const { measure } = condition;
     const { metric } = measure;
 
-    const isDiff = isDiffMetric(metric.key);
-
     const threshold = (condition.level === 'ERROR' ? condition.error : condition.warning) as string;
     const actual = (condition.period ? measure.period?.value : measure.value) as string;
 
-    let operator = translate('quality_gates.operator', condition.op);
-
-    if (metric.type === 'RATING') {
-      operator = translate('quality_gates.operator', condition.op, 'rating');
-    }
+    const operator = getOperatorLabel(condition.op, metric);
 
     return this.wrapWithLink(
-      <div className="overview-quality-gate-condition-container display-flex-center">
-        <div className="overview-quality-gate-condition-value text-center spacer-right">
-          <Measure
-            decimals={2}
-            metricKey={measure.metric.key}
-            metricType={measure.metric.type}
-            value={actual}
-          />
-        </div>
-
-        <div>
-          <span className="overview-quality-gate-condition-metric little-spacer-right">
-            <IssueTypeIcon className="little-spacer-right" query={metric.key} />
-            {metric.name}
-          </span>
-          {!isDiff && condition.period != null && (
-            <span className="overview-quality-gate-condition-period text-ellipsis little-spacer-right">
-              {translate('quality_gates.conditions.new_code')}
+      <div className="sw-flex sw-items-center sw-p-2">
+        <MeasureIndicator
+          className="sw-flex sw-justify-center sw-w-6 sw-mx-4"
+          decimals={2}
+          metricKey={measure.metric.key}
+          metricType={measure.metric.type}
+          value={actual}
+        />
+        <div className="sw-flex sw-flex-col sw-text-sm">
+          <div className="sw-flex sw-items-center">
+            <IssueTypeIcon className="sw-mr-2" query={metric.key} />
+            <span className="sw-body-sm-highlight sw-text-ellipsis sw-max-w-abs-300">
+              {this.getPrimaryText()}
             </span>
-          )}
-          <span className="little-spacer-top small text-muted">
-            {operator} {formatMeasure(threshold, metric.type)}
-          </span>
+          </div>
+          <TextMuted text={`${operator} ${formatMeasure(threshold, metric.type)}`} />
         </div>
-      </div>
+      </div>,
     );
   }
 }

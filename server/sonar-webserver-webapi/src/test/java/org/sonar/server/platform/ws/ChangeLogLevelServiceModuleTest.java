@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,53 +19,39 @@
  */
 package org.sonar.server.platform.ws;
 
-import java.util.Collection;
 import org.junit.Test;
-import org.picocontainer.ComponentAdapter;
-import org.sonar.core.platform.ComponentContainer;
-import org.sonar.server.platform.WebServer;
+import org.sonar.core.platform.ListContainer;
+import org.sonar.server.platform.NodeInformation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.core.platform.ComponentContainer.COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER;
 
 public class ChangeLogLevelServiceModuleTest {
-  private WebServer webServer = mock(WebServer.class);
-  private ChangeLogLevelServiceModule underTest = new ChangeLogLevelServiceModule(webServer);
+  private final NodeInformation nodeInformation = mock(NodeInformation.class);
+  private final ChangeLogLevelServiceModule underTest = new ChangeLogLevelServiceModule(nodeInformation);
 
   @Test
-  public void provide_returns_ChangeLogLevelClusterService_if_cluster_not_on_SonarCloud() {
-    when(webServer.isStandalone()).thenReturn(false);
-    ComponentContainer container = new ComponentContainer();
+  public void provide_returns_ChangeLogLevelClusterService() {
+    when(nodeInformation.isStandalone()).thenReturn(false);
+    ListContainer container = new ListContainer();
 
     underTest.configure(container);
 
-    Collection<ComponentAdapter<?>> adapters = container.getPicoContainer().getComponentAdapters();
-    assertThat(adapters)
-      .hasSize(COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER + 1)
-      .extracting(ComponentAdapter::getComponentKey)
-      .contains(ChangeLogLevelClusterService.class)
-      .doesNotContain(ChangeLogLevelStandaloneService.class);
+    assertThat(container.getAddedObjects()).containsOnly(ChangeLogLevelClusterService.class);
   }
 
   @Test
   public void provide_returns_ChangeLogLevelStandaloneService_if_SQ_standalone() {
-    when(webServer.isStandalone()).thenReturn(true);
-    ComponentContainer container = new ComponentContainer();
+    when(nodeInformation.isStandalone()).thenReturn(true);
+    ListContainer container = new ListContainer();
 
     underTest.configure(container);
 
     verifyInStandaloneSQ(container);
   }
 
-  private void verifyInStandaloneSQ(ComponentContainer container) {
-    Collection<ComponentAdapter<?>> adapters = container.getPicoContainer().getComponentAdapters();
-    assertThat(adapters)
-      .hasSize(COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER + 1)
-      .extracting(ComponentAdapter::getComponentKey)
-      .contains(ChangeLogLevelStandaloneService.class)
-      .doesNotContain(ChangeLogLevelClusterService.class);
+  private void verifyInStandaloneSQ(ListContainer container) {
+    assertThat(container.getAddedObjects()).containsOnly(ChangeLogLevelStandaloneService.class);
   }
-
 }

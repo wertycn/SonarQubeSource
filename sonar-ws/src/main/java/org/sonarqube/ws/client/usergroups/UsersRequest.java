@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,24 +30,11 @@ import javax.annotation.Generated;
 @Generated("sonar-ws-generator")
 public class UsersRequest {
 
-  private String id;
   private String name;
   private String p;
   private String ps;
   private String q;
   private String selected;
-
-  /**
-   * Example value: "42"
-   */
-  public UsersRequest setId(String id) {
-    this.id = id;
-    return this;
-  }
-
-  public String getId() {
-    return id;
-  }
 
   /**
    * Example value: "sonar-administrators"

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ItemLink } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import ChevronsIcon from 'sonar-ui-common/components/icons/ChevronsIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
+import { queryToSearch } from '../../../helpers/urls';
+import { AlmKeys } from '../../../types/alm-settings';
 
 export interface ProjectCreationMenuItemProps {
   alm: string;
@@ -29,21 +30,24 @@ export interface ProjectCreationMenuItemProps {
 
 export default function ProjectCreationMenuItem(props: ProjectCreationMenuItemProps) {
   const { alm } = props;
+  let almIcon = alm;
+  if (alm === AlmKeys.BitbucketCloud) {
+    almIcon = 'bitbucket';
+  }
   return (
-    <Link
+    <ItemLink
       className="display-flex-center"
-      to={{ pathname: '/projects/create', query: { mode: alm } }}>
-      {alm === 'manual' ? (
-        <ChevronsIcon className="spacer-right" />
-      ) : (
+      to={{ pathname: '/projects/create', search: queryToSearch({ mode: alm }) }}
+    >
+      {alm !== 'manual' && (
         <img
           alt={alm}
           className="spacer-right"
           width={16}
-          src={`${getBaseUrl()}/images/alm/${alm}.svg`}
+          src={`${getBaseUrl()}/images/alm/${almIcon}.svg`}
         />
       )}
       {translate('my_account.add_project', alm)}
-    </Link>
+    </ItemLink>
   );
 }

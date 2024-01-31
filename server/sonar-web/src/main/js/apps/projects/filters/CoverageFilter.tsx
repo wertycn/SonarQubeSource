@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,43 +17,42 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { CoverageIndicator } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import {
-  getCoverageRatingAverageValue,
-  getCoverageRatingLabel
-} from 'sonar-ui-common/helpers/ratings';
-import CoverageRating from '../../../components/ui/CoverageRating';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { getCoverageRatingAverageValue, getCoverageRatingLabel } from '../../../helpers/ratings';
+import { MetricKey } from '../../../types/metrics';
+import { RawQuery } from '../../../types/types';
 import { Facet } from '../types';
-import Filter from './Filter';
-import FilterHeader from './FilterHeader';
+import RangeFacetBase from './RangeFacetBase';
 
 export interface Props {
-  className?: string;
   facet?: Facet;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
+  onQueryChange: (change: RawQuery) => void;
   property?: string;
   value?: any;
 }
 
+const NO_DATA_OPTION = 6;
+
 export default function CoverageFilter(props: Props) {
-  const { property = 'coverage' } = props;
+  const { facet, maxFacetValue, property = MetricKey.coverage, value } = props;
 
   return (
-    <Filter
-      className={props.className}
-      facet={props.facet}
+    <RangeFacetBase
+      facet={facet}
       getFacetValueForOption={getFacetValueForOption}
-      header={<FilterHeader name={translate('metric_domain.Coverage')} />}
+      header={translate('metric_domain.Coverage')}
       highlightUnder={1}
       highlightUnderMax={5}
-      maxFacetValue={props.maxFacetValue}
+      maxFacetValue={maxFacetValue}
       onQueryChange={props.onQueryChange}
       options={[1, 2, 3, 4, 5, 6]}
       property={property}
+      renderAccessibleLabel={renderAccessibleLabel}
       renderOption={renderOption}
-      value={props.value}
+      value={value}
     />
   );
 }
@@ -63,23 +62,28 @@ function getFacetValueForOption(facet: Facet, option: number): number {
   return facet[map[option - 1]];
 }
 
-function renderOption(option: number, selected: boolean) {
+function renderAccessibleLabel(option: number) {
+  return option < NO_DATA_OPTION
+    ? translate('projects.facets.coverage.label', option.toString())
+    : translateWithParameters(
+        'projects.facets.label_no_data_x',
+        translate('metric_domain.Coverage'),
+      );
+}
+
+function renderOption(option: number) {
   return (
-    <span>
-      {option < 6 && (
-        <CoverageRating
-          muted={!selected}
-          size="small"
-          value={getCoverageRatingAverageValue(option)}
-        />
+    <div className="sw-flex sw-items-center">
+      {option < NO_DATA_OPTION && (
+        <CoverageIndicator value={getCoverageRatingAverageValue(option)} size="xs" />
       )}
-      <span className="spacer-left">
-        {option < 6 ? (
+      <span className="sw-ml-2">
+        {option < NO_DATA_OPTION ? (
           getCoverageRatingLabel(option)
         ) : (
-          <span className="big-spacer-left">{translate('no_data')}</span>
+          <span className="sw-ml-4">{translate('no_data')}</span>
         )}
       </span>
-    </span>
+    </div>
   );
 }

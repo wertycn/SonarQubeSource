@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Title } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import InstanceMessage from '../../../components/common/InstanceMessage';
+import { translate } from '../../../helpers/l10n';
+import { ExtendedSettingDefinition } from '../../../types/settings';
+import { Component } from '../../../types/types';
+import SettingsSearch from './SettingsSearch';
 
 export interface PageHeaderProps {
-  component?: T.Component;
+  component?: Component;
+  definitions: ExtendedSettingDefinition[];
 }
 
-export default function PageHeader({ component }: PageHeaderProps) {
+export default function PageHeader({ component, definitions }: Readonly<PageHeaderProps>) {
   const title = component ? translate('project_settings.page') : translate('settings.page');
 
   const description = component ? (
@@ -35,13 +40,10 @@ export default function PageHeader({ component }: PageHeaderProps) {
   );
 
   return (
-    <header className="top-bar-outer">
-      <div className="top-bar">
-        <div className="top-bar-inner bordered-bottom big-padded-top padded-bottom">
-          <h1 className="page-title">{title}</h1>
-          <div className="page-description spacer-top">{description}</div>
-        </div>
-      </div>
+    <header className="sw-mb-5">
+      <Title className="sw-mb-4">{title}</Title>
+      <p className="sw-mb-4">{description}</p>
+      <SettingsSearch component={component} definitions={definitions} />
     </header>
   );
 }

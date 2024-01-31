@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,15 @@
  */
 package org.sonar.server.platform;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.sonar.api.utils.text.JsonWriter;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.process.systeminfo.SystemInfoSection;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
 import org.sonar.server.ce.http.CeHttpClient;
 import org.sonar.server.health.Health;
 import org.sonar.server.health.HealthChecker;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoader;
 
 import static java.util.Arrays.stream;
 
@@ -37,9 +36,7 @@ public class StandaloneSystemInfoWriter extends AbstractSystemInfoWriter {
   private final HealthChecker healthChecker;
   private final SystemInfoSection[] systemInfoSections;
 
-  public StandaloneSystemInfoWriter(TelemetryDataLoader telemetry, CeHttpClient ceHttpClient, HealthChecker healthChecker,
-    TelemetryDataJsonWriter dataJsonWriter, SystemInfoSection... systemInfoSections) {
-    super(telemetry, dataJsonWriter);
+  public StandaloneSystemInfoWriter(CeHttpClient ceHttpClient, HealthChecker healthChecker, SystemInfoSection... systemInfoSections) {
     this.ceHttpClient = ceHttpClient;
     this.healthChecker = healthChecker;
     this.systemInfoSections = systemInfoSections;
@@ -51,12 +48,11 @@ public class StandaloneSystemInfoWriter extends AbstractSystemInfoWriter {
 
     List<ProtobufSystemInfo.Section> sections = stream(systemInfoSections)
       .map(SystemInfoSection::toProtobuf)
-      .collect(MoreCollectors.toArrayList());
+      .collect(Collectors.toCollection(ArrayList::new));
     ceHttpClient.retrieveSystemInfo()
       .ifPresent(ce -> sections.addAll(ce.getSectionsList()));
 
     writeSections(sections, json);
-    writeTelemetry(json);
   }
 
   private void writeHealth(JsonWriter json) {

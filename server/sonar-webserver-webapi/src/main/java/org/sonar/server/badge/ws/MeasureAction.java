@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -53,15 +54,15 @@ import static org.sonar.api.measures.CoreMetrics.COVERAGE_KEY;
 import static org.sonar.api.measures.CoreMetrics.DUPLICATED_LINES_DENSITY_KEY;
 import static org.sonar.api.measures.CoreMetrics.NCLOC_KEY;
 import static org.sonar.api.measures.CoreMetrics.RELIABILITY_RATING_KEY;
+import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_RATING_KEY;
 import static org.sonar.api.measures.CoreMetrics.SQALE_RATING_KEY;
 import static org.sonar.api.measures.CoreMetrics.TECHNICAL_DEBT_KEY;
 import static org.sonar.api.measures.CoreMetrics.VULNERABILITIES_KEY;
 import static org.sonar.api.measures.Metric.Level;
-import static org.sonar.api.measures.Metric.ValueType;
 import static org.sonar.api.measures.Metric.Level.ERROR;
 import static org.sonar.api.measures.Metric.Level.OK;
-import static org.sonar.api.measures.Metric.Level.WARN;
+import static org.sonar.api.measures.Metric.ValueType;
 import static org.sonar.server.badge.ws.ETagUtils.RFC1123_DATE;
 import static org.sonar.server.badge.ws.ETagUtils.getETag;
 import static org.sonar.server.badge.ws.SvgFormatter.formatDuration;
@@ -88,22 +89,23 @@ public class MeasureAction implements ProjectBadgesWsAction {
     .put(SQALE_RATING_KEY, "maintainability")
     .put(ALERT_STATUS_KEY, "quality gate")
     .put(RELIABILITY_RATING_KEY, "reliability")
+    .put(SECURITY_HOTSPOTS_KEY, "security hotspots")
     .put(SECURITY_RATING_KEY, "security")
     .put(TECHNICAL_DEBT_KEY, "technical debt")
     .put(VULNERABILITIES_KEY, "vulnerabilities")
     .build();
 
-  private static final Map<Level, String> QUALITY_GATE_MESSAGE_BY_STATUS = new EnumMap<>(ImmutableMap.of(
+  private static final String[] DEPRECATED_METRIC_KEYS = {BUGS_KEY, CODE_SMELLS_KEY, SECURITY_HOTSPOTS_KEY, VULNERABILITIES_KEY};
+
+  private static final Map<Level, String> QUALITY_GATE_MESSAGE_BY_STATUS = new EnumMap<>(Map.of(
     OK, "passed",
-    WARN, "warning",
     ERROR, "failed"));
 
-  private static final Map<Level, Color> COLOR_BY_QUALITY_GATE_STATUS = new EnumMap<>(ImmutableMap.of(
+  private static final Map<Level, Color> COLOR_BY_QUALITY_GATE_STATUS = new EnumMap<>(Map.of(
     OK, Color.QUALITY_GATE_OK,
-    WARN, Color.QUALITY_GATE_WARN,
     ERROR, Color.QUALITY_GATE_ERROR));
 
-  private static final Map<Rating, Color> COLOR_BY_RATING = new EnumMap<>(ImmutableMap.of(
+  private static final Map<Rating, Color> COLOR_BY_RATING = new EnumMap<>(Map.of(
     A, Color.RATING_A,
     B, Color.RATING_B,
     C, Color.RATING_C,
@@ -127,6 +129,7 @@ public class MeasureAction implements ProjectBadgesWsAction {
       .setDescription("Generate badge for project's measure as an SVG.<br/>" +
         "Requires 'Browse' permission on the specified project.")
       .setSince("7.1")
+      .setChangelog(new Change("10.4", String.format("The following metric keys are now deprecated: %s", String.join(", ", DEPRECATED_METRIC_KEYS))))
       .setResponseExample(Resources.getResource(getClass(), "measure-example.svg"));
     support.addProjectAndBranchParams(action);
     action.createParam(PARAM_METRIC)
@@ -141,6 +144,7 @@ public class MeasureAction implements ProjectBadgesWsAction {
     response.stream().setMediaType(SVG);
     String metricKey = request.mandatoryParam(PARAM_METRIC);
     try (DbSession dbSession = dbClient.openSession(false)) {
+      support.validateToken(request);
       BranchDto branch = support.getBranch(dbSession, request);
       MetricDto metric = dbClient.metricDao().selectByKey(dbSession, metricKey);
       checkState(metric != null && metric.isEnabled(), "Metric '%s' hasn't been found", metricKey);
@@ -199,11 +203,10 @@ public class MeasureAction implements ProjectBadgesWsAction {
     return svgGenerator.generateBadge(METRIC_NAME_BY_KEY.get(metric.getKey()), value, color);
   }
 
-  private static <PARAM> PARAM getNonNullValue(LiveMeasureDto measure, Function<LiveMeasureDto, PARAM> function) {
-    PARAM value = function.apply(measure);
+  private static <P> P getNonNullValue(LiveMeasureDto measure, Function<LiveMeasureDto, P> function) {
+    P value = function.apply(measure);
     checkState(value != null, "Measure has not been found");
     return value;
   }
-
 
 }

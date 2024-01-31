@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,10 +52,15 @@ public interface QualityProfileMapper {
   @CheckForNull
   QProfileDto selectDefaultProfile(@Param("language") String language);
 
-  List<QProfileDto> selectDefaultBuiltInProfilesWithoutActiveRules(@Param("languages") List<String> languages);
+  List<QProfileDto> selectDefaultProfilesWithoutActiveRules(@Param("languages") List<String> languages, @Param("builtIn") boolean builtIn);
 
   List<QProfileDto> selectDefaultProfiles(
     @Param("languages") Collection<String> languages);
+
+  List<QProfileDto> selectAllDefaultProfiles();
+
+  @CheckForNull
+  String selectDefaultProfileUuid(@Param("language") String language);
 
   @CheckForNull
   QProfileDto selectByNameAndLanguage(
@@ -91,6 +96,8 @@ public interface QualityProfileMapper {
     @Param("projectUuid") String projectUuid,
     @Param("languages") Collection<String> languages);
 
+  List<QProfileDto> selectQProfilesByProjectUuid(@Param("projectUuid") String projectUuid);
+
   void insertProjectProfileAssociation(
     @Param("uuid") String uuid,
     @Param("projectUuid") String projectUuid,
@@ -107,15 +114,17 @@ public interface QualityProfileMapper {
 
   List<ProjectQprofileAssociationDto> selectSelectedProjects(
     @Param("profileUuid") String profileUuid,
-    @Param("nameQuery") String nameQuery);
+    @Param("nameOrKeyQuery") String nameOrKeyQuery);
 
   List<ProjectQprofileAssociationDto> selectDeselectedProjects(
     @Param("profileUuid") String profileUuid,
-    @Param("nameQuery") String nameQuery);
+    @Param("nameOrKeyQuery") String nameOrKeyQuery);
 
   List<ProjectQprofileAssociationDto> selectProjectAssociations(
     @Param("profileUuid") String profileUuid,
-    @Param("nameQuery") String nameQuery);
+    @Param("nameOrKeyQuery") String nameOrKeyQuery);
+
+  List<ProjectQProfileLanguageAssociationDto> selectAllProjectAssociations();
 
   List<String> selectUuidsOfCustomRuleProfiles(@Param("language") String language, @Param("name") String name);
 

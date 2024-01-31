@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { QualifierIcon } from 'design-system';
 import { omit } from 'lodash';
 import * as React from 'react';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { collapsePath, splitPath } from 'sonar-ui-common/helpers/path';
-import { highlightTerm } from 'sonar-ui-common/helpers/search';
-import { isDefined } from 'sonar-ui-common/helpers/types';
 import { getFiles } from '../../../api/components';
-import ListStyleFacet from '../../../components/facet/ListStyleFacet';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
+import { translate } from '../../../helpers/l10n';
+import { collapsePath, splitPath } from '../../../helpers/path';
+import { highlightTerm } from '../../../helpers/search';
+import { isDefined } from '../../../helpers/types';
 import { BranchLike } from '../../../types/branch-like';
 import { TreeComponentWithPath } from '../../../types/component';
 import { Facet } from '../../../types/issues';
+import { MetricKey } from '../../../types/metrics';
 import { Query } from '../utils';
+import { ListStyleFacet } from './ListStyleFacet';
 
 interface Props {
   branchLike?: BranchLike;
@@ -46,7 +47,8 @@ interface Props {
 }
 
 const MAX_PATH_LENGTH = 15;
-export default class FileFacet extends React.PureComponent<Props> {
+
+export class FileFacet extends React.PureComponent<Props> {
   getFacetItemText = (path: string) => {
     return path;
   };
@@ -67,26 +69,27 @@ export default class FileFacet extends React.PureComponent<Props> {
       ...getBranchLikeQuery(branchLike),
       q: query,
       p: page,
-      ps: 30
+      ps: 30,
     }).then(({ components, paging }) => ({
       paging,
-      results: components.filter(file => file.path !== undefined)
+      results: components.filter((file) => file.path !== undefined),
     }));
   };
 
   loadSearchResultCount = (files: TreeComponentWithPath[]) => {
-    return this.props.loadSearchResultCount('files', {
+    return this.props.loadSearchResultCount(MetricKey.files, {
       files: files
-        .map(file => {
+        .map((file) => {
           return file.path;
         })
-        .filter(isDefined)
+        .filter(isDefined),
     });
   };
 
   renderFile = (file: React.ReactNode) => (
     <>
-      <QualifierIcon className="little-spacer-right" qualifier="FIL" />
+      <QualifierIcon qualifier="fil" className="sw-mr-1" />
+
       {file}
     </>
   );
@@ -101,7 +104,7 @@ export default class FileFacet extends React.PureComponent<Props> {
     return this.renderFile(
       <>
         {head}/{highlightTerm(tail, term)}
-      </>
+      </>,
     );
   };
 
@@ -119,8 +122,8 @@ export default class FileFacet extends React.PureComponent<Props> {
         onSearch={this.handleSearch}
         onToggle={this.props.onToggle}
         open={this.props.open}
-        property="files"
-        query={omit(this.props.query, 'files')}
+        property={MetricKey.files}
+        query={omit(this.props.query, MetricKey.files)}
         renderFacetItem={this.renderFacetItem}
         renderSearchResult={this.renderSearchResult}
         searchPlaceholder={translate('search.search_for_files')}

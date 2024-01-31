@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@ package org.sonarqube.ws.client.projects;
 import java.util.stream.Collectors;
 import javax.annotation.Generated;
 import org.sonarqube.ws.MediaTypes;
-import org.sonarqube.ws.Projects.BulkUpdateKeyWsResponse;
 import org.sonarqube.ws.Projects.CreateWsResponse;
 import org.sonarqube.ws.Projects.SearchMyProjectsWsResponse;
 import org.sonarqube.ws.Projects.SearchWsResponse;
@@ -30,6 +29,7 @@ import org.sonarqube.ws.client.BaseService;
 import org.sonarqube.ws.client.GetRequest;
 import org.sonarqube.ws.client.PostRequest;
 import org.sonarqube.ws.client.WsConnector;
+import org.sonarqube.ws.client.WsResponse;
 
 /**
  * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/projects">Further information about this web service online</a>
@@ -59,23 +59,6 @@ public class ProjectsService extends BaseService {
         .setParam("visibility", request.getVisibility())
         .setMediaType(MediaTypes.JSON)
       ).content();
-  }
-
-  /**
-   *
-   * This is part of the internal API.
-   * This is a POST request.
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/projects/bulk_update_key">Further information about this action online (including a response example)</a>
-   * @since 6.1
-   */
-  public BulkUpdateKeyWsResponse bulkUpdateKey(BulkUpdateKeyRequest request) {
-    return call(
-      new PostRequest(path("bulk_update_key"))
-        .setParam("dryRun", request.getDryRun())
-        .setParam("from", request.getFrom())
-        .setParam("project", request.getProject())
-        .setParam("to", request.getTo()),
-      BulkUpdateKeyWsResponse.parser());
   }
 
   /**
@@ -114,6 +97,19 @@ public class ProjectsService extends BaseService {
    *
    * This is part of the internal API.
    * This is a GET request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/projects/license_usage">Further information about this action online (including a response example)</a>
+   * @since 9.4
+   */
+  public WsResponse licenseUsage() {
+    GetRequest getRequest = new GetRequest(path("license_usage"))
+      .setMediaType(MediaTypes.JSON);
+    return call(getRequest);
+  }
+
+  /**
+   *
+   * This is part of the internal API.
+   * This is a GET request.
    * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/projects/search">Further information about this action online (including a response example)</a>
    * @since 6.3
    */
@@ -129,6 +125,21 @@ public class ProjectsService extends BaseService {
         .setParam("qualifiers", request.getQualifiers() == null ? null : request.getQualifiers().stream().collect(Collectors.joining(",")))
         .setParam("visibility", request.getVisibility()),
       SearchWsResponse.parser());
+  }
+
+  /**
+   *
+   * This is a GET request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/projects/export_findings">Further information about this action online (including a response example)</a>
+   * @since 9.1
+   */
+  public WsResponse exportFindings(ExportFindingsRequest request) {
+    GetRequest getRequest = new GetRequest(path("export_findings"))
+      .setParam("project", request.getProjectKey());
+    if (request.getBranchKey() != null) {
+      getRequest.setParam("branch", request.getBranchKey());
+    }
+    return call(getRequest);
   }
 
   /**

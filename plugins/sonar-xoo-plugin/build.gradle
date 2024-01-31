@@ -1,19 +1,18 @@
-configurations {
-  testCompile.extendsFrom(compileOnly)
-}
 
 dependencies {
-  compile 'com.google.guava:guava'
-  compile 'commons-io:commons-io'
-  compile 'commons-lang:commons-lang'
-  compile 'org.apache.commons:commons-csv'
-  compileOnly project(path: ':sonar-plugin-api', configuration: 'shadow')
-  compileOnly 'com.google.code.findbugs:jsr305'
+  api 'com.google.guava:guava'
+  api 'commons-io:commons-io'
+  api 'commons-lang:commons-lang'
+  api 'org.apache.commons:commons-csv'
 
-  testCompile 'junit:junit'
-  testCompile 'org.assertj:assertj-core'
-  testCompile 'org.mockito:mockito-core'
-  testCompile project(':sonar-plugin-api-impl')
+  compileOnlyApi 'com.google.code.findbugs:jsr305'
+  compileOnlyApi 'org.sonarsource.api.plugin:sonar-plugin-api'
+
+  testImplementation 'junit:junit'
+  testImplementation 'org.assertj:assertj-core'
+  testImplementation 'org.mockito:mockito-core'
+  testImplementation 'org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures'
+  testImplementation project(':sonar-plugin-api-impl')
 }
 
 jar {
@@ -23,13 +22,13 @@ jar {
       'Plugin-Version': project.version,
       'Plugin-Class': 'org.sonar.xoo.XooPlugin',
       'Plugin-ChildFirstClassLoader': 'false',
-      'Sonar-Version': project.version,
+      'Sonar-Version': project.pluginApiVersion,
       'SonarLint-Supported': 'true',
       'Plugin-Name': 'Xoo'
     )
   }
   into('META-INF/lib') {
-    from configurations.compile
+    from configurations.runtimeClasspath
   }
 }
 

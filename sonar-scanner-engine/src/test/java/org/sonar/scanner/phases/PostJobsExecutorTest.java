@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,7 @@ package org.sonar.scanner.phases;
 import java.util.Arrays;
 import org.junit.Before;
 import org.junit.Test;
-import org.sonar.scanner.bootstrap.PostJobExtensionDictionnary;
+import org.sonar.scanner.bootstrap.PostJobExtensionDictionary;
 import org.sonar.scanner.postjob.PostJobWrapper;
 import org.sonar.scanner.postjob.PostJobsExecutor;
 
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
 public class PostJobsExecutorTest {
   private PostJobsExecutor executor;
 
-  private PostJobExtensionDictionnary selector = mock(PostJobExtensionDictionnary.class);
+  private PostJobExtensionDictionary selector = mock(PostJobExtensionDictionary.class);
   private PostJobWrapper job1 = mock(PostJobWrapper.class);
   private PostJobWrapper job2 = mock(PostJobWrapper.class);
 

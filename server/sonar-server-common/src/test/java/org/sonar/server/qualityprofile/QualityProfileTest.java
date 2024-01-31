@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.sonar.api.utils.DateUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class QualityProfileTest {
 
@@ -33,24 +34,35 @@ public class QualityProfileTest {
   private static final Date SOME_DATE = DateUtils.parseDateTimeQuietly("2010-05-18T15:50:45+0100");
   private static final QualityProfile QUALITY_PROFILE = new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, SOME_LANGUAGE_KEY, SOME_DATE);
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void constructor_throws_NPE_if_qkKey_arg_is_null() {
-    new QualityProfile(null, SOME_QP_NAME, SOME_LANGUAGE_KEY, SOME_DATE);
+    assertThatThrownBy(() -> new QualityProfile(null, SOME_QP_NAME, SOME_LANGUAGE_KEY, SOME_DATE))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void constructor_throws_NPE_if_qpName_arg_is_null() {
-    new QualityProfile(SOME_QP_KEY, null, SOME_LANGUAGE_KEY, SOME_DATE);
+
+    assertThatThrownBy(() -> {
+      new QualityProfile(SOME_QP_KEY, null, SOME_LANGUAGE_KEY, SOME_DATE);
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void constructor_throws_NPE_if_languageKey_arg_is_null() {
-    new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, null, SOME_DATE);
+    assertThatThrownBy(() -> {
+      new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, null, SOME_DATE);
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void constructor_throws_NPE_if_rulesUpdatedAt_arg_is_null() {
-    new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, SOME_LANGUAGE_KEY, null);
+    assertThatThrownBy(() -> {
+      new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, SOME_LANGUAGE_KEY, null);
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -68,13 +80,14 @@ public class QualityProfileTest {
 
   @Test
   public void verify_equals() {
-    assertThat(QUALITY_PROFILE).isEqualTo(new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, SOME_LANGUAGE_KEY, SOME_DATE));
-    assertThat(QUALITY_PROFILE).isEqualTo(QUALITY_PROFILE);
-    assertThat(QUALITY_PROFILE).isNotEqualTo(null);
+    assertThat(QUALITY_PROFILE)
+      .isEqualTo(new QualityProfile(SOME_QP_KEY, SOME_QP_NAME, SOME_LANGUAGE_KEY, SOME_DATE))
+      .isEqualTo(QUALITY_PROFILE)
+      .isNotNull();
   }
 
   @Test
   public void verify_toString() {
-    assertThat(QUALITY_PROFILE.toString()).isEqualTo("QualityProfile{key=qpKey, name=qpName, language=languageKey, rulesUpdatedAt=1274194245000}");
+    assertThat(QUALITY_PROFILE).hasToString("QualityProfile{key=qpKey, name=qpName, language=languageKey, rulesUpdatedAt=1274194245000}");
   }
 }

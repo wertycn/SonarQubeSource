@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import org.sonar.server.issue.workflow.IsUnResolved;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.rule.RuleTagFormat;
 import org.sonar.core.issue.DefaultIssue;
@@ -43,7 +42,6 @@ public abstract class AbstractChangeTagsAction extends Action {
   protected AbstractChangeTagsAction(String key, IssueFieldsSetter issueUpdater) {
     super(key);
     this.issueUpdater = issueUpdater;
-    super.setConditions(new IsUnResolved());
   }
 
   @Override
@@ -65,7 +63,7 @@ public abstract class AbstractChangeTagsAction extends Action {
     return false;
   }
 
-  private Set<String> parseTags(Map<String, Object> properties) {
+  private static Set<String> parseTags(Map<String, Object> properties) {
     Set<String> result = new HashSet<>();
     String tagsString = (String) properties.get(TAGS_PARAMETER);
     if (!Strings.isNullOrEmpty(tagsString)) {

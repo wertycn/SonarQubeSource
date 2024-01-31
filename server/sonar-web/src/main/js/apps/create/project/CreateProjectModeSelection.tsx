@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,145 +17,165 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+/* eslint-disable react/no-unused-prop-types */
+import {
+  ButtonSecondary,
+  GreyCard,
+  HelperHintIcon,
+  LightPrimary,
+  Spinner,
+  StandoutLink,
+  TextMuted,
+  Title,
+} from 'design-system';
 import * as React from 'react';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
-import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
-import { withAppState } from '../../../components/hoc/withAppState';
-import { ALM_DOCUMENTATION_PATHS } from '../../../helpers/constants';
+import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
+import { getCreateProjectModeLocation } from '../../../helpers/urls';
 import { AlmKeys } from '../../../types/alm-settings';
-import { ALM_INTEGRATION } from '../../settings/components/AdditionalCategoryKeys';
+import { AppState } from '../../../types/appstate';
 import { CreateProjectModes } from './types';
 
 export interface CreateProjectModeSelectionProps {
   almCounts: {
-    [AlmKeys.Azure]: number;
-    [AlmKeys.BitbucketServer]: number;
-    [AlmKeys.GitLab]: number;
-    [AlmKeys.GitHub]: number;
+    [k in AlmKeys]: number;
   };
-  appState: Pick<T.AppState, 'canAdmin'>;
+  appState: AppState;
   loadingBindings: boolean;
-  onSelectMode: (mode: CreateProjectModes) => void;
+  onConfigMode: (mode: AlmKeys) => void;
 }
+
+type almList = {
+  key: AlmKeys;
+  mode: CreateProjectModes;
+}[];
+
+const almList: almList = [
+  { key: AlmKeys.Azure, mode: CreateProjectModes.AzureDevOps },
+  { key: AlmKeys.BitbucketCloud, mode: CreateProjectModes.BitbucketCloud },
+  { key: AlmKeys.BitbucketServer, mode: CreateProjectModes.BitbucketServer },
+  { key: AlmKeys.GitHub, mode: CreateProjectModes.GitHub },
+  { key: AlmKeys.GitLab, mode: CreateProjectModes.GitLab },
+];
 
 function renderAlmOption(
   props: CreateProjectModeSelectionProps,
-  alm: AlmKeys.Azure | AlmKeys.BitbucketServer | AlmKeys.GitHub | AlmKeys.GitLab,
-  mode: CreateProjectModes
+  alm: AlmKeys,
+  mode: CreateProjectModes,
 ) {
   const {
     almCounts,
     appState: { canAdmin },
-    loadingBindings
+    loadingBindings,
   } = props;
-
   const count = almCounts[alm];
-  const disabled = count !== 1 || loadingBindings;
+  const hasConfig = count > 0;
+  const disabled = loadingBindings || (!hasConfig && !canAdmin);
+  const configMode = alm === AlmKeys.BitbucketCloud ? AlmKeys.BitbucketServer : alm;
 
-  const tooltipLinks = [];
-  if (count === 0) {
-    if (canAdmin) {
-      tooltipLinks.push({
-        href: `/admin/settings?category=${ALM_INTEGRATION}&alm=${alm}`,
-        label: translateWithParameters(
-          'onboarding.create_project.set_up_x',
-          translate('alm', alm, 'short')
-        )
-      });
-    }
+  const svgFileName = alm === AlmKeys.BitbucketCloud ? AlmKeys.BitbucketServer : alm;
+  const svgFileNameGrey = `${svgFileName}_grey`;
 
-    tooltipLinks.push({
-      href: ALM_DOCUMENTATION_PATHS[alm],
-      label: translateWithParameters(
-        'onboarding.create_project.help_set_up_x',
-        translate('alm', alm, 'short')
-      )
-    });
-  }
+  const icon = (
+    <img
+      alt="" // Should be ignored by screen readers
+      className="sw-h-4 sw-w-4"
+      src={`${getBaseUrl()}/images/alm/${
+        !disabled && hasConfig ? svgFileName : svgFileNameGrey
+      }.svg`}
+    />
+  );
 
   return (
-    <div className="big-spacer-left display-flex-column">
-      <button
-        className={classNames(
-          'button button-huge display-flex-column create-project-mode-type-alm',
-          { disabled }
-        )}
-        disabled={disabled}
-        onClick={() => props.onSelectMode(mode)}
-        type="button">
-        <img
-          alt="" // Should be ignored by screen readers
-          height={80}
-          src={`${getBaseUrl()}/images/alm/${alm}.svg`}
-        />
-        <div className="medium big-spacer-top abs-height-50 display-flex-center">
-          {translate('onboarding.create_project.select_method', alm)}
-        </div>
-
-        {loadingBindings && (
-          <span>
-            {translate('onboarding.create_project.check_alm_supported')}
-            <i className="little-spacer-left spinner" />
-          </span>
-        )}
-
-        {!loadingBindings && disabled && (
-          <div className="text-muted small spacer-top" style={{ lineHeight: 1.5 }}>
-            {translate('onboarding.create_project.alm_not_configured')}
-            <DocumentationTooltip
-              className="little-spacer-left"
-              content={
-                count === 0
-                  ? translate('onboarding.create_project.zero_alm_instances', alm)
-                  : `${translate('onboarding.create_project.too_many_alm_instances', alm)} 
-                ${translateWithParameters(
-                  'onboarding.create_project.alm_instances_count_X',
-                  count
-                )}`
-              }
-              links={count === 0 ? tooltipLinks : undefined}
+    <GreyCard key={alm} className="sw-col-span-4 sw-p-4 sw-flex sw-justify-between sw-items-center">
+      <div className="sw-items-center sw-flex sw-py-2">
+        {!disabled && hasConfig ? (
+          <StandoutLink icon={icon} to={getCreateProjectModeLocation(mode)}>
+            {translate('onboarding.create_project.import_select_method', alm)}
+          </StandoutLink>
+        ) : (
+          <>
+            {icon}
+            <TextMuted
+              className="sw-ml-3 sw-text-sm sw-font-semibold"
+              text={translate('onboarding.create_project.import_select_method', alm)}
             />
-          </div>
+          </>
         )}
-      </button>
+      </div>
+
+      <Spinner loading={loadingBindings}>
+        {!hasConfig &&
+          (canAdmin ? (
+            <ButtonSecondary onClick={() => props.onConfigMode(configMode)}>
+              {translate('setup')}
+            </ButtonSecondary>
+          ) : (
+            <HelpTooltip overlay={translate('onboarding.create_project.alm_not_configured')}>
+              <HelperHintIcon aria-label="help-tooltip" />
+            </HelpTooltip>
+          ))}
+      </Spinner>
+    </GreyCard>
+  );
+}
+
+function separateAvailableOptions(almCounts: CreateProjectModeSelectionProps['almCounts']) {
+  const availableOptions: almList = [];
+  const unavailableOptions: almList = [];
+  almList.forEach(({ key, mode }) =>
+    (almCounts[key] > 0 ? availableOptions : unavailableOptions).push({ key, mode }),
+  );
+  return {
+    availableOptions,
+    unavailableOptions,
+  };
+}
+
+export function CreateProjectModeSelection(props: CreateProjectModeSelectionProps) {
+  const {
+    appState: { canAdmin },
+    almCounts,
+  } = props;
+  const almTotalCount = Object.values(almCounts).reduce((prev, cur) => prev + cur);
+  const filteredAlm = separateAvailableOptions(almCounts);
+
+  return (
+    <div className="sw-body-sm">
+      <div className="sw-flex sw-flex-col">
+        <Title className="sw-mb-10">{translate('onboarding.create_project.select_method')}</Title>
+        <LightPrimary>
+          {translate('onboarding.create_project.select_method.devops_platform')}
+        </LightPrimary>
+        <LightPrimary>
+          {translate('onboarding.create_project.select_method.devops_platform_second')}
+        </LightPrimary>
+        {almTotalCount === 0 && canAdmin && (
+          <LightPrimary className="sw-mt-3">
+            {translate('onboarding.create_project.select_method.no_alm_yet.admin')}
+          </LightPrimary>
+        )}
+        <div className="sw-grid sw-gap-x-12 sw-gap-y-6 sw-grid-cols-12 sw-mt-4">
+          {filteredAlm.availableOptions.map(({ key, mode }) => renderAlmOption(props, key, mode))}
+          {filteredAlm.unavailableOptions.map(({ key, mode }) => renderAlmOption(props, key, mode))}
+        </div>
+        <LightPrimary className="sw-mb-4 sw-mt-10">
+          {translate('onboarding.create_project.select_method.manually')}
+        </LightPrimary>
+        <div className="sw-grid sw-gap-x-12 sw-gap-y-6 sw-grid-cols-12">
+          <GreyCard className="sw-col-span-4 sw-p-4 sw-py-6 sw-flex sw-justify-between sw-items-center">
+            <div>
+              <StandoutLink to={getCreateProjectModeLocation(CreateProjectModes.Manual)}>
+                {translate('onboarding.create_project.import_select_method.manual')}
+              </StandoutLink>
+            </div>
+          </GreyCard>
+        </div>
+      </div>
     </div>
   );
 }
 
-export function CreateProjectModeSelection(props: CreateProjectModeSelectionProps) {
-  return (
-    <>
-      <header className="huge-spacer-top big-spacer-bottom padded">
-        <h1 className="text-center huge big-spacer-bottom">
-          {translate('my_account.create_new.TRK')}
-        </h1>
-        <p className="text-center big">{translate('onboarding.create_project.select_method')}</p>
-      </header>
-
-      <div className="create-project-modes huge-spacer-top display-flex-justify-center">
-        <button
-          className="button button-huge display-flex-column create-project-mode-type-manual"
-          onClick={() => props.onSelectMode(CreateProjectModes.Manual)}
-          type="button">
-          <img
-            alt="" // Should be ignored by screen readers
-            height={80}
-            src={`${getBaseUrl()}/images/sonarcloud/analysis/manual.svg`}
-          />
-          <div className="medium big-spacer-top">
-            {translate('onboarding.create_project.select_method.manual')}
-          </div>
-        </button>
-
-        {renderAlmOption(props, AlmKeys.Azure, CreateProjectModes.AzureDevOps)}
-        {renderAlmOption(props, AlmKeys.BitbucketServer, CreateProjectModes.BitbucketServer)}
-        {renderAlmOption(props, AlmKeys.GitHub, CreateProjectModes.GitHub)}
-        {renderAlmOption(props, AlmKeys.GitLab, CreateProjectModes.GitLab)}
-      </div>
-    </>
-  );
-}
-
-export default withAppState(CreateProjectModeSelection);
+export default withAppStateContext(CreateProjectModeSelection);

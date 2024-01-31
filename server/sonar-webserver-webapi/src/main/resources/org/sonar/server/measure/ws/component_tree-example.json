@@ -16,6 +16,10 @@
         }
       },
       {
+        "metric": "accepted_issues",
+        "value": "10"
+      },
+      {
         "metric": "complexity",
         "value": "42"
       },
@@ -42,6 +46,10 @@
         {
           "metric": "complexity",
           "value": "12"
+        },
+        {
+          "metric": "accepted_issues",
+          "value": "10"
         },
         {
           "metric": "ncloc",
@@ -78,17 +86,15 @@
         },
         {
           "metric": "complexity",
-          "value": "35",
-          "period": {
-            "value": "0"
-          }
+          "value": "35"
+        },
+        {
+          "metric": "accepted_issues",
+          "value": "10"
         },
         {
           "metric": "ncloc",
-          "value": "217",
-          "period": {
-            "value": "0"
-          }
+          "value": "217"
         }
       ]
     }
@@ -102,8 +108,7 @@
       "type": "INT",
       "higherValuesAreBetter": false,
       "qualitative": false,
-      "hidden": false,
-      "custom": false
+      "hidden": false
     },
     {
       "key": "ncloc",
@@ -113,8 +118,7 @@
       "type": "INT",
       "higherValuesAreBetter": false,
       "qualitative": false,
-      "hidden": false,
-      "custom": false
+      "hidden": false
     },
     {
       "key": "new_violations",
@@ -125,8 +129,17 @@
       "higherValuesAreBetter": false,
       "qualitative": true,
       "hidden": false,
-      "custom": false,
       "bestValue": "0"
+    },
+    {
+      "key": "accepted_issues",
+      "name": "Accepted Issues",
+      "description": "Accepted issues",
+      "domain": "Issues",
+      "type": "INT",
+      "higherValuesAreBetter": false,
+      "qualitative": false,
+      "hidden": false
     }
   ],
   "period": {

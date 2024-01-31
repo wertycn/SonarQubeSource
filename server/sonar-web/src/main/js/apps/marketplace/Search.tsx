@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSearch, ToggleButton } from 'design-system';
 import * as React from 'react';
-import RadioToggle from 'sonar-ui-common/components/controls/RadioToggle';
-import SearchBox from 'sonar-ui-common/components/controls/SearchBox';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../helpers/l10n';
 import { Query } from './utils';
 
 interface Props {
@@ -45,22 +44,20 @@ export default class Search extends React.PureComponent<Props> {
         disabled: !updateCenterActive,
         label: translate('marketplace.updates_only'),
         tooltip: !updateCenterActive ? translate('marketplace.not_activated') : undefined,
-        value: 'updates'
-      }
+        value: 'updates',
+      },
     ];
     return (
-      <div className="big-spacer-bottom" id="marketplace-search">
-        <div className="display-inline-block text-top nowrap abs-width-240 spacer-right">
-          <RadioToggle
-            name="marketplace-filter"
-            onCheck={this.handleFilterChange}
-            options={radioOptions}
-            value={query.filter}
-          />
-        </div>
-        <SearchBox
+      <div className="sw-mt-6 sw-flex sw-gap-6" id="marketplace-search">
+        <ToggleButton
+          onChange={this.handleFilterChange}
+          options={radioOptions}
+          value={query.filter}
+        />
+        <InputSearch
           onChange={this.handleSearch}
           placeholder={translate('marketplace.search')}
+          size="large"
           value={query.search}
         />
       </div>

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,35 +24,32 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.sonar.process.LoggingRule;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.slf4j.event.Level.DEBUG;
 import static org.slf4j.event.Level.ERROR;
 
 public class HealthStateRefresherTest {
   @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-  @Rule
-  public LoggingRule logging = new LoggingRule(HealthStateRefresher.class);
+  public final LoggingRule logging = new LoggingRule(HealthStateRefresher.class);
 
-  private Random random = new Random();
-  private NodeDetailsTestSupport testSupport = new NodeDetailsTestSupport(random);
+  private final Random random = new Random();
+  private final NodeDetailsTestSupport testSupport = new NodeDetailsTestSupport(random);
 
-  private HealthStateRefresherExecutorService executorService = mock(HealthStateRefresherExecutorService.class);
-  private NodeHealthProvider nodeHealthProvider = mock(NodeHealthProvider.class);
-  private SharedHealthState sharedHealthState = mock(SharedHealthState.class);
-  private HealthStateRefresher underTest = new HealthStateRefresher(executorService, nodeHealthProvider, sharedHealthState);
+  private final HealthStateRefresherExecutorService executorService = mock(HealthStateRefresherExecutorService.class);
+  private final NodeHealthProvider nodeHealthProvider = mock(NodeHealthProvider.class);
+  private final SharedHealthState sharedHealthState = mock(SharedHealthState.class);
+  private final HealthStateRefresher underTest = new HealthStateRefresher(executorService, nodeHealthProvider, sharedHealthState);
 
   @Test
   public void start_adds_runnable_with_10_second_delay_and_initial_delay_putting_NodeHealth_from_provider_into_SharedHealthState() {
@@ -82,23 +79,32 @@ public class HealthStateRefresherTest {
     verify(sharedHealthState).writeMine(nodeHealths[1]);
     verify(sharedHealthState).writeMine(nodeHealths[2]);
 
-    try {
-      runnable.run();
-    } catch (IllegalStateException e) {
-      fail("Runnable should catch any Throwable");
-    }
+    assertThatCode(runnable::run)
+      .doesNotThrowAnyException();
   }
 
   @Test
-  public void stop_has_no_effect() {
+  public void stop_whenCalled_hasNoEffect() {
     underTest.stop();
 
     verify(sharedHealthState).clearMine();
-    verifyZeroInteractions(executorService, nodeHealthProvider);
+    verifyNoInteractions(executorService, nodeHealthProvider);
   }
 
   @Test
-  public void do_not_log_errors_when_hazelcast_is_not_active() {
+  public void stop_whenThrowHazelcastInactiveException_shouldSilenceError() {
+    logging.setLevel(DEBUG);
+    SharedHealthState sharedHealthStateMock = mock(SharedHealthState.class);
+    doThrow(HazelcastInstanceNotActiveException.class).when(sharedHealthStateMock).clearMine();
+    HealthStateRefresher underTest = new HealthStateRefresher(executorService, nodeHealthProvider, sharedHealthStateMock);
+    underTest.stop();
+
+    assertThat(logging.getLogs(ERROR)).isEmpty();
+    assertThat(logging.hasLog(DEBUG, "Hazelcast is not active anymore")).isTrue();
+  }
+
+  @Test
+  public void start_whenHazelcastIsNotActive_shouldNotLogErrors() {
     logging.setLevel(DEBUG);
     doThrow(new HazelcastInstanceNotActiveException()).when(sharedHealthState).writeMine(any());
 
@@ -110,6 +116,6 @@ public class HealthStateRefresherTest {
     runnable.run();
 
     assertThat(logging.getLogs(ERROR)).isEmpty();
-    assertThat(logging.hasLog(DEBUG, "Hazelcast is no more active")).isTrue();
+    assertThat(logging.hasLog(DEBUG, "Hazelcast is not active anymore")).isTrue();
   }
 }

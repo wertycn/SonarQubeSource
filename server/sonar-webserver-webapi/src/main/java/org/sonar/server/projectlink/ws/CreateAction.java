@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,14 +44,14 @@ import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class CreateAction implements ProjectLinksWsAction {
+  private static final int LINK_NAME_MAX_LENGTH = 128;
+  private static final int LINK_URL_MAX_LENGTH = 2048;
+  private static final int LINK_TYPE_MAX_LENGTH = 20;
+
   private final DbClient dbClient;
   private final UserSession userSession;
   private final ComponentFinder componentFinder;
   private final UuidFactory uuidFactory;
-
-  private static final int LINK_NAME_MAX_LENGTH = 128;
-  private static final int LINK_URL_MAX_LENGTH = 2048;
-  private static final int LINK_TYPE_MAX_LENGTH = 20;
 
   public CreateAction(DbClient dbClient, UserSession userSession, ComponentFinder componentFinder, UuidFactory uuidFactory) {
     this.dbClient = dbClient;
@@ -106,7 +106,7 @@ public class CreateAction implements ProjectLinksWsAction {
     try (DbSession dbSession = dbClient.openSession(false)) {
       ProjectDto project = getProject(dbSession, createWsRequest);
 
-      userSession.checkProjectPermission(UserRole.ADMIN, project);
+      userSession.checkEntityPermission(UserRole.ADMIN, project);
 
       ProjectLinkDto link = new ProjectLinkDto()
         .setUuid(uuidFactory.create())

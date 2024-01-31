@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,24 +23,21 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Arrays;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.server.platform.db.migration.version.DatabaseVersion;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.server.platform.db.migration.version.DatabaseVersion.Status.FRESH_INSTALL;
 import static org.sonar.server.platform.db.migration.version.DatabaseVersion.Status.UP_TO_DATE;
 
 @RunWith(DataProviderRunner.class)
 public class DatabaseCompatibilityTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private DatabaseVersion databaseVersion = mock(DatabaseVersion.class);
   private DatabaseCompatibility underTest = new DatabaseCompatibility(databaseVersion);
@@ -50,10 +47,9 @@ public class DatabaseCompatibilityTest {
   public void start_throws_ISE_if_status_is_not_UP_TO_DATE_nor_FRESH_INSTALL(DatabaseVersion.Status status) {
     when(databaseVersion.getStatus()).thenReturn(status);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Compute Engine can't start unless Database is up to date");
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Compute Engine can't start unless Database is up to date");
   }
 
   @DataProvider
@@ -88,6 +84,6 @@ public class DatabaseCompatibilityTest {
   public void stop_has_no_effect() {
     underTest.stop();
 
-    verifyZeroInteractions(databaseVersion);
+    verifyNoInteractions(databaseVersion);
   }
 }

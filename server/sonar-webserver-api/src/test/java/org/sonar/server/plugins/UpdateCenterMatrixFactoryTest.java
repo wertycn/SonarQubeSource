@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ package org.sonar.server.plugins;
 
 import java.util.Optional;
 import org.junit.Test;
-import org.sonar.api.SonarRuntime;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.updatecenter.common.UpdateCenter;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +38,7 @@ public class UpdateCenterMatrixFactoryTest {
     UpdateCenterClient updateCenterClient = mock(UpdateCenterClient.class);
     when(updateCenterClient.getUpdateCenter(anyBoolean())).thenReturn(Optional.empty());
 
-    underTest = new UpdateCenterMatrixFactory(updateCenterClient, mock(SonarRuntime.class), mock(InstalledPluginReferentialFactory.class));
+    underTest = new UpdateCenterMatrixFactory(updateCenterClient, mock(SonarQubeVersion.class), mock(InstalledPluginReferentialFactory.class));
 
     Optional<UpdateCenter> updateCenter = underTest.getUpdateCenter(false);
 

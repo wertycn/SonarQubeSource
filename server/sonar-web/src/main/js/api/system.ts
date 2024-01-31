@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,24 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON, requestTryAndRepeatUntil } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON, requestTryAndRepeatUntil } from '../helpers/request';
 import { SystemUpgrade } from '../types/system';
+import { SysInfoCluster, SysInfoStandalone, SysStatus } from '../types/types';
 
 export function setLogLevel(level: string): Promise<void | Response> {
   return post('/api/system/change_log_level', { level }).catch(throwGlobalError);
 }
 
-export function getSystemInfo(): Promise<T.SysInfoCluster | T.SysInfoStandalone> {
+export function getSystemInfo(): Promise<SysInfoCluster | SysInfoStandalone> {
   return getJSON('/api/system/info').catch(throwGlobalError);
 }
 
-export function getSystemStatus(): Promise<{ id: string; version: string; status: T.SysStatus }> {
+export function getSystemStatus(): Promise<{ id: string; version: string; status: SysStatus }> {
   return getJSON('/api/system/status');
 }
 
 export function getSystemUpgrades(): Promise<{
   upgrades: SystemUpgrade[];
+  latestLTS: string;
   updateCenterRefresh: string;
 }> {
   return getJSON('/api/system/upgrades');
@@ -63,11 +65,11 @@ export function restart(): Promise<void | Response> {
 export function waitSystemUPStatus(): Promise<{
   id: string;
   version: string;
-  status: T.SysStatus;
+  status: SysStatus;
 }> {
   return requestTryAndRepeatUntil(
     getSystemStatus,
     { max: -1, slowThreshold: -15 },
-    ({ status }) => status === 'UP'
+    ({ status }) => status === 'UP',
   );
 }

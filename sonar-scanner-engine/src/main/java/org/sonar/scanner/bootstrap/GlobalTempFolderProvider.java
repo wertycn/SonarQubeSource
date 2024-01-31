@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,16 @@
  */
 package org.sonar.scanner.bootstrap;
 
+import org.apache.commons.lang.StringUtils;
+import org.sonar.api.CoreProperties;
+import org.sonar.api.impl.utils.DefaultTempFolder;
+import org.sonar.api.utils.System2;
+import org.sonar.api.utils.TempFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import static org.sonar.core.util.FileUtils.deleteQuietly;
+import org.springframework.context.annotation.Bean;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -26,27 +36,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.TimeUnit;
-import org.apache.commons.lang.StringUtils;
-import org.picocontainer.ComponentLifecycle;
-import org.picocontainer.PicoContainer;
-import org.picocontainer.injectors.ProviderAdapter;
-import org.sonar.api.CoreProperties;
-import org.sonar.api.impl.utils.DefaultTempFolder;
-import org.sonar.api.utils.System2;
-import org.sonar.api.utils.TempFolder;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 
-import static org.sonar.core.util.FileUtils.deleteQuietly;
-
-public class GlobalTempFolderProvider extends ProviderAdapter implements ComponentLifecycle<TempFolder> {
-  private static final Logger LOG = Loggers.get(GlobalTempFolderProvider.class);
+public class GlobalTempFolderProvider {
+  private static final Logger LOG = LoggerFactory.getLogger(GlobalTempFolderProvider.class);
   private static final long CLEAN_MAX_AGE = TimeUnit.DAYS.toMillis(21);
   static final String TMP_NAME_PREFIX = ".sonartmp_";
-  private boolean started = false;
 
   private System2 system;
-  private DefaultTempFolder tempFolder;
 
   public GlobalTempFolderProvider() {
     this(new System2());
@@ -56,25 +52,24 @@ public class GlobalTempFolderProvider extends ProviderAdapter implements Compone
     this.system = system;
   }
 
+  @Bean("GlobalTempFolder")
   public TempFolder provide(ScannerProperties scannerProps) {
-    if (tempFolder == null) {
 
-      String workingPathName = StringUtils.defaultIfBlank(scannerProps.property(CoreProperties.GLOBAL_WORKING_DIRECTORY), CoreProperties.GLOBAL_WORKING_DIRECTORY_DEFAULT_VALUE);
-      Path workingPath = Paths.get(workingPathName);
+    String workingPathName = StringUtils.defaultIfBlank(scannerProps.property(CoreProperties.GLOBAL_WORKING_DIRECTORY), CoreProperties.GLOBAL_WORKING_DIRECTORY_DEFAULT_VALUE);
+    Path workingPath = Paths.get(workingPathName);
 
-      if (!workingPath.isAbsolute()) {
-        Path home = findSonarHome(scannerProps);
-        workingPath = home.resolve(workingPath).normalize();
-      }
-      try {
-        cleanTempFolders(workingPath);
-      } catch (IOException e) {
-        LOG.error(String.format("failed to clean global working directory: %s", workingPath), e);
-      }
-      Path tempDir = createTempFolder(workingPath);
-      tempFolder = new DefaultTempFolder(tempDir.toFile(), true);
+    if (!workingPath.isAbsolute()) {
+      Path home = findSonarHome(scannerProps);
+      workingPath = home.resolve(workingPath).normalize();
     }
-    return tempFolder;
+    try {
+      cleanTempFolders(workingPath);
+    } catch (IOException e) {
+      LOG.error(String.format("failed to clean global working directory: %s", workingPath), e);
+    }
+    Path tempDir = createTempFolder(workingPath);
+    return new DefaultTempFolder(tempDir.toFile(), true);
+
   }
 
   private static Path createTempFolder(Path workingPath) {
@@ -149,30 +144,4 @@ public class GlobalTempFolderProvider extends ProviderAdapter implements Compone
     }
   }
 
-  @Override
-  public void start(PicoContainer container) {
-    started = true;
-  }
-
-  @Override
-  public void stop(PicoContainer container) {
-    if (tempFolder != null) {
-      tempFolder.stop();
-    }
-  }
-
-  @Override
-  public void dispose(PicoContainer container) {
-    // nothing to do
-  }
-
-  @Override
-  public boolean componentHasLifecycle() {
-    return true;
-  }
-
-  @Override
-  public boolean isStarted() {
-    return started;
-  }
 }

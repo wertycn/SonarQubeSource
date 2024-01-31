@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,66 +17,82 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { MetricKey } from '../../types/metrics';
 import {
   QualityGateApplicationStatus,
   QualityGateProjectStatus,
+  QualityGateProjectStatusCondition,
   QualityGateStatus,
   QualityGateStatusCondition,
-  QualityGateStatusConditionEnhanced
+  QualityGateStatusConditionEnhanced,
 } from '../../types/quality-gates';
+import { CaycStatus, QualityGate } from '../../types/types';
 import { mockMeasureEnhanced, mockMetric } from '../testMocks';
 
-export function mockQualityGate(overrides: Partial<T.QualityGate> = {}): T.QualityGate {
+export function mockQualityGate(overrides: Partial<QualityGate> = {}): QualityGate {
   return {
-    id: '1',
     name: 'qualitygate',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockQualityGateStatus(
-  overrides: Partial<QualityGateStatus> = {}
+  overrides: Partial<QualityGateStatus> = {},
 ): QualityGateStatus {
   return {
     ignoredConditions: false,
+    caycStatus: CaycStatus.Compliant,
     failedConditions: [mockQualityGateStatusConditionEnhanced()],
     key: 'foo',
     name: 'Foo',
     status: 'ERROR',
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockQualityGateProjectCondition(
+  overrides: Partial<QualityGateProjectStatusCondition> = {},
+): QualityGateProjectStatusCondition {
+  return {
+    actualValue: '10',
+    errorThreshold: '0',
+    status: 'ERROR',
+    metricKey: 'foo',
+    comparator: 'GT',
+    periodIndex: 1,
+    ...overrides,
   };
 }
 
 export function mockQualityGateStatusCondition(
-  overrides: Partial<QualityGateStatusCondition> = {}
+  overrides: Partial<QualityGateStatusCondition> = {},
 ): QualityGateStatusCondition {
   return {
     actual: '10',
     error: '0',
     level: 'ERROR',
-    metric: 'foo',
+    metric: MetricKey.bugs,
     op: 'GT',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockQualityGateStatusConditionEnhanced(
-  overrides: Partial<QualityGateStatusConditionEnhanced> = {}
+  overrides: Partial<QualityGateStatusConditionEnhanced> = {},
 ): QualityGateStatusConditionEnhanced {
   return {
     actual: '10',
     error: '0',
     level: 'ERROR',
-    metric: 'foo',
+    metric: MetricKey.bugs,
     op: 'GT',
     measure: mockMeasureEnhanced({ ...(overrides.measure || {}) }),
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockQualityGateProjectStatus(
-  overrides: Partial<QualityGateProjectStatus> = {}
+  overrides: Partial<QualityGateProjectStatus> = {},
 ): QualityGateProjectStatus {
   return {
     conditions: [
@@ -86,17 +102,18 @@ export function mockQualityGateProjectStatus(
         errorThreshold: '1.0',
         metricKey: 'new_bugs',
         periodIndex: 1,
-        status: 'OK'
-      }
+        status: 'OK',
+      },
     ],
     ignoredConditions: false,
+    caycStatus: CaycStatus.Compliant,
     status: 'OK',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockQualityGateApplicationStatus(
-  overrides: Partial<QualityGateApplicationStatus> = {}
+  overrides: Partial<QualityGateApplicationStatus> = {},
 ): QualityGateApplicationStatus {
   return {
     metrics: [mockMetric(), mockMetric({ name: 'new_bugs', key: 'new_bugs', type: 'INT' })],
@@ -110,7 +127,7 @@ export function mockQualityGateApplicationStatus(
             errorThreshold: '1.0',
             metric: 'coverage',
             status: 'ERROR',
-            value: '10'
+            value: '10',
           },
           {
             comparator: 'GT',
@@ -118,10 +135,11 @@ export function mockQualityGateApplicationStatus(
             metric: 'new_bugs',
             periodIndex: 1,
             status: 'ERROR',
-            value: '5'
-          }
+            value: '5',
+          },
         ],
-        status: 'ERROR'
+        caycStatus: CaycStatus.Compliant,
+        status: 'ERROR',
       },
       {
         key: 'bar',
@@ -133,13 +151,14 @@ export function mockQualityGateApplicationStatus(
             metric: 'new_bugs',
             periodIndex: 1,
             status: 'ERROR',
-            value: '15'
-          }
+            value: '15',
+          },
         ],
-        status: 'ERROR'
-      }
+        caycStatus: CaycStatus.Compliant,
+        status: 'ERROR',
+      },
     ],
     status: 'ERROR',
-    ...overrides
+    ...overrides,
   };
 }

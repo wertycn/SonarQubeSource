@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -67,6 +67,10 @@ public class NewComponent {
   @CheckForNull
   public String description() {
     return description;
+  }
+
+  public boolean isProject() {
+    return PROJECT.equals(qualifier);
   }
 
   public static class Builder {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,16 +30,18 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.db.DBSessions;
 import org.sonar.server.authentication.UserSessionInitializer;
+import org.sonar.server.http.JavaxHttpRequest;
+import org.sonar.server.http.JavaxHttpResponse;
 import org.sonar.server.platform.Platform;
 import org.sonar.server.platform.PlatformImpl;
 import org.sonar.server.setting.ThreadLocalSettings;
 
 public class UserSessionFilter implements Filter {
-  private static final Logger LOG = Loggers.get(UserSessionFilter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UserSessionFilter.class);
   private final Platform platform;
 
   public UserSessionFilter() {
@@ -58,7 +60,7 @@ public class UserSessionFilter implements Filter {
 
     DBSessions dbSessions = platform.getContainer().getComponentByType(DBSessions.class);
     ThreadLocalSettings settings = platform.getContainer().getComponentByType(ThreadLocalSettings.class);
-    UserSessionInitializer userSessionInitializer = platform.getContainer().getComponentByType(UserSessionInitializer.class);
+    UserSessionInitializer userSessionInitializer = platform.getContainer().getOptionalComponentByType(UserSessionInitializer.class).orElse(null);
 
     LOG.trace("{} serves {}", Thread.currentThread(), request.getRequestURI());
     dbSessions.enableCaching();
@@ -77,7 +79,7 @@ public class UserSessionFilter implements Filter {
   private static void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
     @Nullable UserSessionInitializer userSessionInitializer) throws IOException, ServletException {
     try {
-      if (userSessionInitializer == null || userSessionInitializer.initUserSession(request, response)) {
+      if (userSessionInitializer == null || userSessionInitializer.initUserSession(new JavaxHttpRequest(request), new JavaxHttpResponse(response))) {
         chain.doFilter(request, response);
       }
     } finally {

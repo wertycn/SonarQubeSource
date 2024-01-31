@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.session.ResultHandler;
-import org.apache.ibatis.session.RowBounds;
+import org.sonar.db.Pagination;
 import org.sonar.db.permission.PermissionQuery;
 
 /**
@@ -36,23 +36,17 @@ public interface PermissionTemplateMapper {
 
   void update(PermissionTemplateDto permissionTemplate);
 
-  void deleteByUuid(String templateUuid);
-
-  void deleteByUuids(@Param("templateUuids") List<String> templateUuids);
+  int deleteByUuid(String templateUuid);
 
   void deleteUserPermissionsByTemplateUuid(String templateUuid);
 
-  void deleteUserPermissionsByTemplateUuids(@Param("templateUuids") List<String> templateUuids);
+  int deleteUserPermissionsByUserUuid(@Param("userUuid") String userUuid);
 
-  void deleteUserPermissionsByUserUuid(@Param("userUuid") String userUuid);
-
-  void deleteUserPermission(PermissionTemplateUserDto permissionTemplateUser);
+  int deleteUserPermission(PermissionTemplateUserDto permissionTemplateUser);
 
   void deleteGroupPermissionsByTemplateUuid(String templateUuid);
 
-  void deleteGroupPermissionsByTemplateUuids(@Param("templateUuids") List<String> templateUuids);
-
-  void deleteGroupPermission(PermissionTemplateGroupDto permissionTemplateGroup);
+  int deleteGroupPermission(PermissionTemplateGroupDto permissionTemplateGroup);
 
   PermissionTemplateDto selectByUuid(String templateUuid);
 
@@ -64,15 +58,15 @@ public interface PermissionTemplateMapper {
 
   void insertGroupPermission(PermissionTemplateGroupDto permissionTemplateGroup);
 
-  void deleteByGroupUuid(String groupUuid);
+  int deleteByGroupUuid(String groupUuid);
 
   PermissionTemplateDto selectByName(@Param("name") String name);
 
-  List<String> selectUserLoginsByQueryAndTemplate(@Param("query") PermissionQuery query, @Param("templateUuid") String templateUuid, RowBounds rowBounds);
+  List<String> selectUserLoginsByQueryAndTemplate(@Param("query") PermissionQuery query, @Param("templateUuid") String templateUuid, @Param("pagination") Pagination pagination);
 
   int countUserLoginsByQueryAndTemplate(@Param("query") PermissionQuery query, @Param("templateUuid") String templateUuid);
 
-  List<String> selectGroupNamesByQueryAndTemplate(@Param("templateUuid") String templateUuid, @Param("query") PermissionQuery query, RowBounds rowBounds);
+  List<String> selectGroupNamesByQueryAndTemplate(@Param("templateUuid") String templateUuid, @Param("query") PermissionQuery query, @Param("pagination") Pagination pagination);
 
   int countGroupNamesByQueryAndTemplate(@Param("query") PermissionQuery query, @Param("templateUuid") String templateUuid);
 
@@ -85,8 +79,6 @@ public interface PermissionTemplateMapper {
   List<String> selectPotentialPermissionsByUserUuidAndTemplateUuid(@Param("userUuid") @Nullable String currentUserUuid, @Param("templateUuid") String templateUuid);
 
   int countGroupsWithPermission(@Param("templateUuid") String templateUuid, @Param("permission") String permission, @Nullable @Param("groupUuid") String groupUuid);
-
-  List<String> selectTemplateUuids();
 
   List<PermissionTemplateGroupDto> selectAllGroupPermissionTemplatesByGroupUuid(@Param("groupUuid") String groupUuid);
 

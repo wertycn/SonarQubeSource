@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ import org.sonar.server.es.newindex.DefaultIndexSettings;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchQuery;
 import static org.elasticsearch.index.query.QueryBuilders.prefixQuery;
+import static org.elasticsearch.index.query.QueryBuilders.wildcardQuery;
 import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SEARCH_GRAMS_ANALYZER;
 import static org.sonar.server.es.newindex.DefaultIndexSettingsElement.SORTABLE_ANALYZER;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_KEY;
@@ -60,14 +61,14 @@ class ProjectsTextSearchQueryFactory {
       @Override
       QueryBuilder getQuery(String queryText) {
         return matchQuery(SORTABLE_ANALYZER.subField(FIELD_NAME), queryText)
-          .boost(2.5f);
+          .boost(2.5F);
       }
     },
     PREFIX {
       @Override
       QueryBuilder getQuery(String queryText) {
         return prefixAndPartialQuery(queryText, FIELD_NAME, FIELD_NAME)
-          .boost(2f);
+          .boost(2F);
       }
     },
     PREFIX_IGNORE_CASE {
@@ -75,7 +76,7 @@ class ProjectsTextSearchQueryFactory {
       QueryBuilder getQuery(String queryText) {
         String lowerCaseQueryText = queryText.toLowerCase(Locale.ENGLISH);
         return prefixAndPartialQuery(lowerCaseQueryText, SORTABLE_ANALYZER.subField(FIELD_NAME), FIELD_NAME)
-          .boost(3f);
+          .boost(3F);
       }
     },
     PARTIAL {
@@ -86,14 +87,15 @@ class ProjectsTextSearchQueryFactory {
           .map(text -> partialTermQuery(text, FIELD_NAME))
           .forEach(queryBuilder::must);
         return queryBuilder
-          .boost(0.5f);
+          .boost(0.5F);
       }
     },
     KEY {
       @Override
       QueryBuilder getQuery(String queryText) {
-        return matchQuery(SORTABLE_ANALYZER.subField(FIELD_KEY), queryText)
-          .boost(50f);
+        return wildcardQuery(SORTABLE_ANALYZER.subField(FIELD_KEY), "*" + queryText + "*")
+          .caseInsensitive(true)
+          .boost(50F);
       }
     };
 

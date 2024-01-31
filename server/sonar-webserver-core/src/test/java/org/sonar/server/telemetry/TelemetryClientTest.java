@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_COMPRESSION;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_URL;
 
 public class TelemetryClientTest {
@@ -48,6 +49,7 @@ public class TelemetryClientTest {
   public void upload() throws IOException {
     ArgumentCaptor<Request> requestCaptor = ArgumentCaptor.forClass(Request.class);
     settings.setProperty(SONAR_TELEMETRY_URL.getKey(), TELEMETRY_URL);
+    settings.setProperty(SONAR_TELEMETRY_COMPRESSION.getKey(), false);
     underTest.start();
 
     underTest.upload(JSON);
@@ -59,7 +61,7 @@ public class TelemetryClientTest {
     Buffer body = new Buffer();
     request.body().writeTo(body);
     assertThat(body.readUtf8()).isEqualTo(JSON);
-    assertThat(request.url().toString()).isEqualTo(TELEMETRY_URL);
+    assertThat(request.url()).hasToString(TELEMETRY_URL);
   }
 
   @Test
@@ -77,6 +79,6 @@ public class TelemetryClientTest {
     Buffer body = new Buffer();
     request.body().writeTo(body);
     assertThat(body.readUtf8()).isEqualTo(JSON);
-    assertThat(request.url().toString()).isEqualTo(TELEMETRY_URL);
+    assertThat(request.url()).hasToString(TELEMETRY_URL);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,5 +30,12 @@ public class MeasuresWsModule extends Module {
       ComponentAction.class,
       SearchAction.class,
       SearchHistoryAction.class);
+  }
+
+
+  public static String getDeprecatedMetricsInSonarQube93() {
+    return String.join(", ", "releasability_effort", "security_rating_effort", "reliability_rating_effort", "security_review_rating_effort",
+      "maintainability_rating_effort", "last_change_on_maintainability_rating", "last_change_on_releasability_rating", "last_change_on_reliability_rating",
+      "last_change_on_security_rating", "last_change_on_security_review_rating");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON, RequestData } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, RequestData } from '../helpers/request';
 import { BranchParameters } from '../types/branch-like';
-import { ComponentQualifier, TreeComponent, TreeComponentWithPath } from '../types/component';
+import {
+  ComponentQualifier,
+  TreeComponent,
+  TreeComponentWithPath,
+  Visibility,
+} from '../types/component';
+import {
+  ComponentMeasure,
+  Dict,
+  DuplicatedFile,
+  Duplication,
+  Metric,
+  MyProject,
+  Paging,
+  SourceLine,
+  SourceViewerFile,
+} from '../types/types';
 
 export interface BaseSearchProjectsParameters {
   analyzedBefore?: string;
@@ -28,55 +44,26 @@ export interface BaseSearchProjectsParameters {
   projects?: string;
   q?: string;
   qualifiers?: string;
-  visibility?: T.Visibility;
+  visibility?: Visibility;
 }
 
 export interface ProjectBase {
   key: string;
   name: string;
   qualifier: string;
-  visibility: T.Visibility;
+  visibility: Visibility;
 }
 
-export interface Project extends ProjectBase {
-  id: string;
-  lastAnalysisDate?: string;
-}
-
-export interface SearchProjectsParameters extends BaseSearchProjectsParameters {
-  p?: number;
-  ps?: number;
-}
-
-export function getComponents(
-  parameters: SearchProjectsParameters
-): Promise<{
-  components: Project[];
-  paging: T.Paging;
-}> {
-  return getJSON('/api/projects/search', parameters);
-}
-
-export function bulkDeleteProjects(
-  parameters: BaseSearchProjectsParameters
-): Promise<void | Response> {
-  return post('/api/projects/bulk_delete', parameters).catch(throwGlobalError);
-}
-
-export function deleteProject(project: string): Promise<void | Response> {
-  return post('/api/projects/delete', { project }).catch(throwGlobalError);
-}
-
-export function deletePortfolio(portfolio: string): Promise<void | Response> {
-  return post('/api/views/delete', { key: portfolio }).catch(throwGlobalError);
-}
-
-export function createProject(data: {
+export interface ComponentRaw {
+  key: string;
   name: string;
-  project: string;
-  visibility?: T.Visibility;
-}): Promise<{ project: ProjectBase }> {
-  return postJSON('/api/projects/create', data).catch(throwGlobalError);
+  isFavorite?: boolean;
+  analysisDate?: string;
+  qualifier: ComponentQualifier;
+  tags: string[];
+  visibility: Visibility;
+  leakPeriodDate?: string;
+  needIssueSync?: boolean;
 }
 
 export function searchProjectTags(data?: { ps?: number; q?: string }): Promise<any> {
@@ -95,12 +82,12 @@ export function getComponentTree(
   strategy: string,
   component: string,
   metrics: string[] = [],
-  additional: RequestData = {}
+  additional: RequestData = {},
 ): Promise<{
-  baseComponent: T.ComponentMeasure;
-  components: T.ComponentMeasure[];
-  metrics: T.Metric[];
-  paging: T.Paging;
+  baseComponent: ComponentMeasure;
+  components: ComponentMeasure[];
+  metrics: Metric[];
+  paging: Paging;
 }> {
   const url = '/api/measures/component_tree';
   const data = { ...additional, component, metricKeys: metrics.join(','), strategy };
@@ -110,7 +97,7 @@ export function getComponentTree(
 export function getChildren(
   component: string,
   metrics: string[] = [],
-  additional: RequestData = {}
+  additional: RequestData = {},
 ) {
   return getComponentTree('children', component, metrics, additional);
 }
@@ -118,18 +105,18 @@ export function getChildren(
 export function getComponentLeaves(
   component: string,
   metrics: string[] = [],
-  additional: RequestData = {}
+  additional: RequestData = {},
 ) {
   return getComponentTree('leaves', component, metrics, additional);
 }
 
 export function getComponent(
-  data: { component: string; metricKeys: string } & BranchParameters
-): Promise<{ component: T.ComponentMeasure }> {
+  data: { component: string; metricKeys: string } & BranchParameters,
+): Promise<{ component: ComponentMeasure }> {
   return getJSON('/api/measures/component', data);
 }
 
-type GetTreeParams = {
+export type GetTreeParams = {
   asc?: boolean;
   component: string;
   p?: number;
@@ -140,8 +127,8 @@ type GetTreeParams = {
 } & BranchParameters;
 
 export function getTree<T = TreeComponent>(
-  data: GetTreeParams & { qualifiers?: string }
-): Promise<{ baseComponent: TreeComponent; components: T[]; paging: T.Paging }> {
+  data: GetTreeParams & { qualifiers?: string },
+): Promise<{ baseComponent: TreeComponent; components: T[]; paging: Paging }> {
   return getJSON('/api/components/tree', data).catch(throwGlobalError);
 }
 
@@ -153,16 +140,19 @@ export function getDirectories(data: GetTreeParams) {
   return getTree<TreeComponentWithPath>({ ...data, qualifiers: 'DIR' });
 }
 
-export function getComponentData(data: { component: string } & BranchParameters): Promise<any> {
+export function getComponentData(data: { component: string } & BranchParameters): Promise<{
+  ancestors: Array<Omit<ComponentRaw, 'tags'>>;
+  component: Omit<ComponentRaw, 'tags'>;
+}> {
   return getJSON('/api/components/show', data);
 }
 
 export function doesComponentExists(
-  data: { component: string } & BranchParameters
+  data: { component: string } & BranchParameters,
 ): Promise<boolean> {
   return getComponentData(data).then(
     ({ component }) => component !== undefined,
-    () => false
+    () => false,
   );
 }
 
@@ -170,12 +160,10 @@ export function getComponentShow(data: { component: string } & BranchParameters)
   return getComponentData(data).catch(throwGlobalError);
 }
 
-export function getParents(component: string): Promise<any> {
-  return getComponentShow({ component }).then(r => r.ancestors);
-}
-
-export function getBreadcrumbs(data: { component: string } & BranchParameters): Promise<any> {
-  return getComponentShow(data).then(r => {
+export function getBreadcrumbs(
+  data: { component: string } & BranchParameters,
+): Promise<Array<Omit<ComponentRaw, 'tags'>>> {
+  return getComponentShow(data).then((r) => {
     const reversedAncestors = [...r.ancestors].reverse();
     return [...reversedAncestors, r.component];
   });
@@ -184,21 +172,8 @@ export function getBreadcrumbs(data: { component: string } & BranchParameters): 
 export function getMyProjects(data: {
   p?: number;
   ps?: number;
-}): Promise<{ paging: T.Paging; projects: T.MyProject[] }> {
+}): Promise<{ paging: Paging; projects: MyProject[] }> {
   return getJSON('/api/projects/search_my_projects', data);
-}
-
-export interface Component {
-  id: string;
-  key: string;
-  name: string;
-  isFavorite?: boolean;
-  analysisDate?: string;
-  qualifier: ComponentQualifier;
-  tags: string[];
-  visibility: T.Visibility;
-  leakPeriodDate?: string;
-  needIssueSync?: boolean;
 }
 
 export interface Facet {
@@ -206,12 +181,10 @@ export interface Facet {
   values: Array<{ val: string; count: number }>;
 }
 
-export function searchProjects(
-  data: RequestData
-): Promise<{
-  components: Component[];
+export function searchProjects(data: RequestData): Promise<{
+  components: ComponentRaw[];
   facets: Facet[];
-  paging: T.Paging;
+  paging: Paging;
 }> {
   const url = '/api/components/search_projects';
   return getJSON(url, data);
@@ -249,7 +222,7 @@ export interface SuggestionsResponse {
 export function getSuggestions(
   query?: string,
   recentlyBrowsed?: string[],
-  more?: string
+  more?: string,
 ): Promise<SuggestionsResponse> {
   const data: RequestData = {};
   if (query) {
@@ -265,25 +238,34 @@ export function getSuggestions(
 }
 
 export function getComponentForSourceViewer(
-  data: { component: string } & BranchParameters
-): Promise<T.SourceViewerFile> {
+  data: { component: string } & BranchParameters,
+): Promise<SourceViewerFile> {
   return getJSON('/api/components/app', data);
 }
 
 export function getSources(
-  data: { key: string; from?: number; to?: number } & BranchParameters
-): Promise<T.SourceLine[]> {
-  return getJSON('/api/sources/lines', data).then(r => r.sources);
+  data: { key: string; from?: number; to?: number } & BranchParameters,
+): Promise<SourceLine[]> {
+  return getJSON('/api/sources/lines', data).then((r) => r.sources);
 }
 
 export function getDuplications(
-  data: { key: string } & BranchParameters
-): Promise<{ duplications: T.Duplication[]; files: T.Dict<T.DuplicatedFile> }> {
+  data: { key: string } & BranchParameters,
+): Promise<{ duplications: Duplication[]; files: Dict<DuplicatedFile> }> {
   return getJSON('/api/duplications/show', data).catch(throwGlobalError);
 }
 
 export function getTests(
-  data: { sourceFileKey: string; sourceFileLineNumber: number | string } & BranchParameters
+  data: { sourceFileKey: string; sourceFileLineNumber: number | string } & BranchParameters,
 ): Promise<any> {
-  return getJSON('/api/tests/list', data).then(r => r.tests);
+  return getJSON('/api/tests/list', data).then((r) => r.tests);
+}
+
+interface ProjectResponse {
+  key: string;
+  name: string;
+}
+
+export function getScannableProjects(): Promise<{ projects: ProjectResponse[] }> {
+  return getJSON('/api/projects/search_my_scannable_projects').catch(throwGlobalError);
 }

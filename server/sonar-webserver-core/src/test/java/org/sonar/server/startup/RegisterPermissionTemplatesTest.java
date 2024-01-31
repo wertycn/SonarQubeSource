@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,15 +24,13 @@ import java.util.Objects;
 import java.util.Optional;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.slf4j.event.Level;
 import org.sonar.api.security.DefaultGroups;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.api.web.UserRole;
 import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbTester;
-import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.permission.template.PermissionTemplateDto;
 import org.sonar.db.permission.template.PermissionTemplateGroupDto;
 import org.sonar.db.user.GroupDto;
@@ -48,8 +46,6 @@ public class RegisterPermissionTemplatesTest {
   public DbTester db = DbTester.create(System2.INSTANCE);
   @Rule
   public LogTester logTester = new LogTester();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private RegisterPermissionTemplates underTest = new RegisterPermissionTemplates(db.getDbClient(), UuidFactoryFast.getInstance(), System2.INSTANCE, new DefaultGroupFinder(db.getDbClient()));
 
@@ -64,10 +60,8 @@ public class RegisterPermissionTemplatesTest {
     assertThat(defaultTemplate.getName()).isEqualTo("Default template");
 
     List<PermissionTemplateGroupDto> groupPermissions = selectGroupPermissions(defaultTemplate);
-    assertThat(groupPermissions).hasSize(7);
+    assertThat(groupPermissions).hasSize(5);
     expectGroupPermission(groupPermissions, UserRole.ADMIN, DefaultGroups.ADMINISTRATORS);
-    expectGroupPermission(groupPermissions, GlobalPermission.APPLICATION_CREATOR.getKey(), DefaultGroups.ADMINISTRATORS);
-    expectGroupPermission(groupPermissions, GlobalPermission.PORTFOLIO_CREATOR.getKey(), DefaultGroups.ADMINISTRATORS);
     expectGroupPermission(groupPermissions, UserRole.CODEVIEWER, defaultGroup.getName());
     expectGroupPermission(groupPermissions, UserRole.USER, defaultGroup.getName());
     expectGroupPermission(groupPermissions, UserRole.ISSUE_ADMIN, defaultGroup.getName());
@@ -75,7 +69,7 @@ public class RegisterPermissionTemplatesTest {
 
     verifyDefaultTemplateForProject(defaultTemplate.getUuid());
 
-    assertThat(logTester.logs(LoggerLevel.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
   }
 
   @Test
@@ -96,7 +90,7 @@ public class RegisterPermissionTemplatesTest {
 
     verifyDefaultTemplateForProject(defaultTemplate.getUuid());
 
-    assertThat(logTester.logs(LoggerLevel.ERROR)).contains("Cannot setup default permission for group: sonar-administrators");
+    assertThat(logTester.logs(Level.ERROR)).contains("Cannot setup default permission for group: sonar-administrators");
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,11 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.process.cluster.health.NodeHealth;
 import org.sonar.process.cluster.health.SharedHealthState;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.common.health.ClusterHealthCheck;
+import org.sonar.server.common.health.HealthReducer;
+import org.sonar.server.common.health.NodeHealthCheck;
+import org.sonar.server.platform.NodeInformation;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.copyOf;
@@ -35,25 +39,27 @@ import static com.google.common.collect.ImmutableList.copyOf;
  * available in the container.
  */
 public class HealthCheckerImpl implements HealthChecker {
-  private final WebServer webServer;
+  private final NodeInformation nodeInformation;
   private final List<NodeHealthCheck> nodeHealthChecks;
   private final List<ClusterHealthCheck> clusterHealthChecks;
   @CheckForNull
   private final SharedHealthState sharedHealthState;
 
   /**
-   * Constructor used by Pico in standalone mode and in safe mode.
+   * Constructor used by the ioc container in standalone mode and in safe mode.
    */
-  public HealthCheckerImpl(WebServer webServer, NodeHealthCheck[] nodeHealthChecks) {
-    this(webServer, nodeHealthChecks, new ClusterHealthCheck[0], null);
+  @Autowired(required = false)
+  public HealthCheckerImpl(NodeInformation nodeInformation, NodeHealthCheck[] nodeHealthChecks) {
+    this(nodeInformation, nodeHealthChecks, new ClusterHealthCheck[0], null);
   }
 
   /**
-   * Constructor used by Pico in cluster mode.
+   * Constructor used by the ioc container in cluster mode.
    */
-  public HealthCheckerImpl(WebServer webServer, NodeHealthCheck[] nodeHealthChecks, ClusterHealthCheck[] clusterHealthChecks,
+  @Autowired(required = false)
+  public HealthCheckerImpl(NodeInformation nodeInformation, NodeHealthCheck[] nodeHealthChecks, ClusterHealthCheck[] clusterHealthChecks,
     @Nullable SharedHealthState sharedHealthState) {
-    this.webServer = webServer;
+    this.nodeInformation = nodeInformation;
     this.nodeHealthChecks = copyOf(nodeHealthChecks);
     this.clusterHealthChecks = copyOf(clusterHealthChecks);
     this.sharedHealthState = sharedHealthState;
@@ -63,18 +69,18 @@ public class HealthCheckerImpl implements HealthChecker {
   public Health checkNode() {
     return nodeHealthChecks.stream()
       .map(NodeHealthCheck::check)
-      .reduce(Health.GREEN, HealthReducer.INSTANCE);
+      .reduce(Health.GREEN, HealthReducer::merge);
   }
 
   @Override
   public ClusterHealth checkCluster() {
-    checkState(!webServer.isStandalone(), "Clustering is not enabled");
+    checkState(!nodeInformation.isStandalone(), "Clustering is not enabled");
     checkState(sharedHealthState != null, "HealthState instance can't be null when clustering is enabled");
 
     Set<NodeHealth> nodeHealths = sharedHealthState.readAll();
     Health health = clusterHealthChecks.stream()
       .map(clusterHealthCheck -> clusterHealthCheck.check(nodeHealths))
-      .reduce(Health.GREEN, HealthReducer.INSTANCE);
+      .reduce(Health.GREEN, HealthReducer::merge);
     return new ClusterHealth(health, nodeHealths);
   }
 

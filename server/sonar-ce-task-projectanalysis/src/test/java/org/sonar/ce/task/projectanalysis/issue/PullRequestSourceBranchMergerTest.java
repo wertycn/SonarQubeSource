@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,7 +36,7 @@ import org.sonar.core.issue.tracking.Tracker;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -76,7 +76,7 @@ public class PullRequestSourceBranchMergerTest {
   public DbTester db = DbTester.create();
 
   private PullRequestSourceBranchMerger underTest;
-  private RuleDefinitionDto rule;
+  private RuleDto rule;
   private DefaultIssue rawIssue;
   private Input<DefaultIssue> rawIssuesInput;
 
@@ -88,7 +88,7 @@ public class PullRequestSourceBranchMergerTest {
       issueLifecycle,
       sourceBranchInputFactory);
 
-    ComponentDto projectDto = db.components().insertPublicProject(p -> p.setDbKey(PROJECT_KEY).setUuid(PROJECT_UUID));
+    ComponentDto projectDto = db.components().insertPublicProject(p -> p.setKey(PROJECT_KEY).setUuid(PROJECT_UUID).setBranchUuid(PROJECT_UUID)).getMainBranchComponent();
     ComponentDto branch1Dto = db.components().insertProjectBranch(projectDto, b -> b.setKey("myBranch1")
       .setBranchType(BranchType.PULL_REQUEST)
       .setMergeBranchUuid(projectDto.uuid()));
@@ -98,9 +98,9 @@ public class PullRequestSourceBranchMergerTest {
     ComponentDto branch3Dto = db.components().insertProjectBranch(projectDto, b -> b.setKey("myBranch3")
       .setBranchType(BranchType.PULL_REQUEST)
       .setMergeBranchUuid(projectDto.uuid()));
-    db.components().insertComponent(newFileDto(branch1Dto).setDbKey(FILE_1_KEY + ":PULL_REQUEST:myBranch1"));
-    db.components().insertComponent(newFileDto(branch2Dto).setDbKey(FILE_1_KEY + ":PULL_REQUEST:myBranch2"));
-    db.components().insertComponent(newFileDto(branch3Dto).setDbKey(FILE_1_KEY + ":PULL_REQUEST:myBranch3"));
+    db.components().insertComponent(newFileDto(branch1Dto, projectDto.uuid()).setKey(FILE_1_KEY + ":PULL_REQUEST:myBranch1"));
+    db.components().insertComponent(newFileDto(branch2Dto, projectDto.uuid()).setKey(FILE_1_KEY + ":PULL_REQUEST:myBranch2"));
+    db.components().insertComponent(newFileDto(branch3Dto, projectDto.uuid()).setKey(FILE_1_KEY + ":PULL_REQUEST:myBranch3"));
     rule = db.rules().insert();
     rawIssue = createIssue("issue1", rule.getKey(), Issue.STATUS_OPEN, new Date());
     rawIssuesInput = new DefaultTrackingInput(singletonList(rawIssue), mock(LineHashSequence.class), mock(BlockHashSequence.class));

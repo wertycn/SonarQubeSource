@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,11 @@
  */
 import * as React from 'react';
 import { AutoSizer } from 'react-virtualized/dist/commonjs/AutoSizer';
-import ZoomTimeLine from 'sonar-ui-common/components/charts/ZoomTimeLine';
+import { ZoomTimeLine } from '../../components/charts/ZoomTimeLine';
 import { Serie } from '../../types/project-activity';
 import { hasHistoryData } from './utils';
 
-interface Props {
+interface GraphsZoomProps {
   graphEndDate?: Date;
   graphStartDate?: Date;
   leakPeriodDate?: Date;
@@ -31,28 +31,43 @@ interface Props {
   metricsType: string;
   series: Serie[];
   showAreas?: boolean;
-  updateGraphZoom: (from?: Date, to?: Date) => void;
+  onUpdateGraphZoom: (from?: Date, to?: Date) => void;
 }
 
-export default function GraphsZoom(props: Props) {
-  if (props.loading || !hasHistoryData(props.series)) {
+const ZOOM_TIMELINE_PADDING_TOP = 0;
+const ZOOM_TIMELINE_PADDING_RIGHT = 10;
+const ZOOM_TIMELINE_PADDING_BOTTOM = 18;
+const ZOOM_TIMELINE_PADDING_LEFT = 60;
+const ZOOM_TIMELINE_HEIGHT = 64;
+
+export default function GraphsZoom(props: GraphsZoomProps) {
+  const { loading, series, graphEndDate, leakPeriodDate, metricsType, showAreas, graphStartDate } =
+    props;
+
+  if (loading || !hasHistoryData(series)) {
     return null;
   }
 
   return (
-    <div className="activity-graph-zoom">
-      <AutoSizer disableHeight={true}>
+    // We hide this for screen readers; they should use date inputs instead.
+    <div className="activity-graph-zoom" aria-hidden>
+      <AutoSizer disableHeight>
         {({ width }) => (
           <ZoomTimeLine
-            endDate={props.graphEndDate}
-            height={64}
-            leakPeriodDate={props.leakPeriodDate}
-            metricType={props.metricsType}
-            padding={[0, 10, 18, 60]}
-            series={props.series}
-            showAreas={props.showAreas}
-            startDate={props.graphStartDate}
-            updateZoom={props.updateGraphZoom}
+            endDate={graphEndDate}
+            height={ZOOM_TIMELINE_HEIGHT}
+            leakPeriodDate={leakPeriodDate}
+            metricType={metricsType}
+            padding={[
+              ZOOM_TIMELINE_PADDING_TOP,
+              ZOOM_TIMELINE_PADDING_RIGHT,
+              ZOOM_TIMELINE_PADDING_BOTTOM,
+              ZOOM_TIMELINE_PADDING_LEFT,
+            ]}
+            series={series}
+            showAreas={showAreas}
+            startDate={graphStartDate}
+            updateZoom={props.onUpdateGraphZoom}
             width={width}
           />
         )}

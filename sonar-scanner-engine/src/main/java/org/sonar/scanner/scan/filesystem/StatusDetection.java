@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import org.apache.commons.lang.StringUtils;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.scanner.repository.FileData;
-import org.sonar.scanner.repository.ProjectRepositoriesSupplier;
+import org.sonar.scanner.repository.ProjectRepositories;
 import org.sonar.scanner.scm.ScmChangedFiles;
 
 import static org.sonar.api.batch.fs.InputFile.Status.ADDED;
@@ -33,23 +33,35 @@ import static org.sonar.api.batch.fs.InputFile.Status.SAME;
 
 @Immutable
 public class StatusDetection {
-  private final ProjectRepositoriesSupplier projectSettingsSupplier;
+  private final ProjectRepositories projectRepositories;
   private final ScmChangedFiles scmChangedFiles;
 
-  public StatusDetection(ProjectRepositoriesSupplier projectSettingsSupplier, ScmChangedFiles scmChangedFiles) {
-    this.projectSettingsSupplier = projectSettingsSupplier;
+  public StatusDetection(ProjectRepositories projectRepositories, ScmChangedFiles scmChangedFiles) {
+    this.projectRepositories = projectRepositories;
     this.scmChangedFiles = scmChangedFiles;
   }
 
+  public boolean isScmStatusAvailable() {
+    return scmChangedFiles.isValid();
+  }
+
   InputFile.Status status(String moduleKeyWithBranch, DefaultInputFile inputFile, String hash) {
-    if (scmChangedFiles.isValid()) {
-      return checkChangedWithScm(inputFile);
+    InputFile.Status statusFromScm = findStatusFromScm(inputFile);
+    if (statusFromScm != null) {
+      return statusFromScm;
     }
     return checkChangedWithProjectRepositories(moduleKeyWithBranch, inputFile, hash);
   }
 
+  InputFile.Status findStatusFromScm(DefaultInputFile inputFile) {
+    if (isScmStatusAvailable()) {
+      return checkChangedWithScm(inputFile);
+    }
+    return null;
+  }
+
   private InputFile.Status checkChangedWithProjectRepositories(String moduleKeyWithBranch, DefaultInputFile inputFile, String hash) {
-    FileData fileDataPerPath = projectSettingsSupplier.get().fileData(moduleKeyWithBranch, inputFile);
+    FileData fileDataPerPath = projectRepositories.fileData(moduleKeyWithBranch, inputFile);
     if (fileDataPerPath == null) {
       return ADDED;
     }

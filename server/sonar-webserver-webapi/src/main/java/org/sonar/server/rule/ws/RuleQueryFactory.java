@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  */
 package org.sonar.server.rule.ws;
 
-import com.google.common.collect.ImmutableList;
 import java.util.Date;
+import java.util.List;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ServerSide;
@@ -36,13 +36,17 @@ import static org.sonar.server.rule.ws.EnumUtils.toEnums;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVATION;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_ACTIVE_SEVERITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_AVAILABLE_SINCE;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_CLEAN_CODE_ATTRIBUTE_CATEGORIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_COMPARE_TO_PROFILE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_CWE;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IMPACT_SEVERITIES;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IMPACT_SOFTWARE_QUALITIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_INCLUDE_EXTERNAL;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_INHERITANCE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_IS_TEMPLATE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_LANGUAGES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_OWASP_TOP_10;
+import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_OWASP_TOP_10_2021;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_QPROFILE;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_REPOSITORIES;
 import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_RULE_KEY;
@@ -56,7 +60,6 @@ import static org.sonar.server.rule.ws.RulesWsParameters.PARAM_TYPES;
 
 @ServerSide
 public class RuleQueryFactory {
-
   private final DbClient dbClient;
 
   public RuleQueryFactory(DbClient dbClient) {
@@ -90,7 +93,7 @@ public class RuleQueryFactory {
     setProfile(dbSession, query, request);
     setCompareToProfile(dbSession, query, request);
     QProfileDto profile = query.getQProfile();
-    query.setLanguages(profile == null ? request.paramAsStrings(PARAM_LANGUAGES) : ImmutableList.of(profile.getLanguage()));
+    query.setLanguages(profile == null ? request.paramAsStrings(PARAM_LANGUAGES) : List.of(profile.getLanguage()));
     query.setActivation(request.paramAsBoolean(PARAM_ACTIVATION));
     query.setTags(request.paramAsStrings(PARAM_TAGS));
     query.setInheritance(request.paramAsStrings(PARAM_INHERITANCE));
@@ -101,8 +104,12 @@ public class RuleQueryFactory {
     query.setKey(request.param(PARAM_RULE_KEY));
     query.setCwe(request.paramAsStrings(PARAM_CWE));
     query.setOwaspTop10(request.paramAsStrings(PARAM_OWASP_TOP_10));
+    query.setOwaspTop10For2021(request.paramAsStrings(PARAM_OWASP_TOP_10_2021));
     query.setSansTop25(request.paramAsStrings(PARAM_SANS_TOP_25));
     query.setSonarsourceSecurity(request.paramAsStrings(PARAM_SONARSOURCE_SECURITY));
+    query.setCleanCodeAttributesCategories(request.paramAsStrings(PARAM_CLEAN_CODE_ATTRIBUTE_CATEGORIES));
+    query.setImpactSeverities(request.paramAsStrings(PARAM_IMPACT_SEVERITIES));
+    query.setImpactSoftwareQualities(request.paramAsStrings(PARAM_IMPACT_SOFTWARE_QUALITIES));
 
     String sortParam = request.param(WebService.Param.SORT);
     if (sortParam != null) {

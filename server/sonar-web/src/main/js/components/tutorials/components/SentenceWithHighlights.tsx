@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,8 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { Dict } from '../../../types/types';
 
 export interface SentenceWithHighlightsProps {
   highlightKeys: string[];
@@ -30,13 +31,17 @@ export interface SentenceWithHighlightsProps {
 export default function SentenceWithHighlights({
   highlightKeys,
   translationKey,
-  highlightPrefixKeys
+  highlightPrefixKeys,
 }: SentenceWithHighlightsProps) {
-  const values: T.Dict<JSX.Element> = {};
+  const values: Dict<JSX.Element> = {};
 
   const transhighlightPrefixKeys = highlightPrefixKeys || translationKey;
-  highlightKeys.forEach(key => {
-    values[key] = <strong>{translate(transhighlightPrefixKeys, 'sentence', key)}</strong>;
+  highlightKeys.forEach((key) => {
+    values[key] = (
+      <strong className="sw-font-semibold">
+        {translate(transhighlightPrefixKeys, 'sentence', key)}
+      </strong>
+    );
   });
   return (
     <FormattedMessage

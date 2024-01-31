@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,74 +17,65 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { mount } from 'enzyme';
 import * as React from 'react';
+import { useContext } from 'react';
+import { mockAppState } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { byText } from '../../../../helpers/testSelector';
 import { IndexationStatus } from '../../../../types/indexation';
 import { IndexationContext } from '../IndexationContext';
-import { IndexationContextProvider } from '../IndexationContextProvider';
+import {
+  IndexationContextProvider,
+  IndexationContextProviderProps,
+} from '../IndexationContextProvider';
 import IndexationNotificationHelper from '../IndexationNotificationHelper';
 
 beforeEach(() => jest.clearAllMocks());
 
 jest.mock('../IndexationNotificationHelper');
 
-it('should render correctly and start polling if issue sync is needed', () => {
-  const wrapper = mountRender();
-
-  expect(wrapper).toMatchSnapshot();
+it('should render correctly, start polling if issue sync is needed and stop when unmounted', () => {
+  const { unmount } = renderIndexationContextProvider();
   expect(IndexationNotificationHelper.startPolling).toHaveBeenCalled();
-});
-
-it('should not start polling if no issue sync is needed', () => {
-  const wrapper = mountRender({ appState: { needIssueSync: false } });
-
-  expect(IndexationNotificationHelper.startPolling).not.toHaveBeenCalled();
-
-  const expectedStatus: IndexationStatus = {
-    isCompleted: true,
-    percentCompleted: 100,
-    hasFailures: false
-  };
-  expect(wrapper.state().status).toEqual(expectedStatus);
-});
-
-it('should update the state on new status', () => {
-  const wrapper = mountRender();
-
-  const triggerNewStatus = (IndexationNotificationHelper.startPolling as jest.Mock).mock
-    .calls[0][0] as (status: IndexationStatus) => void;
-  const newStatus: IndexationStatus = {
-    isCompleted: true,
-    percentCompleted: 100,
-    hasFailures: false
-  };
-
-  triggerNewStatus(newStatus);
-
-  expect(wrapper.state().status).toEqual(newStatus);
-});
-
-it('should stop polling when component is destroyed', () => {
-  const wrapper = mountRender();
-
-  wrapper.unmount();
-
+  unmount();
   expect(IndexationNotificationHelper.stopPolling).toHaveBeenCalled();
 });
 
-function mountRender(props?: IndexationContextProvider['props']) {
-  return mount<IndexationContextProvider>(
-    <IndexationContextProvider appState={{ needIssueSync: true }} {...props}>
+it('should not start polling if no issue sync is needed', () => {
+  const appState = mockAppState({ needIssueSync: false });
+  renderIndexationContextProvider({ appState });
+  expect(IndexationNotificationHelper.startPolling).not.toHaveBeenCalled();
+});
+
+it('should update the state on new status', async () => {
+  renderIndexationContextProvider();
+
+  const triggerNewStatus = jest.mocked(IndexationNotificationHelper.startPolling).mock
+    .calls[0][0] as (status: IndexationStatus) => void;
+
+  const newStatus: IndexationStatus = {
+    hasFailures: false,
+    isCompleted: true,
+  };
+
+  expect(byText('null').get()).toBeInTheDocument();
+
+  triggerNewStatus(newStatus);
+
+  expect(
+    await byText('{"status":{"hasFailures":false,"isCompleted":true}}').find(),
+  ).toBeInTheDocument();
+});
+
+function renderIndexationContextProvider(props?: IndexationContextProviderProps) {
+  return renderComponent(
+    <IndexationContextProvider appState={mockAppState({ needIssueSync: true, ...props?.appState })}>
       <TestComponent />
-    </IndexationContextProvider>
+    </IndexationContextProvider>,
   );
 }
 
-class TestComponent extends React.PureComponent {
-  context!: IndexationStatus;
-  static contextType = IndexationContext;
-
-  render() {
-    return <h1>TestComponent</h1>;
-  }
+function TestComponent() {
+  const state = useContext(IndexationContext);
+  return <div>{JSON.stringify(state)}</div>;
 }

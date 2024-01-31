@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { uniqueId } from 'lodash';
 import { ComponentQualifier } from '../../types/component';
 import { Task, TaskStatuses, TaskTypes, TaskWarning } from '../../types/tasks';
 
@@ -30,15 +31,15 @@ export function mockTask(overrides: Partial<Task> = {}): Task {
     status: TaskStatuses.Pending,
     submittedAt: '2020-09-11T11:45:35+0200',
     type: TaskTypes.Report,
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockTaskWarning(overrides: Partial<TaskWarning> = {}): TaskWarning {
   return {
-    key: 'foo',
+    key: uniqueId('foo'),
     message: 'Lorem ipsum',
     dismissable: false,
-    ...overrides
+    ...overrides,
   };
 }

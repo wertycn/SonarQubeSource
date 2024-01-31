@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,94 +17,74 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  Avatar,
+  BareButton,
+  ButtonSecondary,
+  Dropdown,
+  PopupPlacement,
+  PopupZLevel,
+} from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import Dropdown from 'sonar-ui-common/components/controls/Dropdown';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
-import { Router, withRouter } from '../../../../components/hoc/withRouter';
-import Avatar from '../../../../components/ui/Avatar';
-import { isLoggedIn } from '../../../../helpers/users';
-import { rawSizes } from '../../../theme';
+import Tooltip from '../../../../components/controls/Tooltip';
+import { translate } from '../../../../helpers/l10n';
+import { getBaseUrl } from '../../../../helpers/system';
+import { GlobalSettingKeys } from '../../../../types/settings';
+import { isLoggedIn } from '../../../../types/users';
+import { AppStateContext } from '../../app-state/AppStateContext';
+import { CurrentUserContext } from '../../current-user/CurrentUserContext';
+import { GlobalNavUserMenu } from './GlobalNavUserMenu';
 
-interface Props {
-  currentUser: T.CurrentUser;
-  router: Pick<Router, 'push'>;
-}
+export function GlobalNavUser() {
+  const userContext = React.useContext(CurrentUserContext);
+  const currentUser = userContext?.currentUser;
 
-export class GlobalNavUser extends React.PureComponent<Props> {
-  handleLogin = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    const shouldReturnToCurrentPage = window.location.pathname !== `${getBaseUrl()}/about`;
-    if (shouldReturnToCurrentPage) {
-      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href =
-        getBaseUrl() + `/sessions/new?return_to=${returnTo}${window.location.hash}`;
-    } else {
-      window.location.href = `${getBaseUrl()}/sessions/new`;
-    }
-  };
+  const { settings } = React.useContext(AppStateContext);
 
-  handleLogout = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    this.props.router.push('/sessions/logout');
-  };
+  const handleLogin = React.useCallback(() => {
+    const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `${getBaseUrl()}/sessions/new?return_to=${returnTo}${
+      window.location.hash
+    }`;
+  }, []);
 
-  renderAuthenticated() {
-    const currentUser = this.props.currentUser as T.LoggedInUser;
+  if (!currentUser || !isLoggedIn(currentUser)) {
     return (
-      <Dropdown
-        className="js-user-authenticated"
-        overlay={
-          <ul className="menu">
-            <li className="menu-item">
-              <div className="text-ellipsis text-muted" title={currentUser.name}>
-                <strong>{currentUser.name}</strong>
-              </div>
-              {currentUser.email != null && (
-                <div
-                  className="little-spacer-top text-ellipsis text-muted"
-                  title={currentUser.email}>
-                  {currentUser.email}
-                </div>
-              )}
-            </li>
-            <li className="divider" />
-            <li>
-              <Link to="/account">{translate('my_account.page')}</Link>
-            </li>
-            <li>
-              <a href="#" onClick={this.handleLogout}>
-                {translate('layout.logout')}
-              </a>
-            </li>
-          </ul>
-        }
-        tagName="li">
-        <a className="dropdown-toggle navbar-avatar" href="#" title={currentUser.name}>
-          <Avatar
-            hash={currentUser.avatar}
-            name={currentUser.name}
-            size={rawSizes.globalNavContentHeightRaw}
-          />
-        </a>
-      </Dropdown>
+      <div>
+        <ButtonSecondary onClick={handleLogin}>{translate('layout.login')}</ButtonSecondary>
+      </div>
     );
   }
 
-  renderAnonymous() {
-    return (
-      <li>
-        <a className="navbar-login" href="/sessions/new" onClick={this.handleLogin}>
-          {translate('layout.login')}
-        </a>
-      </li>
-    );
-  }
+  const enableGravatar = settings[GlobalSettingKeys.EnableGravatar] === 'true';
+  const gravatarServerUrl = settings[GlobalSettingKeys.GravatarServerUrl] ?? '';
 
-  render() {
-    return isLoggedIn(this.props.currentUser) ? this.renderAuthenticated() : this.renderAnonymous();
-  }
+  return (
+    <Dropdown
+      id="userAccountMenuDropdown"
+      placement={PopupPlacement.BottomRight}
+      zLevel={PopupZLevel.Global}
+      overlay={<GlobalNavUserMenu currentUser={currentUser} />}
+    >
+      {({ a11yAttrs: { role, ...a11yAttrs }, onToggleClick, open }) => (
+        <Tooltip
+          mouseEnterDelay={0.2}
+          overlay={!open ? translate('global_nav.account.tooltip') : undefined}
+        >
+          <BareButton
+            aria-label={translate('global_nav.account.tooltip')}
+            onClick={onToggleClick}
+            {...a11yAttrs}
+          >
+            <Avatar
+              enableGravatar={enableGravatar}
+              gravatarServerUrl={gravatarServerUrl}
+              hash={currentUser.avatar}
+              name={currentUser.name}
+            />
+          </BareButton>
+        </Tooltip>
+      )}
+    </Dropdown>
+  );
 }
-
-export default withRouter(GlobalNavUser);

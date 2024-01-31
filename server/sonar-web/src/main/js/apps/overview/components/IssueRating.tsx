@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,64 +17,68 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+/* eslint-disable react/no-unused-prop-types */
+
+import { DiscreetLinkBox, MetricsRatingBadge } from 'design-system';
 import * as React from 'react';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import Rating from 'sonar-ui-common/components/ui/Rating';
-import { getLeakValue, getRatingTooltip } from '../../../components/measure/utils';
-import DrilldownLink from '../../../components/shared/DrilldownLink';
-import { findMeasure } from '../../../helpers/measures';
+import Tooltip from '../../../components/controls/Tooltip';
+import RatingTooltipContent from '../../../components/measure/RatingTooltipContent';
+import { getLeakValue } from '../../../components/measure/utils';
+import { translateWithParameters } from '../../../helpers/l10n';
+import { findMeasure, formatRating } from '../../../helpers/measures';
+import { getComponentDrilldownUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { IssueType } from '../../../types/issues';
-import { getIssueRatingMetricKey, getIssueRatingName } from '../utils';
+import { Component, MeasureEnhanced } from '../../../types/types';
+import { getIssueRatingMetricKey } from '../utils';
 
 export interface IssueRatingProps {
   branchLike?: BranchLike;
-  component: T.Component;
-  measures: T.MeasureEnhanced[];
+  component: Component;
+  measures: MeasureEnhanced[];
   type: IssueType;
   useDiffMetric?: boolean;
 }
 
-function renderRatingLink(props: IssueRatingProps) {
+export function IssueRating(props: IssueRatingProps) {
   const { branchLike, component, useDiffMetric = false, measures, type } = props;
-  const rating = getIssueRatingMetricKey(type, useDiffMetric);
-  const measure = findMeasure(measures, rating);
+  const ratingKey = getIssueRatingMetricKey(type, useDiffMetric);
+  const measure = findMeasure(measures, ratingKey);
+  const rawValue = measure && (useDiffMetric ? getLeakValue(measure) : measure.value);
+  const value = formatRating(rawValue);
 
-  if (!rating || !measure) {
-    return (
-      <div className="padded">
-        <Rating value={undefined} />
-      </div>
-    );
+  if (!ratingKey || !measure) {
+    return <NoRating />;
   }
 
-  const value = measure && (useDiffMetric ? getLeakValue(measure) : measure.value);
-  const tooltip = value && getRatingTooltip(rating, Number(value));
-
   return (
-    <Tooltip overlay={tooltip}>
+    <Tooltip overlay={rawValue && <RatingTooltipContent metricKey={ratingKey} value={rawValue} />}>
       <span>
-        <DrilldownLink
-          branchLike={branchLike}
-          className="link-no-underline"
-          component={component.key}
-          metric={rating}>
-          <Rating value={value} />
-        </DrilldownLink>
+        {value ? (
+          <DiscreetLinkBox
+            to={getComponentDrilldownUrl({
+              branchLike,
+              componentKey: component.key,
+              metric: ratingKey,
+              listView: true,
+            })}
+          >
+            <MetricsRatingBadge
+              label={translateWithParameters('metric.has_rating_X', value)}
+              rating={value}
+              size="md"
+            />
+          </DiscreetLinkBox>
+        ) : (
+          <NoRating />
+        )}
       </span>
     </Tooltip>
   );
 }
 
-export function IssueRating(props: IssueRatingProps) {
-  const { type } = props;
+export default IssueRating;
 
-  return (
-    <>
-      <span className="flex-1 big-spacer-right text-right">{getIssueRatingName(type)}</span>
-      {renderRatingLink(props)}
-    </>
-  );
+function NoRating() {
+  return <div className="sw-w-8 sw-h-8 sw-flex sw-justify-center sw-items-center">–</div>;
 }
-
-export default React.memo(IssueRating);

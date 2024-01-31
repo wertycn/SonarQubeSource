@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,9 +34,14 @@ public interface UserTokenMapper {
 
   List<UserTokenDto> selectByUserUuid(String userUuid);
 
-  void deleteByUserUuid(String userUuid);
+  int deleteByUserUuid(String userUuid);
 
-  void deleteByUserUuidAndName(@Param("userUuid") String userUuid, @Param("name") String name);
+  int deleteByUserUuidAndName(@Param("userUuid") String userUuid, @Param("name") String name);
+
+  int deleteByProjectUuid(@Param("projectUuid") String projectUuid);
 
   List<UserTokenCount> countTokensByUserUuids(@Param("userUuids") List<String> userUuids);
+
+  List<UserTokenDto> selectTokensExpiredOnDate(@Param("timestamp") long timestamp);
+
 }

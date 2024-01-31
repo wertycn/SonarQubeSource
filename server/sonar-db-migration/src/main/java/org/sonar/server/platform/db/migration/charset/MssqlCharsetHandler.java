@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,17 +24,16 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.lang.String.format;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 
 class MssqlCharsetHandler extends CharsetHandler {
 
-  private static final Logger LOGGER = Loggers.get(MssqlCharsetHandler.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(MssqlCharsetHandler.class);
   private static final String CASE_SENSITIVE_ACCENT_SENSITIVE = "_CS_AS";
   private static final String CASE_INSENSITIVE_ACCENT_INSENSITIVE = "_CI_AI";
   private static final String CASE_INSENSITIVE_ACCENT_SENSITIVE = "_CI_AS";
@@ -75,7 +74,7 @@ class MssqlCharsetHandler extends CharsetHandler {
     // Example of row:
     // issues | kee | Latin1_General_CS_AS or Latin1_General_100_CI_AS_KS_WS
     List<ColumnDef> columns = metadata.getColumnDefs(connection);
-    for (ColumnDef column : columns.stream().filter(ColumnDef::isInSonarQubeTable).collect(Collectors.toList())) {
+    for (ColumnDef column : columns.stream().filter(ColumnDef::isInSonarQubeTable).toList()) {
       String collation = column.getCollation();
       if (!isCollationCorrect(collation)) {
         repairColumnCollation(connection, column, toCaseSensitive(collation));

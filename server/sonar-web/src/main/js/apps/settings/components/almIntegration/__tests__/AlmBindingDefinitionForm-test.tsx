@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,146 +17,64 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
-import * as React from 'react';
-import { waitAndUpdate } from 'sonar-ui-common/helpers/testUtils';
-import { mockGithubBindingDefinition } from '../../../../../helpers/mocks/alm-settings';
-import { GithubBindingDefinition } from '../../../../../types/alm-settings';
-import AlmBindingDefinitionForm from '../AlmBindingDefinitionForm';
+import userEvent from '@testing-library/user-event';
+import React from 'react';
+import AlmSettingsServiceMock from '../../../../../api/mocks/AlmSettingsServiceMock';
+import { renderComponent } from '../../../../../helpers/testReactTestingUtils';
+import { byLabelText, byRole, byText } from '../../../../../helpers/testSelector';
+import { AlmKeys } from '../../../../../types/alm-settings';
+import AlmBindingDefinitionForm, {
+  AlmBindingDefinitionFormProps,
+} from '../AlmBindingDefinitionForm';
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot('create');
+jest.mock('../../../../../api/alm-settings');
 
-  expect(shallowRender({ bindingDefinition: mockGithubBindingDefinition() })).toMatchSnapshot(
-    'edit'
-  );
+let almSettings: AlmSettingsServiceMock;
+
+beforeAll(() => {
+  almSettings = new AlmSettingsServiceMock();
 });
 
-it('should reset if the props change', () => {
-  const bindingDefinition = mockGithubBindingDefinition();
-  const wrapper = shallowRender({ bindingDefinition });
-
-  wrapper.setState({ formData: { ...bindingDefinition, appId: 'newAppId' }, touched: true });
-  wrapper.setProps({ bindingDefinition: { ...bindingDefinition } });
-  expect(wrapper.state('touched')).toBe(true);
-
-  wrapper.setProps({ bindingDefinition: mockGithubBindingDefinition({ key: 'diffKey' }) });
-  expect(wrapper.state('touched')).toBe(false);
+afterEach(() => {
+  almSettings.reset();
 });
 
-it('should handle field changes', () => {
-  const wrapper = shallowRender();
+const ui = {
+  bitbucketConfiguration: (almKey: AlmKeys.BitbucketCloud | AlmKeys.BitbucketServer) =>
+    byRole('button', { name: `alm.${almKey}.long` }),
+  configurationInput: (id: string) =>
+    byLabelText(`settings.almintegration.form.${id}`, { exact: false }),
+  saveConfigurationButton: byRole('button', { name: 'settings.almintegration.form.save' }),
+  cancelButton: byRole('button', { name: 'cancel' }),
+  validationError: (text: string) => byText(text),
+};
 
-  const formData = {
-    key: 'github - example',
-    url: 'http://github.com',
-    appId: '34812568251',
-    clientId: 'cid',
-    clientSecret: 'csecret',
-    privateKey: 'gs7df9g7d9fsg7x9df7g9xdg'
-  };
+const onCancel = jest.fn();
 
-  wrapper.instance().handleFieldChange('key', formData.key);
-  wrapper.instance().handleFieldChange('url', formData.url);
-  wrapper.instance().handleFieldChange('appId', formData.appId);
-  wrapper.instance().handleFieldChange('clientId', formData.clientId);
-  wrapper.instance().handleFieldChange('clientSecret', formData.clientSecret);
-  wrapper.instance().handleFieldChange('privateKey', formData.privateKey);
-  expect(wrapper.state().formData).toEqual(formData);
-});
+it('enforceValidation enabled', async () => {
+  almSettings.setDefinitionErrorMessage('Validation Error');
+  renderAlmBindingDefinitionForm();
 
-it('should handle form submit', async () => {
-  const onSubmit = jest.fn();
-  const wrapper = shallowRender({
-    onSubmit,
-    bindingDefinition: {
-      key: 'originalKey',
-      appId: '',
-      clientId: '',
-      clientSecret: '',
-      privateKey: '',
-      url: ''
-    }
-  });
-  const formData = {
-    key: 'github instance',
-    url: 'http://github.enterprise.com',
-    appId: '34812568251',
-    clientId: 'client1234',
-    clientSecret: 'secret',
-    privateKey: 'gs7df9g7d9fsg7x9df7g9xdg'
-  };
-  wrapper.setState({ formData });
-  await waitAndUpdate(wrapper);
+  // Fill in form
+  await userEvent.type(await ui.configurationInput('name.gitlab').find(), 'Name');
+  await userEvent.type(ui.configurationInput('url.gitlab').get(), 'https://api.alm.com');
+  await userEvent.type(ui.configurationInput('personal_access_token').get(), 'Access Token');
 
-  wrapper.instance().handleFormSubmit();
+  await userEvent.click(ui.saveConfigurationButton.get());
+  expect(ui.validationError('Validation Error').get()).toBeInTheDocument();
 
-  expect(onSubmit).toHaveBeenCalledWith(formData, 'originalKey');
-});
-
-it('should handle cancelling', () => {
-  const onCancel = jest.fn();
-  const bindingDefinition = {
-    appId: 'foo',
-    clientId: 'cid',
-    clientSecret: 'cs',
-    key: 'bar',
-    privateKey: 'baz',
-    url: 'http://github.enterprise.com'
-  };
-  const wrapper = shallowRender({
-    bindingDefinition,
-    onCancel
-  });
-
-  wrapper.setState({ formData: mockGithubBindingDefinition() });
-  wrapper.instance().handleCancel();
-
-  expect(wrapper.state().formData).toBe(bindingDefinition);
+  await userEvent.click(ui.cancelButton.get());
   expect(onCancel).toHaveBeenCalled();
 });
 
-it('should handle deleting', () => {
-  const onDelete = jest.fn();
-  const bindingDefinition = mockGithubBindingDefinition();
-  const wrapper = shallowRender({
-    bindingDefinition,
-    onDelete
-  });
-
-  wrapper.instance().handleDelete();
-  expect(onDelete).toHaveBeenCalledWith(bindingDefinition.key);
-});
-
-it('should (dis)allow submit by validating its state', () => {
-  const wrapper = shallowRender();
-  expect(wrapper.instance().canSubmit()).toBe(false);
-
-  wrapper.setState({ formData: mockGithubBindingDefinition(), touched: true });
-  expect(wrapper.instance().canSubmit()).toBe(true);
-
-  wrapper.setState({ formData: mockGithubBindingDefinition({ url: '' }), touched: true });
-  wrapper.setProps({ optionalFields: ['url'] });
-  expect(wrapper.instance().canSubmit()).toBe(true);
-});
-
-function shallowRender(
-  props: Partial<AlmBindingDefinitionForm<GithubBindingDefinition>['props']> = {}
-) {
-  return shallow<AlmBindingDefinitionForm<GithubBindingDefinition>>(
+function renderAlmBindingDefinitionForm(props: Partial<AlmBindingDefinitionFormProps> = {}) {
+  return renderComponent(
     <AlmBindingDefinitionForm
-      bindingDefinition={{
-        appId: '',
-        clientId: '',
-        clientSecret: '',
-        key: '',
-        privateKey: '',
-        url: ''
-      }}
-      onCancel={jest.fn()}
-      onSubmit={jest.fn()}
-      {...props}>
-      {() => null}
-    </AlmBindingDefinitionForm>
+      onCancel={onCancel}
+      afterSubmit={jest.fn()}
+      enforceValidation
+      alm={AlmKeys.GitLab}
+      {...props}
+    />,
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
+import { intersection, isArray, uniq } from 'lodash';
+import { getUsers } from '../../api/users';
+import { DEFAULT_ISSUES_QUERY } from '../../components/shared/utils';
+import { formatMeasure } from '../../helpers/measures';
 import {
   cleanQuery,
   parseAsArray,
@@ -26,19 +29,37 @@ import {
   parseAsString,
   queriesEqual,
   serializeDateShort,
+  serializeOptionalBoolean,
   serializeString,
-  serializeStringArray
-} from 'sonar-ui-common/helpers/query';
-import { scrollToElement } from 'sonar-ui-common/helpers/scrolling';
-import { get, save } from 'sonar-ui-common/helpers/storage';
-import { searchUsers } from '../../api/users';
-import { Facet, RawFacet } from '../../types/issues';
-import { SecurityStandard, StandardType } from '../../types/security';
+  serializeStringArray,
+} from '../../helpers/query';
+import { get, save } from '../../helpers/storage';
+import { isDefined } from '../../helpers/types';
+import {
+  CleanCodeAttributeCategory,
+  SoftwareImpactSeverity,
+  SoftwareQuality,
+} from '../../types/clean-code-taxonomy';
+import {
+  Facet,
+  IssueDeprecatedStatus,
+  IssueResolution,
+  IssueStatus,
+  RawFacet,
+} from '../../types/issues';
+import { MetricType } from '../../types/metrics';
+import { SecurityStandard } from '../../types/security';
+import { Dict, Flow, FlowType, Issue, Paging, RawQuery } from '../../types/types';
+import { RestUser } from '../../types/users';
+
+const OWASP_ASVS_4_0 = 'owaspAsvs-4.0';
 
 export interface Query {
   assigned: boolean;
   assignees: string[];
-  authors: string[];
+  author: string[];
+  cleanCodeAttributeCategories: CleanCodeAttributeCategory[];
+  codeVariants: string[];
   createdAfter: Date | undefined;
   createdAt: string;
   createdBefore: Date | undefined;
@@ -46,42 +67,45 @@ export interface Query {
   cwe: string[];
   directories: string[];
   files: string[];
+  fixedInPullRequest: string;
+  impactSeverities: SoftwareImpactSeverity[];
+  impactSoftwareQualities: SoftwareQuality[];
   issues: string[];
   languages: string[];
-  modules: string[];
   owaspTop10: string[];
+  'owaspTop10-2021': string[];
+  'pciDss-3.2': string[];
+  'pciDss-4.0': string[];
+  [OWASP_ASVS_4_0]: string[];
+  owaspAsvsLevel: string;
   projects: string[];
-  resolutions: string[];
-  resolved: boolean;
   rules: string[];
-  sansTop25: string[];
   scopes: string[];
   severities: string[];
-  sinceLeakPeriod: boolean;
+  inNewCodePeriod: boolean;
   sonarsourceSecurity: string[];
   sort: string;
-  statuses: string[];
+  issueStatuses: IssueStatus[];
   tags: string[];
   types: string[];
+  resolved?: boolean;
 }
 
 export const STANDARDS = 'standards';
-export const STANDARD_TYPES: StandardType[] = [
-  SecurityStandard.OWASP_TOP10,
-  SecurityStandard.SANS_TOP25,
-  SecurityStandard.CWE,
-  SecurityStandard.SONARSOURCE
-];
 
 // allow sorting by CREATION_DATE only
 const parseAsSort = (sort: string) => (sort === 'CREATION_DATE' ? 'CREATION_DATE' : '');
 const ISSUES_DEFAULT = 'sonarqube.issues.default';
 
-export function parseQuery(query: T.RawQuery): Query {
+export function parseQuery(query: RawQuery, needIssueSync = false): Query {
   return {
     assigned: parseAsBoolean(query.assigned),
     assignees: parseAsArray(query.assignees, parseAsString),
-    authors: parseAsArray(query.authors, parseAsString),
+    author: isArray(query.author) ? query.author : [query.author].filter(isDefined),
+    cleanCodeAttributeCategories: parseAsArray<CleanCodeAttributeCategory>(
+      query.cleanCodeAttributeCategories,
+      parseAsString,
+    ),
     createdAfter: parseAsDate(query.createdAfter),
     createdAt: parseAsString(query.createdAt),
     createdBefore: parseAsDate(query.createdBefore),
@@ -89,37 +113,115 @@ export function parseQuery(query: T.RawQuery): Query {
     cwe: parseAsArray(query.cwe, parseAsString),
     directories: parseAsArray(query.directories, parseAsString),
     files: parseAsArray(query.files, parseAsString),
+    impactSeverities: parseAsArray<SoftwareImpactSeverity>(query.impactSeverities, parseAsString),
+    impactSoftwareQualities: parseAsArray<SoftwareQuality>(
+      query.impactSoftwareQualities,
+      parseAsString,
+    ),
+    inNewCodePeriod: parseAsBoolean(query.inNewCodePeriod, false),
     issues: parseAsArray(query.issues, parseAsString),
     languages: parseAsArray(query.languages, parseAsString),
-    modules: parseAsArray(query.moduleUuids, parseAsString),
     owaspTop10: parseAsArray(query.owaspTop10, parseAsString),
+    'owaspTop10-2021': parseAsArray(query['owaspTop10-2021'], parseAsString),
+    'pciDss-3.2': parseAsArray(query['pciDss-3.2'], parseAsString),
+    'pciDss-4.0': parseAsArray(query['pciDss-4.0'], parseAsString),
+    [OWASP_ASVS_4_0]: parseAsArray(query[OWASP_ASVS_4_0], parseAsString),
+    owaspAsvsLevel: parseAsString(query['owaspAsvsLevel']),
     projects: parseAsArray(query.projects, parseAsString),
-    resolutions: parseAsArray(query.resolutions, parseAsString),
-    resolved: parseAsBoolean(query.resolved),
     rules: parseAsArray(query.rules, parseAsString),
-    sansTop25: parseAsArray(query.sansTop25, parseAsString),
     scopes: parseAsArray(query.scopes, parseAsString),
     severities: parseAsArray(query.severities, parseAsString),
-    sinceLeakPeriod: parseAsBoolean(query.sinceLeakPeriod, false),
     sonarsourceSecurity: parseAsArray(query.sonarsourceSecurity, parseAsString),
     sort: parseAsSort(query.s),
-    statuses: parseAsArray(query.statuses, parseAsString),
+    issueStatuses: parseIssueStatuses(query),
     tags: parseAsArray(query.tags, parseAsString),
-    types: parseAsArray(query.types, parseAsString)
+    types: parseAsArray(query.types, parseAsString),
+    codeVariants: parseAsArray(query.codeVariants, parseAsString),
+    fixedInPullRequest: parseAsString(query.fixedInPullRequest),
+    // While reindexing, we need to use resolved param for issues/list endpoint
+    // False is used to show unresolved issues only
+    resolved: needIssueSync ? false : undefined,
   };
 }
 
-export function getOpen(query: T.RawQuery): string | undefined {
+function parseIssueStatuses(query: RawQuery) {
+  let result: Array<IssueStatus> = [];
+
+  if (query.issueStatuses) {
+    return parseAsArray<IssueStatus>(query.issueStatuses, parseAsString);
+  }
+
+  const deprecatedStatusesMap = {
+    [IssueDeprecatedStatus.Open]: [IssueStatus.Open],
+    [IssueDeprecatedStatus.Confirmed]: [IssueStatus.Confirmed],
+    [IssueDeprecatedStatus.Reopened]: [IssueStatus.Open],
+    [IssueDeprecatedStatus.Resolved]: [
+      IssueStatus.Fixed,
+      IssueStatus.Accepted,
+      IssueStatus.FalsePositive,
+    ],
+    [IssueDeprecatedStatus.Closed]: [IssueStatus.Fixed],
+  };
+  const deprecatedResolutionsMap = {
+    [IssueResolution.FalsePositive]: [IssueStatus.FalsePositive],
+    [IssueResolution.WontFix]: [IssueStatus.Accepted],
+    [IssueResolution.Fixed]: [IssueStatus.Fixed],
+    [IssueResolution.Removed]: [IssueStatus.Fixed],
+    [IssueResolution.Unresolved]: [IssueStatus.Open, IssueStatus.Confirmed],
+  };
+
+  const issuesStatusesFromDeprecatedStatuses = parseAsArray<IssueDeprecatedStatus>(
+    query.statuses,
+    parseAsString,
+  )
+    .map((status) => deprecatedStatusesMap[status])
+    .filter(Boolean)
+    .flat();
+  const issueStatusesFromResolutions = parseAsArray<IssueResolution>(
+    query.resolutions,
+    parseAsString,
+  )
+    .map((status) => deprecatedResolutionsMap[status])
+    .filter(Boolean)
+    .flat();
+
+  const intesectedIssueStatuses = intersection(
+    issuesStatusesFromDeprecatedStatuses,
+    issueStatusesFromResolutions,
+  );
+  result = intesectedIssueStatuses.length
+    ? intesectedIssueStatuses
+    : issueStatusesFromResolutions.concat(issuesStatusesFromDeprecatedStatuses);
+
+  if (
+    query.resolved === 'false' &&
+    [IssueStatus.Open, IssueStatus.Confirmed].every((status) => !result.includes(status))
+  ) {
+    result = result.concat(
+      parseAsArray<IssueStatus>(DEFAULT_ISSUES_QUERY.issueStatuses, parseAsString),
+    );
+  }
+
+  return uniq(result);
+}
+
+export function getOpen(query: RawQuery): string | undefined {
   return query.open;
 }
 
-export const areMyIssuesSelected = (query: T.RawQuery) => query.myIssues === 'true';
+export function getOpenIssue(props: { location: { query: RawQuery } }, issues: Issue[]) {
+  const open = getOpen(props.location.query);
+  return open ? issues.find((issue) => issue.key === open) : undefined;
+}
 
-export function serializeQuery(query: Query): T.RawQuery {
+export const areMyIssuesSelected = (query: RawQuery) => query.myIssues === 'true';
+
+export function serializeQuery(query: Query): RawQuery {
   const filter = {
     assigned: query.assigned ? undefined : 'false',
     assignees: serializeStringArray(query.assignees),
-    authors: serializeStringArray(query.authors),
+    author: query.author,
+    cleanCodeAttributeCategories: serializeStringArray(query.cleanCodeAttributeCategories),
     createdAfter: serializeDateShort(query.createdAfter),
     createdAt: serializeString(query.createdAt),
     createdBefore: serializeDateShort(query.createdBefore),
@@ -127,70 +229,64 @@ export function serializeQuery(query: Query): T.RawQuery {
     cwe: serializeStringArray(query.cwe),
     directories: serializeStringArray(query.directories),
     files: serializeStringArray(query.files),
+    fixedInPullRequest: serializeString(query.fixedInPullRequest),
     issues: serializeStringArray(query.issues),
     languages: serializeStringArray(query.languages),
-    moduleUuids: serializeStringArray(query.modules),
     owaspTop10: serializeStringArray(query.owaspTop10),
+    'owaspTop10-2021': serializeStringArray(query['owaspTop10-2021']),
+    'pciDss-3.2': serializeStringArray(query['pciDss-3.2']),
+    'pciDss-4.0': serializeStringArray(query['pciDss-4.0']),
+    [OWASP_ASVS_4_0]: serializeStringArray(query[OWASP_ASVS_4_0]),
+    owaspAsvsLevel: serializeString(query['owaspAsvsLevel']),
     projects: serializeStringArray(query.projects),
-    resolutions: serializeStringArray(query.resolutions),
-    resolved: query.resolved ? undefined : 'false',
     rules: serializeStringArray(query.rules),
     s: serializeString(query.sort),
-    sansTop25: serializeStringArray(query.sansTop25),
     scopes: serializeStringArray(query.scopes),
     severities: serializeStringArray(query.severities),
-    sinceLeakPeriod: query.sinceLeakPeriod ? 'true' : undefined,
+    impactSeverities: serializeStringArray(query.impactSeverities),
+    impactSoftwareQualities: serializeStringArray(query.impactSoftwareQualities),
+    inNewCodePeriod: query.inNewCodePeriod ? 'true' : undefined,
     sonarsourceSecurity: serializeStringArray(query.sonarsourceSecurity),
-    statuses: serializeStringArray(query.statuses),
+    issueStatuses: serializeStringArray(query.issueStatuses),
     tags: serializeStringArray(query.tags),
-    types: serializeStringArray(query.types)
+    types: serializeStringArray(query.types),
+    codeVariants: serializeStringArray(query.codeVariants),
+    resolved: serializeOptionalBoolean(query.resolved),
   };
+
   return cleanQuery(filter);
 }
 
-export const areQueriesEqual = (a: T.RawQuery, b: T.RawQuery) =>
+export const areQueriesEqual = (a: RawQuery, b: RawQuery) =>
   queriesEqual(parseQuery(a), parseQuery(b));
 
-export function mapFacet(facet: string) {
-  const propertyMapping: T.Dict<string> = {
-    modules: 'moduleUuids'
-  };
-  return propertyMapping[facet] || facet;
-}
-
-export function parseFacets(facets: RawFacet[]): T.Dict<Facet> {
+export function parseFacets(facets?: RawFacet[]): Dict<Facet> {
   if (!facets) {
     return {};
   }
 
-  // for readability purpose
-  const propertyMapping: T.Dict<string> = {
-    moduleUuids: 'modules'
-  };
-
-  const result: T.Dict<Facet> = {};
-  facets.forEach(facet => {
+  const result: Dict<Facet> = {};
+  facets.forEach((facet) => {
     const values: Facet = {};
-    facet.values.forEach(value => {
+    facet.values.forEach((value) => {
       values[value.val] = value.count;
     });
-    const finalProperty = propertyMapping[facet.property] || facet.property;
-    result[finalProperty] = values;
+    result[facet.property] = values;
   });
   return result;
 }
 
 export function formatFacetStat(stat: number | undefined) {
-  return stat && formatMeasure(stat, 'SHORT_INT');
+  return stat && formatMeasure(stat, MetricType.ShortInteger);
 }
 
 export const searchAssignees = (
   query: string,
-  page = 1
-): Promise<{ paging: T.Paging; results: T.UserBase[] }> => {
-  return searchUsers({ p: page, q: query }).then(({ paging, users }) => ({
-    paging,
-    results: users
+  page = 1,
+): Promise<{ paging: Paging; results: RestUser[] }> => {
+  return getUsers<RestUser>({ pageIndex: page, q: query }).then(({ page, users }) => ({
+    paging: page,
+    results: users,
   }));
 };
 
@@ -204,21 +300,45 @@ export const isMySet = () => {
 export const saveMyIssues = (myIssues: boolean) =>
   save(ISSUES_DEFAULT, myIssues ? LOCALSTORAGE_MY : LOCALSTORAGE_ALL);
 
+export function getTypedFlows(flows: Flow[]) {
+  return flows.map((flow) => ({
+    ...flow,
+    locations:
+      flow.type === FlowType.EXECUTION ? [...(flow.locations ?? [])].reverse() : flow.locations,
+  }));
+}
+
 export function getLocations(
-  { flows, secondaryLocations }: Pick<T.Issue, 'flows' | 'secondaryLocations'>,
-  selectedFlowIndex: number | undefined
+  {
+    flows,
+    secondaryLocations,
+    flowsWithType,
+  }: Pick<Issue, 'flows' | 'secondaryLocations' | 'flowsWithType'>,
+  selectedFlowIndex: number | undefined,
 ) {
-  if (selectedFlowIndex !== undefined) {
-    return flows[selectedFlowIndex] || [];
-  } else {
-    return flows.length > 0 ? flows[0] : secondaryLocations;
+  if (secondaryLocations.length > 0) {
+    return secondaryLocations;
   }
+
+  if (selectedFlowIndex !== undefined) {
+    if (flows[selectedFlowIndex] !== undefined) {
+      return flows[selectedFlowIndex];
+    }
+
+    if (flowsWithType[selectedFlowIndex] !== undefined) {
+      return getTypedFlows(flowsWithType)[selectedFlowIndex].locations || [];
+    }
+
+    return [];
+  }
+
+  return [];
 }
 
 export function getSelectedLocation(
-  issue: Pick<T.Issue, 'flows' | 'secondaryLocations'>,
+  issue: Pick<Issue, 'flows' | 'secondaryLocations' | 'flowsWithType'>,
   selectedFlowIndex: number | undefined,
-  selectedLocationIndex: number | undefined
+  selectedLocationIndex: number | undefined,
 ) {
   const locations = getLocations(issue, selectedFlowIndex);
   if (
@@ -227,28 +347,20 @@ export function getSelectedLocation(
     locations.length >= selectedLocationIndex
   ) {
     return locations[selectedLocationIndex];
-  } else {
-    return undefined;
   }
+  return undefined;
 }
 
 export function allLocationsEmpty(
-  issue: Pick<T.Issue, 'flows' | 'secondaryLocations'>,
-  selectedFlowIndex: number | undefined
+  issue: Pick<Issue, 'flows' | 'secondaryLocations' | 'flowsWithType'>,
+  selectedFlowIndex: number | undefined,
 ) {
-  return getLocations(issue, selectedFlowIndex).every(location => !location.msg);
-}
-
-export function scrollToIssue(issue: string, smooth = true) {
-  const element = document.querySelector(`[data-issue="${issue}"]`);
-  if (element) {
-    scrollToElement(element, { topOffset: 250, bottomOffset: 100, smooth });
-  }
+  return getLocations(issue, selectedFlowIndex).every((location) => !location.msg);
 }
 
 export function shouldOpenStandardsFacet(
-  openFacets: T.Dict<boolean>,
-  query: Partial<Query>
+  openFacets: Dict<boolean>,
+  query: Partial<Query>,
 ): boolean {
   return (
     openFacets[STANDARDS] ||
@@ -258,9 +370,13 @@ export function shouldOpenStandardsFacet(
 }
 
 export function shouldOpenStandardsChildFacet(
-  openFacets: T.Dict<boolean>,
+  openFacets: Dict<boolean>,
   query: Partial<Query>,
-  standardType: SecurityStandard
+  standardType:
+    | SecurityStandard.CWE
+    | SecurityStandard.OWASP_TOP10
+    | SecurityStandard.OWASP_TOP10_2021
+    | SecurityStandard.SONARSOURCE,
 ): boolean {
   const filter = query[standardType];
   return (
@@ -271,8 +387,8 @@ export function shouldOpenStandardsChildFacet(
 }
 
 export function shouldOpenSonarSourceSecurityFacet(
-  openFacets: T.Dict<boolean>,
-  query: Partial<Query>
+  openFacets: Dict<boolean>,
+  query: Partial<Query>,
 ): boolean {
   // Open it by default if the parent is open, and no other standard is open.
   return (
@@ -285,8 +401,14 @@ function isFilteredBySecurityIssueTypes(query: Partial<Query>): boolean {
   return query.types !== undefined && query.types.includes('VULNERABILITY');
 }
 
-function isOneStandardChildFacetOpen(openFacets: T.Dict<boolean>, query: Partial<Query>): boolean {
-  return STANDARD_TYPES.some(standardType =>
-    shouldOpenStandardsChildFacet(openFacets, query, standardType)
+function isOneStandardChildFacetOpen(openFacets: Dict<boolean>, query: Partial<Query>): boolean {
+  return [SecurityStandard.OWASP_TOP10, SecurityStandard.CWE, SecurityStandard.SONARSOURCE].some(
+    (
+      standardType:
+        | SecurityStandard.CWE
+        | SecurityStandard.OWASP_TOP10
+        | SecurityStandard.OWASP_TOP10_2021
+        | SecurityStandard.SONARSOURCE,
+    ) => shouldOpenStandardsChildFacet(openFacets, query, standardType),
   );
 }

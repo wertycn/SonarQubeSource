@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,6 +39,7 @@ import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueFinder;
 import org.sonar.server.user.UserSession;
 
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.ACTION_SET_TAGS;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ISSUE;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_TAGS;
@@ -73,6 +74,12 @@ public class SetTagsAction implements IssuesWsAction {
       .setDescription("Set tags on an issue. <br/>" +
         "Requires authentication and Browse permission on project")
       .setChangelog(
+        new Change("10.4", "The response fields 'severity' and 'type' are deprecated. Please use 'impacts' instead."),
+        new Change("10.4", "The response fields 'status' and 'resolution' are deprecated. Please use 'issueStatus' instead."),
+        new Change("10.4", "Add 'issueStatus' field to the response."),
+        new Change("10.2", "Add 'impacts', 'cleanCodeAttribute', 'cleanCodeAttributeCategory' fields to the response"),
+        new Change("9.6", "Response field 'ruleDescriptionContextKey' added"),
+        new Change("8.8", "The response field components.uuid is removed"),
         new Change("6.5", "the database ids of the components are removed from the response"),
         new Change("6.5", "the response field components.uuid is deprecated. Use components.key instead."),
         new Change("6.4", "response contains issue information instead of list of tags"))
@@ -101,9 +108,9 @@ public class SetTagsAction implements IssuesWsAction {
     try (DbSession session = dbClient.openSession(false)) {
       IssueDto issueDto = issueFinder.getByKey(session, issueKey);
       DefaultIssue issue = issueDto.toDefaultIssue();
-      IssueChangeContext context = IssueChangeContext.createUser(new Date(), userSession.getUuid());
+      IssueChangeContext context = issueChangeContextByUserBuilder(new Date(), userSession.getUuid()).build();
       if (issueFieldsSetter.setTags(issue, tags, context)) {
-        return issueUpdater.saveIssueAndPreloadSearchResponseData(session, issue, context, false);
+        return issueUpdater.saveIssueAndPreloadSearchResponseData(session, issueDto, issue, context);
       }
       return new SearchResponseData(issueDto);
     }

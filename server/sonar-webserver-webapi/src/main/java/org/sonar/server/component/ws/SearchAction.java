@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.resources.ResourceTypes;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Response;
@@ -36,7 +35,7 @@ import org.sonar.api.utils.Paging;
 import org.sonar.core.i18n.I18n;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.server.component.index.ComponentIndex;
 import org.sonar.server.component.index.ComponentQuery;
 import org.sonar.server.es.SearchIdResult;
@@ -45,13 +44,11 @@ import org.sonarqube.ws.Components;
 import org.sonarqube.ws.Components.SearchWsResponse;
 
 import static java.util.Objects.requireNonNull;
-import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toMap;
 import static org.sonar.api.resources.Qualifiers.APP;
 import static org.sonar.api.resources.Qualifiers.PROJECT;
 import static org.sonar.api.resources.Qualifiers.SUBVIEW;
 import static org.sonar.api.resources.Qualifiers.VIEW;
-import static org.sonar.core.util.stream.MoreCollectors.toHashSet;
 import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
 import static org.sonar.server.ws.WsParameterBuilder.createQualifiersParameter;
 import static org.sonar.server.ws.WsParameterBuilder.QualifierParameterContext.newQualifierParameterContext;
@@ -83,7 +80,7 @@ public class SearchAction implements ComponentsWsAction {
       .addPagingParams(100, MAX_PAGE_SIZE)
       .setChangelog(
         new Change("8.4", "Param 'language' has been removed"),
-        new Change("8.4", String.format("The use of 'DIR','FIL','UTS' as values for parameter '%s' is no longer supported", PARAM_QUALIFIERS)),
+        new Change("8.4", String.format("The use of 'DIR','FIL','UTS' and 'BRC' as values for parameter '%s' is no longer supported", PARAM_QUALIFIERS)),
         new Change("8.0", "Field 'id' from response has been removed"),
         new Change("7.6", String.format("The use of 'BRC' as value for parameter '%s' is deprecated", PARAM_QUALIFIERS)))
       .setResponseExample(getClass().getResource("search-components-example.json"))
@@ -119,7 +116,7 @@ public class SearchAction implements ComponentsWsAction {
       ComponentQuery esQuery = buildEsQuery(request);
       SearchIdResult<String> results = componentIndex.search(esQuery, new SearchOptions().setPage(request.getPage(), request.getPageSize()));
 
-      List<ComponentDto> components = dbClient.componentDao().selectByUuids(dbSession, results.getUuids());
+      List<EntityDto> components = dbClient.entityDao().selectByUuids(dbSession, results.getUuids());
       Map<String, String> projectKeysByUuids = searchProjectsKeysByUuids(dbSession, components);
 
       return buildResponse(components, projectKeysByUuids,
@@ -127,16 +124,12 @@ public class SearchAction implements ComponentsWsAction {
     }
   }
 
-  private Map<String, String> searchProjectsKeysByUuids(DbSession dbSession, List<ComponentDto> components) {
-    Set<String> projectUuidsToSearch = components.stream()
-      .map(ComponentDto::projectUuid)
-      .collect(toHashSet());
-    List<ComponentDto> projects = dbClient.componentDao()
-      .selectByUuids(dbSession, projectUuidsToSearch)
-      .stream()
-      .filter(c -> !c.qualifier().equals(Qualifiers.MODULE))
-      .collect(Collectors.toList());
-    return projects.stream().collect(toMap(ComponentDto::uuid, ComponentDto::getDbKey));
+  private Map<String, String> searchProjectsKeysByUuids(DbSession dbSession, List<EntityDto> entities) {
+    Set<String> projectUuidsToSearch = entities.stream()
+      .map(EntityDto::getAuthUuid)
+      .collect(Collectors.toSet());
+    List<EntityDto> projects = dbClient.entityDao().selectByUuids(dbSession, projectUuidsToSearch);
+    return projects.stream().collect(toMap(EntityDto::getUuid, EntityDto::getKey));
   }
 
   private static ComponentQuery buildEsQuery(SearchRequest request) {
@@ -146,7 +139,7 @@ public class SearchAction implements ComponentsWsAction {
       .build();
   }
 
-  private static SearchWsResponse buildResponse(List<ComponentDto> components, Map<String, String> projectKeysByUuids, Paging paging) {
+  private static SearchWsResponse buildResponse(List<EntityDto> components, Map<String, String> projectKeysByUuids, Paging paging) {
     SearchWsResponse.Builder responseBuilder = SearchWsResponse.newBuilder();
     responseBuilder.getPagingBuilder()
       .setPageIndex(paging.pageIndex())
@@ -155,19 +148,18 @@ public class SearchAction implements ComponentsWsAction {
       .build();
 
     components.stream()
-      .map(dto -> dtoToComponent(dto, projectKeysByUuids.get(dto.projectUuid())))
+      .map(dto -> dtoToComponent(dto, projectKeysByUuids.get(dto.getAuthUuid())))
       .forEach(responseBuilder::addComponents);
 
     return responseBuilder.build();
   }
 
-  private static Components.Component dtoToComponent(ComponentDto dto, String projectKey) {
+  private static Components.Component dtoToComponent(EntityDto dto, String projectKey) {
     Components.Component.Builder builder = Components.Component.newBuilder()
-      .setKey(dto.getDbKey())
+      .setKey(dto.getKey())
       .setProject(projectKey)
-      .setName(dto.name())
-      .setQualifier(dto.qualifier());
-    ofNullable(dto.language()).ifPresent(builder::setLanguage);
+      .setName(dto.getName())
+      .setQualifier(dto.getQualifier());
     return builder.build();
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -40,7 +40,7 @@ import org.sonar.scanner.cpd.index.SonarCpdBlockIndex;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class JavaCpdBlockIndexerSensorTest {
 
@@ -73,7 +73,7 @@ public class JavaCpdBlockIndexerSensorTest {
   public void testExclusions() {
     file.setExcludedForDuplication(true);
     new JavaCpdBlockIndexerSensor(index).execute(context);
-    verifyZeroInteractions(index);
+    verifyNoInteractions(index);
   }
 
   @Test

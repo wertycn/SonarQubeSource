@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,18 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
-import { fetchLanguages } from '../../store/rootActions';
-import { getGlobalSettingValue, Store } from '../../store/rootReducer';
+import { Outlet } from 'react-router-dom';
+import { AppState } from '../../types/appstate';
+import { GlobalSettingKeys } from '../../types/settings';
 import KeyboardShortcutsModal from './KeyboardShortcutsModal';
-
-const PageTracker = lazyLoadComponent(() => import('./PageTracker'));
+import PageTracker from './PageTracker';
+import withAppStateContext from './app-state/withAppStateContext';
 
 interface Props {
-  fetchLanguages: () => void;
-  enableGravatar: boolean;
-  gravatarServerUrl: string;
+  appState: AppState;
 }
 
 export class App extends React.PureComponent<Props> {
@@ -37,7 +34,6 @@ export class App extends React.PureComponent<Props> {
 
   componentDidMount() {
     this.mounted = true;
-    this.props.fetchLanguages();
     this.setScrollbarWidth();
   }
 
@@ -71,35 +67,34 @@ export class App extends React.PureComponent<Props> {
   };
 
   renderPreconnectLink = () => {
-    const parser = document.createElement('a');
-    parser.href = this.props.gravatarServerUrl;
-    if (parser.hostname !== window.location.hostname) {
-      return <link href={parser.origin} rel="preconnect" />;
-    } else {
+    const {
+      appState: { settings },
+    } = this.props;
+
+    const enableGravatar = settings[GlobalSettingKeys.EnableGravatar] === 'true';
+    const gravatarServerUrl = settings[GlobalSettingKeys.GravatarServerUrl];
+
+    if (!enableGravatar || !gravatarServerUrl) {
       return null;
     }
+
+    const parser = document.createElement('a');
+    parser.href = gravatarServerUrl;
+    if (parser.hostname !== window.location.hostname) {
+      return <link href={parser.origin} rel="preconnect" />;
+    }
+    return null;
   };
 
   render() {
     return (
       <>
-        <PageTracker>{this.props.enableGravatar && this.renderPreconnectLink()}</PageTracker>
-        {this.props.children}
+        <PageTracker>{this.renderPreconnectLink()}</PageTracker>
+        <Outlet />
         <KeyboardShortcutsModal />
       </>
     );
   }
 }
 
-const mapStateToProps = (state: Store) => {
-  const enableGravatar = getGlobalSettingValue(state, 'sonar.lf.enableGravatar');
-  const gravatarServerUrl = getGlobalSettingValue(state, 'sonar.lf.gravatarServerUrl');
-  return {
-    enableGravatar: Boolean(enableGravatar && enableGravatar.value === 'true'),
-    gravatarServerUrl: (gravatarServerUrl && gravatarServerUrl.value) || ''
-  };
-};
-
-const mapDispatchToProps = { fetchLanguages };
-
-export default connect(mapStateToProps, mapDispatchToProps)(App);
+export default withAppStateContext(App);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.db.component;
 
+import java.util.List;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 
@@ -42,10 +43,10 @@ public final class SnapshotQuery {
     }
   }
 
-  private String componentUuid;
+  private String rootComponentUuid;
   private Long createdAfter;
   private Long createdBefore;
-  private String status;
+  private List<String> statuses;
   private String projectVersion;
   private Boolean isLast;
   private String sortField;
@@ -88,22 +89,27 @@ public final class SnapshotQuery {
   }
 
   @CheckForNull
-  public String getComponentUuid() {
-    return componentUuid;
+  public String getRootComponentUuid() {
+    return rootComponentUuid;
   }
 
-  public SnapshotQuery setComponentUuid(@Nullable String componentUuid) {
-    this.componentUuid = componentUuid;
+  public SnapshotQuery setRootComponentUuid(@Nullable String rootComponentUuid) {
+    this.rootComponentUuid = rootComponentUuid;
     return this;
   }
 
   @CheckForNull
-  public String getStatus() {
-    return status;
+  public List<String> getStatus() {
+    return statuses;
   }
 
   public SnapshotQuery setStatus(@Nullable String status) {
-    this.status = status;
+    this.statuses = List.of(status);
+    return this;
+  }
+
+  public SnapshotQuery setStatuses(@Nullable List<String> statuses) {
+    this.statuses = statuses;
     return this;
   }
 

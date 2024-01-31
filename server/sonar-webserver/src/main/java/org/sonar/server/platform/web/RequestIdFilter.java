@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -55,12 +55,12 @@ public class RequestIdFilter implements Filter {
 
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-    RequestIdGenerator requestIdGenerator = platform.getContainer().getComponentByType(RequestIdGenerator.class);
+    var requestIdGenerator = platform.getContainer().getOptionalComponentByType(RequestIdGenerator.class);
 
-    if (requestIdGenerator == null) {
+    if (requestIdGenerator.isEmpty()) {
       chain.doFilter(request, response);
     } else {
-      String requestId = requestIdGenerator.generate();
+      String requestId = requestIdGenerator.get().generate();
       try (RequestIdMDCStorage mdcStorage = new RequestIdMDCStorage(requestId)) {
         request.setAttribute("ID", requestId);
         chain.doFilter(request, response);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,59 +17,57 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DiscreetLink, FlagMessage, Note } from 'design-system';
 import * as React from 'react';
-import DateFormatter from 'sonar-ui-common/components/intl/DateFormatter';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import ProfileLink from '../components/ProfileLink';
+import { useIntl } from 'react-intl';
+import DateFormatter from '../../../components/intl/DateFormatter';
 import { Profile } from '../types';
-import { isStagnant } from '../utils';
+import { getProfilePath, isStagnant } from '../utils';
 
 interface Props {
   profiles: Profile[];
 }
 
 export default function EvolutionStagnant(props: Props) {
-  const outdated = props.profiles.filter(profile => !profile.isBuiltIn && isStagnant(profile));
+  const intl = useIntl();
+  const outdated = props.profiles.filter((profile) => !profile.isBuiltIn && isStagnant(profile));
 
   if (outdated.length === 0) {
     return null;
   }
 
   return (
-    <div className="boxed-group boxed-group-inner quality-profiles-evolution-stagnant">
-      <div className="spacer-bottom">
-        <strong>{translate('quality_profiles.stagnant_profiles')}</strong>
-      </div>
-      <div className="spacer-bottom">
-        {translate('quality_profiles.not_updated_more_than_year')}
-      </div>
-      <ul>
-        {outdated.map(profile => (
-          <li className="spacer-top" key={profile.key}>
-            <div className="text-ellipsis">
-              <ProfileLink
-                className="link-no-underline"
-                language={profile.language}
-                name={profile.name}>
+    <section aria-label={intl.formatMessage({ id: 'quality_profiles.stagnant_profiles' })}>
+      <h2 className="sw-heading-md sw-mb-6">
+        {intl.formatMessage({ id: 'quality_profiles.stagnant_profiles' })}
+      </h2>
+
+      <FlagMessage variant="warning" className="sw-mb-3">
+        {intl.formatMessage({ id: 'quality_profiles.not_updated_more_than_year' })}
+      </FlagMessage>
+      <ul className="sw-flex sw-flex-col sw-gap-4 sw-body-sm">
+        {outdated.map((profile) => (
+          <li className="sw-flex sw-flex-col sw-gap-1" key={profile.key}>
+            <div className="sw-truncate">
+              <DiscreetLink to={getProfilePath(profile.name, profile.language)}>
                 {profile.name}
-              </ProfileLink>
+              </DiscreetLink>
             </div>
             {profile.rulesUpdatedAt && (
-              <DateFormatter date={profile.rulesUpdatedAt} long={true}>
-                {formattedDate => (
-                  <div className="note">
-                    {translateWithParameters(
-                      'quality_profiles.x_updated_on_y',
-                      profile.languageName,
-                      formattedDate
-                    )}
-                  </div>
-                )}
-              </DateFormatter>
+              <Note>
+                <DateFormatter date={profile.rulesUpdatedAt} long>
+                  {(formattedDate) =>
+                    intl.formatMessage(
+                      { id: 'quality_profiles.x_updated_on_y' },
+                      { name: profile.languageName, date: formattedDate },
+                    )
+                  }
+                </DateFormatter>
+              </Note>
             )}
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }

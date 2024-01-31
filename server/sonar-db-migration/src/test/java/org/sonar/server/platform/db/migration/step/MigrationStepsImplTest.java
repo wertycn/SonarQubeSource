@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,15 +23,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class MigrationStepsImplTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private MigrationStepsImpl underTest = new MigrationStepsImpl(Arrays.asList(
     new RegisteredMigrationStep(1, "mmmmmm", MigrationStep.class),
@@ -44,34 +41,33 @@ public class MigrationStepsImplTest {
 
   @Test
   public void constructor_fails_with_NPE_if_argument_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("steps can't be null");
-
-    new MigrationStepsImpl(null);
+    assertThatThrownBy(() ->  new MigrationStepsImpl(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("steps can't be null");
   }
 
   @Test
   public void constructor_fails_with_IAE_if_argument_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("steps can't be empty");
-
-    new MigrationStepsImpl(Collections.emptyList());
+    assertThatThrownBy(() -> new MigrationStepsImpl(Collections.emptyList()))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("steps can't be empty");
   }
 
   @Test
   public void constructor_fails_with_NPE_if_argument_contains_a_null() {
-    expectedException.expect(NullPointerException.class);
-
-    new MigrationStepsImpl(Arrays.asList(
-      new RegisteredMigrationStep(12, "sdsd", MigrationStep.class),
-      null,
-      new RegisteredMigrationStep(88, "q", MigrationStep.class)));
+    assertThatThrownBy(() -> {
+      new MigrationStepsImpl(Arrays.asList(
+        new RegisteredMigrationStep(12, "sdsd", MigrationStep.class),
+        null,
+        new RegisteredMigrationStep(88, "q", MigrationStep.class)));
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void getMaxMigrationNumber_returns_migration_of_last_step_in_constructor_list_argument() {
     assertThat(underTest.getMaxMigrationNumber()).isEqualTo(8L);
-    assertThat(unorderedSteps.getMaxMigrationNumber()).isEqualTo(1L);
+    assertThat(unorderedSteps.getMaxMigrationNumber()).isOne();
   }
 
   @Test
@@ -81,10 +77,9 @@ public class MigrationStepsImplTest {
 
   @Test
   public void readFrom_throws_IAE_if_number_is_less_than_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Migration number must be >= 0");
-
-    underTest.readFrom(-1);
+    assertThatThrownBy(() -> underTest.readFrom(-1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Migration number must be >= 0");
   }
 
   @Test

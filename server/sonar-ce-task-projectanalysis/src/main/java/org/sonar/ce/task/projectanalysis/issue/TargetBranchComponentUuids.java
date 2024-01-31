@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,8 +30,6 @@ import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 
-import static org.sonar.db.component.ComponentDto.removeBranchAndPullRequestFromKey;
-
 /**
  * Cache a map between component keys and uuids in the merge branch and optionally the target branch (for PR and SLB, and only if this target branch is analyzed)
  */
@@ -40,8 +38,6 @@ public class TargetBranchComponentUuids {
   private final DbClient dbClient;
   private Map<String, String> targetBranchComponentsUuidsByKey;
   private boolean hasTargetBranchAnalysis;
-  @CheckForNull
-  private String targetBranchUuid;
 
   public TargetBranchComponentUuids(AnalysisMetadataHolder analysisMetadataHolder, DbClient dbClient) {
     this.analysisMetadataHolder = analysisMetadataHolder;
@@ -65,10 +61,10 @@ public class TargetBranchComponentUuids {
   private void initForTargetBranch(DbSession dbSession) {
     Optional<BranchDto> branchDtoOpt = dbClient.branchDao().selectByBranchKey(dbSession, analysisMetadataHolder.getProject().getUuid(),
       analysisMetadataHolder.getBranch().getTargetBranchName());
-    targetBranchUuid = branchDtoOpt.map(BranchDto::getUuid).orElse(null);
+    String targetBranchUuid = branchDtoOpt.map(BranchDto::getUuid).orElse(null);
     hasTargetBranchAnalysis = targetBranchUuid != null && dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, targetBranchUuid).isPresent();
     if (hasTargetBranchAnalysis) {
-      List<ComponentDto> targetComponents = dbClient.componentDao().selectByProjectUuid(targetBranchUuid, dbSession);
+      List<ComponentDto> targetComponents = dbClient.componentDao().selectByBranchUuid(targetBranchUuid, dbSession);
       for (ComponentDto dto : targetComponents) {
         targetBranchComponentsUuidsByKey.put(dto.getKey(), dto.uuid());
       }
@@ -81,9 +77,8 @@ public class TargetBranchComponentUuids {
   }
 
   @CheckForNull
-  public String getTargetBranchComponentUuid(String dbKey) {
+  public String getTargetBranchComponentUuid(String key) {
     lazyInit();
-    String cleanComponentKey = removeBranchAndPullRequestFromKey(dbKey);
-    return targetBranchComponentsUuidsByKey.get(cleanComponentKey);
+    return targetBranchComponentsUuidsByKey.get(key);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,13 +21,24 @@ package org.sonar.api.batch.sensor.internal;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
+
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.sensor.SensorDescriptor;
 import org.sonar.api.config.Configuration;
 
 public class DefaultSensorDescriptor implements SensorDescriptor {
+  public static final Set<String> HARDCODED_INDEPENDENT_FILE_SENSORS = Collections.unmodifiableSet(Stream.of(
+          "CSS Metrics",
+          "CSS Rules",
+          "HTML",
+          "XML Sensor"
+  ).collect(Collectors.toSet()));
 
   private String name;
   private String[] languages = new String[0];
@@ -35,6 +46,7 @@ public class DefaultSensorDescriptor implements SensorDescriptor {
   private String[] ruleRepositories = new String[0];
   private boolean global = false;
   private Predicate<Configuration> configurationPredicate;
+  private boolean processesFilesIndependently = false;
 
   public String name() {
     return name;
@@ -61,8 +73,16 @@ public class DefaultSensorDescriptor implements SensorDescriptor {
     return global;
   }
 
+  public boolean isProcessesFilesIndependently() {
+    return processesFilesIndependently;
+  }
+
   @Override
   public DefaultSensorDescriptor name(String name) {
+    // TODO: Remove this hardcoded list once all plugins will implement the new API "processFilesIndependently"
+    if (HARDCODED_INDEPENDENT_FILE_SENSORS.contains(name)) {
+      processesFilesIndependently = true;
+    }
     this.name = name;
     return this;
   }
@@ -96,17 +116,6 @@ public class DefaultSensorDescriptor implements SensorDescriptor {
   }
 
   @Override
-  public DefaultSensorDescriptor requireProperty(String... propertyKey) {
-    return requireProperties(propertyKey);
-  }
-
-  @Override
-  public DefaultSensorDescriptor requireProperties(String... propertyKeys) {
-    this.configurationPredicate = config -> Arrays.stream(propertyKeys).allMatch(config::hasKey);
-    return this;
-  }
-
-  @Override
   public SensorDescriptor global() {
     this.global = true;
     return this;
@@ -118,4 +127,9 @@ public class DefaultSensorDescriptor implements SensorDescriptor {
     return this;
   }
 
+  @Override
+  public SensorDescriptor processesFilesIndependently() {
+    this.processesFilesIndependently = true;
+    return this;
+  }
 }

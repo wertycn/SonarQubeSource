@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,8 +27,8 @@ import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.permission.template.PermissionTemplateDto;
+import org.sonar.db.user.UserId;
 import org.sonar.server.permission.RequestValidator;
-import org.sonar.server.permission.UserId;
 import org.sonar.server.permission.ws.PermissionWsSupport;
 import org.sonar.server.permission.ws.PermissionsWsAction;
 import org.sonar.server.permission.ws.WsParameters;
@@ -98,7 +98,7 @@ public class RemoveUserFromTemplateAction implements PermissionsWsAction {
 
       UserId user = wsSupport.findUser(dbSession, userLogin);
 
-      dbClient.permissionTemplateDao().deleteUserPermission(dbSession, template.getUuid(), user.getUuid(), permission);
+      dbClient.permissionTemplateDao().deleteUserPermission(dbSession, template.getUuid(), user.getUuid(), permission, template.getName(), user.getLogin());
       dbSession.commit();
     }
   }

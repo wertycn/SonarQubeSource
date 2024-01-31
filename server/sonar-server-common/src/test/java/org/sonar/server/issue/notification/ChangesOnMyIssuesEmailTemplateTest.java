@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.elasticsearch.common.util.set.Sets;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.notifications.Notification;
@@ -54,7 +53,9 @@ import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
+import static org.apache.commons.lang.StringEscapeUtils.escapeHtml;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.issue.Issue.STATUS_CLOSED;
@@ -80,8 +81,6 @@ public class ChangesOnMyIssuesEmailTemplateTest {
   private static final String[] ISSUE_STATUSES = {STATUS_OPEN, STATUS_RESOLVED, STATUS_CONFIRMED, STATUS_REOPENED, STATUS_CLOSED};
   private static final String[] SECURITY_HOTSPOTS_STATUSES = {STATUS_TO_REVIEW, STATUS_REVIEWED};
 
-  @org.junit.Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private I18n i18n = mock(I18n.class);
   private EmailSettings emailSettings = mock(EmailSettings.class);
@@ -98,10 +97,9 @@ public class ChangesOnMyIssuesEmailTemplateTest {
   public void formats_fails_with_ISE_if_change_from_Analysis_and_no_issue() {
     AnalysisChange analysisChange = newAnalysisChange();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("changedIssues can't be empty");
-
-    underTest.format(new ChangesOnMyIssuesNotification(analysisChange, Collections.emptySet()));
+    assertThatThrownBy(() -> underTest.format(new ChangesOnMyIssuesNotification(analysisChange, Collections.emptySet())))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("changedIssues can't be empty");
   }
 
   @Test
@@ -408,6 +406,38 @@ public class ChangesOnMyIssuesEmailTemplateTest {
       .hasParagraph()// skip title based on status
       .hasList("Rule " + ruleName + " - See the single issue")
       .withLink("See the single issue", host + "/project/issues?id=" + project.getKey() + "&issues=" + changedIssue.getKey() + "&open=" + changedIssue.getKey())
+      .hasParagraph().hasParagraph() // skip footer
+      .noMoreBlock();
+  }
+
+  @Test
+  public void user_input_content_should_be_html_escape() {
+    Project project = new Project.Builder("uuid").setProjectName("</projectName>").setKey("project_key").build();
+    String ruleName = "</RandomRule>";
+    String host = randomAlphabetic(15);
+    Rule rule = newRule(ruleName, randomRuleTypeHotspotExcluded());
+    List<ChangedIssue> changedIssues = IntStream.range(0, 2 + new Random().nextInt(5))
+      .mapToObj(i -> newChangedIssue("issue_" + i, randomValidStatus(), project, rule))
+      .collect(toList());
+    UserChange userChange = newUserChange();
+    when(emailSettings.getServerBaseURL()).thenReturn(host);
+
+    EmailMessage emailMessage = underTest.format(new ChangesOnMyIssuesNotification(userChange, ImmutableSet.copyOf(changedIssues)));
+
+    assertThat(emailMessage.getMessage())
+      .doesNotContain(project.getProjectName())
+      .contains(escapeHtml(project.getProjectName()))
+      .doesNotContain(ruleName)
+      .contains(escapeHtml(ruleName));
+
+    String expectedHref = host + "/project/issues?id=" + project.getKey()
+      + "&issues=" + changedIssues.stream().map(ChangedIssue::getKey).collect(joining("%2C"));
+    String expectedLinkText = "See all " + changedIssues.size() + " issues";
+    HtmlFragmentAssert.assertThat(emailMessage.getMessage())
+      .hasParagraph().hasParagraph() // skip header
+      .hasParagraph(project.getProjectName())
+      .hasList("Rule " + ruleName + " - " + expectedLinkText)
+      .withLink(expectedLinkText, expectedHref)
       .hasParagraph().hasParagraph() // skip footer
       .noMoreBlock();
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.application.es;
 import ch.qos.logback.classic.Level;
 import java.io.File;
 import java.util.Properties;
+import javax.annotation.CheckForNull;
 import org.sonar.process.ProcessId;
 import org.sonar.process.ProcessProperties;
 import org.sonar.process.Props;
@@ -29,31 +30,46 @@ import org.sonar.process.logging.Log4JPropertiesBuilder;
 import org.sonar.process.logging.LogLevelConfig;
 import org.sonar.process.logging.RootLoggerConfig;
 
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_NAME;
 import static org.sonar.process.ProcessProperties.Property.LOG_CONSOLE;
+import static org.sonar.process.ProcessProperties.Property.LOG_JSON_OUTPUT;
 import static org.sonar.process.logging.RootLoggerConfig.newRootLoggerConfigBuilder;
 
 public class EsLogging {
 
   public Properties createProperties(Props props, File logDir) {
     Log4JPropertiesBuilder log4JPropertiesBuilder = new Log4JPropertiesBuilder(props);
-    RootLoggerConfig config = newRootLoggerConfigBuilder().setProcessId(ProcessId.ELASTICSEARCH).build();
+    RootLoggerConfig config = newRootLoggerConfigBuilder()
+      .setNodeNameField(getNodeNameWhenCluster(props))
+      .setProcessId(ProcessId.ELASTICSEARCH)
+      .build();
+
     String logPattern = log4JPropertiesBuilder.buildLogPattern(config);
 
-    log4JPropertiesBuilder.internalLogLevel(Level.ERROR);
-    log4JPropertiesBuilder.configureGlobalFileLog(config, logDir, logPattern);
-    if (isAllLogsToConsoleEnabled(props)) {
-      log4JPropertiesBuilder.configureGlobalStdoutLog(logPattern);
-    }
-    log4JPropertiesBuilder.apply(
-      LogLevelConfig.newBuilder(log4JPropertiesBuilder.getRootLoggerName())
-        .rootLevelFor(ProcessId.ELASTICSEARCH)
-        // turn off ES type deprecation logging to not flood logs
-        .immutableLevel("DEPRECATION", Level.ERROR)
-        .immutableLevel("org.elasticsearch.deprecation", Level.ERROR)
-        .immutableLevel("org.elasticsearch.client.RestClient", Level.ERROR)
-        .build());
+    return log4JPropertiesBuilder.internalLogLevel(Level.ERROR)
+      .rootLoggerConfig(config)
+      .logPattern(logPattern)
+      .enableAllLogsToConsole(isAllLogsToConsoleEnabled(props))
+      .jsonOutput(isJsonOutput(props))
+      .logDir(logDir)
+      .logLevelConfig(
+        LogLevelConfig.newBuilder(log4JPropertiesBuilder.getRootLoggerName())
+          .rootLevelFor(ProcessId.ELASTICSEARCH)
+          .build())
+      .build();
+  }
 
-    return log4JPropertiesBuilder.get();
+  private static boolean isJsonOutput(Props props) {
+    return props.valueAsBoolean(LOG_JSON_OUTPUT.getKey(),
+      Boolean.parseBoolean(LOG_JSON_OUTPUT.getDefaultValue()));
+  }
+
+  @CheckForNull
+  private static String getNodeNameWhenCluster(Props props) {
+    boolean clusterEnabled = props.valueAsBoolean(CLUSTER_ENABLED.getKey(),
+      Boolean.parseBoolean(CLUSTER_ENABLED.getDefaultValue()));
+    return clusterEnabled ? props.value(CLUSTER_NODE_NAME.getKey(), CLUSTER_NODE_NAME.getDefaultValue()) : null;
   }
 
   /**

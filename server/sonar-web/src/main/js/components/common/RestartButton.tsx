@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,23 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { DangerButtonSecondary } from 'design-system/lib';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ConfirmButton from 'sonar-ui-common/components/controls/ConfirmButton';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { restart } from '../../api/system';
+import ConfirmButton from '../../components/controls/ConfirmButton';
+import { translate } from '../../helpers/l10n';
+import { SysStatus } from '../../types/types';
 
 interface Props {
   className?: string;
   fetchSystemStatus: () => void;
-  systemStatus: T.SysStatus;
+  systemStatus: SysStatus;
 }
 
 export default class RestartButton extends React.PureComponent<Props> {
-  handleConfirm = () => {
-    return restart().then(this.props.fetchSystemStatus);
-  };
+  handleConfirm = () => restart().then(this.props.fetchSystemStatus);
 
   render() {
     const { className, systemStatus } = this.props;
@@ -42,23 +40,24 @@ export default class RestartButton extends React.PureComponent<Props> {
         confirmButtonText={translate('restart')}
         modalBody={
           <>
-            <p className="spacer-top spacer-bottom">
-              {translate('system.are_you_sure_to_restart')}
-            </p>
-            <p>{translate('system.forcing_shutdown_not_recommended')}</p>
+            <p className="sw-my-2">{translate('system.are_you_sure_to_restart')}</p>
+            <p className="sw-mb-2">{translate('system.forcing_shutdown_not_recommended')}</p>
+            <p>{translate('system.restart_does_not_reload_sonar_properties')}</p>
           </>
         }
         modalHeader={translate('system.restart_server')}
-        onConfirm={this.handleConfirm}>
+        onConfirm={this.handleConfirm}
+      >
         {({ onClick }) => (
-          <Button
-            className={classNames('button-red', className)}
+          <DangerButtonSecondary
+            className={className}
             disabled={systemStatus !== 'UP'}
-            onClick={onClick}>
+            onClick={onClick}
+          >
             {systemStatus === 'RESTARTING'
               ? translate('system.restart_in_progress')
               : translate('system.restart_server')}
-          </Button>
+          </DangerButtonSecondary>
         )}
       </ConfirmButton>
     );

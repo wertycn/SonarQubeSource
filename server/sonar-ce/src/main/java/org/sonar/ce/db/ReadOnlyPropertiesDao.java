@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,12 @@
  */
 package org.sonar.ce.db;
 
-import java.util.Map;
+import javax.annotation.Nullable;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbSession;
 import org.sonar.db.MyBatis;
+import org.sonar.db.audit.NoOpAuditPersister;
 import org.sonar.db.property.PropertiesDao;
 import org.sonar.db.property.PropertyDto;
 
@@ -38,11 +39,12 @@ import org.sonar.db.property.PropertyDto;
  */
 public class ReadOnlyPropertiesDao extends PropertiesDao {
   public ReadOnlyPropertiesDao(MyBatis mybatis, System2 system2, UuidFactory uuidFactory) {
-    super(mybatis, system2, uuidFactory);
+    super(mybatis, system2, uuidFactory, new NoOpAuditPersister());
   }
 
   @Override
-  public void saveProperty(DbSession session, PropertyDto property) {
+  public void saveProperty(DbSession session, PropertyDto property, @Nullable String userLogin,
+    @Nullable String projectKey, @Nullable String projectName, @Nullable String qualifier) {
     // do nothing
   }
 
@@ -52,37 +54,13 @@ public class ReadOnlyPropertiesDao extends PropertiesDao {
   }
 
   @Override
-  public void deleteProjectProperty(String key, String projectUuid) {
-    // do nothing
-  }
-
-  @Override
-  public void deleteProjectProperty(String key, String projectUuid, DbSession session) {
-    // do nothing
-  }
-
-  @Override
-  public void deleteProjectProperties(String key, String value, DbSession session) {
-    // do nothing
-  }
-
-  @Override
-  public void deleteProjectProperties(String key, String value) {
+  public void deleteProjectProperty(DbSession session, String key, String projectUuid, String projectKey,
+    String projectName, String qualifier) {
     // do nothing
   }
 
   @Override
   public void deleteGlobalProperty(String key, DbSession session) {
-    // do nothing
-  }
-
-  @Override
-  public void deleteGlobalProperty(String key) {
-    // do nothing
-  }
-
-  @Override
-  public void saveGlobalProperties(Map<String, String> properties) {
     // do nothing
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,7 @@ package org.sonar.ce.task.projectanalysis.batch;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -30,15 +31,17 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.LineIterator;
 import org.sonar.core.util.CloseableIterator;
 import org.sonar.core.util.LineReaderIterator;
+import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.LineSgnificantCode;
+import org.sonar.scanner.protocol.output.ScannerReportReader;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class BatchReportReaderImpl implements BatchReportReader {
 
   private final BatchReportDirectoryHolder batchReportDirectoryHolder;
-  private org.sonar.scanner.protocol.output.ScannerReportReader delegate;
+  private ScannerReportReader delegate;
   // caching of metadata which are read often
   private ScannerReport.Metadata metadata;
 
@@ -48,7 +51,8 @@ public class BatchReportReaderImpl implements BatchReportReader {
 
   private void ensureInitialized() {
     if (this.delegate == null) {
-      this.delegate = new org.sonar.scanner.protocol.output.ScannerReportReader(batchReportDirectoryHolder.getDirectory());
+      FileStructure fileStructure = new FileStructure(batchReportDirectoryHolder.getDirectory());
+      this.delegate = new ScannerReportReader(fileStructure);
     }
   }
 
@@ -59,6 +63,13 @@ public class BatchReportReaderImpl implements BatchReportReader {
       this.metadata = delegate.readMetadata();
     }
     return this.metadata;
+  }
+
+  @CheckForNull
+  @Override
+  public InputStream getAnalysisCache() {
+    ensureInitialized();
+    return delegate.getAnalysisCache();
   }
 
   @Override

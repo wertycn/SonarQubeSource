@@ -21,16 +21,28 @@
       analysis_uuid = #{analysisUuid}
   </select>
 
-  <select id="selectProjectCountPerAnalysisPropertyValueInLastAnalysis" parameterType="string" resultType="ProjectCountPerAnalysisPropertyValue">
+  <select id="selectByKeyAnAnalysisUuids" parameterType="string" resultType="ScrapAnalysisProperty">
+    SELECT
+    <include refid="columns"/>
+    FROM
+    analysis_properties
+    WHERE
+    kee = #{analysisPropertyKey,jdbcType=VARCHAR}
+    AND analysis_uuid in <foreach collection="analysisUuids" open="(" close=")" item="uuid" separator=",">#{uuid,jdbcType=VARCHAR}</foreach>
+  </select>
+
+  <select id="selectAnalysisPropertyValueInLastAnalysisPerProject" parameterType="string" resultType="AnalysisPropertyValuePerProject">
     select
-      ap.text_value as "propertyValue",
-      count(ap.text_value) as "count"
+      pb.project_uuid as "projectUuid", ap.text_value as "propertyValue"
     from components cp
-    inner join snapshots s on s.component_uuid = cp.uuid
+    inner join snapshots s on s.root_component_uuid = cp.uuid
     inner join analysis_properties ap on ap.analysis_uuid = s.uuid
+    inner join project_branches pb on pb.uuid = cp.branch_uuid
     where
-      s.islast = ${_true} and ap.kee = #{analysisPropertyKey, jdbcType=VARCHAR}
-    group by ap.text_value
+      pb.is_main = ${_true}
+      and s.islast = ${_true}
+      and ap.kee = #{analysisPropertyKey, jdbcType=VARCHAR}
+    order by cp.uuid asc
   </select>
 
   <insert id="insertAsEmpty" parameterType="map" useGeneratedKeys="false">

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,31 +19,61 @@
  */
 package org.sonar.server.platform.db.migration.engine;
 
+import java.sql.SQLException;
+import java.util.List;
+import org.junit.Before;
 import org.junit.Test;
-import org.picocontainer.Startable;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.api.Startable;
+import org.sonar.core.platform.SpringComponentContainer;
+import org.sonar.server.platform.db.migration.step.InternalMigrationStepRegistry;
+import org.sonar.server.platform.db.migration.step.MigrationStep;
+import org.sonar.server.platform.db.migration.step.MigrationStepRegistryImpl;
+import org.sonar.server.platform.db.migration.step.MigrationStepsExecutor;
+import org.sonar.server.platform.db.migration.step.RegisteredMigrationStep;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class MigrationContainerImplTest {
-  private ComponentContainer parent = new ComponentContainer();
-  private MigrationContainerPopulator populator = container -> container.add(StartCallCounter.class);
+  private final SpringComponentContainer parent = new SpringComponentContainer();
+  private MigrationContainerImpl underTest;
 
-  private MigrationContainerImpl underTest = new MigrationContainerImpl(parent, populator);
+  @Before
+  public void setUp() {
+    InternalMigrationStepRegistry registry = new MigrationStepRegistryImpl();
+    registry.add(1, "test", NoOpMigrationStep.class);
 
-  @Test
-  public void pico_container_of_migration_container_has_pico_container_of_specified_container_as_parent() {
-    assertThat(underTest.getPicoContainer().getParent()).isEqualTo(parent.getPicoContainer());
+    parent.add(registry.build());
+    parent.startComponents();
+    underTest = new MigrationContainerImpl(parent, NoOpExecutor.class);
+    underTest.add(StartCallCounter.class);
   }
 
   @Test
-  public void pico_container_of_parent_does_not_have_pico_container_of_migration_container_as_child() {
-    assertThat(parent.getPicoContainer().removeChildContainer(underTest.getPicoContainer())).isFalse();
+  public void adds_migration_steps_to_migration_container() {
+    assertThat(underTest.getComponentByType(MigrationStep.class)).isInstanceOf(NoOpMigrationStep.class);
   }
 
   @Test
-  public void pico_container_of_migration_container_is_started_in_constructor() {
-    assertThat(underTest.getPicoContainer().getLifecycleState().isStarted()).isTrue();
+  public void context_of_migration_container_has_specified_context_as_parent() {
+    assertThat(underTest.context().getParent()).isEqualTo(parent.context());
+  }
+
+  @Test
+  public void context_of_migration_container_is_started_in_constructor() {
+    assertThat(underTest.context().isActive()).isTrue();
+  }
+
+  @Test
+  public void add_duplicate_steps_has_no_effect() {
+    InternalMigrationStepRegistry registry = new MigrationStepRegistryImpl();
+    registry.add(1, "test", NoOpMigrationStep.class);
+    registry.add(2, "test2", NoOpMigrationStep.class);
+
+    SpringComponentContainer parent = new SpringComponentContainer();
+    parent.add(registry.build());
+    parent.startComponents();
+    MigrationContainerImpl underTest = new MigrationContainerImpl(parent, NoOpExecutor.class);
+    assertThat(underTest.getComponentsByType(MigrationStep.class)).hasSize(1);
   }
 
   @Test
@@ -53,14 +83,29 @@ public class MigrationContainerImplTest {
     StartCallCounter startCallCounter = underTest.getComponentByType(StartCallCounter.class);
 
     assertThat(startCallCounter).isNotNull();
-    assertThat(StartCallCounter.startCalls).isEqualTo(1);
+    assertThat(StartCallCounter.startCalls).isOne();
   }
 
   @Test
   public void cleanup_does_not_fail_even_if_stop_of_component_fails() {
-    MigrationContainerImpl underTest = new MigrationContainerImpl(parent, (container -> container.add(StopFailing.class)));
+    parent.add(StopFailing.class);
+    MigrationContainerImpl underTest = new MigrationContainerImpl(parent, NoOpExecutor.class);
 
     underTest.cleanup();
+  }
+
+  private static class NoOpExecutor implements MigrationStepsExecutor {
+    @Override
+    public void execute(List<RegisteredMigrationStep> steps) {
+
+    }
+  }
+
+  private static class NoOpMigrationStep implements MigrationStep {
+    @Override
+    public void execute() throws SQLException {
+
+    }
   }
 
   public static final class StartCallCounter implements Startable {

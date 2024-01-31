@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect, Note } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { getOperatorLabel } from '../../../helpers/qualityGates';
+import { Metric } from '../../../types/types';
 import { getPossibleOperators } from '../utils';
 
 interface Props {
-  metric: T.Metric;
+  metric: Metric;
   onOperatorChange: (op: string) => void;
   op?: string;
 }
@@ -33,40 +34,30 @@ export default class ConditionOperator extends React.PureComponent<Props> {
     this.props.onOperatorChange(value);
   };
 
-  getLabel(op: string, metric: T.Metric) {
-    return metric.type === 'RATING'
-      ? translate('quality_gates.operator', op, 'rating')
-      : translate('quality_gates.operator', op);
-  }
-
   render() {
     const operators = getPossibleOperators(this.props.metric);
 
     if (Array.isArray(operators)) {
-      const operatorOptions = operators.map(op => {
-        const label = this.getLabel(op, this.props.metric);
+      const operatorOptions = operators.map((op) => {
+        const label = getOperatorLabel(op, this.props.metric);
         return { label, value: op };
       });
 
       return (
-        <Select
-          autoFocus={true}
-          className="input-medium"
-          clearable={false}
-          id="condition-operator"
+        <InputSelect
+          autoFocus
+          size="small"
+          isClearable={false}
+          inputId="condition-operator"
           name="operator"
           onChange={this.handleChange}
           options={operatorOptions}
-          searchable={false}
-          value={this.props.op}
+          isSearchable={false}
+          value={operatorOptions.filter((o) => o.value === this.props.op)}
         />
       );
-    } else {
-      return (
-        <span className="display-inline-block note abs-width-150">
-          {this.getLabel(operators, this.props.metric)}
-        </span>
-      );
     }
+
+    return <Note className="sw-w-abs-150">{getOperatorLabel(operators, this.props.metric)}</Note>;
   }
 }

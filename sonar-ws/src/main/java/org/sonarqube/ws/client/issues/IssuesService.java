@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonarqube.ws.client.issues;
 
+import java.io.InputStream;
 import java.util.stream.Collectors;
 import javax.annotation.Generated;
 import org.sonarqube.ws.Issues.AddCommentResponse;
@@ -194,6 +195,19 @@ public class IssuesService extends BaseService {
   /**
    *
    * This is part of the internal API.
+   * This is a POST request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/issues/reindex">Further information about this action online (including a response example)</a>
+   * @since 9.8
+   */
+  public void reindex() {
+    call(
+      new PostRequest(path("reindex"))
+        .setMediaType(MediaTypes.JSON)).content();
+  }
+
+  /**
+   *
+   * This is part of the internal API.
    * This is a GET request.
    * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/issues/search">Further information about this action online (including a response example)</a>
    * @since 3.6
@@ -206,22 +220,18 @@ public class IssuesService extends BaseService {
         .setParam("assigned", request.getAssigned())
         .setParam("assignees", request.getAssignees() == null ? null : request.getAssignees().stream().collect(Collectors.joining(",")))
         .setParam("author", request.getAuthor())
-        .setParam("authors", request.getAuthors() == null ? null : request.getAuthors().stream().collect(Collectors.joining(",")))
         .setParam("branch", request.getBranch())
-        .setParam("componentKeys", request.getComponentKeys() == null ? null : request.getComponentKeys().stream().collect(Collectors.joining(",")))
-        .setParam("componentUuids", request.getComponentUuids() == null ? null : request.getComponentUuids().stream().collect(Collectors.joining(",")))
+        .setParam("components", request.getComponentKeys() == null ? null : request.getComponentKeys().stream().collect(Collectors.joining(",")))
         .setParam("createdAfter", request.getCreatedAfter())
         .setParam("createdAt", request.getCreatedAt())
         .setParam("createdBefore", request.getCreatedBefore())
         .setParam("createdInLast", request.getCreatedInLast())
         .setParam("cwe", request.getCwe() == null ? null : request.getCwe().stream().collect(Collectors.joining(",")))
         .setParam("directories", request.getDirectories() == null ? null : request.getDirectories().stream().collect(Collectors.joining(",")))
-        .setParam("facetMode", request.getFacetMode())
         .setParam("facets", request.getFacets() == null ? null : request.getFacets().stream().collect(Collectors.joining(",")))
         .setParam("fileUuids", request.getFileUuids() == null ? null : request.getFileUuids().stream().collect(Collectors.joining(",")))
         .setParam("issues", request.getIssues() == null ? null : request.getIssues().stream().collect(Collectors.joining(",")))
         .setParam("languages", request.getLanguages() == null ? null : request.getLanguages().stream().collect(Collectors.joining(",")))
-        .setParam("moduleUuids", request.getModuleUuids() == null ? null : request.getModuleUuids().stream().collect(Collectors.joining(",")))
         .setParam("onComponentOnly", request.getOnComponentOnly())
         .setParam("owaspTop10", request.getOwaspTop10() == null ? null : request.getOwaspTop10().stream().collect(Collectors.joining(",")))
         .setParam("p", request.getP())
@@ -235,7 +245,7 @@ public class IssuesService extends BaseService {
         .setParam("sansTop25", request.getSansTop25() == null ? null : request.getSansTop25().stream().collect(Collectors.joining(",")))
         .setParam("sonarsourceSecurity", request.getSonarsourceSecurity() == null ? null : request.getSonarsourceSecurity().stream().collect(Collectors.joining(",")))
         .setParam("severities", request.getSeverities() == null ? null : request.getSeverities().stream().collect(Collectors.joining(",")))
-        .setParam("sinceLeakPeriod", request.getSinceLeakPeriod())
+        .setParam("inNewCodePeriod", request.isInNewCodePeriod())
         .setParam("statuses", request.getStatuses() == null ? null : request.getStatuses().stream().collect(Collectors.joining(",")))
         .setParam("tags", request.getTags() == null ? null : request.getTags().stream().collect(Collectors.joining(",")))
         .setParam("types", request.getTypes() == null ? null : request.getTypes().stream().collect(Collectors.joining(","))),
@@ -302,4 +312,54 @@ public class IssuesService extends BaseService {
         .setParam("q", request.getQ()),
       TagsResponse.parser());
   }
+
+  /**
+   *
+   * This is part of the internal API.
+   * This is a GET request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/api/issues/pull">Further information about this action online (including a response example)</a>
+   * @since 9.5
+   */
+  public InputStream pull(PullRequest request) {
+    return call(
+      new GetRequest(path("pull"))
+        .setParam("projectKey", request.getProjectKey())
+        .setParam("branchName", request.getBranchName())
+        .setParam("languages", request.getLanguages())
+        .setParam("ruleRepositories", request.getRuleRepositories())
+        .setParam("resolvedOnly", request.getResolvedOnly())
+        .setParam("changedSince", request.getChangedSince())
+    ).contentStream();
+  }
+
+  /**
+   *
+   * This is part of the internal API.
+   * This is a GET request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/api/issues/pull_taint">Further information about this action online (including a response example)</a>
+   * @since 9.5
+   */
+  public InputStream pullTaint(PullRequest request) {
+    return call(
+      new GetRequest(path("pull_taint"))
+        .setParam("projectKey", request.getProjectKey())
+        .setParam("branchName", request.getBranchName())
+        .setParam("languages", request.getLanguages())
+        .setParam("changedSince", request.getChangedSince())
+    ).contentStream();
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/api/issues/anticipated_transitions">Further information about this action online (including a response example)</a>
+   * @since 10.2
+   */
+  public int anticipatedTransitions(String projectKey, String body) {
+    return call(
+      new PostRequest(path("anticipated_transitions?projectKey=" + projectKey))
+        .setBody(body)).code();
+  }
+
 }

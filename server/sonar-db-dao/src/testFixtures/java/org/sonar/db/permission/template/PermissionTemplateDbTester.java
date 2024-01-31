@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.db.permission.template;
 
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -59,8 +60,9 @@ public class PermissionTemplateDbTester {
       ofNullable(portfoliosDefaultTemplate).map(PermissionTemplateDto::getUuid).orElse(null));
   }
 
-  public PermissionTemplateDto insertTemplate() {
-    return insertTemplate(newPermissionTemplateDto());
+  @SafeVarargs
+  public final PermissionTemplateDto insertTemplate(Consumer<PermissionTemplateDto>... populators) {
+    return insertTemplate(newPermissionTemplateDto(populators));
   }
 
   public PermissionTemplateDto insertTemplate(PermissionTemplateDto template) {
@@ -70,36 +72,37 @@ public class PermissionTemplateDbTester {
   }
 
   public void addGroupToTemplate(PermissionTemplateDto permissionTemplate, GroupDto group, String permission) {
-    addGroupToTemplate(permissionTemplate.getUuid(), group.getUuid(), permission);
+    addGroupToTemplate(permissionTemplate.getUuid(), group.getUuid(), permission, permissionTemplate.getName(), group.getName());
   }
 
-  public void addGroupToTemplate(String templateUuid, @Nullable String groupUuid, String permission) {
-    dbClient.permissionTemplateDao().insertGroupPermission(dbSession, templateUuid, groupUuid, permission);
+  public void addGroupToTemplate(String templateUuid, @Nullable String groupUuid, String permission, String templateName, @Nullable String groupName) {
+    dbClient.permissionTemplateDao().insertGroupPermission(dbSession, templateUuid, groupUuid, permission, templateName, groupName);
     db.commit();
   }
 
   public void addAnyoneToTemplate(PermissionTemplateDto permissionTemplate, String permission) {
-    addGroupToTemplate(permissionTemplate.getUuid(), null, permission);
+    addGroupToTemplate(permissionTemplate.getUuid(), null, permission, permissionTemplate.getName(), null);
   }
 
   public void addUserToTemplate(PermissionTemplateDto permissionTemplate, UserDto user, String permission) {
-    addUserToTemplate(permissionTemplate.getUuid(), user.getUuid(), permission);
+    addUserToTemplate(permissionTemplate.getUuid(), user.getUuid(), permission, permissionTemplate.getName(), user.getName());
   }
 
-  public void addUserToTemplate(String templateUuid, String userUuid, String permission) {
-    dbClient.permissionTemplateDao().insertUserPermission(dbSession, templateUuid, userUuid, permission);
+  public void addUserToTemplate(String templateUuid, String userUuid, String permission, String templateName, String userLogin) {
+    dbClient.permissionTemplateDao().insertUserPermission(dbSession, templateUuid, userUuid, permission, templateName, userLogin);
     db.commit();
   }
 
   public void addProjectCreatorToTemplate(PermissionTemplateDto permissionTemplate, String permission) {
-    addProjectCreatorToTemplate(permissionTemplate.getUuid(), permission);
+    addProjectCreatorToTemplate(permissionTemplate.getUuid(), permission, permissionTemplate.getName());
   }
 
-  public void addProjectCreatorToTemplate(String templateUuid, String permission) {
+  public void addProjectCreatorToTemplate(String templateUuid, String permission, String templateName) {
     dbClient.permissionTemplateCharacteristicDao().insert(dbSession, newPermissionTemplateCharacteristicDto()
-      .setWithProjectCreator(true)
-      .setTemplateUuid(templateUuid)
-      .setPermission(permission));
+        .setWithProjectCreator(true)
+        .setTemplateUuid(templateUuid)
+        .setPermission(permission),
+      templateName);
     db.commit();
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,56 +17,66 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator, Title, TutorialStep, TutorialStepList } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../../types/alm-settings';
-import Step from '../components/Step';
+import { translate } from '../../../helpers/l10n';
+import { AlmKeys, AlmSettingsInstance } from '../../../types/alm-settings';
+import { Component } from '../../../types/types';
+import { LoggedInUser } from '../../../types/users';
+import AllSet from '../components/AllSet';
+import YamlFileStep from '../components/YamlFileStep';
+import AnalysisCommand from './AnalysisCommand';
 import SecretStep from './SecretStep';
-import YamlFileStep from './YamlFileStep';
-
-export enum Steps {
-  CREATE_SECRET = 1,
-  YAML = 2
-}
 
 export interface GitHubActionTutorialProps {
   almBinding?: AlmSettingsInstance;
   baseUrl: string;
-  component: T.Component;
-  currentUser: T.LoggedInUser;
-  projectBinding: ProjectAlmBindingResponse;
+  component: Component;
+  currentUser: LoggedInUser;
+  mainBranchName: string;
+  willRefreshAutomatically?: boolean;
 }
 
 export default function GitHubActionTutorial(props: GitHubActionTutorialProps) {
-  const { almBinding, baseUrl, currentUser, component, projectBinding } = props;
-
-  const [step, setStep] = React.useState<Steps>(Steps.CREATE_SECRET);
+  const [done, setDone] = React.useState<boolean>(false);
+  const { almBinding, baseUrl, currentUser, component, mainBranchName, willRefreshAutomatically } =
+    props;
   return (
     <>
-      <Step
-        finished={step > Steps.CREATE_SECRET}
-        onOpen={() => setStep(Steps.CREATE_SECRET)}
-        open={step === Steps.CREATE_SECRET}
-        renderForm={() => (
+      <Title>{translate('onboarding.tutorial.with.github_ci.title')}</Title>
+
+      <TutorialStepList className="sw-mb-8">
+        <TutorialStep
+          title={translate('onboarding.tutorial.with.github_action.create_secret.title')}
+        >
           <SecretStep
             almBinding={almBinding}
             baseUrl={baseUrl}
             component={component}
             currentUser={currentUser}
-            projectBinding={projectBinding}
-            onDone={() => setStep(Steps.YAML)}
           />
+        </TutorialStep>
+        <TutorialStep title={translate('onboarding.tutorial.with.github_action.yaml.title')}>
+          <YamlFileStep setDone={setDone}>
+            {(buildTool) => (
+              <AnalysisCommand
+                buildTool={buildTool}
+                mainBranchName={mainBranchName}
+                component={component}
+              />
+            )}
+          </YamlFileStep>
+        </TutorialStep>
+        {done && (
+          <>
+            <BasicSeparator className="sw-my-10" />
+            <AllSet
+              alm={almBinding?.alm || AlmKeys.GitHub}
+              willRefreshAutomatically={willRefreshAutomatically}
+            />
+          </>
         )}
-        stepNumber={Steps.CREATE_SECRET}
-        stepTitle={translate('onboarding.tutorial.with.github_action.create_secret.title')}
-      />
-      <Step
-        onOpen={() => setStep(Steps.YAML)}
-        open={step === Steps.YAML}
-        renderForm={() => <YamlFileStep component={component} />}
-        stepNumber={Steps.YAML}
-        stepTitle={translate('onboarding.tutorial.with.github_action.yaml.title')}
-      />
+      </TutorialStepList>
     </>
   );
 }

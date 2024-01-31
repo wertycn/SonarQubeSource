@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,8 @@ import org.sonar.core.platform.Module;
 import org.sonar.server.almintegration.ws.azure.ImportAzureProjectAction;
 import org.sonar.server.almintegration.ws.azure.ListAzureProjectsAction;
 import org.sonar.server.almintegration.ws.azure.SearchAzureReposAction;
+import org.sonar.server.almintegration.ws.bitbucketcloud.ImportBitbucketCloudRepoAction;
+import org.sonar.server.almintegration.ws.bitbucketcloud.SearchBitbucketCloudReposAction;
 import org.sonar.server.almintegration.ws.bitbucketserver.ImportBitbucketServerProjectAction;
 import org.sonar.server.almintegration.ws.bitbucketserver.ListBitbucketServerProjectsAction;
 import org.sonar.server.almintegration.ws.bitbucketserver.SearchBitbucketServerReposAction;
@@ -30,6 +32,7 @@ import org.sonar.server.almintegration.ws.github.GetGithubClientIdAction;
 import org.sonar.server.almintegration.ws.github.ImportGithubProjectAction;
 import org.sonar.server.almintegration.ws.github.ListGithubOrganizationsAction;
 import org.sonar.server.almintegration.ws.github.ListGithubRepositoriesAction;
+import org.sonar.server.almintegration.ws.github.config.CheckAction;
 import org.sonar.server.almintegration.ws.gitlab.ImportGitLabProjectAction;
 import org.sonar.server.almintegration.ws.gitlab.SearchGitlabReposAction;
 
@@ -38,10 +41,13 @@ public class AlmIntegrationsWSModule extends Module {
   protected void configureModule() {
     add(
       CheckPatAction.class,
+      CheckAction.class,
       SetPatAction.class,
       ImportBitbucketServerProjectAction.class,
+      ImportBitbucketCloudRepoAction.class,
       ListBitbucketServerProjectsAction.class,
       SearchBitbucketServerReposAction.class,
+      SearchBitbucketCloudReposAction.class,
       GetGithubClientIdAction.class,
       ImportGithubProjectAction.class,
       ListGithubOrganizationsAction.class,

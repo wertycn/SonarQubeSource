@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,52 +17,48 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { last } from 'lodash';
+import { HoverLink, TextMuted } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { isMainBranch } from '../../../../helpers/branch-like';
+import Favorite from '../../../../components/controls/Favorite';
 import { getComponentOverviewUrl } from '../../../../helpers/urls';
-import { BranchLike } from '../../../../types/branch-like';
+import { Component } from '../../../../types/types';
+import { CurrentUser, isLoggedIn } from '../../../../types/users';
 
-interface Props {
-  component: T.Component;
-  currentBranchLike: BranchLike | undefined;
+export interface BreadcrumbProps {
+  component: Component;
+  currentUser: CurrentUser;
 }
 
-export function Breadcrumb(props: Props) {
-  const {
-    component: { breadcrumbs },
-    currentBranchLike
-  } = props;
-  const lastBreadcrumbElement = last(breadcrumbs);
-  const isNoMainBranch = currentBranchLike && !isMainBranch(currentBranchLike);
+export function Breadcrumb(props: BreadcrumbProps) {
+  const { component, currentUser } = props;
 
   return (
-    <div className="big flex-shrink display-flex-center">
-      {breadcrumbs.map((breadcrumbElement, i) => {
-        const isFirst = i === 0;
-        const isNotLast = i < breadcrumbs.length - 1;
+    <div className="sw-text-sm sw-flex sw-justify-center">
+      {component.breadcrumbs.map((breadcrumbElement, i) => {
+        const isNotLast = i < component.breadcrumbs.length - 1;
+        const isLast = !isNotLast;
 
         return (
-          <span className="flex-shrink display-flex-center" key={breadcrumbElement.key}>
-            {isFirst && lastBreadcrumbElement && (
-              <QualifierIcon className="spacer-right" qualifier={lastBreadcrumbElement.qualifier} />
+          <div key={breadcrumbElement.key} className="sw-flex sw-items-center">
+            {isLast && isLoggedIn(currentUser) && (
+              <Favorite
+                className="sw-mr-2"
+                component={component.key}
+                favorite={Boolean(component.isFavorite)}
+                qualifier={component.qualifier}
+              />
             )}
-            {isNoMainBranch || isNotLast ? (
-              <Link
-                className="link-no-underline text-ellipsis"
-                title={breadcrumbElement.name}
-                to={getComponentOverviewUrl(breadcrumbElement.key, breadcrumbElement.qualifier)}>
-                {breadcrumbElement.name}
-              </Link>
-            ) : (
-              <span className="text-ellipsis" title={breadcrumbElement.name}>
-                {breadcrumbElement.name}
-              </span>
-            )}
-            {isNotLast && <span className="slash-separator" />}
-          </span>
+            <HoverLink
+              blurAfterClick
+              className="js-project-link sw-flex"
+              key={breadcrumbElement.name}
+              title={breadcrumbElement.name}
+              to={getComponentOverviewUrl(breadcrumbElement.key, breadcrumbElement.qualifier)}
+            >
+              <TextMuted text={breadcrumbElement.name} />
+            </HoverLink>
+            {isNotLast && <span className="slash-separator sw-mx-2" />}
+          </div>
         );
       })}
     </div>

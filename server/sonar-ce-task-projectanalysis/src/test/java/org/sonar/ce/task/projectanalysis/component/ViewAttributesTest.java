@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,15 @@
  */
 package org.sonar.ce.task.projectanalysis.component;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.resources.Qualifiers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.ce.task.projectanalysis.component.ViewAttributes.Type.APPLICATION;
 import static org.sonar.ce.task.projectanalysis.component.ViewAttributes.Type.PORTFOLIO;
 
 public class ViewAttributesTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private ViewAttributes underTest;
 
@@ -58,9 +55,8 @@ public class ViewAttributesTest {
 
   @Test
   public void fail_if_unknown_view_qualifier() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Qualifier 'TRK' is not supported");
-
-    ViewAttributes.Type.fromQualifier(Qualifiers.PROJECT);
+    assertThatThrownBy(() -> ViewAttributes.Type.fromQualifier(Qualifiers.PROJECT))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Qualifier 'TRK' is not supported");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,52 +17,45 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
 import * as React from 'react';
-import { scrollToElement } from 'sonar-ui-common/helpers/scrolling';
-import withKeyboardNavigation from '../../../components/hoc/withKeyboardNavigation';
 import SourceViewer from '../../../components/SourceViewer/SourceViewer';
+import withKeyboardNavigation from '../../../components/hoc/withKeyboardNavigation';
+import { Location } from '../../../components/hoc/withRouter';
 import { BranchLike } from '../../../types/branch-like';
+import { Measure } from '../../../types/types';
 
-interface Props {
+export interface SourceViewerWrapperProps {
   branchLike?: BranchLike;
   component: string;
-  componentMeasures: T.Measure[] | undefined;
-  location: Pick<Location, 'query'>;
-  onIssueChange?: (issue: T.Issue) => void;
+  componentMeasures: Measure[] | undefined;
+  location: Location;
 }
 
-export class SourceViewerWrapper extends React.PureComponent<Props> {
-  scrollToLine = () => {
-    const { location } = this.props;
-    const { line } = location.query;
+function SourceViewerWrapper(props: SourceViewerWrapperProps) {
+  const { branchLike, component, componentMeasures, location } = props;
+  const { line } = location.query;
+  const finalLine = line ? Number(line) : undefined;
 
+  const handleLoaded = React.useCallback(() => {
     if (line) {
-      const row = document.querySelector(`.source-line[data-line-number="${line}"]`);
+      const row = document.querySelector(`.it__source-line-code[data-line-number="${line}"]`);
       if (row) {
-        scrollToElement(row, { smooth: false, bottomOffset: window.innerHeight / 2 - 60 });
+        row.scrollIntoView({ block: 'center' });
       }
     }
-  };
+  }, [line]);
 
-  render() {
-    const { branchLike, component, componentMeasures, location } = this.props;
-    const { line } = location.query;
-    const finalLine = line ? Number(line) : undefined;
-
-    return (
-      <SourceViewer
-        aroundLine={finalLine}
-        branchLike={branchLike}
-        component={component}
-        componentMeasures={componentMeasures}
-        highlightedLine={finalLine}
-        onIssueChange={this.props.onIssueChange}
-        onLoaded={this.scrollToLine}
-        showMeasures={true}
-      />
-    );
-  }
+  return (
+    <SourceViewer
+      aroundLine={finalLine}
+      branchLike={branchLike}
+      component={component}
+      componentMeasures={componentMeasures}
+      highlightedLine={finalLine}
+      onLoaded={handleLoaded}
+      showMeasures
+    />
+  );
 }
 
 export default withKeyboardNavigation(SourceViewerWrapper);

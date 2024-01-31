@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,11 +25,13 @@ import com.google.gson.JsonSyntaxException;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.api.utils.KeyValueFormat;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.event.EventComponentChangeDto;
 import org.sonar.db.event.EventDto;
@@ -37,28 +39,30 @@ import org.sonarqube.ws.ProjectAnalyses;
 import org.sonarqube.ws.ProjectAnalyses.Analysis;
 import org.sonarqube.ws.ProjectAnalyses.Event;
 import org.sonarqube.ws.ProjectAnalyses.QualityGate;
+import org.sonarqube.ws.ProjectAnalyses.QualityProfile;
 import org.sonarqube.ws.ProjectAnalyses.SearchResponse;
 
 import static java.lang.String.format;
 import static java.util.Optional.ofNullable;
-import static java.util.stream.Collectors.toList;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.core.util.stream.MoreCollectors.index;
 import static org.sonar.server.projectanalysis.ws.EventCategory.fromLabel;
 
 class SearchResponseBuilder {
-  private static final Logger LOGGER = Loggers.get(SearchResponseBuilder.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(SearchResponseBuilder.class);
 
   private final Analysis.Builder wsAnalysis;
   private final Event.Builder wsEvent;
   private final SearchData searchData;
   private final QualityGate.Builder wsQualityGate;
+  private final QualityProfile.Builder wsQualityProfile;
   private final ProjectAnalyses.DefinitionChange.Builder wsDefinitionChange;
 
   SearchResponseBuilder(SearchData searchData) {
     this.wsAnalysis = Analysis.newBuilder();
     this.wsEvent = Event.newBuilder();
     this.wsQualityGate = QualityGate.newBuilder();
+    this.wsQualityProfile = QualityProfile.newBuilder();
     this.wsDefinitionChange = ProjectAnalyses.DefinitionChange.newBuilder();
     this.searchData = searchData;
   }
@@ -78,7 +82,7 @@ class SearchResponseBuilder {
   }
 
   private Analysis.Builder dbToWsAnalysis(SnapshotDto dbAnalysis) {
-    Analysis.Builder builder = wsAnalysis.clear();
+    var builder = wsAnalysis.clear();
     builder
       .setKey(dbAnalysis.getUuid())
       .setDate(formatDateTime(dbAnalysis.getCreatedAt()))
@@ -86,6 +90,7 @@ class SearchResponseBuilder {
     ofNullable(dbAnalysis.getProjectVersion()).ifPresent(builder::setProjectVersion);
     ofNullable(dbAnalysis.getBuildString()).ifPresent(builder::setBuildString);
     ofNullable(dbAnalysis.getRevision()).ifPresent(builder::setRevision);
+    ofNullable(searchData.detectedCIs.get(dbAnalysis.getUuid())).ifPresent(builder::setDetectedCI);
 
     return builder;
   }
@@ -102,23 +107,31 @@ class SearchResponseBuilder {
     wsEvent.clear().setKey(dbEvent.getUuid());
     ofNullable(dbEvent.getName()).ifPresent(wsEvent::setName);
     ofNullable(dbEvent.getDescription()).ifPresent(wsEvent::setDescription);
-    ofNullable(dbEvent.getCategory()).ifPresent(cat -> wsEvent.setCategory(fromLabel(cat).name()));
-    if (dbEvent.getCategory() != null) {
-      switch (EventCategory.fromLabel(dbEvent.getCategory())) {
-        case DEFINITION_CHANGE:
-          addDefinitionChange(dbEvent);
-          break;
-        case QUALITY_GATE:
-          addQualityGateInformation(dbEvent);
-          break;
-        case VERSION:
-        case OTHER:
-        case QUALITY_PROFILE:
-        default:
-          break;
-      }
-    }
+    ofNullable(dbEvent.getCategory())
+      .ifPresent(cat -> {
+        wsEvent.setCategory(fromLabel(cat).name());
+        switch (fromLabel(cat)) {
+          case DEFINITION_CHANGE -> addDefinitionChange(dbEvent);
+          case QUALITY_GATE -> addQualityGateInformation(dbEvent);
+          case QUALITY_PROFILE -> addQualityProfileInformation(dbEvent);
+          default -> {
+            //Nothing to do if not one of the previous cases
+          }
+        }
+      });
     return wsEvent;
+  }
+
+  private void addQualityProfileInformation(EventDto event) {
+    wsQualityProfile.clear();
+
+    Map<String, String> data = KeyValueFormat.parse(event.getData());
+
+    Optional.ofNullable(data.get("key")).ifPresent(wsQualityProfile::setKey);
+    Optional.ofNullable(data.get("name")).ifPresent(wsQualityProfile::setName);
+    Optional.ofNullable(data.get("languageKey")).ifPresent(wsQualityProfile::setLanguageKey);
+
+    wsEvent.setQualityProfile(wsQualityProfile.build());
   }
 
   private void addQualityGateInformation(EventDto event) {
@@ -143,7 +156,7 @@ class SearchResponseBuilder {
 
     wsQualityGate.addAllFailing(eventComponentChangeDtos.stream()
       .map(SearchResponseBuilder::toFailing)
-      .collect(toList()));
+      .toList());
     wsEvent.setQualityGate(wsQualityGate.build());
   }
 
@@ -162,7 +175,7 @@ class SearchResponseBuilder {
         componentChangeByKey.asMap().values().stream()
           .map(SearchResponseBuilder::addChange)
           .map(Project::toProject)
-          .collect(toList())
+          .toList()
       );
       wsEvent.setDefinitionChange(wsDefinitionChange.build());
     } catch (IllegalStateException e) {

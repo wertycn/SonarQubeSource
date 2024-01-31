@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,22 +18,28 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { ExtendedSettingDefinition } from '../../../types/settings';
+import { Component } from '../../../types/types';
 import {
-  ALM_INTEGRATION,
+  ALM_INTEGRATION_CATEGORY,
   ANALYSIS_SCOPE_CATEGORY,
+  AUTHENTICATION_CATEGORY,
   LANGUAGES_CATEGORY,
   NEW_CODE_PERIOD_CATEGORY,
-  PULL_REQUEST_DECORATION_BINDING_CATEGORY
-} from './AdditionalCategoryKeys';
-import AlmIntegration from './almIntegration/AlmIntegration';
+  PULL_REQUEST_DECORATION_BINDING_CATEGORY,
+} from '../constants';
 import { AnalysisScope } from './AnalysisScope';
 import Languages from './Languages';
-import NewCodePeriod from './NewCodePeriod';
+import NewCodeDefinition from './NewCodeDefinition';
+import AlmIntegration from './almIntegration/AlmIntegration';
+import Authentication from './authentication/Authentication';
 import PullRequestDecorationBinding from './pullRequestDecorationBinding/PRDecorationBinding';
 
 export interface AdditionalCategoryComponentProps {
-  component: T.Component | undefined;
+  categories: string[];
+  definitions: ExtendedSettingDefinition[];
+  component: Component | undefined;
   selectedCategory: string;
 }
 
@@ -44,7 +50,7 @@ export interface AdditionalCategory {
   key: string;
   name: string;
   renderComponent: (props: AdditionalCategoryComponentProps) => React.ReactNode;
-  requiresBranchesEnabled?: boolean;
+  requiresBranchSupport?: boolean;
 }
 
 export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
@@ -54,7 +60,7 @@ export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
     renderComponent: getLanguagesComponent,
     availableGlobally: true,
     availableForProject: true,
-    displayTab: true
+    displayTab: true,
   },
   {
     key: NEW_CODE_PERIOD_CATEGORY,
@@ -62,7 +68,7 @@ export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
     renderComponent: getNewCodePeriodComponent,
     availableGlobally: true,
     availableForProject: false,
-    displayTab: true
+    displayTab: true,
   },
   {
     key: ANALYSIS_SCOPE_CATEGORY,
@@ -70,15 +76,15 @@ export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
     renderComponent: getAnalysisScopeComponent,
     availableGlobally: true,
     availableForProject: true,
-    displayTab: false
+    displayTab: false,
   },
   {
-    key: ALM_INTEGRATION,
+    key: ALM_INTEGRATION_CATEGORY,
     name: translate('property.category.almintegration'),
     renderComponent: getAlmIntegrationComponent,
     availableGlobally: true,
     availableForProject: false,
-    displayTab: false
+    displayTab: true,
   },
   {
     key: PULL_REQUEST_DECORATION_BINDING_CATEGORY,
@@ -87,8 +93,16 @@ export const ADDITIONAL_CATEGORIES: AdditionalCategory[] = [
     availableGlobally: false,
     availableForProject: true,
     displayTab: true,
-    requiresBranchesEnabled: true
-  }
+    requiresBranchSupport: true,
+  },
+  {
+    key: AUTHENTICATION_CATEGORY,
+    name: translate('property.category.authentication'),
+    renderComponent: getAuthenticationComponent,
+    availableGlobally: true,
+    availableForProject: false,
+    displayTab: false,
+  },
 ];
 
 function getLanguagesComponent(props: AdditionalCategoryComponentProps) {
@@ -96,7 +110,7 @@ function getLanguagesComponent(props: AdditionalCategoryComponentProps) {
 }
 
 function getNewCodePeriodComponent() {
-  return <NewCodePeriod />;
+  return <NewCodeDefinition />;
 }
 
 function getAnalysisScopeComponent(props: AdditionalCategoryComponentProps) {
@@ -105,6 +119,10 @@ function getAnalysisScopeComponent(props: AdditionalCategoryComponentProps) {
 
 function getAlmIntegrationComponent(props: AdditionalCategoryComponentProps) {
   return <AlmIntegration {...props} />;
+}
+
+function getAuthenticationComponent(props: AdditionalCategoryComponentProps) {
+  return <Authentication {...props} />;
 }
 
 function getPullRequestDecorationBindingComponent(props: AdditionalCategoryComponentProps) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,25 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { get, getJSON, parseError, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { get, getJSON, parseError, post, postJSON } from '../helpers/request';
 import {
   AzureProject,
   AzureRepository,
+  BitbucketCloudRepository,
   BitbucketProject,
   BitbucketRepository,
   GithubOrganization,
   GithubRepository,
-  GitlabProject
+  GitlabProject,
 } from '../types/alm-integration';
+import { Paging } from '../types/types';
 import { ProjectBase } from './components';
 
-export function setAlmPersonalAccessToken(almSetting: string, pat: string): Promise<void> {
-  return post('/api/alm_integrations/set_pat', { almSetting, pat }).catch(throwGlobalError);
+export function setAlmPersonalAccessToken(
+  almSetting: string,
+  pat: string,
+  username?: string,
+): Promise<void> {
+  return post('/api/alm_integrations/set_pat', { almSetting, pat, username }).catch(
+    throwGlobalError,
+  );
 }
 
 export function checkPersonalAccessTokenIsValid(
-  almSetting: string
+  almSetting: string,
 ): Promise<{ status: boolean; error?: string }> {
   return get('/api/alm_integrations/check_pat', { almSetting })
     .then(() => ({ status: true }))
@@ -50,81 +58,114 @@ export function checkPersonalAccessTokenIsValid(
 
 export function getAzureProjects(almSetting: string): Promise<{ projects: AzureProject[] }> {
   return getJSON('/api/alm_integrations/list_azure_projects', { almSetting }).catch(
-    throwGlobalError
+    throwGlobalError,
   );
 }
 
 export function getAzureRepositories(
   almSetting: string,
-  projectName: string
+  projectName: string,
 ): Promise<{ repositories: AzureRepository[] }> {
   return getJSON('/api/alm_integrations/search_azure_repos', { almSetting, projectName }).catch(
-    throwGlobalError
+    throwGlobalError,
   );
 }
 
 export function searchAzureRepositories(
   almSetting: string,
-  searchQuery: string
+  searchQuery: string,
 ): Promise<{ repositories: AzureRepository[] }> {
   return getJSON('/api/alm_integrations/search_azure_repos', { almSetting, searchQuery }).catch(
-    throwGlobalError
+    throwGlobalError,
   );
 }
 
-export function importAzureRepository(
-  almSetting: string,
-  projectName: string,
-  repositoryName: string
-): Promise<{ project: ProjectBase }> {
-  return postJSON('/api/alm_integrations/import_azure_project', {
-    almSetting,
-    projectName,
-    repositoryName
-  }).catch(throwGlobalError);
+export function setupAzureProjectCreation(data: {
+  almSetting: string;
+  projectName: string;
+  repositoryName: string;
+}) {
+  return (newCodeDefinitionType?: string, newCodeDefinitionValue?: string) =>
+    importAzureRepository({ ...data, newCodeDefinitionType, newCodeDefinitionValue });
+}
+
+export function importAzureRepository(data: {
+  almSetting: string;
+  projectName: string;
+  repositoryName: string;
+  newCodeDefinitionType?: string;
+  newCodeDefinitionValue?: string;
+}): Promise<{ project: ProjectBase }> {
+  return postJSON('/api/alm_integrations/import_azure_project', data).catch(throwGlobalError);
 }
 
 export function getBitbucketServerProjects(
-  almSetting: string
+  almSetting: string,
 ): Promise<{ projects: BitbucketProject[] }> {
   return getJSON('/api/alm_integrations/list_bitbucketserver_projects', { almSetting });
 }
 
 export function getBitbucketServerRepositories(
   almSetting: string,
-  projectName: string
+  projectName: string,
 ): Promise<{
   isLastPage: boolean;
   repositories: BitbucketRepository[];
 }> {
   return getJSON('/api/alm_integrations/search_bitbucketserver_repos', {
     almSetting,
-    projectName
+    projectName,
   });
 }
 
-export function importBitbucketServerProject(
-  almSetting: string,
-  projectKey: string,
-  repositorySlug: string
-): Promise<{ project: ProjectBase }> {
-  return postJSON('/api/alm_integrations/import_bitbucketserver_project', {
-    almSetting,
-    projectKey,
-    repositorySlug
-  }).catch(throwGlobalError);
+export function setupBitbucketServerProjectCreation(data: {
+  almSetting: string;
+  projectKey: string;
+  repositorySlug: string;
+}) {
+  return (newCodeDefinitionType?: string, newCodeDefinitionValue?: string) =>
+    importBitbucketServerProject({ ...data, newCodeDefinitionType, newCodeDefinitionValue });
+}
+
+export function importBitbucketServerProject(data: {
+  almSetting: string;
+  projectKey: string;
+  repositorySlug: string;
+  newCodeDefinitionType?: string;
+  newCodeDefinitionValue?: string;
+}): Promise<{ project: ProjectBase }> {
+  return postJSON('/api/alm_integrations/import_bitbucketserver_project', data).catch(
+    throwGlobalError,
+  );
 }
 
 export function searchForBitbucketServerRepositories(
   almSetting: string,
-  repositoryName: string
+  repositoryName: string,
 ): Promise<{
   isLastPage: boolean;
   repositories: BitbucketRepository[];
 }> {
   return getJSON('/api/alm_integrations/search_bitbucketserver_repos', {
     almSetting,
-    repositoryName
+    repositoryName,
+  });
+}
+
+export function searchForBitbucketCloudRepositories(
+  almSetting: string,
+  repositoryName: string,
+  pageSize: number,
+  page?: number,
+): Promise<{
+  isLastPage: boolean;
+  repositories: BitbucketCloudRepository[];
+}> {
+  return getJSON('/api/alm_integrations/search_bitbucketcloud_repos', {
+    almSetting,
+    repositoryName,
+    p: page,
+    ps: pageSize,
   });
 }
 
@@ -132,25 +173,48 @@ export function getGithubClientId(almSetting: string): Promise<{ clientId?: stri
   return getJSON('/api/alm_integrations/get_github_client_id', { almSetting });
 }
 
-export function importGithubRepository(
-  almSetting: string,
-  organization: string,
-  repositoryKey: string
-): Promise<{ project: ProjectBase }> {
-  return postJSON('/api/alm_integrations/import_github_project', {
-    almSetting,
-    organization,
-    repositoryKey
-  }).catch(throwGlobalError);
+export function setupBitbucketCloudProjectCreation(data: {
+  almSetting: string;
+  repositorySlug: string;
+}) {
+  return (newCodeDefinitionType?: string, newCodeDefinitionValue?: string) =>
+    importBitbucketCloudRepository({ ...data, newCodeDefinitionType, newCodeDefinitionValue });
+}
+
+export function importBitbucketCloudRepository(data: {
+  almSetting: string;
+  repositorySlug: string;
+  newCodeDefinitionType?: string;
+  newCodeDefinitionValue?: string;
+}): Promise<{ project: ProjectBase }> {
+  return postJSON('/api/alm_integrations/import_bitbucketcloud_repo', data).catch(throwGlobalError);
+}
+
+export function setupGithubProjectCreation(data: {
+  almSetting: string;
+  organization: string;
+  repositoryKey: string;
+}) {
+  return (newCodeDefinitionType?: string, newCodeDefinitionValue?: string) =>
+    importGithubRepository({ ...data, newCodeDefinitionType, newCodeDefinitionValue });
+}
+
+export function importGithubRepository(data: {
+  almSetting: string;
+  repositoryKey: string;
+  newCodeDefinitionType?: string;
+  newCodeDefinitionValue?: string;
+}): Promise<{ project: ProjectBase }> {
+  return postJSON('/api/alm_integrations/import_github_project', data).catch(throwGlobalError);
 }
 
 export function getGithubOrganizations(
   almSetting: string,
-  token: string
+  token: string,
 ): Promise<{ organizations: GithubOrganization[] }> {
   return getJSON('/api/alm_integrations/list_github_organizations', {
     almSetting,
-    token
+    token,
   }).catch((response?: Response) => {
     if (response && response.status !== 400) {
       throwGlobalError(response);
@@ -164,14 +228,14 @@ export function getGithubRepositories(data: {
   pageSize: number;
   page?: number;
   query?: string;
-}): Promise<{ repositories: GithubRepository[]; paging: T.Paging }> {
+}): Promise<{ repositories: GithubRepository[]; paging: Paging }> {
   const { almSetting, organization, pageSize, page = 1, query } = data;
   return getJSON('/api/alm_integrations/list_github_repositories', {
     almSetting,
     organization,
     p: page,
     ps: pageSize,
-    q: query || undefined
+    q: query || undefined,
   }).catch(throwGlobalError);
 }
 
@@ -180,25 +244,28 @@ export function getGitlabProjects(data: {
   page?: number;
   pageSize?: number;
   query?: string;
-}): Promise<{ projects: GitlabProject[]; projectsPaging: T.Paging }> {
+}): Promise<{ projects: GitlabProject[]; projectsPaging: Paging }> {
   const { almSetting, pageSize, page, query } = data;
   return getJSON('/api/alm_integrations/search_gitlab_repos', {
     almSetting,
     projectName: query || undefined,
     p: page,
-    ps: pageSize
+    ps: pageSize,
   })
     .then(({ repositories, paging }) => ({ projects: repositories, projectsPaging: paging }))
     .catch(throwGlobalError);
 }
 
+export function setupGitlabProjectCreation(data: { almSetting: string; gitlabProjectId: string }) {
+  return (newCodeDefinitionType?: string, newCodeDefinitionValue?: string) =>
+    importGitlabProject({ ...data, newCodeDefinitionType, newCodeDefinitionValue });
+}
+
 export function importGitlabProject(data: {
   almSetting: string;
   gitlabProjectId: string;
+  newCodeDefinitionType?: string;
+  newCodeDefinitionValue?: string;
 }): Promise<{ project: ProjectBase }> {
-  const { almSetting, gitlabProjectId } = data;
-  return postJSON('/api/alm_integrations/import_gitlab_project', {
-    almSetting,
-    gitlabProjectId
-  }).catch(throwGlobalError);
+  return postJSON('/api/alm_integrations/import_gitlab_project', data).catch(throwGlobalError);
 }

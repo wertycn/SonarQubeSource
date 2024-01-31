@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,26 +24,16 @@ import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.process.systeminfo.SystemInfoUtils;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
 import org.sonar.server.health.Health;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoader;
 
 public abstract class AbstractSystemInfoWriter implements SystemInfoWriter {
   private static final String[] ORDERED_SECTION_NAMES = {
     // standalone
-    "System", "Database", "Bundled", "Plugins",
+    "System", "Statistics", "Database", "Bundled", "Plugins",
 
     // cluster
     "Web JVM State", "Web Database Connection", "Web Logging", "Web JVM Properties",
     "Compute Engine Tasks", "Compute Engine JVM State", "Compute Engine Database Connection", "Compute Engine Logging", "Compute Engine JVM Properties",
     "Search State", "Search Indexes"};
-
-  private final TelemetryDataLoader telemetry;
-  private final TelemetryDataJsonWriter dataJsonWriter;
-
-  AbstractSystemInfoWriter(TelemetryDataLoader telemetry, TelemetryDataJsonWriter dataJsonWriter) {
-    this.telemetry = telemetry;
-    this.dataJsonWriter = dataJsonWriter;
-  }
 
   protected void writeSections(Collection<ProtobufSystemInfo.Section> sections, JsonWriter json) {
     SystemInfoUtils
@@ -51,7 +41,7 @@ public abstract class AbstractSystemInfoWriter implements SystemInfoWriter {
       .forEach(section -> writeSection(section, json));
   }
 
-  private void writeSection(ProtobufSystemInfo.Section section, JsonWriter json) {
+  private static void writeSection(ProtobufSystemInfo.Section section, JsonWriter json) {
     json.name(section.getName());
     json.beginObject();
     for (ProtobufSystemInfo.Attribute attribute : section.getAttributesList()) {
@@ -60,7 +50,7 @@ public abstract class AbstractSystemInfoWriter implements SystemInfoWriter {
     json.endObject();
   }
 
-  private void writeAttribute(ProtobufSystemInfo.Attribute attribute, JsonWriter json) {
+  private static void writeAttribute(ProtobufSystemInfo.Attribute attribute, JsonWriter json) {
     switch (attribute.getValueCase()) {
       case BOOLEAN_VALUE:
         json.prop(attribute.getKey(), attribute.getBooleanValue());
@@ -87,8 +77,4 @@ public abstract class AbstractSystemInfoWriter implements SystemInfoWriter {
     json.name("Health Causes").beginArray().values(health.getCauses()).endArray();
   }
 
-  protected void writeTelemetry(JsonWriter json) {
-    json.name("Statistics");
-    dataJsonWriter.writeTelemetryData(json, telemetry.load());
-  }
 }

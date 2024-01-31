@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.server.es.searchrequest.TopAggregationHelper.NO_EXTRA_FILTER;
 import static org.sonar.server.es.searchrequest.TopAggregationHelper.NO_OTHER_SUBAGGREGATION;
@@ -139,7 +139,7 @@ public class TopAggregationHelperTest {
 
     underTest.buildTopAggregation(topAggregationName, topAggregation, NO_EXTRA_FILTER, t -> t.subAggregation(subAggregation));
 
-    verifyZeroInteractions(subAggregationHelper);
+    verifyNoInteractions(subAggregationHelper);
   }
 
   @Test

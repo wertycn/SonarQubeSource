@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,17 +20,19 @@
 import {
   AzureProject,
   AzureRepository,
+  BitbucketCloudRepository,
   BitbucketProject,
   BitbucketRepository,
   GithubRepository,
-  GitlabProject
+  GitlabProject,
 } from '../../types/alm-integration';
+import { GitlabConfiguration, ProvisioningType } from '../../types/provisioning';
 
 export function mockAzureProject(overrides: Partial<AzureProject> = {}): AzureProject {
   return {
     name: 'azure-project-1',
     description: 'Azure Project',
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -38,7 +40,7 @@ export function mockAzureRepository(overrides: Partial<AzureRepository> = {}): A
   return {
     name: 'Azure repo 1',
     projectName: 'Azure Project',
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -47,19 +49,32 @@ export function mockBitbucketProject(overrides: Partial<BitbucketProject> = {}):
     id: 1,
     key: 'project',
     name: 'Project',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockBitbucketRepository(
-  overrides: Partial<BitbucketRepository> = {}
+  overrides: Partial<BitbucketRepository> = {},
 ): BitbucketRepository {
   return {
     id: 1,
     slug: 'project__repo',
     name: 'Repo',
     projectKey: 'project',
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockBitbucketCloudRepository(
+  overrides: Partial<BitbucketCloudRepository> = {},
+): BitbucketCloudRepository {
+  return {
+    uuid: 1,
+    slug: 'project__repo',
+    name: 'Repo',
+    projectKey: 'project',
+    workspace: 'worksapce',
+    ...overrides,
   };
 }
 
@@ -68,9 +83,8 @@ export function mockGitHubRepository(overrides: Partial<GithubRepository> = {}):
     id: 'id1234',
     key: 'key3456',
     name: 'repository 1',
-    sqProjectKey: '',
-    url: 'owner/repo1',
-    ...overrides
+    url: 'https://github.com/owner/repo1',
+    ...overrides,
   };
 }
 
@@ -81,8 +95,24 @@ export function mockGitlabProject(overrides: Partial<GitlabProject> = {}): Gitla
     slug: 'awesome-project-exclamation',
     pathName: 'Company / Best Projects',
     pathSlug: 'company/best-projects',
-    sqProjectKey: '',
     url: 'https://gitlab.company.com/best-projects/awesome-project-exclamation',
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockGitlabConfiguration(
+  overrides: Partial<GitlabConfiguration> = {},
+): GitlabConfiguration {
+  return {
+    id: Math.random().toString(),
+    enabled: false,
+    url: 'URL',
+    applicationId: '123',
+    allowUsersToSignUp: false,
+    synchronizeGroups: true,
+    provisioningType: ProvisioningType.jit,
+    allowedGroups: ['Cypress Hill'],
+    isProvisioningTokenSet: false,
+    ...overrides,
   };
 }

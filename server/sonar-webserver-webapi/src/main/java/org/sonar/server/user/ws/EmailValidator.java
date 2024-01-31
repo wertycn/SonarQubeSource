@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,7 @@ import javax.mail.internet.InternetAddress;
 
 import static org.apache.commons.lang.StringUtils.isEmpty;
 
-class EmailValidator {
+public class EmailValidator {
 
   private EmailValidator() {
     // Hide constructor

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,35 +17,45 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { withTheme } from '@emotion/react';
+import { QueryClient } from '@tanstack/react-query';
+import { Theme } from 'design-system';
+import { isEqual } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { InjectedIntlProps, injectIntl } from 'react-intl';
-import { connect } from 'react-redux';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { injectIntl, WrappedComponentProps } from 'react-intl';
 import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import { getExtensionStart } from '../../../helpers/extensions';
-import { getCurrentL10nBundle } from '../../../helpers/l10n';
+import { addGlobalErrorMessage } from '../../../helpers/globalMessages';
+import { translate } from '../../../helpers/l10n';
+import { getCurrentL10nBundle } from '../../../helpers/l10nBundle';
 import { getBaseUrl } from '../../../helpers/system';
-import { addGlobalErrorMessage } from '../../../store/globalMessages';
-import { getCurrentUser, Store } from '../../../store/rootReducer';
+import { withQueryClient } from '../../../queries/withQueryClientHoc';
+import { AppState } from '../../../types/appstate';
 import { ExtensionStartMethod } from '../../../types/extension';
+import { Dict, Extension as TypeExtension } from '../../../types/types';
+import { CurrentUser, HomePage } from '../../../types/users';
 import * as theme from '../../theme';
-import getStore from '../../utils/getStore';
+import withAppStateContext from '../app-state/withAppStateContext';
+import withCurrentUserContext from '../current-user/withCurrentUserContext';
 
-interface Props extends InjectedIntlProps {
-  currentUser: T.CurrentUser;
-  extension: T.Extension;
+export interface ExtensionProps extends WrappedComponentProps {
+  theme: Theme;
+  appState: AppState;
+  currentUser: CurrentUser;
+  extension: TypeExtension;
   location: Location;
-  onFail: (message: string) => void;
-  options?: T.Dict<any>;
+  options?: Dict<any>;
   router: Router;
+  queryClient: QueryClient;
+  updateCurrentUserHomepage: (homepage: HomePage) => void;
 }
 
 interface State {
   extensionElement?: React.ReactElement<any>;
 }
 
-export class Extension extends React.PureComponent<Props, State> {
+class Extension extends React.PureComponent<ExtensionProps, State> {
   container?: HTMLElement | null;
   stop?: Function;
   state: State = {};
@@ -54,11 +64,11 @@ export class Extension extends React.PureComponent<Props, State> {
     this.startExtension();
   }
 
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.extension !== this.props.extension) {
+  componentDidUpdate(prevProps: ExtensionProps) {
+    if (prevProps.extension.key !== this.props.extension.key) {
       this.stopExtension();
       this.startExtension();
-    } else if (prevProps.location !== this.props.location) {
+    } else if (!isEqual(prevProps.location, this.props.location)) {
       this.startExtension();
     }
   }
@@ -68,18 +78,24 @@ export class Extension extends React.PureComponent<Props, State> {
   }
 
   handleStart = (start: ExtensionStartMethod) => {
-    const store = getStore();
+    const { theme: dsTheme, queryClient } = this.props;
     const result = start({
-      store,
+      appState: this.props.appState,
       el: this.container,
       currentUser: this.props.currentUser,
       intl: this.props.intl,
       location: this.props.location,
       router: this.props.router,
       theme,
+      // New theme from design-system, we should drop old theme once the migration to miui is done
+      dsTheme,
       baseUrl: getBaseUrl(),
       l10nBundle: getCurrentL10nBundle(),
-      ...this.props.options
+      // See SONAR-16207 and core-extension-enterprise-server/src/main/js/portfolios/components/Header.tsx
+      // for more information on why we're passing this as a prop to an extension.
+      updateCurrentUserHomepage: this.props.updateCurrentUserHomepage,
+      queryClient,
+      ...this.props.options,
     });
 
     if (result) {
@@ -92,7 +108,7 @@ export class Extension extends React.PureComponent<Props, State> {
   };
 
   handleFailure = () => {
-    this.props.onFail(translate('page_extension_failed'));
+    addGlobalErrorMessage(translate('page_extension_failed'));
   };
 
   startExtension() {
@@ -115,14 +131,13 @@ export class Extension extends React.PureComponent<Props, State> {
         {this.state.extensionElement ? (
           this.state.extensionElement
         ) : (
-          <div ref={container => (this.container = container)} />
+          <div ref={(container) => (this.container = container)} />
         )}
       </div>
     );
   }
 }
 
-const mapStateToProps = (state: Store) => ({ currentUser: getCurrentUser(state) });
-const mapDispatchToProps = { onFail: addGlobalErrorMessage };
-
-export default injectIntl(withRouter(connect(mapStateToProps, mapDispatchToProps)(Extension)));
+export default injectIntl(
+  withRouter(withTheme(withAppStateContext(withCurrentUserContext(withQueryClient(Extension))))),
+);

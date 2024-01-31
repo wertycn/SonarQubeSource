@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -78,9 +78,9 @@ abstract class AbstractManagedProcess implements ManagedProcess {
     int exitValue = process.waitFor();
     if (exitValueLogged.compareAndSet(false, true)) {
       if (exitValue != EXPECTED_EXIT_VALUE) {
-        LOG.warn("Process exited with exit value [{}]: {}", processId.getKey(), exitValue);
+        LOG.warn("Process exited with exit value [{}]: {}", processId.getHumanReadableName(), exitValue);
       } else {
-        LOG.debug("Process exited with exit value [{}]: {}", processId.getKey(), exitValue);
+        LOG.debug("Process exited with exit value [{}]: {}", processId.getHumanReadableName(), exitValue);
       }
     }
   }

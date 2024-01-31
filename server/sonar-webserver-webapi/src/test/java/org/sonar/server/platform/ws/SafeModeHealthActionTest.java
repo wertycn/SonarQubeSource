@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,9 +23,8 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.stream.IntStream;
 import org.apache.commons.lang.RandomStringUtils;
-import org.junit.Rule;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.health.Health;
@@ -38,15 +37,13 @@ import org.sonarqube.ws.System;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.server.health.Health.newHealthCheckBuilder;
 import static org.sonar.test.JsonAssert.assertJson;
 
 public class SafeModeHealthActionTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final Random random = new Random();
   private HealthChecker healthChecker = mock(HealthChecker.class);
@@ -71,16 +68,14 @@ public class SafeModeHealthActionTest {
     when(systemPasscode.isValid(any())).thenReturn(false);
     TestRequest request = underTest.newRequest();
 
-    expectForbiddenException();
-
-    request.execute();
+    expectForbiddenException(() -> request.execute());
   }
 
   @Test
   public void request_succeeds_when_valid_passcode() {
     authenticateWithPasscode();
     when(healthChecker.checkNode())
-      .thenReturn(newHealthCheckBuilder()
+      .thenReturn(Health.builder()
         .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
         .build());
     TestRequest request = underTest.newRequest();
@@ -92,7 +87,7 @@ public class SafeModeHealthActionTest {
   public void verify_response_example() {
     authenticateWithPasscode();
     when(healthChecker.checkNode())
-      .thenReturn(newHealthCheckBuilder()
+      .thenReturn(Health.builder()
         .setStatus(Health.Status.RED)
         .addCause("Application node app-1 is RED")
         .build());
@@ -108,7 +103,7 @@ public class SafeModeHealthActionTest {
   public void request_returns_status_and_causes_from_HealthChecker_checkNode_method() {
     authenticateWithPasscode();
     Health.Status randomStatus = Health.Status.values()[new Random().nextInt(Health.Status.values().length)];
-    Health.Builder builder = newHealthCheckBuilder()
+    Health.Builder builder = Health.builder()
       .setStatus(randomStatus);
     IntStream.range(0, new Random().nextInt(5)).mapToObj(i -> RandomStringUtils.randomAlphanumeric(3)).forEach(builder::addCause);
     Health health = builder.build();
@@ -125,7 +120,7 @@ public class SafeModeHealthActionTest {
     authenticateWithPasscode();
     Health.Status randomStatus = Health.Status.values()[random.nextInt(Health.Status.values().length)];
     String[] causes = IntStream.range(0, random.nextInt(33)).mapToObj(i -> randomAlphanumeric(4)).toArray(String[]::new);
-    Health.Builder healthBuilder = newHealthCheckBuilder()
+    Health.Builder healthBuilder = Health.builder()
       .setStatus(randomStatus);
     Arrays.stream(causes).forEach(healthBuilder::addCause);
     when(healthChecker.checkNode()).thenReturn(healthBuilder.build());
@@ -137,9 +132,10 @@ public class SafeModeHealthActionTest {
       .containsOnly(causes);
   }
 
-  private void expectForbiddenException() {
-    expectedException.expect(ForbiddenException.class);
-    expectedException.expectMessage("Insufficient privileges");
+  private void expectForbiddenException(ThrowingCallable shouldRaiseThrowable) {
+    assertThatThrownBy(shouldRaiseThrowable)
+      .isInstanceOf(ForbiddenException.class)
+      .hasMessageContaining("Insufficient privileges");
   }
 
   private void authenticateWithPasscode() {

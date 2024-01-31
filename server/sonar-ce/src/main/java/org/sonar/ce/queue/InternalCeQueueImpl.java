@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,12 +27,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.ce.container.ComputeEngineStatus;
 import org.sonar.ce.monitoring.CEQueueStatus;
 import org.sonar.ce.task.CeTask;
@@ -43,32 +44,31 @@ import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.ce.CeActivityDto;
-import org.sonar.db.ce.CeQueueDao;
 import org.sonar.db.ce.CeQueueDto;
 import org.sonar.db.ce.CeTaskCharacteristicDto;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.server.platform.NodeInformation;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
-import static java.util.Optional.ofNullable;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 @ComputeEngineSide
 public class InternalCeQueueImpl extends CeQueueImpl implements InternalCeQueue {
-  private static final Logger LOG = Loggers.get(InternalCeQueueImpl.class);
+  private static final Logger LOG = LoggerFactory.getLogger(InternalCeQueueImpl.class);
 
   private final DbClient dbClient;
   private final CEQueueStatus queueStatus;
   private final ComputeEngineStatus computeEngineStatus;
+  private final NextPendingTaskPicker nextPendingTaskPicker;
 
   public InternalCeQueueImpl(System2 system2, DbClient dbClient, UuidFactory uuidFactory, CEQueueStatus queueStatus,
-    ComputeEngineStatus computeEngineStatus) {
-    super(system2, dbClient, uuidFactory);
+    ComputeEngineStatus computeEngineStatus, NextPendingTaskPicker nextPendingTaskPicker, NodeInformation nodeInformation) {
+    super(system2, dbClient, uuidFactory, nodeInformation);
     this.dbClient = dbClient;
     this.queueStatus = queueStatus;
     this.computeEngineStatus = computeEngineStatus;
+    this.nextPendingTaskPicker = nextPendingTaskPicker;
   }
 
   @Override
@@ -79,38 +79,30 @@ public class InternalCeQueueImpl extends CeQueueImpl implements InternalCeQueue 
       return Optional.empty();
     }
     try (DbSession dbSession = dbClient.openSession(false)) {
-      CeQueueDao ceQueueDao = dbClient.ceQueueDao();
-      int i = ceQueueDao.resetToPendingForWorker(dbSession, workerUuid);
-      if (i > 0) {
-        dbSession.commit();
-        LOG.debug("{} in progress tasks reset for worker uuid {}", i, workerUuid);
-      }
-      Optional<CeQueueDto> opt = findPendingTask(workerUuid, dbSession, ceQueueDao, excludeIndexationJob);
-      if (!opt.isPresent()) {
+      resetNotPendingTasks(workerUuid, dbSession);
+      Optional<CeQueueDto> opt = nextPendingTaskPicker.findPendingTask(workerUuid, dbSession, excludeIndexationJob);
+      if (opt.isEmpty()) {
         return Optional.empty();
       }
       CeQueueDto taskDto = opt.get();
-      Map<String, ComponentDto> componentsByUuid = loadComponentDtos(dbSession, taskDto);
       Map<String, String> characteristics = dbClient.ceTaskCharacteristicsDao().selectByTaskUuids(dbSession, singletonList(taskDto.getUuid())).stream()
-        .collect(uniqueIndex(CeTaskCharacteristicDto::getKey, CeTaskCharacteristicDto::getValue));
+        .collect(Collectors.toMap(CeTaskCharacteristicDto::getKey, CeTaskCharacteristicDto::getValue));
 
-      CeTask task = convertToTask(dbSession, taskDto, characteristics,
-        ofNullable(taskDto.getComponentUuid()).map(componentsByUuid::get).orElse(null),
-        ofNullable(taskDto.getMainComponentUuid()).map(componentsByUuid::get).orElse(null));
+      CeTask task = convertToTask(dbSession, taskDto, characteristics);
       queueStatus.addInProgress();
       return Optional.of(task);
     }
   }
 
-  private Optional<CeQueueDto> findPendingTask(String workerUuid, DbSession dbSession, CeQueueDao ceQueueDao, boolean excludeIndexationJob) {
-    // try to find tasks including indexation job & excluding app/portfolio
-    // and if no match, try the opposite
-    // when excludeIndexationJob is false, search first excluding indexation jobs and including app/portfolio, then the opposite
-    Optional<CeQueueDto> opt = ceQueueDao.peek(dbSession, workerUuid, excludeIndexationJob, !excludeIndexationJob);
-    if (!opt.isPresent()) {
-      opt = ceQueueDao.peek(dbSession, workerUuid, !excludeIndexationJob, excludeIndexationJob);
+  private void resetNotPendingTasks(String workerUuid, DbSession dbSession) {
+    List<CeQueueDto> notPendingTasks = dbClient.ceQueueDao().selectNotPendingForWorker(dbSession, workerUuid);
+    if (!notPendingTasks.isEmpty()) {
+      for (CeQueueDto pendingTask : notPendingTasks) {
+        dbClient.ceQueueDao().resetToPendingByUuid(dbSession, pendingTask.getUuid());
+      }
+      dbSession.commit();
+      LOG.debug("{} in progress tasks reset for worker uuid {}", notPendingTasks.size(), workerUuid);
     }
-    return opt;
   }
 
   @Override
@@ -122,6 +114,7 @@ public class InternalCeQueueImpl extends CeQueueImpl implements InternalCeQueue 
       CeQueueDto queueDto = dbClient.ceQueueDao().selectByUuid(dbSession, task.getUuid())
         .orElseThrow(() -> new IllegalStateException("Task does not exist anymore: " + task));
       CeActivityDto activityDto = new CeActivityDto(queueDto);
+      activityDto.setNodeName(nodeInformation.getNodeName().orElse(null));
       activityDto.setStatus(status);
       executionTimeInMs = updateExecutionFields(activityDto);
       updateTaskResult(activityDto, taskResult);
@@ -161,8 +154,8 @@ public class InternalCeQueueImpl extends CeQueueImpl implements InternalCeQueue 
     if (stacktrace != null) {
       activityDto.setErrorStacktrace(stacktrace);
     }
-    if (error instanceof TypedException) {
-      activityDto.setErrorType(((TypedException) error).getType());
+    if (error instanceof TypedException typedException) {
+      activityDto.setErrorType(typedException.getType());
     }
   }
 
@@ -185,6 +178,7 @@ public class InternalCeQueueImpl extends CeQueueImpl implements InternalCeQueue 
       List<CeQueueDto> wornOutTasks = dbClient.ceQueueDao().selectWornout(dbSession);
       wornOutTasks.forEach(queueDto -> {
         CeActivityDto activityDto = new CeActivityDto(queueDto);
+        activityDto.setNodeName(nodeInformation.getNodeName().orElse(null));
         activityDto.setStatus(CeActivityDto.Status.CANCELED);
         updateExecutionFields(activityDto);
         remove(dbSession, queueDto, activityDto);

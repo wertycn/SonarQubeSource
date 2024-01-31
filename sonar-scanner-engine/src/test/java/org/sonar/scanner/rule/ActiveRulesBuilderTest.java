@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,7 @@
  */
 package org.sonar.scanner.rule;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.batch.rule.ActiveRule;
 import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.rule.internal.ActiveRulesBuilder;
@@ -30,10 +28,9 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.Severity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ActiveRulesBuilderTest {
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Test
   public void no_rules() {
@@ -45,7 +42,7 @@ public class ActiveRulesBuilderTest {
   @Test
   public void build_rules() {
     NewActiveRule activeRule = new NewActiveRule.Builder()
-      .setRuleKey(RuleKey.of("squid", "S0001"))
+      .setRuleKey(RuleKey.of("java", "S0001"))
       .setName("My Rule")
       .setSeverity(Severity.CRITICAL)
       .setInternalKey("__S0001__")
@@ -55,7 +52,7 @@ public class ActiveRulesBuilderTest {
     ActiveRules activeRules = new ActiveRulesBuilder()
       .addRule(activeRule)
       // most simple rule
-      .addRule(new NewActiveRule.Builder().setRuleKey(RuleKey.of("squid", "S0002")).build())
+      .addRule(new NewActiveRule.Builder().setRuleKey(RuleKey.of("java", "S0002")).build())
       .addRule(new NewActiveRule.Builder()
         .setRuleKey(RuleKey.of("findbugs", "NPE"))
         .setInternalKey(null)
@@ -65,24 +62,24 @@ public class ActiveRulesBuilderTest {
       .build();
 
     assertThat(activeRules.findAll()).hasSize(3);
-    assertThat(activeRules.findByRepository("squid")).hasSize(2);
+    assertThat(activeRules.findByRepository("java")).hasSize(2);
     assertThat(activeRules.findByRepository("findbugs")).hasSize(1);
-    assertThat(activeRules.findByInternalKey("squid", "__S0001__")).isNotNull();
+    assertThat(activeRules.findByInternalKey("java", "__S0001__")).isNotNull();
     assertThat(activeRules.findByRepository("unknown")).isEmpty();
 
-    ActiveRule squid1 = activeRules.find(RuleKey.of("squid", "S0001"));
-    assertThat(squid1.ruleKey().repository()).isEqualTo("squid");
-    assertThat(squid1.ruleKey().rule()).isEqualTo("S0001");
-    assertThat(squid1.severity()).isEqualTo(Severity.CRITICAL);
-    assertThat(squid1.internalKey()).isEqualTo("__S0001__");
-    assertThat(squid1.params()).hasSize(1);
-    assertThat(squid1.param("min")).isEqualTo("20");
+    ActiveRule java1 = activeRules.find(RuleKey.of("java", "S0001"));
+    assertThat(java1.ruleKey().repository()).isEqualTo("java");
+    assertThat(java1.ruleKey().rule()).isEqualTo("S0001");
+    assertThat(java1.severity()).isEqualTo(Severity.CRITICAL);
+    assertThat(java1.internalKey()).isEqualTo("__S0001__");
+    assertThat(java1.params()).hasSize(1);
+    assertThat(java1.param("min")).isEqualTo("20");
 
-    ActiveRule squid2 = activeRules.find(RuleKey.of("squid", "S0002"));
-    assertThat(squid2.ruleKey().repository()).isEqualTo("squid");
-    assertThat(squid2.ruleKey().rule()).isEqualTo("S0002");
-    assertThat(squid2.severity()).isEqualTo(Severity.defaultSeverity());
-    assertThat(squid2.params()).isEmpty();
+    ActiveRule java2 = activeRules.find(RuleKey.of("java", "S0002"));
+    assertThat(java2.ruleKey().repository()).isEqualTo("java");
+    assertThat(java2.ruleKey().rule()).isEqualTo("S0002");
+    assertThat(java2.severity()).isEqualTo(Severity.defaultSeverity());
+    assertThat(java2.params()).isEmpty();
 
     ActiveRule findbugsRule = activeRules.find(RuleKey.of("findbugs", "NPE"));
     assertThat(findbugsRule.severity()).isEqualTo(Severity.defaultSeverity());
@@ -94,13 +91,12 @@ public class ActiveRulesBuilderTest {
   public void fail_to_add_twice_the_same_rule() {
     ActiveRulesBuilder builder = new ActiveRulesBuilder();
     NewActiveRule rule = new NewActiveRule.Builder()
-      .setRuleKey(RuleKey.of("squid", "S0001"))
+      .setRuleKey(RuleKey.of("java", "S0001"))
       .build();
     builder.addRule(rule);
 
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Rule 'squid:S0001' is already activated");
-
-    builder.addRule(rule);
+    assertThatThrownBy(() -> builder.addRule(rule))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Rule 'java:S0001' is already activated");
   }
 }

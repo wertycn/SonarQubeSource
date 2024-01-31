@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,39 +17,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InteractiveIcon, PinIcon } from 'design-system';
 import * as React from 'react';
-import PinIcon from 'sonar-ui-common/components/icons/PinIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { WorkspaceContextShape } from '../../../components/workspace/context';
+import { translateWithParameters } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
+import { ComponentMeasure } from '../../../types/types';
 
 interface Props {
   branchLike?: BranchLike;
-  component: T.ComponentMeasure;
+  component: ComponentMeasure;
   openComponent: WorkspaceContextShape['openComponent'];
 }
 
-export default class ComponentPin extends React.PureComponent<Props> {
-  handleClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
-    this.props.openComponent({
-      branchLike: this.props.branchLike,
-      key: this.props.component.key,
-      name: this.props.component.path,
-      qualifier: this.props.component.qualifier
-    });
-  };
+export default function ComponentPin(props: Props) {
+  const { branchLike, component, openComponent } = props;
 
-  render() {
-    return (
-      <a
-        className="link-no-underline"
-        href="#"
-        onClick={this.handleClick}
-        title={translate('component_viewer.open_in_workspace')}>
-        <PinIcon />
-      </a>
-    );
-  }
+  const handleClick = React.useCallback(() => {
+    openComponent({
+      branchLike,
+      key: component.key,
+      name: component.path,
+      qualifier: component.qualifier,
+    });
+  }, [branchLike, component, openComponent]);
+
+  const label = translateWithParameters('component_viewer.open_in_workspace_X', component.name);
+
+  return (
+    <span title={label}>
+      <InteractiveIcon aria-label={label} Icon={PinIcon} onClick={handleClick} />
+    </span>
+  );
 }

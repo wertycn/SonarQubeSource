@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@ package org.sonar.ce.notification;
 import java.time.Duration;
 import javax.annotation.Nullable;
 import org.sonar.api.resources.Qualifiers;
-import org.sonar.api.resources.Scopes;
 import org.sonar.api.utils.System2;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.CeTaskResult;
@@ -35,7 +34,9 @@ import org.sonar.db.DbSession;
 import org.sonar.db.RowNotFoundException;
 import org.sonar.db.ce.CeActivityDto;
 import org.sonar.db.ce.CeTaskTypes;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.server.notification.NotificationService;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -66,18 +67,22 @@ public class ReportAnalysisFailureNotificationExecutionListener implements CeWor
     if (status == CeActivityDto.Status.SUCCESS) {
       return;
     }
-    String projectUuid = ceTask.getComponent().map(CeTask.Component::getUuid).orElse(null);
-    if (!CeTaskTypes.REPORT.equals(ceTask.getType()) || projectUuid == null) {
+    String branchUuid = ceTask.getComponent().map(CeTask.Component::getUuid).orElse(null);
+    if (!CeTaskTypes.REPORT.equals(ceTask.getType()) || branchUuid == null) {
       return;
     }
 
-    if (notificationService.hasProjectSubscribersForTypes(projectUuid, singleton(ReportAnalysisFailureNotification.class))) {
-      try (DbSession dbSession = dbClient.openSession(false)) {
-        ComponentDto projectDto = dbClient.componentDao().selectOrFailByUuid(dbSession, projectUuid);
-        checkScopeAndQualifier(projectDto);
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      BranchDto branchDto = dbClient.branchDao().selectByUuid(dbSession, branchUuid)
+        .orElseThrow(() -> new IllegalStateException("Could not find a branch with uuid %s".formatted(branchUuid)));
+      if (notificationService.hasProjectSubscribersForTypes(branchDto.getProjectUuid(), singleton(ReportAnalysisFailureNotification.class))) {
+        ProjectDto projectDto = dbClient.projectDao().selectByUuid(dbSession, branchDto.getProjectUuid())
+          .orElseThrow(() -> new IllegalStateException("Could not find project uuid %s".formatted(branchDto.getProjectUuid())));
+
+        checkQualifier(projectDto);
         CeActivityDto ceActivityDto = dbClient.ceActivityDao().selectByUuid(dbSession, ceTask.getUuid())
           .orElseThrow(() -> new RowNotFoundException(format("CeActivity with uuid '%s' not found", ceTask.getUuid())));
-        ReportAnalysisFailureNotificationBuilder taskFailureNotification = buildNotification(ceActivityDto, projectDto, error);
+        ReportAnalysisFailureNotificationBuilder taskFailureNotification = buildNotification(ceActivityDto, projectDto, branchDto, error);
         ReportAnalysisFailureNotification notification = taskFailureNotificationSerializer.toNotification(taskFailureNotification);
         notificationService.deliverEmails(singleton(notification));
 
@@ -90,22 +95,21 @@ public class ReportAnalysisFailureNotificationExecutionListener implements CeWor
   /**
    * @throws IllegalArgumentException if specified {@link ComponentDto} is not a project.
    */
-  private static void checkScopeAndQualifier(ComponentDto projectDto) {
-    String scope = projectDto.scope();
-    String qualifier = projectDto.qualifier();
-    checkArgument(
-      scope.equals(Scopes.PROJECT) && qualifier.equals(Qualifiers.PROJECT),
-      "Component %s must be a project (scope=%s, qualifier=%s)", projectDto.uuid(), scope, qualifier);
+  private static void checkQualifier(ProjectDto projectDto) {
+    String qualifier = projectDto.getQualifier();
+    checkArgument(qualifier.equals(Qualifiers.PROJECT), "Component %s must be a project (qualifier=%s)", projectDto.getUuid(), qualifier);
   }
 
-  private ReportAnalysisFailureNotificationBuilder buildNotification(CeActivityDto ceActivityDto, ComponentDto projectDto, @Nullable Throwable error) {
+  private ReportAnalysisFailureNotificationBuilder buildNotification(CeActivityDto ceActivityDto, ProjectDto projectDto, BranchDto branchDto,
+    @Nullable Throwable error) {
+    String projectBranch = branchDto.isMain() ? null : branchDto.getBranchKey();
     Long executedAt = ceActivityDto.getExecutedAt();
     return new ReportAnalysisFailureNotificationBuilder(
       new ReportAnalysisFailureNotificationBuilder.Project(
-        projectDto.uuid(),
+        projectDto.getUuid(),
         projectDto.getKey(),
-        projectDto.name(),
-        projectDto.getBranch()),
+        projectDto.getName(),
+        projectBranch),
       new ReportAnalysisFailureNotificationBuilder.Task(
         ceActivityDto.getUuid(),
         ceActivityDto.getSubmittedAt(),

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,10 @@
   border: 1px solid var(--barBorderColor);
   border-radius: 2px;
   background-color: #fff;
+}
+
+.boxed-group.no-border {
+  border-color: transparent;
 }
 
 .boxed-group-centered {
@@ -87,16 +91,14 @@
 }
 
 .boxed-group-accordion {
+  border-color: var(--neutral200);
   margin-bottom: var(--gridSize);
   transition: border-color 0.3s ease;
 }
 
-.boxed-group-accordion:not(.no-hover):hover {
-  border-color: var(--blue);
-}
-
-.boxed-group-accordion:not(.no-hover):hover .boxed-group-accordion-title {
-  color: var(--blue);
+.boxed-group-accordion:hover,
+.boxed-group-accordion.open {
+  border-color: var(--info400);
 }
 
 .boxed-group-accordion .boxed-group-header {
@@ -128,4 +130,5 @@
   vertical-align: middle;
   font-weight: bold;
   transition: color 0.3s ease;
+  text-align: left;
 }

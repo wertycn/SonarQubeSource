@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -49,16 +49,16 @@ import org.sonar.server.qualitygate.notification.QGChangeNotification;
 import static java.util.Collections.emptyList;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.measures.CoreMetrics.ALERT_STATUS_KEY;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.Level.ERROR;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.Level.OK;
+import static org.sonar.db.component.BranchDto.DEFAULT_MAIN_BRANCH_NAME;
 
 public class QualityGateEventsStepTest {
   private static final String PROJECT_VERSION = randomAlphabetic(19);
@@ -97,7 +97,7 @@ public class QualityGateEventsStepTest {
   public void setUp() {
     when(metricRepository.getByKey(ALERT_STATUS_KEY)).thenReturn(alertStatusMetric);
     analysisMetadataHolder
-      .setProject(new Project(PROJECT_COMPONENT.getUuid(), PROJECT_COMPONENT.getDbKey(), PROJECT_COMPONENT.getName(), PROJECT_COMPONENT.getDescription(), emptyList()));
+      .setProject(new Project(PROJECT_COMPONENT.getUuid(), PROJECT_COMPONENT.getKey(), PROJECT_COMPONENT.getName(), PROJECT_COMPONENT.getDescription(), emptyList()));
     analysisMetadataHolder.setBranch(mock(Branch.class));
     treeRootHolder.setRoot(PROJECT_COMPONENT);
   }
@@ -170,7 +170,7 @@ public class QualityGateEventsStepTest {
 
     verify(measureRepository).getRawMeasure(PROJECT_COMPONENT, alertStatusMetric);
     verify(measureRepository).getBaseMeasure(PROJECT_COMPONENT, alertStatusMetric);
-    verify(eventRepository).add(eq(PROJECT_COMPONENT), eventArgumentCaptor.capture());
+    verify(eventRepository).add(eventArgumentCaptor.capture());
     verifyNoMoreInteractions(measureRepository, eventRepository);
 
     Event event = eventArgumentCaptor.getValue();
@@ -226,7 +226,7 @@ public class QualityGateEventsStepTest {
 
     verify(measureRepository).getRawMeasure(PROJECT_COMPONENT, alertStatusMetric);
     verify(measureRepository).getBaseMeasure(PROJECT_COMPONENT, alertStatusMetric);
-    verify(eventRepository).add(eq(PROJECT_COMPONENT), eventArgumentCaptor.capture());
+    verify(eventRepository).add(eventArgumentCaptor.capture());
     verifyNoMoreInteractions(measureRepository, eventRepository);
 
     Event event = eventArgumentCaptor.getValue();
@@ -250,7 +250,7 @@ public class QualityGateEventsStepTest {
 
   @Test
   public void verify_branch_name_is_not_set_in_notification_when_main() {
-    analysisMetadataHolder.setBranch(new DefaultBranchImpl());
+    analysisMetadataHolder.setBranch(new DefaultBranchImpl(DEFAULT_MAIN_BRANCH_NAME));
 
     when(measureRepository.getRawMeasure(PROJECT_COMPONENT, alertStatusMetric))
       .thenReturn(of(Measure.newMeasureBuilder().setQualityGateStatus(OK_QUALITY_GATE_STATUS).createNoValue()));
@@ -286,6 +286,6 @@ public class QualityGateEventsStepTest {
 
     underTest.execute(new TestComputationStepContext());
 
-    verifyZeroInteractions(treeRootHolder, metricRepository, measureRepository, eventRepository, notificationService);
+    verifyNoInteractions(treeRootHolder, metricRepository, measureRepository, eventRepository, notificationService);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,16 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { LightPrimary } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { findMeasure } from '../../../helpers/measures';
-import { getMeasurementAfterMergeMetricKey, MeasurementType } from '../utils';
+import { findMeasure, formatMeasure } from '../../../helpers/measures';
+import { MetricType } from '../../../types/metrics';
+import { MeasureEnhanced } from '../../../types/types';
+import { MeasurementType, getMeasurementAfterMergeMetricKey } from '../utils';
 
 export interface AfterMergeEstimateProps {
   className?: string;
-  measures: T.MeasureEnhanced[];
+  measures: MeasureEnhanced[];
   type: MeasurementType;
 }
 
@@ -40,11 +41,10 @@ export function AfterMergeEstimate({ className, measures, type }: AfterMergeEsti
   }
 
   return (
-    <div className={classNames(className, 'display-flex-center')}>
-      <span className="huge">{formatMeasure(measure.value, 'PERCENT')}</span>
-      <span className="label flex-1 spacer-left text-right">
-        {translate('component_measures.facet_category.overall_category.estimated')}
-      </span>
+    <div className={classNames(className, 'sw-flex sw-items-center')}>
+      <LightPrimary className="sw-body-sm-highlight">
+        {formatMeasure(measure.value, MetricType.Percent)}
+      </LightPrimary>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FavoriteButton } from 'design-system';
 import * as React from 'react';
-import FavoriteButton from 'sonar-ui-common/components/controls/FavoriteButton';
 import { addFavorite, removeFavorite } from '../../api/favorites';
+import { translate, translateWithParameters } from '../../helpers/l10n';
+import Tooltip from './Tooltip';
 
 interface Props {
   className?: string;
   component: string;
+  componentName?: string;
   favorite: boolean;
   qualifier: string;
   handleFavorite?: (component: string, isFavorite: boolean) => void;
@@ -35,12 +38,13 @@ interface State {
 
 export default class Favorite extends React.PureComponent<Props, State> {
   mounted = false;
+  buttonNode?: HTMLElement | null;
 
   constructor(props: Props) {
     super(props);
 
     this.state = {
-      favorite: props.favorite
+      favorite: props.favorite,
     };
   }
 
@@ -68,23 +72,32 @@ export default class Favorite extends React.PureComponent<Props, State> {
           if (this.props.handleFavorite) {
             this.props.handleFavorite(this.props.component, newFavorite);
           }
+          if (this.buttonNode) {
+            this.buttonNode.focus();
+          }
         });
       }
     });
   };
 
   render() {
-    const { className, qualifier } = this.props;
+    const { className, componentName, qualifier } = this.props;
     const { favorite } = this.state;
+
+    const actionName = favorite ? 'remove' : 'add';
+    const overlay = componentName
+      ? translateWithParameters(`favorite.action.${qualifier}.${actionName}_x`, componentName)
+      : translate('favorite.action', qualifier, actionName);
 
     return (
       <FavoriteButton
         className={className}
-        favorite={favorite}
-        qualifier={qualifier}
+        overlay={overlay}
         toggleFavorite={this.toggleFavorite}
+        tooltip={Tooltip}
+        favorite={favorite}
+        innerRef={(node) => (this.buttonNode = node)}
       />
     );
   }
 }
-/*  */

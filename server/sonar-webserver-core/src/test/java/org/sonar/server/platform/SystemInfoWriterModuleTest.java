@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,42 +19,31 @@
  */
 package org.sonar.server.platform;
 
-import java.util.Collection;
 import org.junit.Test;
-import org.picocontainer.ComponentAdapter;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ListContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.core.platform.ComponentContainer.COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER;
 
 public class SystemInfoWriterModuleTest {
-  private WebServer webServer = mock(WebServer.class);
-  private SystemInfoWriterModule underTest = new SystemInfoWriterModule(webServer);
+  private final NodeInformation nodeInformation = mock(NodeInformation.class);
+  private final SystemInfoWriterModule underTest = new SystemInfoWriterModule(nodeInformation);
 
   @Test
   public void verify_system_info_configuration_in_cluster_mode() {
-    when(webServer.isStandalone()).thenReturn(false);
-    ComponentContainer container = new ComponentContainer();
-
+    when(nodeInformation.isStandalone()).thenReturn(false);
+    ListContainer container = new ListContainer();
     underTest.configure(container);
-
-    Collection<ComponentAdapter<?>> adapters = container.getPicoContainer().getComponentAdapters();
-    assertThat(adapters)
-      .hasSize(COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER + 19);
+    assertThat(container.getAddedObjects()).hasSize(22);
   }
 
   @Test
   public void verify_system_info_configuration_in_standalone_mode() {
-    when(webServer.isStandalone()).thenReturn(true);
-    ComponentContainer container = new ComponentContainer();
+    when(nodeInformation.isStandalone()).thenReturn(true);
 
+    ListContainer container = new ListContainer();
     underTest.configure(container);
-
-    Collection<ComponentAdapter<?>> adapters = container.getPicoContainer().getComponentAdapters();
-    assertThat(adapters)
-      .hasSize(COMPONENTS_IN_EMPTY_COMPONENT_CONTAINER + 13);
+    assertThat(container.getAddedObjects()).hasSize(16);
   }
-
 }

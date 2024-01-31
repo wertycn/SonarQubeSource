@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,9 @@ import org.sonar.db.metric.MetricDto;
 import org.sonarqube.ws.Common.Metric;
 
 import static java.util.Optional.ofNullable;
+import static org.sonar.db.metric.RemovedMetricConverter.REMOVED_METRIC;
+import static org.sonar.db.metric.RemovedMetricConverter.REMOVED_METRIC_DESCRIPTION;
+import static org.sonar.db.metric.RemovedMetricConverter.REMOVED_METRIC_SHORT_NAME;
 import static org.sonar.server.measure.ws.MeasureValueFormatter.formatNumericalValue;
 
 class MetricDtoToWsMetric {
@@ -42,11 +45,19 @@ class MetricDtoToWsMetric {
     }
     metric.setQualitative(metricDto.isQualitative());
     metric.setHidden(metricDto.isHidden());
-    metric.setCustom(metricDto.isUserManaged());
     ofNullable(metricDto.getDecimalScale()).ifPresent(metric::setDecimalScale);
     ofNullable(metricDto.getBestValue()).ifPresent(bv -> metric.setBestValue(formatNumericalValue(bv, metricDto)));
     ofNullable(metricDto.getWorstValue()).ifPresent(wv -> metric.setWorstValue(formatNumericalValue(wv, metricDto)));
 
     return metric.build();
+  }
+
+  static Metric wontFixToAcceptedWsMetric(MetricDto metricDto) {
+    return metricDtoToWsMetric(metricDto)
+      .toBuilder()
+      .setKey(REMOVED_METRIC)
+      .setDescription(REMOVED_METRIC_DESCRIPTION)
+      .setName(REMOVED_METRIC_SHORT_NAME)
+      .build();
   }
 }

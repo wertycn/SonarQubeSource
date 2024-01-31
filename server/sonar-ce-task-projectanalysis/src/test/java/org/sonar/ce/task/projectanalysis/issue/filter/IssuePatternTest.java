@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -61,7 +61,7 @@ public class IssuePatternTest {
   public void test_to_string() {
     IssuePattern pattern = new IssuePattern("*", "checkstyle:*");
 
-    assertThat(pattern.toString()).isEqualTo(
+    assertThat(pattern).hasToString(
       "IssuePattern{componentPattern=*, rulePattern=checkstyle:*}");
   }
 }

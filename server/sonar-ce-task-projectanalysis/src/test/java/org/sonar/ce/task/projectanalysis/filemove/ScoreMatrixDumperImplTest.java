@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,17 +26,17 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.AbstractFileFilter;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.projectanalysis.filemove.ScoreMatrix.ScoreFile;
+import org.sonar.server.platform.ServerFileSystem;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,27 +53,32 @@ public class ScoreMatrixDumperImplTest {
   private MapSettings settings = new MapSettings();
   private Configuration configuration = settings.asConfig();
   private CeTask ceTask = mock(CeTask.class);
-  private ScoreMatrixDumper underTest = new ScoreMatrixDumperImpl(configuration, ceTask);
-  private static Path tempDir;
 
-  @BeforeClass
-  public static void lookupTempDir() throws IOException {
+  private ServerFileSystem serverFileSystem = mock(ServerFileSystem.class);
+  private ScoreMatrixDumper underTest = new ScoreMatrixDumperImpl(configuration, ceTask, serverFileSystem);
+  private Path tempDir;
+
+  @Before
+  public void before() throws IOException {
     Path tempFile = Files.createTempFile("a", "b");
     Files.delete(tempFile);
     tempDir = tempFile.getParent();
+    when(serverFileSystem.getTempDir()).thenReturn(tempDir.toFile());
   }
 
-  @Before
-  public void setUp() {
-    FileUtils.listFiles(tempDir.toFile(), new AbstractFileFilter() {
-      @Override
-      public boolean accept(File file) {
-        if (file.getName().contains("score-matrix-")) {
-          file.delete();
+  @After
+  public void cleanUp() {
+    try {
+      Files.list(tempDir.toAbsolutePath()).filter(p -> p.getFileName().toString().contains("score-matrix-")).forEach((p) -> {
+        try {
+          Files.deleteIfExists(p);
+        } catch (Exception e) {
+          System.out.println("Could not delete file. Details: " + e.getMessage());
         }
-        return false;
-      }
-    }, null);
+      });
+    } catch (Exception e) {
+      System.out.println("Cleaning up temp directory failed. Details: " + e.getMessage());
+    }
   }
 
   @Test
@@ -119,13 +124,22 @@ public class ScoreMatrixDumperImplTest {
     };
   }
 
-  private static Collection<File> listDumpFilesForTaskUuid(String taskUuid) {
-    return FileUtils.listFiles(tempDir.toFile(), new AbstractFileFilter() {
-      @Override
-      public boolean accept(File file) {
+  private Collection<File> listDumpFilesForTaskUuid(String taskUuid) {
+    Collection<File> dumpFiles = new ArrayList<>();
+    File dir = tempDir.toFile();
+    File[] files = dir.listFiles();
+    if (!dir.exists() || files == null) {
+      throw new IllegalStateException("Temp directory does not exist");
+    }
+    for (File file : files) {
+      if (file.exists()) {
         String name = file.getName();
-        return name.startsWith("score-matrix-" + taskUuid) && name.endsWith(".csv");
+        if (name.startsWith("score-matrix-" + taskUuid) && name.endsWith(".csv")) {
+          dumpFiles.add(file);
+        }
       }
-    }, null);
+    }
+
+    return dumpFiles;
   }
 }

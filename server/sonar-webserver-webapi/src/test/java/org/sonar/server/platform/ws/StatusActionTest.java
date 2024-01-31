@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.platform.ws;
 
-import java.io.File;
 import java.util.Date;
 import java.util.Set;
 import org.junit.Test;
@@ -187,37 +186,12 @@ public class StatusActionTest {
     }
 
     @Override
-    public File getRootDir() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public String getContextPath() {
       throw new UnsupportedOperationException();
     }
 
     @Override
     public String getPublicRootUrl() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean isDev() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean isSecured() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String getURL() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String getPermanentServerId() {
       throw new UnsupportedOperationException();
     }
   }

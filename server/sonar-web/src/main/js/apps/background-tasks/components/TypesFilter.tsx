@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,44 +17,47 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect, LabelValueSelectOption } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 import { ALL_TYPES } from '../constants';
 
 interface Props {
   value: string;
+  id: string;
   onChange: Function;
   types: string[];
 }
 
 export default class TypesFilter extends React.PureComponent<Props> {
-  handleChange = ({ value }: { value: string }) => {
+  handleChange = ({ value }: LabelValueSelectOption<string>) => {
     this.props.onChange(value);
   };
 
   render() {
-    const { value, types } = this.props;
-    const options = types.map(t => {
+    const { value, types, id } = this.props;
+    const options = types.map((t) => {
       return {
         value: t,
-        label: translate('background_task.type', t)
+        label: translate('background_task.type', t),
       };
     });
 
-    const allOptions = [
+    const allOptions: LabelValueSelectOption<string>[] = [
       { value: ALL_TYPES, label: translate('background_task.type.ALL') },
-      ...options
+      ...options,
     ];
 
     return (
-      <Select
-        className="input-medium"
-        clearable={false}
+      <InputSelect
+        aria-labelledby="background-task-type-filter-label"
+        className="sw-w-abs-200"
+        id={id}
+        isClearable={false}
+        size="medium"
         onChange={this.handleChange}
         options={allOptions}
-        searchable={false}
-        value={value}
+        value={allOptions.find((o) => o.value === value)}
       />
     );
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,6 @@ import org.sonar.api.rules.RuleType;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.notification.IssuesChangesNotificationBuilder.AnalysisChange;
@@ -50,10 +49,6 @@ public class IssuesChangesNotificationBuilderTesting {
   }
 
   public static Rule ruleOf(RuleDto rule) {
-    return new Rule(rule.getKey(), RuleType.valueOfNullable(rule.getType()), rule.getName());
-  }
-
-  public static Rule ruleOf(RuleDefinitionDto rule) {
     return new Rule(rule.getKey(), RuleType.valueOfNullable(rule.getType()), rule.getName());
   }
 

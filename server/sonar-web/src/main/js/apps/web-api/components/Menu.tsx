@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
 import * as React from 'react';
-import { Link } from 'react-router';
+import Link from '../../../components/common/Link';
+import { queryToSearch } from '../../../helpers/urls';
+import { WebApi } from '../../../types/types';
 import { actionsFilter, isDomainPathActive, Query, serializeQuery } from '../utils';
 import DeprecatedBadge from './DeprecatedBadge';
 import InternalBadge from './InternalBadge';
 
 interface Props {
-  domains: T.WebApi.Domain[];
+  domains: WebApi.Domain[];
   query: Query;
   splat: string;
 }
@@ -33,33 +35,39 @@ interface Props {
 export default function Menu(props: Props) {
   const { domains, query, splat } = props;
   const filteredDomains = (domains || [])
-    .map(domain => {
-      const filteredActions = domain.actions.filter(action => actionsFilter(query, domain, action));
+    .map((domain) => {
+      const filteredActions = domain.actions.filter((action) =>
+        actionsFilter(query, domain, action),
+      );
       return { ...domain, filteredActions };
     })
-    .filter(domain => domain.filteredActions.length);
+    .filter((domain) => domain.filteredActions.length);
 
-  const renderDomain = (domain: T.WebApi.Domain) => {
-    const internal = !domain.actions.find(action => !action.internal);
+  const renderDomain = (domain: WebApi.Domain) => {
+    const internal = !domain.actions.find((action) => !action.internal);
     return (
-      <Link
-        className={classNames('list-group-item', {
-          active: isDomainPathActive(domain.path, splat)
+      <li
+        className={classNames('list-group-item sw-p-0', {
+          active: isDomainPathActive(domain.path, splat),
         })}
         key={domain.path}
-        to={{ pathname: '/web_api/' + domain.path, query: serializeQuery(query) }}>
-        <h3 className="list-group-item-heading">
-          {domain.path}
-          {domain.deprecatedSince && <DeprecatedBadge since={domain.deprecatedSince} />}
-          {internal && <InternalBadge />}
-        </h3>
-      </Link>
+      >
+        <Link
+          to={{ pathname: '/web_api/' + domain.path, search: queryToSearch(serializeQuery(query)) }}
+        >
+          <h3 className="sw-truncate sw-px-2 sw-py-3">
+            {domain.path}
+            {domain.deprecatedSince && <DeprecatedBadge since={domain.deprecatedSince} />}
+            {internal && <InternalBadge />}
+          </h3>
+        </Link>
+      </li>
     );
   };
 
   return (
-    <div className="api-documentation-results panel">
-      <div className="list-group">{filteredDomains.map(renderDomain)}</div>
+    <div className="api-documentation-results panel" role="menu">
+      <ul className="list-group">{filteredDomains.map(renderDomain)}</ul>
     </div>
   );
 }

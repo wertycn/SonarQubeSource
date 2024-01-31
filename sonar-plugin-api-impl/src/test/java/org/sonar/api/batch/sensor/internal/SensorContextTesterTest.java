@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,19 +24,18 @@ import java.io.IOException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
-import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultFileSystem;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
-import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.api.batch.fs.internal.DefaultTextPointer;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.rule.Severity;
 import org.sonar.api.batch.rule.internal.ActiveRulesBuilder;
 import org.sonar.api.batch.rule.internal.NewActiveRule;
+import org.sonar.api.batch.sensor.cache.ReadCache;
+import org.sonar.api.batch.sensor.cache.WriteCache;
 import org.sonar.api.batch.sensor.error.AnalysisError;
 import org.sonar.api.batch.sensor.error.NewAnalysisError;
 import org.sonar.api.batch.sensor.highlighting.TypeOfText;
@@ -49,16 +48,15 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleType;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.data.MapEntry.entry;
+import static org.mockito.Mockito.mock;
 
 public class SensorContextTesterTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException exception = ExpectedException.none();
 
   private SensorContextTester tester;
   private File baseDir;
@@ -75,6 +73,31 @@ public class SensorContextTesterTest {
     settings.setProperty("foo", "bar");
     tester.setSettings(settings);
     assertThat(tester.config().get("foo")).contains("bar");
+  }
+
+  @Test
+  public void test_canSkipUnchangedFiles() {
+    assertThat(tester.canSkipUnchangedFiles()).isFalse();
+    tester.setCanSkipUnchangedFiles(true);
+    assertThat(tester.canSkipUnchangedFiles()).isTrue();
+  }
+
+  @Test
+  public void testPluginCache() {
+    assertThat(tester.nextCache()).isNull();
+    assertThat(tester.previousCache()).isNull();
+    assertThat(tester.isCacheEnabled()).isFalse();
+
+    ReadCache readCache = mock(ReadCache.class);
+    WriteCache writeCache = mock(WriteCache.class);
+
+    tester.setPreviousCache(readCache);
+    tester.setNextCache(writeCache);
+    tester.setCacheEnabled(true);
+
+    assertThat(tester.nextCache()).isEqualTo(writeCache);
+    assertThat(tester.previousCache()).isEqualTo(readCache);
+    assertThat(tester.isCacheEnabled()).isTrue();
   }
 
   @Test
@@ -169,13 +192,6 @@ public class SensorContextTesterTest {
     assertThat(tester.measures("foo:src/Foo.java")).hasSize(2);
     assertThat(tester.measure("foo:src/Foo.java", "ncloc")).isNotNull();
     assertThat(tester.measure("foo:src/Foo.java", "lines")).isNotNull();
-    tester.<Integer>newMeasure()
-      .on(new DefaultInputModule(ProjectDefinition.create().setKey("foo").setBaseDir(temp.newFolder()).setWorkDir(temp.newFolder())))
-      .forMetric(CoreMetrics.DIRECTORIES)
-      .withValue(4)
-      .save();
-    assertThat(tester.measures("foo")).hasSize(1);
-    assertThat(tester.measure("foo", "directories")).isNotNull();
   }
 
   @Test(expected = IllegalStateException.class)
@@ -198,8 +214,8 @@ public class SensorContextTesterTest {
     tester.newHighlighting()
       .onFile(new TestInputFileBuilder("foo", "src/Foo.java").initMetadata("annot dsf fds foo bar").build())
       .highlight(1, 0, 1, 5, TypeOfText.ANNOTATION)
-      .highlight(8, 10, TypeOfText.CONSTANT)
-      .highlight(9, 10, TypeOfText.COMMENT)
+      .highlight(1, 8, 1, 10, TypeOfText.CONSTANT)
+      .highlight(1, 9, 1, 10, TypeOfText.COMMENT)
       .save();
     assertThat(tester.highlightingTypeAt("foo:src/Foo.java", 1, 3)).containsExactly(TypeOfText.ANNOTATION);
     assertThat(tester.highlightingTypeAt("foo:src/Foo.java", 1, 9)).containsExactly(TypeOfText.CONSTANT, TypeOfText.COMMENT);
@@ -228,15 +244,15 @@ public class SensorContextTesterTest {
 
     symbolTable
       .newSymbol(1, 1, 1, 5)
-      .newReference(6, 9)
       .newReference(1, 10, 1, 13);
 
     symbolTable.save();
 
     assertThat(tester.referencesForSymbolAt("foo:src/Foo.java", 1, 0)).isNull();
     assertThat(tester.referencesForSymbolAt("foo:src/Foo.java", 1, 8)).isEmpty();
-    assertThat(tester.referencesForSymbolAt("foo:src/Foo.java", 1, 3)).extracting("start.line", "start.lineOffset", "end.line", "end.lineOffset").containsExactly(tuple(1, 6, 1, 9),
-      tuple(1, 10, 1, 13));
+    assertThat(tester.referencesForSymbolAt("foo:src/Foo.java", 1, 3))
+      .extracting("start.line", "start.lineOffset", "end.line", "end.lineOffset")
+      .containsExactly(tuple(1, 10, 1, 13));
   }
 
   @Test(expected = UnsupportedOperationException.class)
@@ -261,21 +277,21 @@ public class SensorContextTesterTest {
     assertThat(tester.lineHits("foo:src/Foo.java", 1)).isNull();
     assertThat(tester.lineHits("foo:src/Foo.java", 4)).isNull();
 
-    exception.expect(IllegalStateException.class);
-    tester.newCoverage()
+    assertThatThrownBy(() -> tester.newCoverage()
       .onFile(new TestInputFileBuilder("foo", "src/Foo.java").initMetadata("annot dsf fds foo bar").build())
-      .lineHits(0, 3);
+      .lineHits(0, 3))
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
   public void testCoverageAtLineOutOfRange() {
     assertThat(tester.lineHits("foo:src/Foo.java", 1)).isNull();
     assertThat(tester.lineHits("foo:src/Foo.java", 4)).isNull();
-    exception.expect(IllegalStateException.class);
 
-    tester.newCoverage()
+    assertThatThrownBy(() -> tester.newCoverage()
       .onFile(new TestInputFileBuilder("foo", "src/Foo.java").initMetadata("annot dsf fds foo bar").build())
-      .lineHits(4, 3);
+      .lineHits(4, 3))
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test

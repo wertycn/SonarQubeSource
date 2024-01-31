@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,8 @@
  */
 package org.sonar.auth.gitlab;
 
-import org.junit.Rule;
+import org.assertj.core.api.Assertions;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 
@@ -31,9 +30,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GitLabIdentityProviderTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void test_identity_provider() {
@@ -46,7 +42,7 @@ public class GitLabIdentityProviderTest {
     assertThat(gitLabIdentityProvider.getKey()).isEqualTo("gitlab");
     assertThat(gitLabIdentityProvider.getName()).isEqualTo("GitLab");
     Display display = gitLabIdentityProvider.getDisplay();
-    assertThat(display.getIconPath()).isEqualTo("/images/gitlab-icon-rgb.svg");
+    assertThat(display.getIconPath()).isEqualTo("/images/alm/gitlab.svg");
     assertThat(display.getBackgroundColor()).isEqualTo("#6a4fbb");
     assertThat(gitLabIdentityProvider.isEnabled()).isTrue();
     assertThat(gitLabIdentityProvider.allowsUsersToSignUp()).isTrue();
@@ -89,7 +85,7 @@ public class GitLabIdentityProviderTest {
 
     gitLabIdentityProvider.init(initContext);
 
-    verify(initContext).redirectTo("http://server/oauth/authorize?response_type=code&client_id=123&redirect_uri=http%3A%2F%2Fserver%2Fcallback&scope=read_user");
+    verify(initContext).redirectTo("http://server/oauth/authorize?response_type=code&client_id=123&redirect_uri=http%3A%2F%2Fserver%2Fcallback&scope=api");
   }
 
   @Test
@@ -106,9 +102,8 @@ public class GitLabIdentityProviderTest {
     OAuth2IdentityProvider.InitContext initContext = mock(OAuth2IdentityProvider.InitContext.class);
     when(initContext.getCallbackUrl()).thenReturn("http://server/callback");
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("GitLab authentication is disabled");
-
-    gitLabIdentityProvider.init(initContext);
+    Assertions.assertThatThrownBy(() -> gitLabIdentityProvider.init(initContext))
+      .hasMessage("GitLab authentication is disabled")
+      .isInstanceOf(IllegalStateException.class);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.server.platform.monitoring;
 
+import org.sonar.process.systeminfo.BaseSectionMBean;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
 
 public class FakeSection extends BaseSectionMBean implements FakeSectionMBean {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ import org.sonar.ce.task.projectanalysis.period.PeriodHolderRule;
 import org.sonar.ce.task.projectanalysis.scm.Changeset;
 import org.sonar.ce.task.projectanalysis.scm.ScmInfoRepositoryRule;
 import org.sonar.db.component.BranchType;
+import org.sonar.db.newcodeperiod.NewCodePeriodType;
 import org.sonar.scanner.protocol.output.ScannerReport;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +53,7 @@ public class NewLinesRepositoryTest {
   @Rule
   public ScmInfoRepositoryRule scmInfoRepository = new ScmInfoRepositoryRule();
 
-  private NewLinesRepository repository = new NewLinesRepository(reader, analysisMetadataHolder, periodHolder, scmInfoRepository);
+  private final NewLinesRepository repository = new NewLinesRepository(reader, analysisMetadataHolder, periodHolder, scmInfoRepository);
 
   @Test
   public void load_new_lines_from_report_when_available_and_pullrequest() {
@@ -67,9 +68,33 @@ public class NewLinesRepositoryTest {
   }
 
   @Test
+  public void load_new_lines_from_report_when_available_and_using_reference_branch() {
+    periodHolder.setPeriod(new Period(NewCodePeriodType.REFERENCE_BRANCH.name(), null, null));
+    createChangedLinesInReport(1, 2, 5);
+
+    Optional<Set<Integer>> newLines = repository.getNewLines(FILE);
+
+    assertThat(newLines).isPresent();
+    assertThat(newLines.get()).containsOnly(1, 2, 5);
+    assertThat(repository.newLinesAvailable()).isTrue();
+  }
+
+  @Test
   public void compute_new_lines_using_scm_info_for_period() {
     periodHolder.setPeriod(new Period("", null, 1000L));
     scmInfoRepository.setScmInfo(FILE.getReportAttributes().getRef(), createChangesets(1100L, 900L, 1000L, 800L));
+
+    Optional<Set<Integer>> newLines = repository.getNewLines(FILE);
+
+    assertThat(newLines).isPresent();
+    assertThat(newLines.get()).containsOnly(1);
+    assertThat(repository.newLinesAvailable()).isTrue();
+  }
+
+  @Test
+  public void compute_new_lines_using_scm_info_for_period_with_missing_line() {
+    periodHolder.setPeriod(new Period("", null, 1000L));
+    scmInfoRepository.setScmInfo(FILE.getReportAttributes().getRef(), createChangesets(1100L, 900L, null, 800L));
 
     Optional<Set<Integer>> newLines = repository.getNewLines(FILE);
 
@@ -93,7 +118,7 @@ public class NewLinesRepositoryTest {
   }
 
   @Test
-  public void return_empty_if_no_period_and_not_pullrequest() {
+  public void return_empty_if_no_period_no_pullrequest_and_no_reference_branch() {
     periodHolder.setPeriod(null);
 
     // even though we have lines in the report and scm data, nothing should be returned since we have no period
@@ -124,7 +149,7 @@ public class NewLinesRepositoryTest {
 
   private Changeset[] createChangesets(Long... dates) {
     return Arrays.stream(dates)
-      .map(l -> Changeset.newChangesetBuilder().setDate(l).build())
+      .map(l -> l == null ? null : Changeset.newChangesetBuilder().setDate(l).build())
       .toArray(Changeset[]::new);
   }
 

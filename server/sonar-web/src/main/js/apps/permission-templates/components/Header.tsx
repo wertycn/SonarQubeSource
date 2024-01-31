@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,85 +17,75 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { ButtonPrimary, FlagMessage, Spinner, Title } from 'design-system';
+import React, { useState } from 'react';
 import { createPermissionTemplate } from '../../../api/permissions';
 import { Router, withRouter } from '../../../components/hoc/withRouter';
+import { throwGlobalError } from '../../../helpers/error';
+import { translate } from '../../../helpers/l10n';
+import { useGithubProvisioningEnabledQuery } from '../../../queries/identity-provider/github';
 import { PERMISSION_TEMPLATES_PATH } from '../utils';
 import Form from './Form';
 
 interface Props {
   ready?: boolean;
   refresh: () => Promise<void>;
-  router: Pick<Router, 'push'>;
+  router: Router;
 }
 
-interface State {
-  createModal: boolean;
-}
+function Header(props: Props) {
+  const { ready, router } = props;
+  const [createModal, setCreateModal] = useState(false);
+  const { data: gitHubProvisioningStatus } = useGithubProvisioningEnabledQuery();
 
-class Header extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = { createModal: false };
-
-  componentDidMount() {
-    this.mounted = true;
-  }
-
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  handleCreateClick = () => {
-    this.setState({ createModal: true });
-  };
-
-  handleCreateModalClose = () => {
-    if (this.mounted) {
-      this.setState({ createModal: false });
-    }
-  };
-
-  handleCreateModalSubmit = (data: {
+  const handleCreateModalSubmit = async (data: {
     description: string;
     name: string;
     projectKeyPattern: string;
   }) => {
-    return createPermissionTemplate({ ...data }).then(response => {
-      this.props.refresh().then(() => {
-        this.props.router.push({
-          pathname: PERMISSION_TEMPLATES_PATH,
-          query: { id: response.permissionTemplate.id }
-        });
+    try {
+      const response = await createPermissionTemplate({ ...data });
+      await props.refresh();
+      router.push({
+        pathname: PERMISSION_TEMPLATES_PATH,
+        query: { id: response.permissionTemplate.id },
       });
-    });
+    } catch (e) {
+      throwGlobalError(e);
+    }
   };
 
-  render() {
-    return (
-      <header className="page-header" id="project-permissions-header">
-        <h1 className="page-title">{translate('permission_templates.page')}</h1>
+  return (
+    <header>
+      <div id="project-permissions-header">
+        <div className="sw-flex sw-justify-between">
+          <div className="sw-flex sw-gap-3">
+            <Title>{translate('permission_templates.page')}</Title>
+            <Spinner className="sw-mt-2" loading={!ready} />
+          </div>
 
-        {!this.props.ready && <i className="spinner" />}
-
-        <div className="page-actions">
-          <Button onClick={this.handleCreateClick}>{translate('create')}</Button>
-
-          {this.state.createModal && (
-            <Form
-              confirmButtonText={translate('create')}
-              header={translate('permission_template.new_template')}
-              onClose={this.handleCreateModalClose}
-              onSubmit={this.handleCreateModalSubmit}
-            />
-          )}
+          <ButtonPrimary onClick={() => setCreateModal(true)}>{translate('create')}</ButtonPrimary>
         </div>
+        <div className="sw-mb-4">{translate('permission_templates.page.description')}</div>
+      </div>
+      {gitHubProvisioningStatus && (
+        <span>
+          <FlagMessage variant="warning" className="sw-w-fit sw-mb-4">
+            {translate('permission_templates.github_warning')}
+          </FlagMessage>
+        </span>
+      )}
 
-        <p className="page-description">{translate('permission_templates.page.description')}</p>
-      </header>
-    );
-  }
+      {createModal && (
+        <Form
+          confirmButtonText={translate('create')}
+          header={translate('permission_template.new_template')}
+          onClose={() => setCreateModal(false)}
+          onSubmit={handleCreateModalSubmit}
+        />
+      )}
+    </header>
+  );
 }
 
 export default withRouter(Header);

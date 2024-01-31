@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,28 +19,37 @@
  */
 package org.sonar.scm.git;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffAlgorithm;
 import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.DiffEntry.ChangeType;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.RawTextComparator;
+import org.eclipse.jgit.diff.RenameDetector;
 import org.eclipse.jgit.lib.Config;
 import org.eclipse.jgit.lib.ConfigConstants;
 import org.eclipse.jgit.lib.NullProgressMonitor;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
@@ -52,28 +61,47 @@ import org.eclipse.jgit.treewalk.AbstractTreeIterator;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
+import org.eclipse.jgit.treewalk.filter.PathFilterGroup;
+import org.eclipse.jgit.treewalk.filter.TreeFilter;
 import org.sonar.api.batch.scm.BlameCommand;
 import org.sonar.api.batch.scm.ScmProvider;
 import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.utils.MessageException;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
+
+import static java.lang.String.format;
+import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Collectors.toUnmodifiableMap;
+import static org.eclipse.jgit.diff.DiffEntry.ChangeType.ADD;
+import static org.eclipse.jgit.diff.DiffEntry.ChangeType.MODIFY;
+import static org.eclipse.jgit.diff.DiffEntry.ChangeType.RENAME;
 
 public class GitScmProvider extends ScmProvider {
 
-  private static final Logger LOG = Loggers.get(GitScmProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GitScmProvider.class);
   private static final String COULD_NOT_FIND_REF = "Could not find ref '%s' in refs/heads, refs/remotes, refs/remotes/upstream or refs/remotes/origin";
-  private final JGitBlameCommand jgitBlameCommand;
+  private static final String NO_MERGE_BASE_FOUND_MESSAGE = "No merge base found between HEAD and %s";
+  @VisibleForTesting
+  static final String SCM_INTEGRATION_DOCUMENTATION_SUFFIX = "/analyzing-source-code/scm-integration/";
+  private final BlameCommand blameCommand;
   private final AnalysisWarnings analysisWarnings;
   private final GitIgnoreCommand gitIgnoreCommand;
   private final System2 system2;
+  private final DocumentationLinkGenerator documentationLinkGenerator;
 
-  public GitScmProvider(JGitBlameCommand jgitBlameCommand, AnalysisWarnings analysisWarnings, GitIgnoreCommand gitIgnoreCommand, System2 system2) {
-    this.jgitBlameCommand = jgitBlameCommand;
+  public GitScmProvider(CompositeBlameCommand blameCommand, AnalysisWarnings analysisWarnings, GitIgnoreCommand gitIgnoreCommand, System2 system2,
+    DocumentationLinkGenerator documentationLinkGenerator) {
+
+    this.blameCommand = blameCommand;
     this.analysisWarnings = analysisWarnings;
     this.gitIgnoreCommand = gitIgnoreCommand;
     this.system2 = system2;
+    this.documentationLinkGenerator = documentationLinkGenerator;
   }
 
   @Override
@@ -94,18 +122,23 @@ public class GitScmProvider extends ScmProvider {
 
   @Override
   public BlameCommand blameCommand() {
-    return this.jgitBlameCommand;
+    return this.blameCommand;
   }
 
   @CheckForNull
   @Override
   public Set<Path> branchChangedFiles(String targetBranchName, Path rootBaseDir) {
+    return Optional.ofNullable((branchChangedFilesWithFileMovementDetection(targetBranchName, rootBaseDir)))
+      .map(GitScmProvider::extractAbsoluteFilePaths)
+      .orElse(null);
+  }
+
+  @CheckForNull
+  public Set<ChangedFile> branchChangedFilesWithFileMovementDetection(String targetBranchName, Path rootBaseDir) {
     try (Repository repo = buildRepo(rootBaseDir)) {
       Ref targetRef = resolveTargetRef(targetBranchName, repo);
       if (targetRef == null) {
-        analysisWarnings.addUnique(String.format(COULD_NOT_FIND_REF
-          + ". You may see unexpected issues and changes. "
-          + "Please make sure to fetch this ref before pull request analysis.", targetBranchName));
+        addWarningTargetNotFound(targetBranchName);
         return null;
       }
 
@@ -116,8 +149,8 @@ public class GitScmProvider extends ScmProvider {
       }
 
       Optional<RevCommit> mergeBaseCommit = findMergeBase(repo, targetRef);
-      if (!mergeBaseCommit.isPresent()) {
-        LOG.warn("No merge base found between HEAD and " + targetRef.getName());
+      if (mergeBaseCommit.isEmpty()) {
+        LOG.warn(composeNoMergeBaseFoundWarning(targetRef.getName()));
         return null;
       }
       AbstractTreeIterator mergeBaseTree = prepareTreeParser(repo, mergeBaseCommit.get());
@@ -130,10 +163,7 @@ public class GitScmProvider extends ScmProvider {
           .setNewTree(prepareNewTree(repo))
           .call();
 
-        return diffEntries.stream()
-          .filter(diffEntry -> diffEntry.getChangeType() == DiffEntry.ChangeType.ADD || diffEntry.getChangeType() == DiffEntry.ChangeType.MODIFY)
-          .map(diffEntry -> repo.getWorkTree().toPath().resolve(diffEntry.getNewPath()))
-          .collect(Collectors.toSet());
+        return computeChangedFiles(repo, diffEntries);
       }
     } catch (IOException | GitAPIException e) {
       LOG.warn(e.getMessage(), e);
@@ -141,15 +171,61 @@ public class GitScmProvider extends ScmProvider {
     return null;
   }
 
+  private static Set<ChangedFile> computeChangedFiles(Repository repository, List<DiffEntry> diffEntries) throws IOException {
+    Path workingDirectory = repository.getWorkTree().toPath();
+
+    Map<String, String> renamedFilePaths = computeRenamedFilePaths(repository, diffEntries);
+    Set<String> changedFilePaths = computeChangedFilePaths(diffEntries);
+
+    return collectChangedFiles(workingDirectory, renamedFilePaths, changedFilePaths);
+  }
+
+  private static Set<ChangedFile> collectChangedFiles(Path workingDirectory, Map<String, String> renamedFilePaths, Set<String> changedFilePaths) {
+    Set<ChangedFile> changedFiles = new HashSet<>();
+    changedFilePaths.forEach(filePath -> changedFiles.add(ChangedFile.of(workingDirectory.resolve(filePath), renamedFilePaths.get(filePath))));
+    return changedFiles;
+  }
+
+  private static Map<String, String> computeRenamedFilePaths(Repository repository, List<DiffEntry> diffEntries) throws IOException {
+    RenameDetector renameDetector = new RenameDetector(repository);
+    renameDetector.addAll(diffEntries);
+
+    return renameDetector
+      .compute()
+      .stream()
+      .filter(entry -> RENAME.equals(entry.getChangeType()))
+      .collect(toUnmodifiableMap(DiffEntry::getNewPath, DiffEntry::getOldPath));
+  }
+
+  private static Set<String> computeChangedFilePaths(List<DiffEntry> diffEntries) {
+    return diffEntries
+      .stream()
+      .filter(isAllowedChangeType(ADD, MODIFY))
+      .map(DiffEntry::getNewPath)
+      .collect(toSet());
+  }
+
+  private static Predicate<DiffEntry> isAllowedChangeType(ChangeType... changeTypes) {
+    Function<ChangeType, Predicate<DiffEntry>> isChangeType = type -> entry -> type.equals(entry.getChangeType());
+
+    return Arrays
+      .stream(changeTypes)
+      .map(isChangeType)
+      .reduce(x -> false, Predicate::or);
+  }
+
   @CheckForNull
   @Override
   public Map<Path, Set<Integer>> branchChangedLines(String targetBranchName, Path projectBaseDir, Set<Path> changedFiles) {
+    return branchChangedLinesWithFileMovementDetection(targetBranchName, projectBaseDir, toChangedFileByPathsMap(changedFiles));
+  }
+
+  @CheckForNull
+  public Map<Path, Set<Integer>> branchChangedLinesWithFileMovementDetection(String targetBranchName, Path projectBaseDir, Map<Path, ChangedFile> changedFiles) {
     try (Repository repo = buildRepo(projectBaseDir)) {
       Ref targetRef = resolveTargetRef(targetBranchName, repo);
       if (targetRef == null) {
-        analysisWarnings.addUnique(String.format(COULD_NOT_FIND_REF
-          + ". You may see unexpected issues and changes. "
-          + "Please make sure to fetch this ref before pull request analysis.", targetBranchName));
+        addWarningTargetNotFound(targetBranchName);
         return null;
       }
 
@@ -162,79 +238,93 @@ public class GitScmProvider extends ScmProvider {
       repo.getConfig().setBoolean("core", null, "autocrlf", true);
 
       Optional<RevCommit> mergeBaseCommit = findMergeBase(repo, targetRef);
-      if (!mergeBaseCommit.isPresent()) {
-        LOG.warn("No merge base found between HEAD and " + targetRef.getName());
+
+      if (mergeBaseCommit.isEmpty()) {
+        LOG.warn(composeNoMergeBaseFoundWarning(targetRef.getName()));
         return null;
       }
 
       Map<Path, Set<Integer>> changedLines = new HashMap<>();
-      Path repoRootDir = repo.getDirectory().toPath().getParent();
 
-      for (Path path : changedFiles) {
-        collectChangedLines(repo, mergeBaseCommit.get(), changedLines, repoRootDir, path);
+      for (Map.Entry<Path, ChangedFile> entry : changedFiles.entrySet()) {
+        collectChangedLines(repo, mergeBaseCommit.get(), changedLines, entry.getKey(), entry.getValue());
       }
+
       return changedLines;
     } catch (Exception e) {
       LOG.warn("Failed to get changed lines from git", e);
     }
+
     return null;
   }
 
-  private void collectChangedLines(Repository repo, RevCommit mergeBaseCommit, Map<Path, Set<Integer>> changedLines, Path repoRootDir, Path changedFile) {
+  private static String composeNoMergeBaseFoundWarning(String targetRef) {
+    return format(NO_MERGE_BASE_FOUND_MESSAGE, targetRef);
+  }
+
+  private void addWarningTargetNotFound(String targetBranchName) {
+    String url = documentationLinkGenerator.getDocumentationLink(SCM_INTEGRATION_DOCUMENTATION_SUFFIX);
+    analysisWarnings.addUnique(format(COULD_NOT_FIND_REF
+      + ". You may see unexpected issues and changes. "
+      + "Please make sure to fetch this ref before pull request analysis and refer to"
+      + " <a href=\"%s\" rel=\"noopener noreferrer\" target=\"_blank\">the documentation</a>.", targetBranchName, url));
+  }
+
+  private void collectChangedLines(Repository repo, RevCommit mergeBaseCommit, Map<Path, Set<Integer>> changedLines, Path changedFilePath, ChangedFile changedFile) {
     ChangedLinesComputer computer = new ChangedLinesComputer();
 
     try (DiffFormatter diffFmt = new DiffFormatter(new BufferedOutputStream(computer.receiver()))) {
-      // copied from DiffCommand so that we can use a custom DiffFormatter which ignores white spaces.
       diffFmt.setRepository(repo);
       diffFmt.setProgressMonitor(NullProgressMonitor.INSTANCE);
       diffFmt.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
-      diffFmt.setPathFilter(PathFilter.create(toGitPath(repoRootDir.relativize(changedFile).toString())));
+
+      diffFmt.setDetectRenames(changedFile.isMovedFile());
+
+      Path workTree = repo.getWorkTree().toPath();
+      TreeFilter treeFilter = getTreeFilter(changedFile, workTree);
+      diffFmt.setPathFilter(treeFilter);
 
       AbstractTreeIterator mergeBaseTree = prepareTreeParser(repo, mergeBaseCommit);
       List<DiffEntry> diffEntries = diffFmt.scan(mergeBaseTree, new FileTreeIterator(repo));
+
       diffFmt.format(diffEntries);
       diffFmt.flush();
+
       diffEntries.stream()
-        .filter(diffEntry -> diffEntry.getChangeType() == DiffEntry.ChangeType.ADD || diffEntry.getChangeType() == DiffEntry.ChangeType.MODIFY)
+        .filter(isAllowedChangeType(ADD, MODIFY, RENAME))
         .findAny()
-        .ifPresent(diffEntry -> changedLines.put(changedFile, computer.changedLines()));
+        .ifPresent(diffEntry -> changedLines.put(changedFilePath, computer.changedLines()));
     } catch (Exception e) {
-      LOG.warn("Failed to get changed lines from git for file " + changedFile, e);
+      LOG.warn("Failed to get changed lines from git for file " + changedFilePath, e);
     }
   }
 
   @Override
   @CheckForNull
   public Instant forkDate(String referenceBranchName, Path projectBaseDir) {
-    try (Repository repo = buildRepo(projectBaseDir)) {
-      Ref targetRef = resolveTargetRef(referenceBranchName, repo);
-      if (targetRef == null) {
-        LOG.warn("Branch '{}' not found in git", referenceBranchName);
-        return null;
-      }
-
-      if (isDiffAlgoInvalid(repo.getConfig())) {
-        LOG.warn("The diff algorithm configured in git is not supported. "
-          + "No information regarding changes in the branch will be collected, which can lead to unexpected results.");
-        return null;
-      }
-
-      Optional<RevCommit> mergeBaseCommit = findMergeBase(repo, targetRef);
-      if (!mergeBaseCommit.isPresent()) {
-        LOG.warn("No fork point found between HEAD and " + targetRef.getName());
-        return null;
-      }
-
-      return Instant.ofEpochSecond(mergeBaseCommit.get().getCommitTime());
-    } catch (Exception e) {
-      LOG.warn("Failed to find fork point with git", e);
-    }
-
     return null;
   }
 
   private static String toGitPath(String path) {
     return path.replaceAll(Pattern.quote(File.separator), "/");
+  }
+
+  private static TreeFilter getTreeFilter(ChangedFile changedFile, Path baseDir) {
+    String path = toGitPath(relativizeFilePath(baseDir, changedFile.getAbsolutFilePath()));
+    String oldRelativePath = changedFile.getOldRelativeFilePathReference();
+
+    if (oldRelativePath != null) {
+      return PathFilterGroup.createFromStrings(path, toGitPath(oldRelativePath));
+    }
+
+    return PathFilter.create(path);
+  }
+
+  private static Set<Path> extractAbsoluteFilePaths(Collection<ChangedFile> changedFiles) {
+    return changedFiles
+      .stream()
+      .map(ChangedFile::getAbsolutFilePath)
+      .collect(toSet());
   }
 
   @CheckForNull
@@ -287,12 +377,10 @@ public class GitScmProvider extends ScmProvider {
   public String revisionId(Path path) {
     RepositoryBuilder builder = getVerifiedRepositoryBuilder(path);
     try {
-      Ref head = getHead(builder.build());
-      if (head == null || head.getObjectId() == null) {
-        // can happen on fresh, empty repos
-        return null;
-      }
-      return head.getObjectId().getName();
+      return Optional.ofNullable(getHead(builder.build()))
+        .map(Ref::getObjectId)
+        .map(ObjectId::getName)
+        .orElse(null);
     } catch (IOException e) {
       throw new IllegalStateException("I/O error while getting revision ID for path: " + path, e);
     }
@@ -343,9 +431,19 @@ public class GitScmProvider extends ScmProvider {
       }
       RevCommit base = walk.parseCommit(next);
       walk.dispose();
-      LOG.debug("Merge base sha1: {}", base.getName());
+      LOG.info("Merge base sha1: {}", base.getName());
       return Optional.of(base);
     }
+  }
+
+  private static Map<Path, ChangedFile> toChangedFileByPathsMap(Set<Path> changedFiles) {
+    return changedFiles
+      .stream()
+      .collect(toMap(identity(), ChangedFile::of, (x, y) -> y, LinkedHashMap::new));
+  }
+
+  private static String relativizeFilePath(Path baseDirectory, Path filePath) {
+    return baseDirectory.relativize(filePath).toString();
   }
 
   AbstractTreeIterator prepareTreeParser(Repository repo, RevCommit commit) throws IOException {

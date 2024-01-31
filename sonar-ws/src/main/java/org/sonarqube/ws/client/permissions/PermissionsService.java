@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,16 @@ package org.sonarqube.ws.client.permissions;
 import java.util.stream.Collectors;
 import javax.annotation.Generated;
 import org.sonarqube.ws.MediaTypes;
+import org.sonarqube.ws.Permissions.CreateTemplateWsResponse;
+import org.sonarqube.ws.Permissions.SearchTemplatesWsResponse;
+import org.sonarqube.ws.Permissions.UpdateTemplateWsResponse;
+import org.sonarqube.ws.Permissions.UsersWsResponse;
+import org.sonarqube.ws.Permissions.WsGroupsResponse;
+import org.sonarqube.ws.Permissions.WsTemplateGroupsResponse;
 import org.sonarqube.ws.client.BaseService;
 import org.sonarqube.ws.client.GetRequest;
 import org.sonarqube.ws.client.PostRequest;
 import org.sonarqube.ws.client.WsConnector;
-import org.sonarqube.ws.Permissions.CreateTemplateWsResponse;
-import org.sonarqube.ws.Permissions.WsGroupsResponse;
-import org.sonarqube.ws.Permissions.WsSearchGlobalPermissionsResponse;
-import org.sonarqube.ws.Permissions.SearchProjectPermissionsWsResponse;
-import org.sonarqube.ws.Permissions.SearchTemplatesWsResponse;
-import org.sonarqube.ws.Permissions.WsTemplateGroupsResponse;
-import org.sonarqube.ws.Permissions.UpdateTemplateWsResponse;
-import org.sonarqube.ws.Permissions.UsersWsResponse;
 
 /**
  * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/permissions">Further information about this web service online</a>
@@ -55,7 +53,6 @@ public class PermissionsService extends BaseService {
   public void addGroup(AddGroupRequest request) {
     call(
       new PostRequest(path("add_group"))
-        .setParam("groupId", request.getGroupId())
         .setParam("groupName", request.getGroupName())
         .setParam("permission", request.getPermission())
         .setParam("projectId", request.getProjectId())
@@ -74,7 +71,6 @@ public class PermissionsService extends BaseService {
   public void addGroupToTemplate(AddGroupToTemplateRequest request) {
     call(
       new PostRequest(path("add_group_to_template"))
-        .setParam("groupId", request.getGroupId())
         .setParam("groupName", request.getGroupName())
         .setParam("permission", request.getPermission())
         .setParam("templateId", request.getTemplateId())
@@ -237,7 +233,6 @@ public class PermissionsService extends BaseService {
   public void removeGroup(RemoveGroupRequest request) {
     call(
       new PostRequest(path("remove_group"))
-        .setParam("groupId", request.getGroupId())
         .setParam("groupName", request.getGroupName())
         .setParam("permission", request.getPermission())
         .setParam("projectId", request.getProjectId())
@@ -256,7 +251,6 @@ public class PermissionsService extends BaseService {
   public void removeGroupFromTemplate(RemoveGroupFromTemplateRequest request) {
     call(
       new PostRequest(path("remove_group_from_template"))
-        .setParam("groupId", request.getGroupId())
         .setParam("groupName", request.getGroupName())
         .setParam("permission", request.getPermission())
         .setParam("templateId", request.getTemplateId())
@@ -316,42 +310,6 @@ public class PermissionsService extends BaseService {
         .setParam("templateName", request.getTemplateName())
         .setMediaType(MediaTypes.JSON)
       ).content();
-  }
-
-  /**
-   *
-   * This is part of the internal API.
-   * This is a GET request.
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/permissions/search_global_permissions">Further information about this action online (including a response example)</a>
-   * @since 5.2
-   * @deprecated since 6.5
-   */
-  @Deprecated
-  public WsSearchGlobalPermissionsResponse searchGlobalPermissions(SearchGlobalPermissionsRequest request) {
-    return call(
-      new GetRequest(path("search_global_permissions")),
-      WsSearchGlobalPermissionsResponse.parser());
-  }
-
-  /**
-   *
-   * This is part of the internal API.
-   * This is a GET request.
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/permissions/search_project_permissions">Further information about this action online (including a response example)</a>
-   * @since 5.2
-   * @deprecated since 6.5
-   */
-  @Deprecated
-  public SearchProjectPermissionsWsResponse searchProjectPermissions(SearchProjectPermissionsRequest request) {
-    return call(
-      new GetRequest(path("search_project_permissions"))
-        .setParam("p", request.getP())
-        .setParam("projectId", request.getProjectId())
-        .setParam("projectKey", request.getProjectKey())
-        .setParam("ps", request.getPs())
-        .setParam("q", request.getQ())
-        .setParam("qualifier", request.getQualifier()),
-      SearchProjectPermissionsWsResponse.parser());
   }
 
   /**

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,51 +19,27 @@
  */
 package org.sonarqube.ws.client;
 
-import java.io.File;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.function.Function;
+import okhttp3.Request;
+import okhttp3.RequestBody;
 
 /**
  * @since 5.3
  */
-public class PostRequest extends BaseRequest<PostRequest> {
-
-  private final Map<String, Part> parts = new LinkedHashMap<>();
+public class PostRequest extends RequestWithPayload<PostRequest> {
 
   public PostRequest(String path) {
     super(path);
   }
 
   @Override
+  Function<Request.Builder, Request.Builder> addVerbToBuilder(RequestBody body) {
+    return builder -> builder.post(body);
+  }
+
+  @Override
   public Method getMethod() {
     return Method.POST;
-  }
-
-  public PostRequest setPart(String name, Part part) {
-    this.parts.put(name, part);
-    return this;
-  }
-
-  public Map<String, Part> getParts() {
-    return parts;
-  }
-
-  public static class Part {
-    private final String mediaType;
-    private final File file;
-
-    public Part(String mediaType, File file) {
-      this.mediaType = mediaType;
-      this.file = file;
-    }
-
-    public String getMediaType() {
-      return mediaType;
-    }
-
-    public File getFile() {
-      return file;
-    }
   }
 
 }

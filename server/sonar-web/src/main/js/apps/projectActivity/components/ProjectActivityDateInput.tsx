@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary, DateRangePicker, PopupZLevel } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import DateRangeInput from '../../../components/controls/DateRangeInput';
+import { translate } from '../../../helpers/l10n';
 import { Query } from '../utils';
 
 interface Props {
@@ -40,17 +39,24 @@ export default class ProjectActivityDateInput extends React.PureComponent<Props>
 
   render() {
     return (
-      <div>
-        <DateRangeInput
+      <div className="sw-flex">
+        <DateRangePicker
+          className="sw-w-abs-350"
+          clearButtonLabel={translate('clear')}
+          fromLabel={translate('start_date')}
           onChange={this.handleChange}
+          separatorText={translate('to_')}
+          toLabel={translate('end_date')}
           value={{ from: this.props.from, to: this.props.to }}
+          zLevel={PopupZLevel.Content}
         />
-        <Button
-          className="spacer-left"
+        <ButtonSecondary
+          className="sw-ml-2"
           disabled={this.props.from === undefined && this.props.to === undefined}
-          onClick={this.handleResetClick}>
+          onClick={this.handleResetClick}
+        >
           {translate('project_activity.reset_dates')}
-        </Button>
+        </ButtonSecondary>
       </div>
     );
   }

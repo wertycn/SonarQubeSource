@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,35 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  BasicSeparator,
+  ButtonPrimary,
+  ButtonSecondary,
+  FlagMessage,
+  Link,
+  Note,
+  Spinner,
+  SubHeading,
+  SubTitle,
+} from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import { Button, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Select from 'sonar-ui-common/components/controls/Select';
-import AlertSuccessIcon from 'sonar-ui-common/components/icons/AlertSuccessIcon';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import MandatoryFieldsExplanation from 'sonar-ui-common/components/ui/MandatoryFieldsExplanation';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../../../types/alm-settings';
+import AlmSettingsInstanceSelector from '../../../../components/devops-platform/AlmSettingsInstanceSelector';
+import MandatoryFieldMarker from '../../../../components/ui/MandatoryFieldMarker';
+import MandatoryFieldsExplanation from '../../../../components/ui/MandatoryFieldsExplanation';
+import { translate } from '../../../../helpers/l10n';
+import { getGlobalSettingsUrl } from '../../../../helpers/urls';
+import {
+  AlmSettingsInstance,
+  ProjectAlmBindingConfigurationErrorScope,
+  ProjectAlmBindingConfigurationErrors,
+  ProjectAlmBindingResponse,
+} from '../../../../types/alm-settings';
+import { ALM_INTEGRATION_CATEGORY } from '../../constants';
 import AlmSpecificForm from './AlmSpecificForm';
 
 export interface PRDecorationBindingRendererProps {
-  formData: T.Omit<ProjectAlmBindingResponse, 'alm'>;
+  formData: Omit<ProjectAlmBindingResponse, 'alm'>;
   instances: AlmSettingsInstance[];
   isChanged: boolean;
   isConfigured: boolean;
@@ -41,20 +54,12 @@ export interface PRDecorationBindingRendererProps {
   onFieldChange: (id: keyof ProjectAlmBindingResponse, value: string | boolean) => void;
   onReset: () => void;
   onSubmit: () => void;
-  saving: boolean;
-  success: boolean;
-  monorepoEnabled: boolean;
-}
-
-function optionRenderer(instance: AlmSettingsInstance) {
-  return instance.url ? (
-    <>
-      <span>{instance.key} — </span>
-      <span className="text-muted">{instance.url}</span>
-    </>
-  ) : (
-    <span>{instance.key}</span>
-  );
+  updating: boolean;
+  successfullyUpdated: boolean;
+  onCheckConfiguration: () => void;
+  checkingConfiguration: boolean;
+  configurationErrors?: ProjectAlmBindingConfigurationErrors;
+  isSysAdmin: boolean;
 }
 
 export default function PRDecorationBindingRenderer(props: PRDecorationBindingRendererProps) {
@@ -65,107 +70,171 @@ export default function PRDecorationBindingRenderer(props: PRDecorationBindingRe
     isConfigured,
     isValid,
     loading,
-    saving,
-    success,
-    monorepoEnabled
+    updating,
+    successfullyUpdated,
+    checkingConfiguration,
+    configurationErrors,
+    isSysAdmin,
   } = props;
 
   if (loading) {
-    return <DeferredSpinner />;
+    return <Spinner />;
   }
 
   if (instances.length < 1) {
     return (
       <div>
-        <Alert className="spacer-top huge-spacer-bottom" variant="info">
-          <FormattedMessage
-            defaultMessage={translate('settings.pr_decoration.binding.no_bindings')}
-            id="settings.pr_decoration.binding.no_bindings"
-            values={{
-              link: (
-                <Link to="/documentation/analysis/pull-request/#pr-decoration">
-                  {translate('learn_more')}
-                </Link>
-              )
-            }}
-          />
-        </Alert>
+        <FlagMessage variant="info">
+          {isSysAdmin ? (
+            <p>
+              <FormattedMessage
+                defaultMessage={translate('settings.pr_decoration.binding.no_bindings.admin')}
+                id="settings.pr_decoration.binding.no_bindings.admin"
+                values={{
+                  link: (
+                    <Link to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY)}>
+                      {translate('settings.pr_decoration.binding.no_bindings.link')}
+                    </Link>
+                  ),
+                }}
+              />
+            </p>
+          ) : (
+            translate('settings.pr_decoration.binding.no_bindings')
+          )}
+        </FlagMessage>
       </div>
     );
   }
 
-  const selected = formData.key && instances.find(i => i.key === formData.key);
-  const alm = selected && selected.alm;
+  const selected = formData.key ? instances.find((i) => i.key === formData.key) : undefined;
 
   return (
-    <div>
-      <header className="page-header">
-        <h1 className="page-title">{translate('settings.pr_decoration.binding.title')}</h1>
-      </header>
+    <div className="sw-p-6">
+      <SubTitle as="h3">{translate('settings.pr_decoration.binding.title')}</SubTitle>
 
-      <div className="markdown small spacer-top big-spacer-bottom">
-        {translate('settings.pr_decoration.binding.description')}
-      </div>
+      <Note className="markdown">{translate('settings.pr_decoration.binding.description')}</Note>
+
+      <BasicSeparator className="sw-my-6" />
 
       <form
         onSubmit={(event: React.SyntheticEvent<HTMLFormElement>) => {
           event.preventDefault();
           props.onSubmit();
-        }}>
-        <MandatoryFieldsExplanation className="form-field" />
+        }}
+      >
+        <MandatoryFieldsExplanation />
 
-        <div className="form-field">
-          <label htmlFor="name">
-            {translate('settings.pr_decoration.binding.form.name')}
-            <MandatoryFieldMarker className="spacer-right" />
-          </label>
-          <Select
-            autosize={true}
-            className="abs-width-400"
-            clearable={false}
-            id="name"
-            menuContainerStyle={{
-              maxWidth: '210%' /* Allow double the width of the select */,
-              width: 'auto'
-            }}
-            onChange={(instance: AlmSettingsInstance) => props.onFieldChange('key', instance.key)}
-            optionRenderer={optionRenderer}
-            options={instances}
-            searchable={false}
-            value={formData.key}
-            valueKey="key"
-            valueRenderer={optionRenderer}
-          />
+        <div className="sw-p-6 sw-flex sw-gap-12">
+          <div className="sw-w-abs-300">
+            <SubHeading>
+              <label htmlFor="name">
+                {translate('settings.pr_decoration.binding.form.name')}
+                <MandatoryFieldMarker className="sw-mr-2" />
+              </label>
+            </SubHeading>
+            <div className="markdown">
+              {translate('settings.pr_decoration.binding.form.name.help')}
+            </div>
+          </div>
+          <div className="sw-flex-1">
+            <AlmSettingsInstanceSelector
+              instances={instances}
+              onChange={(instance: AlmSettingsInstance) => props.onFieldChange('key', instance.key)}
+              initialValue={formData.key}
+              className="sw-w-abs-400 it__configuration-name-select"
+              inputId="name"
+            />
+          </div>
         </div>
 
-        {alm && (
+        {selected?.alm && (
           <AlmSpecificForm
-            alm={alm}
+            alm={selected.alm}
+            instances={instances}
             formData={formData}
             onFieldChange={props.onFieldChange}
-            monorepoEnabled={monorepoEnabled}
           />
         )}
 
-        <div className="display-flex-center">
-          <DeferredSpinner className="spacer-right" loading={saving} />
+        <div className="sw-flex sw-items-center sw-mt-8 sw-gap-2">
           {isChanged && (
-            <SubmitButton className="spacer-right button-success" disabled={saving || !isValid}>
-              <span data-test="project-settings__alm-save">{translate('save')}</span>
-            </SubmitButton>
+            <>
+              <ButtonPrimary disabled={updating || !isValid} type="submit">
+                <span data-test="project-settings__alm-save">{translate('save')}</span>
+              </ButtonPrimary>
+              <Spinner loading={updating} />
+            </>
+          )}
+          {!updating && successfullyUpdated && (
+            <FlagMessage variant="success">{translate('settings.state.saved')}</FlagMessage>
           )}
           {isConfigured && (
-            <Button className="spacer-right" onClick={props.onReset}>
-              <span data-test="project-settings__alm-reset">{translate('reset_verb')}</span>
-            </Button>
-          )}
-          {!saving && success && (
-            <span className="text-success">
-              <AlertSuccessIcon className="spacer-right" />
-              {translate('settings.state.saved')}
-            </span>
+            <>
+              <ButtonSecondary onClick={props.onReset}>
+                <span data-test="project-settings__alm-reset">{translate('reset_verb')}</span>
+              </ButtonSecondary>
+              {!isChanged && (
+                <>
+                  <ButtonSecondary
+                    onClick={props.onCheckConfiguration}
+                    disabled={checkingConfiguration}
+                  >
+                    {translate('settings.pr_decoration.binding.check_configuration')}
+                  </ButtonSecondary>
+                  <Spinner loading={checkingConfiguration} />
+                </>
+              )}
+            </>
           )}
         </div>
+        {!checkingConfiguration && configurationErrors?.errors && (
+          <FlagMessage variant="error" className="sw-mt-6">
+            <div>
+              <p className="sw-mb-2">
+                {translate('settings.pr_decoration.binding.check_configuration.failure')}
+              </p>
+              <ul className="list-styled">
+                {configurationErrors.errors.map((error, i) => (
+                  // eslint-disable-next-line react/no-array-index-key
+                  <li key={i}>{error.msg}</li>
+                ))}
+              </ul>
+              {configurationErrors.scope === ProjectAlmBindingConfigurationErrorScope.Global && (
+                <p>
+                  {isSysAdmin ? (
+                    <FormattedMessage
+                      id="settings.pr_decoration.binding.check_configuration.failure.check_global_settings"
+                      defaultMessage={translate(
+                        'settings.pr_decoration.binding.check_configuration.failure.check_global_settings',
+                      )}
+                      values={{
+                        link: (
+                          <Link
+                            to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY, {
+                              alm: selected?.alm,
+                            })}
+                          >
+                            {translate(
+                              'settings.pr_decoration.binding.check_configuration.failure.check_global_settings.link',
+                            )}
+                          </Link>
+                        ),
+                      }}
+                    />
+                  ) : (
+                    translate('settings.pr_decoration.binding.check_configuration.contact_admin')
+                  )}
+                </p>
+              )}
+            </div>
+          </FlagMessage>
+        )}
+        {isConfigured && !isChanged && !checkingConfiguration && !configurationErrors && (
+          <FlagMessage variant="success" className="sw-mt-6">
+            {translate('settings.pr_decoration.binding.check_configuration.success')}
+          </FlagMessage>
+        )}
       </form>
     </div>
   );

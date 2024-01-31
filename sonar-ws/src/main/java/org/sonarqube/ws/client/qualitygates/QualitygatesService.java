@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,7 @@ package org.sonarqube.ws.client.qualitygates;
 
 import javax.annotation.Generated;
 import org.sonarqube.ws.MediaTypes;
+import org.sonarqube.ws.Qualitygates;
 import org.sonarqube.ws.Qualitygates.CreateConditionResponse;
 import org.sonarqube.ws.Qualitygates.CreateResponse;
 import org.sonarqube.ws.Qualitygates.GetByProjectResponse;
@@ -54,7 +55,7 @@ public class QualitygatesService extends BaseService {
   public void copy(CopyRequest request) {
     call(
       new PostRequest(path("copy"))
-        .setParam("id", request.getId())
+        .setParam("sourceName", request.getSourceName())
         .setParam("name", request.getName())
         .setMediaType(MediaTypes.JSON)).content();
   }
@@ -94,7 +95,7 @@ public class QualitygatesService extends BaseService {
     return call(
       new PostRequest(path("create_condition"))
         .setParam("error", request.getError())
-        .setParam("gateId", request.getGateId())
+        .setParam("gateName", request.getGateName())
         .setParam("metric", request.getMetric())
         .setParam("op", request.getOp()),
       CreateConditionResponse.parser());
@@ -124,7 +125,6 @@ public class QualitygatesService extends BaseService {
   public void deselect(DeselectRequest request) {
     call(
       new PostRequest(path("deselect"))
-        .setParam("projectId", request.getProjectId())
         .setParam("projectKey", request.getProjectKey())
         .setMediaType(MediaTypes.JSON)).content();
   }
@@ -139,7 +139,7 @@ public class QualitygatesService extends BaseService {
   public void destroy(DestroyRequest request) {
     call(
       new PostRequest(path("destroy"))
-        .setParam("id", request.getId())
+        .setParam("name", request.getName())
         .setMediaType(MediaTypes.JSON)).content();
   }
 
@@ -190,6 +190,20 @@ public class QualitygatesService extends BaseService {
 
   /**
    * This is part of the internal API.
+   * This is a GET request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/application_status">Further information about this action online (including a response example)</a>
+   * @since 2.0
+   */
+  public void applicationStatus(ApplicationStatusRequest request) {
+    call(
+      new GetRequest(path("application_status"))
+        .setParam("application", request.getApplication())
+        .setParam("branch", request.getBranch()));
+  }
+
+  /**
+   * This is part of the internal API.
    * This is a POST request.
    *
    * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/rename">Further information about this action online (including a response example)</a>
@@ -213,7 +227,7 @@ public class QualitygatesService extends BaseService {
   public SearchResponse search(SearchRequest request) {
     return call(
       new GetRequest(path("search"))
-        .setParam("gateId", request.getGateId())
+        .setParam("gateName", request.getGateName())
         .setParam("page", request.getPage())
         .setParam("pageSize", request.getPageSize())
         .setParam("query", request.getQuery())
@@ -231,8 +245,7 @@ public class QualitygatesService extends BaseService {
   public void select(SelectRequest request) {
     call(
       new PostRequest(path("select"))
-        .setParam("gateId", request.getGateId())
-        .setParam("projectId", request.getProjectId())
+        .setParam("gateName", request.getGateName())
         .setParam("projectKey", request.getProjectKey())
         .setMediaType(MediaTypes.JSON)).content();
   }
@@ -247,7 +260,7 @@ public class QualitygatesService extends BaseService {
   public void setAsDefault(SetAsDefaultRequest request) {
     call(
       new PostRequest(path("set_as_default"))
-        .setParam("id", request.getId())
+        .setParam("name", request.getName())
         .setMediaType(MediaTypes.JSON)).content();
   }
 
@@ -261,24 +274,8 @@ public class QualitygatesService extends BaseService {
   public ShowWsResponse show(ShowRequest request) {
     return call(
       new GetRequest(path("show"))
-        .setParam("id", request.getId())
         .setParam("name", request.getName()),
       ShowWsResponse.parser());
-  }
-
-  /**
-   * This is part of the internal API.
-   * This is a POST request.
-   *
-   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/unset_default">Further information about this action online (including a response example)</a>
-   * @since 4.3
-   * @deprecated since 7.0
-   */
-  @Deprecated
-  public String unsetDefault() {
-    return call(
-      new PostRequest(path("unset_default"))
-        .setMediaType(MediaTypes.JSON)).content();
   }
 
   /**
@@ -296,5 +293,105 @@ public class QualitygatesService extends BaseService {
         .setParam("metric", request.getMetric())
         .setParam("op", request.getOp()),
       UpdateConditionResponse.parser());
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/add_user">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public void addUser(AddUserRequest request) {
+    call(
+      new PostRequest(path("add_user"))
+        .setParam("login", request.getLogin())
+        .setParam("gateName", request.getQualityGate())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a GET request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/search_users">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public Qualitygates.SearchUsersResponse searchUsers(SearchUsersRequest request) {
+    return call(
+      new GetRequest(path("search_users"))
+        .setParam("p", request.getP())
+        .setParam("ps", request.getPs())
+        .setParam("q", request.getQ())
+        .setParam("gateName", request.getQualityGate())
+        .setParam("selected", request.getSelected()),
+      Qualitygates.SearchUsersResponse.parser());
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/remove_user">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public void removeUser(RemoveUserRequest request) {
+    call(
+      new PostRequest(path("remove_user"))
+        .setParam("login", request.getLogin())
+        .setParam("gateName", request.getQualityGate())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/add_group">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public void addGroup(AddGroupRequest request) {
+    call(
+      new PostRequest(path("add_group"))
+        .setParam("groupName", request.getGroup())
+        .setParam("gateName", request.getQualityGate())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a GET request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/search_groups">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public Qualitygates.SearchGroupsResponse searchGroups(SearchGroupsRequest request) {
+    return call(
+      new GetRequest(path("search_groups"))
+        .setParam("p", request.getP())
+        .setParam("ps", request.getPs())
+        .setParam("q", request.getQ())
+        .setParam("gateName", request.getQualityGate())
+        .setParam("selected", request.getSelected()),
+      Qualitygates.SearchGroupsResponse.parser());
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/qualitygates/remove_group">Further information about this action online (including a response example)</a>
+   * @since 9.2
+   */
+  public void removeGroup(RemoveGroupRequest request) {
+    call(
+      new PostRequest(path("remove_group"))
+        .setParam("groupName", request.getGroup())
+        .setParam("gateName", request.getQualityGate())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
   }
 }

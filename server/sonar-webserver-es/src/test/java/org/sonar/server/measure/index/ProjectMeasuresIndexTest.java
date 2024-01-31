@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,14 +25,15 @@ import com.google.common.collect.Sets;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.utils.System2;
 import org.sonar.db.component.ComponentDto;
@@ -56,12 +57,12 @@ import static java.util.Arrays.stream;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 import static org.sonar.api.measures.CoreMetrics.ALERT_STATUS_KEY;
 import static org.sonar.api.measures.CoreMetrics.COVERAGE_KEY;
 import static org.sonar.api.measures.Metric.Level.ERROR;
 import static org.sonar.api.measures.Metric.Level.OK;
-import static org.sonar.api.measures.Metric.Level.WARN;
 import static org.sonar.api.resources.Qualifiers.APP;
 import static org.sonar.api.resources.Qualifiers.PROJECT;
 import static org.sonar.db.component.ComponentTesting.newPrivateProjectDto;
@@ -93,12 +94,12 @@ public class ProjectMeasuresIndexTest {
   private static final String NEW_LINES = "new_lines";
   private static final String LANGUAGES = "languages";
 
-  private static final ComponentDto PROJECT1 = ComponentTesting.newPrivateProjectDto().setUuid("Project-1").setName("Project 1").setDbKey("key-1");
-  private static final ComponentDto PROJECT2 = ComponentTesting.newPrivateProjectDto().setUuid("Project-2").setName("Project 2").setDbKey("key-2");
-  private static final ComponentDto PROJECT3 = ComponentTesting.newPrivateProjectDto().setUuid("Project-3").setName("Project 3").setDbKey("key-3");
-  private static final ComponentDto APP1 = ComponentTesting.newApplication().setUuid("App-1").setName("App 1").setDbKey("app-key-1");
-  private static final ComponentDto APP2 = ComponentTesting.newApplication().setUuid("App-2").setName("App 2").setDbKey("app-key-2");
-  private static final ComponentDto APP3 = ComponentTesting.newApplication().setUuid("App-3").setName("App 3").setDbKey("app-key-3");
+  private static final ComponentDto PROJECT1 = ComponentTesting.newPrivateProjectDto().setUuid("Project-1").setName("Project 1").setKey("key-1");
+  private static final ComponentDto PROJECT2 = ComponentTesting.newPrivateProjectDto().setUuid("Project-2").setName("Project 2").setKey("key-2");
+  private static final ComponentDto PROJECT3 = ComponentTesting.newPrivateProjectDto().setUuid("Project-3").setName("Project 3").setKey("key-3");
+  private static final ComponentDto APP1 = ComponentTesting.newApplication().setUuid("App-1").setName("App 1").setKey("app-key-1");
+  private static final ComponentDto APP2 = ComponentTesting.newApplication().setUuid("App-2").setName("App 2").setKey("app-key-2");
+  private static final ComponentDto APP3 = ComponentTesting.newApplication().setUuid("App-3").setName("App 3").setKey("app-key-3");
   private static final UserDto USER1 = newUserDto();
   private static final UserDto USER2 = newUserDto();
   private static final GroupDto GROUP1 = newGroupDto();
@@ -106,8 +107,6 @@ public class ProjectMeasuresIndexTest {
 
   @Rule
   public EsTester es = EsTester.create();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public UserSessionRule userSession = UserSessionRule.standalone();
 
@@ -128,10 +127,10 @@ public class ProjectMeasuresIndexTest {
 
   @Test
   public void default_sort_is_by_ascending_case_insensitive_name_then_by_key() {
-    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setDbKey("project1");
-    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setDbKey("project2");
-    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setDbKey("project3");
-    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setDbKey("project4");
+    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setKey("project1");
+    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setKey("project2");
+    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setKey("project3");
+    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setKey("project4");
     index(newDoc(windows), newDoc(apachee), newDoc(apache1), newDoc(apache2));
 
     assertResults(new ProjectMeasuresQuery(), apache1, apache2, apachee, windows);
@@ -161,10 +160,10 @@ public class ProjectMeasuresIndexTest {
 
   @Test
   public void sort_by_a_metric_then_by_name_then_by_key() {
-    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setDbKey("project1");
-    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setDbKey("project2");
-    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setDbKey("project3");
-    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setDbKey("project4");
+    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setKey("project1");
+    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setKey("project2");
+    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setKey("project3");
+    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setKey("project4");
     index(
       newDoc(windows, NCLOC, 10_000d),
       newDoc(apachee, NCLOC, 5_000d),
@@ -177,7 +176,7 @@ public class ProjectMeasuresIndexTest {
 
   @Test
   public void sort_by_quality_gate_status() {
-    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setDbKey("key-4");
+    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setKey("key-4");
     index(
       newDoc(PROJECT1).setQualityGateStatus(OK.name()),
       newDoc(PROJECT2).setQualityGateStatus(ERROR.name()),
@@ -187,12 +186,44 @@ public class ProjectMeasuresIndexTest {
     assertResults(new ProjectMeasuresQuery().setSort("alert_status").setAsc(false), PROJECT2, PROJECT1, project4);
   }
 
+  public void sort_by_creation_date() {
+    Instant now = Instant.ofEpochMilli(1000L);
+    Date nowMinus10 = Date.from(now.minusSeconds(10));
+    Date nowMinus20 = Date.from(now.minusSeconds(20));
+    Date nowMinus30 = Date.from(now.minusSeconds(30));
+
+    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setKey("key-4");
+    index(
+      newDoc(PROJECT1).setCreatedAt(nowMinus10),
+      newDoc(PROJECT2).setCreatedAt(nowMinus30),
+      newDoc(project4).setCreatedAt(nowMinus20));
+
+    assertResults(new ProjectMeasuresQuery().setSort("creation_date").setAsc(true), PROJECT1, project4, PROJECT2);
+    assertResults(new ProjectMeasuresQuery().setSort("creation_date").setAsc(false), PROJECT2, PROJECT1, project4);
+  }
+
+  public void sort_by_analysis_date() {
+    Instant now = Instant.ofEpochMilli(1000L);
+    Date nowMinus10 = Date.from(now.minusSeconds(10));
+    Date nowMinus20 = Date.from(now.minusSeconds(20));
+    Date nowMinus30 = Date.from(now.minusSeconds(30));
+
+    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setKey("key-4");
+    index(
+      newDoc(PROJECT1).setAnalysedAt(nowMinus10),
+      newDoc(PROJECT2).setAnalysedAt(nowMinus30),
+      newDoc(project4).setAnalysedAt(nowMinus20));
+
+    assertResults(new ProjectMeasuresQuery().setSort("analysis_date").setAsc(true), PROJECT1, project4, PROJECT2);
+    assertResults(new ProjectMeasuresQuery().setSort("analysis_date").setAsc(false), PROJECT2, PROJECT1, project4);
+  }
+
   @Test
   public void sort_by_quality_gate_status_then_by_name_then_by_key() {
-    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setDbKey("project1");
-    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setDbKey("project2");
-    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setDbKey("project3");
-    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setDbKey("project4");
+    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setKey("project1");
+    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setKey("project2");
+    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setKey("project3");
+    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setKey("project4");
     index(
       newDoc(windows).setQualityGateStatus(ERROR.name()),
       newDoc(apachee).setQualityGateStatus(OK.name()),
@@ -424,7 +455,7 @@ public class ProjectMeasuresIndexTest {
 
   @Test
   public void filter_on_languages() {
-    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setDbKey("key-4");
+    ComponentDto project4 = ComponentTesting.newPrivateProjectDto().setUuid("Project-4").setName("Project 4").setKey("key-4");
     index(
       newDoc(PROJECT1).setLanguages(singletonList("java")),
       newDoc(PROJECT2).setLanguages(singletonList("xoo")),
@@ -438,10 +469,10 @@ public class ProjectMeasuresIndexTest {
 
   @Test
   public void filter_on_query_text() {
-    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setDbKey("project1");
-    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setDbKey("project2");
-    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setDbKey("project3");
-    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setDbKey("project4");
+    ComponentDto windows = ComponentTesting.newPrivateProjectDto().setUuid("windows").setName("Windows").setKey("project1");
+    ComponentDto apachee = ComponentTesting.newPrivateProjectDto().setUuid("apachee").setName("apachee").setKey("project2");
+    ComponentDto apache1 = ComponentTesting.newPrivateProjectDto().setUuid("apache-1").setName("Apache").setKey("project3");
+    ComponentDto apache2 = ComponentTesting.newPrivateProjectDto().setUuid("apache-2").setName("Apache").setKey("project4");
     index(newDoc(windows), newDoc(apachee), newDoc(apache1), newDoc(apache2));
 
     assertResults(new ProjectMeasuresQuery().setQueryText("windows"), windows);
@@ -539,15 +570,6 @@ public class ProjectMeasuresIndexTest {
     indexForUser(USER1, newDoc(PROJECT2), newDoc(APP2));
 
     userSession.anonymous();
-    assertResults(new ProjectMeasuresQuery(), APP1, PROJECT1);
-  }
-
-  @Test
-  public void root_user_can_access_all_projects_and_applications() {
-    indexForUser(USER1, newDoc(PROJECT1), newDoc(APP1));
-    // connecting with a root but not USER1
-    userSession.logIn().setRoot();
-
     assertResults(new ProjectMeasuresQuery(), APP1, PROJECT1);
   }
 
@@ -1156,8 +1178,7 @@ public class ProjectMeasuresIndexTest {
 
     assertThat(result).containsOnly(
       entry(ERROR.name(), 4L),
-      entry(OK.name(), 2L),
-      entry(WARN.name(), 0L));
+      entry(OK.name(), 2L));
   }
 
   @Test
@@ -1180,8 +1201,7 @@ public class ProjectMeasuresIndexTest {
     // Sticky facet on quality gate does not take into account quality gate filter
     assertThat(facets.get(ALERT_STATUS_KEY)).containsOnly(
       entry(OK.name(), 2L),
-      entry(ERROR.name(), 3L),
-      entry(WARN.name(), 0L));
+      entry(ERROR.name(), 3L));
     // But facet on ncloc does well take into into filters
     assertThat(facets.get(NCLOC)).containsExactly(
       entry("*-1000.0", 1L),
@@ -1212,54 +1232,7 @@ public class ProjectMeasuresIndexTest {
 
     assertThat(result).containsOnly(
       entry(ERROR.name(), 0L),
-      entry(OK.name(), 2L),
-      entry(WARN.name(), 0L));
-  }
-
-  @Test
-  public void facet_quality_gate_using_deprecated_warning() {
-    index(
-      // 2 docs with QG OK
-      newDoc().setQualityGateStatus(OK.name()),
-      newDoc().setQualityGateStatus(OK.name()),
-      // 3 docs with QG WARN
-      newDoc().setQualityGateStatus(WARN.name()),
-      newDoc().setQualityGateStatus(WARN.name()),
-      newDoc().setQualityGateStatus(WARN.name()),
-      // 4 docs with QG ERROR
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()));
-
-    LinkedHashMap<String, Long> result = underTest.search(new ProjectMeasuresQuery(), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY);
-
-    assertThat(result).containsOnly(
-      entry(ERROR.name(), 4L),
-      entry(WARN.name(), 3L),
       entry(OK.name(), 2L));
-  }
-
-  @Test
-  public void facet_quality_gate_does_not_return_deprecated_warning_when_set_ignore_warning_is_true() {
-    index(
-      // 2 docs with QG OK
-      newDoc().setQualityGateStatus(OK.name()),
-      newDoc().setQualityGateStatus(OK.name()),
-      // 4 docs with QG ERROR
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()),
-      newDoc().setQualityGateStatus(ERROR.name()));
-
-    assertThat(underTest.search(new ProjectMeasuresQuery().setIgnoreWarning(true), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY)).containsOnly(
-      entry(ERROR.name(), 4L),
-      entry(OK.name(), 2L));
-    assertThat(underTest.search(new ProjectMeasuresQuery().setIgnoreWarning(false), new SearchOptions().addFacets(ALERT_STATUS_KEY)).getFacets().get(ALERT_STATUS_KEY))
-      .containsOnly(
-        entry(ERROR.name(), 4L),
-        entry(WARN.name(), 0L),
-        entry(OK.name(), 2L));
   }
 
   @Test
@@ -1477,8 +1450,7 @@ public class ProjectMeasuresIndexTest {
       entry("cpp", 1L));
     assertThat(facets.get(ALERT_STATUS_KEY)).containsOnly(
       entry(OK.name(), 0L),
-      entry(ERROR.name(), 1L),
-      entry(WARN.name(), 0L));
+      entry(ERROR.name(), 1L));
   }
 
   @Test
@@ -1517,7 +1489,7 @@ public class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags("off", 10);
+    List<String> result = underTest.searchTags("off", 1, 10);
 
     assertThat(result).containsOnly("offshore", "official", "Madhoff");
   }
@@ -1532,7 +1504,7 @@ public class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 10);
+    List<String> result = underTest.searchTags(null, 1, 10);
 
     assertThat(result).containsOnly("offshore", "official", "Madhoff", "finance", "marketing", "java", "javascript");
   }
@@ -1547,9 +1519,47 @@ public class ProjectMeasuresIndexTest {
       newDoc().setTags(newArrayList("finance", "offshore")),
       newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 10);
+    List<String> result = underTest.searchTags(null, 1, 10);
 
     assertThat(result).containsExactly("Madhoff", "finance", "java", "javascript", "marketing", "official", "offshore");
+  }
+
+  @Test
+  public void search_tags_follows_paging() {
+    index(
+      newDoc().setTags(newArrayList("finance", "offshore", "java")),
+      newDoc().setTags(newArrayList("official", "javascript")),
+      newDoc().setTags(newArrayList("marketing", "official")),
+      newDoc().setTags(newArrayList("marketing", "Madhoff")),
+      newDoc().setTags(newArrayList("finance", "offshore")),
+      newDoc().setTags(newArrayList("offshore")));
+
+    List<String> result = underTest.searchTags(null, 1, 3);
+    assertThat(result).containsExactly("Madhoff", "finance", "java");
+
+    result = underTest.searchTags(null, 2, 3);
+    assertThat(result).containsExactly("javascript", "marketing", "official");
+
+    result = underTest.searchTags(null, 3, 3);
+    assertThat(result).containsExactly("offshore");
+
+    result = underTest.searchTags(null, 3, 4);
+    assertThat(result).isEmpty();
+  }
+
+  @Test
+  public void search_tags_returns_nothing_if_page_too_large() {
+    index(
+      newDoc().setTags(newArrayList("finance", "offshore", "java")),
+      newDoc().setTags(newArrayList("official", "javascript")),
+      newDoc().setTags(newArrayList("marketing", "official")),
+      newDoc().setTags(newArrayList("marketing", "Madhoff")),
+      newDoc().setTags(newArrayList("finance", "offshore")),
+      newDoc().setTags(newArrayList("offshore")));
+
+    List<String> result = underTest.searchTags(null, 10, 2);
+
+    assertThat(result).isEmpty();
   }
 
   @Test
@@ -1562,14 +1572,14 @@ public class ProjectMeasuresIndexTest {
 
     userSession.logIn(USER1);
 
-    List<String> result = underTest.searchTags(null, 10);
+    List<String> result = underTest.searchTags(null, 1, 10);
 
     assertThat(result).containsOnly("finance", "marketing");
   }
 
   @Test
   public void search_tags_with_no_tags() {
-    List<String> result = underTest.searchTags("whatever", 10);
+    List<String> result = underTest.searchTags("whatever", 1, 10);
 
     assertThat(result).isEmpty();
   }
@@ -1578,7 +1588,7 @@ public class ProjectMeasuresIndexTest {
   public void search_tags_with_page_size_at_0() {
     index(newDoc().setTags(newArrayList("offshore")));
 
-    List<String> result = underTest.searchTags(null, 0);
+    List<String> result = underTest.searchTags(null, 1, 0);
 
     assertThat(result).isEmpty();
   }
@@ -1593,13 +1603,42 @@ public class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(ImmutableMap.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchTelemetryStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectCountByLanguage()).containsOnly(
       entry("java", 2L), entry("cs", 1L), entry("js", 1L), entry("python", 1L), entry("kotlin", 1L));
     assertThat(result.getNclocByLanguage()).containsOnly(
       entry("java", 500L), entry("cs", 250L), entry("js", 50L), entry("python", 100L), entry("kotlin", 404L));
+  }
+
+  @Test
+  public void search_statistics_for_large_instances() {
+    int nbProjects = 25000;
+    int javaLocByProjects = 100;
+    int jsLocByProjects = 900;
+    int csLocByProjects = 2;
+
+    ProjectMeasuresDoc[] documents = IntStream.range(0, nbProjects).mapToObj(i -> newDoc("lines", 10, "coverage", 80)
+      .setLanguages(asList("java", "cs", "js"))
+      .setNclocLanguageDistributionFromMap(ImmutableMap.of("java", javaLocByProjects, "cs", csLocByProjects, "js", jsLocByProjects))).toArray(ProjectMeasuresDoc[]::new);
+
+    es.putDocuments(TYPE_PROJECT_MEASURES, documents);
+
+    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
+
+    assertThat(result.getProjectCount()).isEqualTo(nbProjects);
+    assertThat(result.getProjectCountByLanguage())
+      .hasSize(3)
+      .containsEntry("java", (long) nbProjects)
+      .containsEntry("cs", (long) nbProjects)
+      .containsEntry("js", (long) nbProjects);
+
+    assertThat(result.getNclocByLanguage())
+      .hasSize(3)
+      .containsEntry("java", (long) nbProjects * javaLocByProjects)
+      .containsEntry("cs", (long) nbProjects * csLocByProjects)
+      .containsEntry("js", (long) nbProjects * jsLocByProjects);
   }
 
   @Test
@@ -1621,7 +1660,7 @@ public class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(ImmutableMap.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchTelemetryStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
 
     assertThat(result.getProjectCount()).isEqualTo(2);
     assertThat(result.getProjectCountByLanguage()).containsOnly(
@@ -1641,18 +1680,24 @@ public class ProjectMeasuresIndexTest {
         .setLanguages(Arrays.asList("java", "python", "kotlin"))
         .setNclocLanguageDistributionFromMap(ImmutableMap.of("java", 300, "python", 100, "kotlin", 404)));
 
-    ProjectMeasuresStatistics result = underTest.searchTelemetryStatistics();
+    ProjectMeasuresStatistics result = underTest.searchSupportStatistics();
 
     assertThat(result.getProjectCount()).isZero();
     assertThat(result.getProjectCountByLanguage()).isEmpty();
   }
 
   @Test
-  public void fail_if_page_size_greater_than_500() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Page size must be lower than or equals to 500");
+  public void fail_if_page_size_greater_than_100() {
+    assertThatThrownBy(() -> underTest.searchTags("whatever", 1, 101))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Page size must be lower than or equals to 100");
+  }
 
-    underTest.searchTags("whatever", 501);
+  @Test
+  public void fail_if_page_greater_than_20() {
+    assertThatThrownBy(() -> underTest.searchTags("whatever", 21, 100))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Page must be between 0 and 20");
   }
 
   private void index(ProjectMeasuresDoc... docs) {
@@ -1673,7 +1718,7 @@ public class ProjectMeasuresIndexTest {
   private static ProjectMeasuresDoc newDoc(ComponentDto project) {
     return new ProjectMeasuresDoc()
       .setId(project.uuid())
-      .setKey(project.getDbKey())
+      .setKey(project.getKey())
       .setName(project.name())
       .setQualifier(project.qualifier());
   }

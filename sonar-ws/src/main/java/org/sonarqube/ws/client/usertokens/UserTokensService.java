@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -49,7 +49,10 @@ public class UserTokensService extends BaseService {
     return call(
       new PostRequest(path("generate"))
         .setParam("login", request.getLogin())
-        .setParam("name", request.getName()),
+        .setParam("name", request.getName())
+        .setParam("type", request.getType())
+        .setParam("projectKey", request.getProjectKey())
+        .setParam("expirationDate", request.getExpirationDate()),
       GenerateWsResponse.parser());
   }
 

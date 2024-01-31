@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,6 +33,7 @@ public class MeasureRequest {
   private String branch;
   private String metric;
   private String project;
+  private String token;
 
   /**
    * Example value: "feature/my_branch"
@@ -83,5 +84,17 @@ public class MeasureRequest {
 
   public String getProject() {
     return project;
+  }
+
+  /**
+   * Tthis an optional parameter.
+   */
+  public MeasureRequest setToken(String token) {
+    this.token = token;
+    return this;
+  }
+
+  public String getToken() {
+    return token;
   }
 }

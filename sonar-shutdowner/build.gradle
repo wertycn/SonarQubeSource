@@ -1,4 +1,4 @@
-sonarqube {
+sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: Shutdowner"
   }
@@ -6,10 +6,10 @@ sonarqube {
 
 dependencies {
   // please keep list ordered
-  compileOnly 'com.google.code.findbugs:jsr305'
+  compileOnlyApi 'com.google.code.findbugs:jsr305'
 
-  testCompile 'junit:junit'
-  testCompile 'org.assertj:assertj-core'
+  testImplementation 'junit:junit'
+  testImplementation 'org.assertj:assertj-core'
 }
 
 jar {

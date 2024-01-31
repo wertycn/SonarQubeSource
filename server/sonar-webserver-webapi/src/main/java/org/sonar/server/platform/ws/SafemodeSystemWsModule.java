@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,9 @@
 package org.sonar.server.platform.ws;
 
 import org.sonar.core.platform.Module;
+import org.sonar.server.common.platform.SafeModeLivenessCheckerImpl;
+import org.sonar.server.monitoring.MonitoringWs;
+import org.sonar.server.user.BearerPasscode;
 
 public class SafemodeSystemWsModule extends Module {
   @Override
@@ -28,10 +31,17 @@ public class SafemodeSystemWsModule extends Module {
       StatusAction.class,
       MigrateDbAction.class,
       DbMigrationStatusAction.class,
+
       HealthActionSupport.class,
       SafeModeHealthAction.class,
-      SystemWs.class
+      SafeModeLivenessCheckerImpl.class,
+      LivenessActionSupport.class,
+      SafeModeLivenessAction.class,
 
-    );
+      MonitoringWs.class,
+      BearerPasscode.class,
+      SafeModeMonitoringMetricAction.class,
+
+      SystemWs.class);
   }
 }

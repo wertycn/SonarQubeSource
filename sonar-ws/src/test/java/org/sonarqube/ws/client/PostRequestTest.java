@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -56,5 +56,15 @@ public class PostRequestTest {
     PostRequest.Part part = request.getParts().get("report");
     assertThat(part.getMediaType()).isEqualTo(MediaTypes.JSON);
     assertThat(part.getFile()).isSameAs(reportFile);
+  }
+
+  @Test
+  public void setBody_shouldCorrectlyAddRawBodyToPostRequest() throws IOException {
+    String bodyRaw = "{\"state\":\"open\"}";
+    PostRequest request = new PostRequest("api/alm_integrations/webhook_github");
+    request.setBody(bodyRaw);
+
+    assertThat(request.getBody()).isEqualTo(bodyRaw);
+    assertThat(request.hasBody()).isTrue();
   }
 }

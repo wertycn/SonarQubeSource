@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,28 +23,32 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.batch.bootstrap.ProjectDefinition;
+import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.scanner.bootstrap.GlobalConfiguration;
 import org.sonar.scanner.bootstrap.GlobalServerSettings;
-import org.sonar.api.batch.fs.internal.DefaultInputModule;
+import org.springframework.context.annotation.Bean;
 
-public class ModuleConfigurationProvider extends ProviderAdapter {
+public class ModuleConfigurationProvider {
 
-  private ModuleConfiguration moduleConfiguration;
+  private final SonarGlobalPropertiesFilter sonarGlobalPropertiesFilter;
 
+  public ModuleConfigurationProvider(SonarGlobalPropertiesFilter sonarGlobalPropertiesFilter) {
+    this.sonarGlobalPropertiesFilter = sonarGlobalPropertiesFilter;
+  }
+
+
+  @Bean("ModuleConfiguration")
   public ModuleConfiguration provide(GlobalConfiguration globalConfig, DefaultInputModule module, GlobalServerSettings globalServerSettings,
     ProjectServerSettings projectServerSettings) {
-    if (moduleConfiguration == null) {
+    Map<String, String> settings = new LinkedHashMap<>();
+    settings.putAll(globalServerSettings.properties());
+    settings.putAll(projectServerSettings.properties());
+    addScannerSideProperties(settings, module.definition());
 
-      Map<String, String> settings = new LinkedHashMap<>();
-      settings.putAll(globalServerSettings.properties());
-      settings.putAll(projectServerSettings.properties());
-      addScannerSideProperties(settings, module.definition());
+    settings = sonarGlobalPropertiesFilter.enforceOnlyServerSideSonarGlobalPropertiesAreUsed(settings, globalServerSettings.properties());
 
-      moduleConfiguration = new ModuleConfiguration(globalConfig.getDefinitions(), globalConfig.getEncryption(), settings);
-    }
-    return moduleConfiguration;
+    return new ModuleConfiguration(globalConfig.getDefinitions(), globalConfig.getEncryption(), settings);
   }
 
   private static void addScannerSideProperties(Map<String, String> settings, ProjectDefinition project) {

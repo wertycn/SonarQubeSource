@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,15 +30,15 @@ public interface PurgeMapper {
   List<String> selectAnalysisUuids(PurgeSnapshotQuery query);
 
   /**
-   * Returns the list of modules/subviews and the application/view/project for the specified project_uuid.
+   * Returns the list of subviews and the application/view/project for the specified project_uuid.
    */
-  List<String> selectRootAndModulesOrSubviewsByProjectUuid(@Param("rootUuid") String rootUuid);
+  List<String> selectRootAndSubviewsByProjectUuid(@Param("rootUuid") String rootUuid);
 
-  Set<String> selectDisabledComponentsWithFileSource(@Param("projectUuid") String projectUuid);
+  Set<String> selectDisabledComponentsWithFileSource(@Param("branchUuid") String branchUuid);
 
-  Set<String> selectDisabledComponentsWithUnresolvedIssues(@Param("projectUuid") String projectUuid);
+  Set<String> selectDisabledComponentsWithUnresolvedIssues(@Param("branchUuid") String branchUuid);
 
-  Set<String> selectDisabledComponentsWithLiveMeasures(@Param("projectUuid") String projectUuid);
+  Set<String> selectDisabledComponentsWithLiveMeasures(@Param("branchUuid") String branchUuid);
 
   void deleteAnalyses(@Param("analysisUuids") List<String> analysisUuids);
 
@@ -64,31 +64,35 @@ public interface PurgeMapper {
 
   void deleteProjectLinksByProjectUuid(@Param("rootUuid") String rootUuid);
 
-  void deletePropertiesByComponentUuids(@Param("componentUuids") List<String> componentUuids);
+  void deletePropertiesByEntityUuids(@Param("entityUuids") List<String> entityUuids);
 
-  void deleteComponentsByProjectUuid(@Param("rootUuid") String rootUuid);
+  void deleteComponentsByBranchUuid(@Param("rootUuid") String rootUuid);
 
-  void deleteComponentsByMainBranchProjectUuid(@Param("uuid") String uuid);
+  void deleteNonMainBranchComponentsByProjectUuid(@Param("uuid") String uuid);
 
   void deleteProjectsByProjectUuid(@Param("projectUuid") String projectUuid);
 
   void deleteComponentsByUuids(@Param("componentUuids") List<String> componentUuids);
 
-  void deleteGroupRolesByComponentUuid(@Param("rootUuid") String rootUuid);
+  void deleteGroupRolesByEntityUuid(@Param("entityUuid") String entityUuid);
 
-  void deleteUserRolesByComponentUuid(@Param("rootUuid") String rootUuid);
-
-  void deleteManualMeasuresByComponentUuids(@Param("componentUuids") List<String> componentUuids);
+  void deleteUserRolesByEntityUuid(@Param("entityUuid") String entityUuid);
 
   void deleteEventsByComponentUuid(@Param("componentUuid") String componentUuid);
 
   void deleteEventComponentChangesByComponentUuid(@Param("componentUuid") String componentUuid);
 
-  List<PurgeableAnalysisDto> selectPurgeableAnalyses(@Param("componentUuid") String componentUuid);
+  List<PurgeableAnalysisDto> selectProcessedAnalysisByComponentUuid(@Param("componentUuid") String componentUuid);
+
+  void deleteIssuesByProjectUuid(@Param("projectUuid") String projectUuid);
 
   void deleteIssueChangesByProjectUuid(@Param("projectUuid") String projectUuid);
 
-  void deleteIssuesByProjectUuid(@Param("projectUuid") String projectUuid);
+  List<String> selectBranchOrphanIssues(@Param("branchUuid") String branchUuid);
+
+  void deleteNewCodeReferenceIssuesByProjectUuid(@Param("projectUuid") String projectUuid);
+
+  void deleteIssuesImpactsByProjectUuid(@Param("projectUuid") String projectUuid);
 
   List<String> selectOldClosedIssueKeys(@Param("projectUuid") String projectUuid, @Nullable @Param("toDate") Long toDate);
 
@@ -97,33 +101,37 @@ public interface PurgeMapper {
   @CheckForNull
   String selectSpecificAnalysisNewCodePeriod(@Param("projectUuid") String projectUuid);
 
-  List<String> selectDisabledComponentsWithoutIssues(@Param("projectUuid") String projectUuid);
+  List<String> selectDisabledComponentsWithoutIssues(@Param("branchUuid") String branchUuid);
 
   void deleteIssuesFromKeys(@Param("keys") List<String> keys);
 
   void deleteIssueChangesFromIssueKeys(@Param("issueKeys") List<String> issueKeys);
+
+  void deleteNewCodeReferenceIssuesFromKeys(@Param("issueKeys") List<String> keys);
+
+  void deleteIssuesImpactsFromKeys(@Param("issueKeys") List<String> keys);
 
   void deleteFileSourcesByProjectUuid(String rootProjectUuid);
 
   void deleteFileSourcesByFileUuid(@Param("fileUuids") List<String> fileUuids);
 
   void deleteCeTaskCharacteristicsOfCeActivityByRootUuidOrBefore(@Nullable @Param("rootUuid") String rootUuid,
-    @Nullable @Param("createdAtBefore") Long createdAtBefore);
+    @Nullable @Param("entityUuidToPurge") String entityUuidToPurge, @Nullable @Param("createdAtBefore") Long createdAtBefore);
 
   void deleteCeTaskInputOfCeActivityByRootUuidOrBefore(@Nullable @Param("rootUuid") String rootUuid,
-    @Nullable @Param("createdAtBefore") Long createdAtBefore);
+    @Nullable @Param("entityUuidToPurge") String entityUuidToPurge, @Nullable @Param("createdAtBefore") Long createdAtBefore);
 
   void deleteCeScannerContextOfCeActivityByRootUuidOrBefore(@Nullable @Param("rootUuid") String rootUuid,
-    @Nullable @Param("createdAtBefore") Long createdAtBefore);
+    @Nullable @Param("entityUuidToPurge") String entityUuidToPurge, @Nullable @Param("createdAtBefore") Long createdAtBefore);
 
   void deleteCeTaskMessageOfCeActivityByRootUuidOrBefore(@Nullable @Param("rootUuid") String rootUuid,
-    @Nullable @Param("createdAtBefore") Long createdAtBefore);
+    @Nullable @Param("entityUuidToPurge") String entityUuidToPurge, @Nullable @Param("createdAtBefore") Long createdAtBefore);
 
   /**
    * Delete rows in CE_ACTIVITY of tasks of the specified component and/or created before specified date.
    */
   void deleteCeActivityByRootUuidOrBefore(@Nullable @Param("rootUuid") String rootUuid,
-    @Nullable @Param("createdAtBefore") Long createdAtBefore);
+    @Nullable @Param("entityUuidToPurge") String entityUuidToPurge, @Nullable @Param("createdAtBefore") Long createdAtBefore);
 
   void deleteCeScannerContextOfCeQueueByRootUuid(@Param("rootUuid") String rootUuid);
 
@@ -139,15 +147,23 @@ public interface PurgeMapper {
 
   void deleteWebhookDeliveriesByProjectUuid(@Param("projectUuid") String projectUuid);
 
-  void deleteProjectMappingsByProjectUuid(@Param("projectUuid") String projectUuid);
+  void deleteAppProjectsByAppUuid(@Param("applicationUuid") String applicationUuid);
 
-  void deleteApplicationProjectsByApplicationUuid(@Param("applicationUuid") String applicationUuid);
+  void deleteAppProjectsByProjectUuid(@Param("projectUuid") String projectUuid);
 
-  void deleteApplicationBranchProjectBranchesByApplicationUuid(@Param("applicationUuid") String applicationUuid);
+  void deleteAppBranchProjectBranchesByAppUuid(@Param("applicationUuid") String applicationUuid);
 
-  void deleteApplicationBranchProjects(@Param("branchUuid") String applicationBranchUuid);
+  void deleteAppBranchProjectBranchesByProjectUuid(@Param("projectUuid") String projectUuid);
 
-  void deleteApplicationBranchProjectBranchesByProjectBranchUuid(@Param("projectBranchUuid") String projectBranchUuid);
+  void deleteAppBranchProjectsByAppBranchUuid(@Param("branchUuid") String applicationBranchUuid);
+
+  void deleteAppBranchProjectBranchesByProjectBranchUuid(@Param("projectBranchUuid") String projectBranchUuid);
+
+  void deletePortfolioProjectsByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  void deletePortfolioProjectsByProjectUuid(@Param("projectUuid") String projectUuid);
+
+  void deletePortfolioProjectBranchesByBranchUuid(@Param("branchUuid") String branchUuid);
 
   void deleteBranchByUuid(@Param("uuid") String uuid);
 
@@ -155,9 +171,27 @@ public interface PurgeMapper {
 
   void deleteLiveMeasuresByComponentUuids(@Param("componentUuids") List<String> componentUuids);
 
-  void deleteNewCodePeriodsByRootUuid(String rootUuid);
+  void deleteNewCodePeriodsByProjectUuid(String projectUuid);
+
+  void deleteNewCodePeriodsByBranchUuid(String branchUuid);
 
   void deleteProjectAlmSettingsByProjectUuid(@Param("projectUuid") String projectUuid);
 
+  void deleteProjectBadgeTokenByProjectUuid(@Param("projectUuid") String rootUuid);
+
   void deleteUserDismissedMessagesByProjectUuid(@Param("projectUuid") String projectUuid);
+
+  void deleteScannerAnalysisCacheByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  void deleteReportSchedulesByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  void deleteReportSubscriptionsByBranchUuid(@Param("branchUuid") String branchUuid);
+
+  void deleteReportSchedulesByPortfolioUuids(@Param("portfolioUuids") List<String> portfolioUuids);
+
+  void deleteReportSubscriptionsByPortfolioUuids(@Param("portfolioUuids") List<String> portfolioUuids);
+
+  void deleteAnticipatedTransitionsByProjectUuidAndCreationDate(@Param("projectUuid") String projectUuid, @Param("createdAtBefore") Long createdAtBefore);
+
+  void deleteIssuesFixedByBranchUuid(@Param("branchUuid") String branchUuid);
 }

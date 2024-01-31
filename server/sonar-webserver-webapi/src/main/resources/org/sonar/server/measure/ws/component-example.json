@@ -8,11 +8,7 @@
     "measures": [
       {
         "metric": "complexity",
-        "value": "12",
-        "period": {
-          "value": "2",
-          "bestValue": false
-        }
+        "value": "12"
       },
       {
         "metric": "new_violations",
@@ -23,11 +19,7 @@
       },
       {
         "metric": "ncloc",
-        "value": "114",
-        "period": {
-          "value": "3",
-          "bestValue": false
-        }
+        "value": "114"
       }
     ]
   },
@@ -40,8 +32,7 @@
       "type": "INT",
       "higherValuesAreBetter": false,
       "qualitative": false,
-      "hidden": false,
-      "custom": false
+      "hidden": false
     },
     {
       "key": "ncloc",
@@ -51,8 +42,7 @@
       "type": "INT",
       "higherValuesAreBetter": false,
       "qualitative": false,
-      "hidden": false,
-      "custom": false
+      "hidden": false
     },
     {
       "key": "new_violations",
@@ -62,8 +52,7 @@
       "type": "INT",
       "higherValuesAreBetter": false,
       "qualitative": true,
-      "hidden": false,
-      "custom": false
+      "hidden": false
     }
   ],
   "period": {

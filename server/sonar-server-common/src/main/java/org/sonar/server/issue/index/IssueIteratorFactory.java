@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,11 +32,11 @@ public class IssueIteratorFactory {
   }
 
   public IssueIterator createForAll() {
-    return createForProject(null);
+    return createForBranch(null);
   }
 
-  public IssueIterator createForProject(@Nullable String projectUuid) {
-    return new IssueIteratorForSingleChunk(dbClient, projectUuid, null);
+  public IssueIterator createForBranch(@Nullable String branchUuid) {
+    return new IssueIteratorForSingleChunk(dbClient, branchUuid, null);
   }
 
   public IssueIterator createForIssueKeys(Collection<String> issueKeys) {

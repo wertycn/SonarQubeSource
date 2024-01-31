@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,198 +17,185 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { sanitize } from 'dompurify';
+import {
+  ButtonPrimary,
+  ButtonSecondary,
+  CodeSyntaxHighlighter,
+  DangerButtonSecondary,
+  InputTextArea,
+  Spinner,
+} from 'design-system';
 import * as React from 'react';
-import { Button, ResetButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { updateRule } from '../../../api/rules';
 import FormattingTips from '../../../components/common/FormattingTips';
+import RuleTabViewer from '../../../components/rules/RuleTabViewer';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { sanitizeString, sanitizeUserInput } from '../../../helpers/sanitize';
+import { useUpdateRuleMutation } from '../../../queries/rules';
+import { RuleDetails } from '../../../types/types';
+import { RuleDescriptionSections } from '../rule';
 import RemoveExtendedDescriptionModal from './RemoveExtendedDescriptionModal';
 
 interface Props {
   canWrite: boolean | undefined;
-  onChange: (newRuleDetails: T.RuleDetails) => void;
-  ruleDetails: T.RuleDetails;
+  ruleDetails: RuleDetails;
 }
 
-interface State {
-  description: string;
-  descriptionForm: boolean;
-  removeDescriptionModal: boolean;
-  submitting: boolean;
-}
+export default function RuleDetailsDescription(props: Readonly<Props>) {
+  const { ruleDetails, canWrite } = props;
+  const [description, setDescription] = React.useState('');
+  const [descriptionForm, setDescriptionForm] = React.useState(false);
+  const [removeDescriptionModal, setDescriptionModal] = React.useState(false);
 
-export default class RuleDetailsDescription extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = {
-    description: '',
-    descriptionForm: false,
-    submitting: false,
-    removeDescriptionModal: false
-  };
+  const { mutate: updateRule, isLoading: updatingRule } = useUpdateRuleMutation(undefined, () =>
+    setDescriptionForm(false),
+  );
 
-  componentDidMount() {
-    this.mounted = true;
-  }
-
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  handleDescriptionChange = (event: React.SyntheticEvent<HTMLTextAreaElement>) =>
-    this.setState({ description: event.currentTarget.value });
-
-  handleCancelClick = () => {
-    this.setState({ descriptionForm: false });
-  };
-
-  handleSaveClick = () => {
-    this.updateDescription(this.state.description);
-  };
-
-  handleRemoveDescriptionClick = () => {
-    this.setState({ removeDescriptionModal: true });
-  };
-
-  handleCancelRemoving = () => this.setState({ removeDescriptionModal: false });
-
-  handleConfirmRemoving = () => {
-    this.setState({ removeDescriptionModal: false });
-    this.updateDescription('');
-  };
-
-  updateDescription = (text: string) => {
-    this.setState({ submitting: true });
-
+  const updateDescription = (text = '') => {
     updateRule({
-      key: this.props.ruleDetails.key,
-      markdown_note: text
-    }).then(
-      ruleDetails => {
-        this.props.onChange(ruleDetails);
-        if (this.mounted) {
-          this.setState({ submitting: false, descriptionForm: false });
-        }
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ submitting: false });
-        }
-      }
-    );
-  };
-
-  handleExtendDescriptionClick = () => {
-    this.setState({
-      // set description` to the current `mdNote` each time the form is open
-      description: this.props.ruleDetails.mdNote || '',
-      descriptionForm: true
+      key: ruleDetails.key,
+      markdown_note: text,
     });
   };
 
-  renderDescription = () => (
+  const renderExtendedDescription = () => (
     <div id="coding-rules-detail-description-extra">
-      {this.props.ruleDetails.htmlNote !== undefined && (
-        <div
-          className="rule-desc spacer-bottom markdown"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitize(this.props.ruleDetails.htmlNote) }}
+      {ruleDetails.htmlNote !== undefined && (
+        <CodeSyntaxHighlighter
+          className="markdown sw-my-6"
+          htmlAsString={sanitizeUserInput(ruleDetails.htmlNote)}
+          language={ruleDetails.lang}
         />
       )}
-      {this.props.canWrite && (
-        <Button
-          id="coding-rules-detail-extend-description"
-          onClick={this.handleExtendDescriptionClick}>
-          {translate('coding_rules.extend_description')}
-        </Button>
+
+      <div className="sw-my-6">
+        {canWrite && (
+          <ButtonSecondary
+            onClick={() => {
+              setDescription(ruleDetails.mdNote ?? '');
+              setDescriptionForm(true);
+            }}
+          >
+            {translate('coding_rules.extend_description')}
+          </ButtonSecondary>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderForm = () => (
+    <form
+      aria-label={translate('coding_rules.detail.extend_description.form')}
+      className="sw-my-6"
+      onSubmit={(event: React.SyntheticEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        updateDescription(description);
+      }}
+    >
+      <InputTextArea
+        aria-label={translate('coding_rules.extend_description')}
+        className="sw-mb-2 sw-resize-y"
+        id="coding-rules-detail-extend-description-text"
+        size="full"
+        onChange={({ currentTarget: { value } }: React.SyntheticEvent<HTMLTextAreaElement>) =>
+          setDescription(value)
+        }
+        rows={4}
+        value={description}
+      />
+
+      <div className="sw-flex sw-items-center sw-justify-between">
+        <div className="sw-flex sw-items-center">
+          <ButtonPrimary
+            id="coding-rules-detail-extend-description-submit"
+            disabled={updatingRule}
+            type="submit"
+          >
+            {translate('save')}
+          </ButtonPrimary>
+
+          {ruleDetails.mdNote !== undefined && (
+            <>
+              <DangerButtonSecondary
+                className="sw-ml-2"
+                disabled={updatingRule}
+                id="coding-rules-detail-extend-description-remove"
+                onClick={() => setDescriptionModal(true)}
+              >
+                {translate('remove')}
+              </DangerButtonSecondary>
+              {removeDescriptionModal && (
+                <RemoveExtendedDescriptionModal
+                  onCancel={() => setDescriptionModal(false)}
+                  onSubmit={() => {
+                    setDescriptionModal(false);
+                    updateDescription();
+                  }}
+                />
+              )}
+            </>
+          )}
+
+          <ButtonSecondary
+            className="sw-ml-2"
+            disabled={updatingRule}
+            id="coding-rules-detail-extend-description-cancel"
+            onClick={() => setDescriptionForm(false)}
+          >
+            {translate('cancel')}
+          </ButtonSecondary>
+
+          <Spinner className="sw-ml-2" loading={updatingRule} />
+        </div>
+
+        <FormattingTips />
+      </div>
+    </form>
+  );
+
+  const hasDescription = !ruleDetails.isExternal || ruleDetails.type !== 'UNKNOWN';
+
+  const hasDescriptionSection =
+    hasDescription && ruleDetails.descriptionSections && ruleDetails.descriptionSections.length > 0;
+
+  const defaultSection =
+    hasDescriptionSection &&
+    ruleDetails.descriptionSections?.length === 1 &&
+    ruleDetails.descriptionSections[0].key === RuleDescriptionSections.DEFAULT
+      ? ruleDetails.descriptionSections[0]
+      : undefined;
+
+  const introductionSection = ruleDetails.descriptionSections?.find(
+    (section) => section.key === RuleDescriptionSections.INTRODUCTION,
+  )?.content;
+
+  return (
+    <div className="js-rule-description">
+      {hasDescriptionSection && !defaultSection && (
+        <>
+          {introductionSection && (
+            <CodeSyntaxHighlighter
+              className="rule-desc"
+              htmlAsString={sanitizeString(introductionSection)}
+              language={ruleDetails.lang}
+            />
+          )}
+        </>
+      )}
+
+      <RuleTabViewer ruleDetails={ruleDetails} />
+
+      {ruleDetails.isExternal && (
+        <div className="coding-rules-detail-description rule-desc markdown">
+          {translateWithParameters('issue.external_issue_description', ruleDetails.name)}
+        </div>
+      )}
+
+      {!ruleDetails.templateKey && (
+        <div className="sw-mt-6">
+          {!descriptionForm && renderExtendedDescription()}
+          {descriptionForm && canWrite && renderForm()}
+        </div>
       )}
     </div>
   );
-
-  renderForm = () => (
-    <div className="coding-rules-detail-extend-description-form">
-      <table className="width-100">
-        <tbody>
-          <tr>
-            <td colSpan={2}>
-              <textarea
-                autoFocus={true}
-                className="width-100 little-spacer-bottom"
-                id="coding-rules-detail-extend-description-text"
-                onChange={this.handleDescriptionChange}
-                rows={4}
-                value={this.state.description}
-              />
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <Button
-                disabled={this.state.submitting}
-                id="coding-rules-detail-extend-description-submit"
-                onClick={this.handleSaveClick}>
-                {translate('save')}
-              </Button>
-              {this.props.ruleDetails.mdNote !== undefined && (
-                <>
-                  <Button
-                    className="button-red spacer-left"
-                    disabled={this.state.submitting}
-                    id="coding-rules-detail-extend-description-remove"
-                    onClick={this.handleRemoveDescriptionClick}>
-                    {translate('remove')}
-                  </Button>
-                  {this.state.removeDescriptionModal && (
-                    <RemoveExtendedDescriptionModal
-                      onCancel={this.handleCancelRemoving}
-                      onSubmit={this.handleConfirmRemoving}
-                    />
-                  )}
-                </>
-              )}
-              <ResetButtonLink
-                className="spacer-left"
-                disabled={this.state.submitting}
-                id="coding-rules-detail-extend-description-cancel"
-                onClick={this.handleCancelClick}>
-                {translate('cancel')}
-              </ResetButtonLink>
-              {this.state.submitting && <i className="spinner spacer-left" />}
-            </td>
-            <td className="text-right">
-              <FormattingTips />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-
-  render() {
-    const { ruleDetails } = this.props;
-    const hasDescription = !ruleDetails.isExternal || ruleDetails.type !== 'UNKNOWN';
-
-    return (
-      <div className="js-rule-description">
-        {hasDescription ? (
-          <div
-            className="coding-rules-detail-description rule-desc markdown"
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitize(ruleDetails.htmlDesc || '') }}
-          />
-        ) : (
-          <div className="coding-rules-detail-description rule-desc markdown">
-            {translateWithParameters('issue.external_issue_description', ruleDetails.name)}
-          </div>
-        )}
-
-        {!ruleDetails.templateKey && (
-          <div className="coding-rules-detail-description coding-rules-detail-description-extra">
-            {!this.state.descriptionForm && this.renderDescription()}
-            {this.state.descriptionForm && this.props.canWrite && this.renderForm()}
-          </div>
-        )}
-      </div>
-    );
-  }
 }

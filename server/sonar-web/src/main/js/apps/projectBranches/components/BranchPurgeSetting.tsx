@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,86 +17,58 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { HelperHintIcon, Spinner, Switch } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import Toggle from 'sonar-ui-common/components/controls/Toggle';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { excludeBranchFromPurge } from '../../../api/branches';
+import { useEffect } from 'react';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
 import { isMainBranch } from '../../../helpers/branch-like';
+import { translate } from '../../../helpers/l10n';
+import { useExcludeFromPurgeMutation } from '../../../queries/branch';
 import { Branch } from '../../../types/branch-like';
+import { Component } from '../../../types/types';
 
 interface Props {
   branch: Branch;
-  component: T.Component;
+  component: Component;
 }
 
-interface State {
-  excludedFromPurge: boolean;
-  loading: boolean;
-}
+export default function BranchPurgeSetting(props: Props) {
+  const { branch, component } = props;
+  const { mutate: excludeFromPurge, isLoading } = useExcludeFromPurgeMutation();
 
-export default class BranchPurgeSetting extends React.PureComponent<Props, State> {
-  mounted = false;
+  useEffect(() => {
+    excludeFromPurge({ component, key: branch.name, exclude: branch.excludedFromPurge });
+  }, [branch.excludedFromPurge]);
 
-  constructor(props: Props) {
-    super(props);
-
-    this.state = { excludedFromPurge: props.branch.excludedFromPurge, loading: false };
-  }
-
-  componentDidMount() {
-    this.mounted = true;
-  }
-
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  handleOnChange = () => {
-    const { branch, component } = this.props;
-    const { excludedFromPurge } = this.state;
-    const newValue = !excludedFromPurge;
-
-    this.setState({ loading: true });
-
-    excludeBranchFromPurge(component.key, branch.name, newValue)
-      .then(() => {
-        if (this.mounted) {
-          this.setState({
-            excludedFromPurge: newValue,
-            loading: false
-          });
-        }
-      })
-      .catch(() => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      });
+  const handleOnChange = (exclude: boolean) => {
+    excludeFromPurge({ component, key: branch.name, exclude });
   };
 
-  render() {
-    const { branch } = this.props;
-    const { excludedFromPurge, loading } = this.state;
+  const isTheMainBranch = isMainBranch(branch);
+  const disabled = isTheMainBranch || isLoading;
 
-    const isTheMainBranch = isMainBranch(branch);
-    const disabled = isTheMainBranch || loading;
-
-    return (
-      <>
-        <Toggle disabled={disabled} onChange={this.handleOnChange} value={excludedFromPurge} />
-        <span className="spacer-left">
-          <DeferredSpinner loading={loading} />
-        </span>
-        {isTheMainBranch && (
-          <HelpTooltip
-            overlay={translate(
-              'project_branch_pull_request.branch.auto_deletion.main_branch_tooltip'
-            )}
-          />
-        )}
-      </>
-    );
-  }
+  return (
+    <>
+      <Switch
+        disabled={disabled}
+        onChange={handleOnChange}
+        value={branch.excludedFromPurge}
+        labels={{
+          on: translate('on'),
+          off: translate('off'),
+        }}
+      />
+      <Spinner loading={isLoading} className="sw-ml-1" />
+      {isTheMainBranch && (
+        <HelpTooltip
+          className="sw-ml-1"
+          overlay={translate(
+            'project_branch_pull_request.branch.auto_deletion.main_branch_tooltip',
+          )}
+        >
+          <HelperHintIcon aria-label={translate('help')} />
+        </HelpTooltip>
+      )}
+    </>
+  );
 }

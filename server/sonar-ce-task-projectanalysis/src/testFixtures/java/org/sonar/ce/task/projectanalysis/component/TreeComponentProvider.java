@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,7 @@ public final class TreeComponentProvider extends AbstractComponentProvider {
   }
 
   private static String getRef(Component component) {
-    return component.getType().isReportType() ? String.valueOf(component.getReportAttributes().getRef()) : component.getDbKey();
+    return component.getType().isReportType() ? String.valueOf(component.getReportAttributes().getRef()) : component.getKey();
   }
 
   @Override

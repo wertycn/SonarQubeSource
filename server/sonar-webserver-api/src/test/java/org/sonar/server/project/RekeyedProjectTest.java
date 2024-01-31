@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,33 +19,28 @@
  */
 package org.sonar.server.project;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static java.util.Collections.emptyList;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.db.component.ComponentTesting.newPrivateProjectDto;
 
 public class RekeyedProjectTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void constructor_throws_NPE_if_project_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("project can't be null");
-
-    new RekeyedProject(null, randomAlphanumeric(3));
+    assertThatThrownBy(() -> new RekeyedProject(null, randomAlphanumeric(3)))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("project can't be null");
   }
 
   @Test
   public void constructor_throws_NPE_if_previousKey_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("previousKey can't be null");
-
-    new RekeyedProject(newRandomProject(), null);
+    assertThatThrownBy(() -> new RekeyedProject(newRandomProject(), null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("previousKey can't be null");
   }
 
   @Test
@@ -54,8 +49,8 @@ public class RekeyedProjectTest {
     String previousKey = randomAlphanumeric(6);
     RekeyedProject underTest = new RekeyedProject(project, previousKey);
 
-    assertThat(underTest.getProject()).isSameAs(project);
-    assertThat(underTest.getPreviousKey()).isEqualTo(previousKey);
+    assertThat(underTest.project()).isSameAs(project);
+    assertThat(underTest.previousKey()).isEqualTo(previousKey);
   }
 
   @Test
@@ -64,12 +59,13 @@ public class RekeyedProjectTest {
     String previousKey = randomAlphanumeric(6);
     RekeyedProject underTest = new RekeyedProject(project, previousKey);
 
-    assertThat(underTest).isEqualTo(underTest);
-    assertThat(underTest).isEqualTo(new RekeyedProject(project, previousKey));
-    assertThat(underTest).isNotEqualTo(new RekeyedProject(project, randomAlphanumeric(11)));
-    assertThat(underTest).isNotEqualTo(new RekeyedProject(newRandomProject(), previousKey));
-    assertThat(underTest).isNotEqualTo(new Object());
-    assertThat(underTest).isNotEqualTo(null);
+    assertThat(underTest)
+      .isEqualTo(underTest)
+      .isEqualTo(new RekeyedProject(project, previousKey))
+      .isNotEqualTo(new RekeyedProject(project, randomAlphanumeric(11)))
+      .isNotEqualTo(new RekeyedProject(newRandomProject(), previousKey))
+      .isNotEqualTo(new Object())
+      .isNotNull();
   }
 
   @Test
@@ -78,12 +74,13 @@ public class RekeyedProjectTest {
     String previousKey = randomAlphanumeric(6);
     RekeyedProject underTest = new RekeyedProject(project, previousKey);
 
-    assertThat(underTest.hashCode()).isEqualTo(underTest.hashCode());
-    assertThat(underTest.hashCode()).isEqualTo(new RekeyedProject(project, previousKey).hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new RekeyedProject(project, randomAlphanumeric(11)).hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new RekeyedProject(newRandomProject(), previousKey).hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new Object().hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(null);
+    assertThat(underTest)
+      .hasSameHashCodeAs(underTest)
+      .hasSameHashCodeAs(new RekeyedProject(project, previousKey));
+    assertThat(underTest.hashCode())
+      .isNotEqualTo(new RekeyedProject(project, randomAlphanumeric(11)).hashCode())
+      .isNotEqualTo(new RekeyedProject(newRandomProject(), previousKey).hashCode())
+      .isNotEqualTo(new Object().hashCode());
   }
 
   @Test
@@ -92,7 +89,7 @@ public class RekeyedProjectTest {
     String previousKey = "E";
     RekeyedProject underTest = new RekeyedProject(project, previousKey);
 
-    assertThat(underTest.toString()).isEqualTo("RekeyedProject{project=Project{uuid='A', key='B', name='C', description='D'}, previousKey='E'}");
+    assertThat(underTest).hasToString("RekeyedProject{project=Project{uuid='A', key='B', name='C', description='D'}, previousKey='E'}");
   }
 
   private static Project newRandomProject() {

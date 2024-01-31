@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,26 +17,41 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { NewCodeLegend } from 'design-system';
 import * as React from 'react';
+import { translate } from '../../helpers/l10n';
 import { Serie } from '../../types/project-activity';
-import GraphsLegendItem from './GraphsLegendItem';
+import { GraphsLegendItem } from './GraphsLegendItem';
 
 export interface GraphsLegendStaticProps {
+  leakPeriodDate?: Date;
   series: Array<Pick<Serie, 'name' | 'translatedName'>>;
 }
 
-export default function GraphsLegendStatic({ series }: GraphsLegendStaticProps) {
+export default function GraphsLegendStatic({
+  series,
+  leakPeriodDate,
+}: Readonly<GraphsLegendStaticProps>) {
   return (
-    <div className="activity-graph-legends">
+    <ul className="activity-graph-legends sw-flex sw-justify-center sw-items-center sw-pb-4">
       {series.map((serie, idx) => (
-        <GraphsLegendItem
-          className="big-spacer-left big-spacer-right"
-          index={idx}
-          key={serie.name}
-          metric={serie.name}
-          name={serie.translatedName}
-        />
+        <li key={serie.name}>
+          <GraphsLegendItem
+            className="sw-mx-2"
+            index={idx}
+            metric={serie.name}
+            name={serie.translatedName}
+          />
+        </li>
       ))}
-    </div>
+      {leakPeriodDate && (
+        <li key={translate('hotspot.filters.period.since_leak_period')}>
+          <NewCodeLegend
+            className="sw-mr-2"
+            text={translate('hotspot.filters.period.since_leak_period')}
+          />
+        </li>
+      )}
+    </ul>
   );
 }

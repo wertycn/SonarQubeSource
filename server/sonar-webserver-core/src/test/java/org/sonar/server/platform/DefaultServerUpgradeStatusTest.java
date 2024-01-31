@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -78,14 +78,14 @@ public class DefaultServerUpgradeStatusTest {
   }
 
   @Test
-  public void isBlueGreen() {
+  public void isAutoDbUpgrade() {
     settings.clear();
-    assertThat(underTest.isBlueGreen()).isFalse();
+    assertThat(underTest.isAutoDbUpgrade()).isFalse();
 
-    settings.setProperty("sonar.blueGreenEnabled", true);
-    assertThat(underTest.isBlueGreen()).isTrue();
+    settings.setProperty("sonar.autoDatabaseUpgrade", true);
+    assertThat(underTest.isAutoDbUpgrade()).isTrue();
 
-    settings.setProperty("sonar.blueGreenEnabled", false);
-    assertThat(underTest.isBlueGreen()).isFalse();
+    settings.setProperty("sonar.autoDatabaseUpgrade", false);
+    assertThat(underTest.isAutoDbUpgrade()).isFalse();
   }
 }

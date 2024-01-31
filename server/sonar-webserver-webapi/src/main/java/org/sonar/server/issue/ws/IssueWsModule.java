@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,16 +20,25 @@
 package org.sonar.server.issue.ws;
 
 import org.sonar.core.platform.Module;
-import org.sonar.server.issue.AvatarResolverImpl;
+import org.sonar.server.common.avatar.AvatarResolverImpl;
 import org.sonar.server.issue.IssueChangeWSSupport;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueFinder;
+import org.sonar.server.issue.NewCodePeriodResolver;
+import org.sonar.server.issue.TaintChecker;
 import org.sonar.server.issue.TextRangeResponseFormatter;
 import org.sonar.server.issue.TransitionService;
 import org.sonar.server.issue.WebIssueStorage;
 import org.sonar.server.issue.index.IssueQueryFactory;
 import org.sonar.server.issue.workflow.FunctionExecutor;
 import org.sonar.server.issue.workflow.IssueWorkflow;
+import org.sonar.server.issue.ws.anticipatedtransition.AnticipatedTransitionHandler;
+import org.sonar.server.issue.ws.anticipatedtransition.AnticipatedTransitionParser;
+import org.sonar.server.issue.ws.anticipatedtransition.AnticipatedTransitionsAction;
+import org.sonar.server.issue.ws.anticipatedtransition.AnticipatedTransitionsActionValidator;
+import org.sonar.server.issue.ws.pull.PullActionProtobufObjectGenerator;
+import org.sonar.server.issue.ws.pull.PullActionResponseWriter;
+import org.sonar.server.issue.ws.pull.PullTaintActionProtobufObjectGenerator;
 import org.sonar.server.qualitygate.changeevent.QGChangeEventListenersImpl;
 
 public class IssueWsModule extends Module {
@@ -52,20 +61,34 @@ public class IssueWsModule extends Module {
       UserResponseFormatter.class,
       SearchResponseFormat.class,
       OperationResponseWriter.class,
+      NewCodePeriodResolver.class,
       AddCommentAction.class,
       EditCommentAction.class,
       DeleteCommentAction.class,
       AssignAction.class,
       DoTransitionAction.class,
       SearchAction.class,
+      ListAction.class,
       SetSeverityAction.class,
       TagsAction.class,
       SetTagsAction.class,
       SetTypeAction.class,
       ComponentTagsAction.class,
+      ReindexAction.class,
       AuthorsAction.class,
       ChangelogAction.class,
       BulkChangeAction.class,
-      QGChangeEventListenersImpl.class);
+      QGChangeEventListenersImpl.class,
+      TaintChecker.class,
+      PullAction.class,
+      PullTaintAction.class,
+      PullActionResponseWriter.class,
+      PullActionProtobufObjectGenerator.class,
+      PullTaintActionProtobufObjectGenerator.class,
+      AnticipatedTransitionParser.class,
+      AnticipatedTransitionHandler.class,
+      AnticipatedTransitionsActionValidator.class,
+      AnticipatedTransitionsAction.class
+    );
   }
 }

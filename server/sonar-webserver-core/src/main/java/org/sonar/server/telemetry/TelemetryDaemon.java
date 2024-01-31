@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,37 +22,35 @@ package org.sonar.server.telemetry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.Date;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import org.picocontainer.Startable;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.server.property.InternalProperties;
+import org.sonar.server.util.AbstractStoppableScheduledExecutorServiceImpl;
 import org.sonar.server.util.GlobalLockManager;
 
-import static org.sonar.api.utils.DateUtils.formatDate;
-import static org.sonar.api.utils.DateUtils.parseDate;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_ENABLE;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_FREQUENCY_IN_SECONDS;
 import static org.sonar.process.ProcessProperties.Property.SONAR_TELEMETRY_URL;
 
 @ServerSide
-public class TelemetryDaemon implements Startable {
+public class TelemetryDaemon extends AbstractStoppableScheduledExecutorServiceImpl<ScheduledExecutorService> {
   private static final String THREAD_NAME_PREFIX = "sq-telemetry-service-";
-  private static final int SEVEN_DAYS = 7 * 24 * 60 * 60 * 1_000;
+  private static final int ONE_DAY = 24 * 60 * 60 * 1_000;
   private static final String I_PROP_LAST_PING = "telemetry.lastPing";
   private static final String I_PROP_OPT_OUT = "telemetry.optOut";
   private static final String LOCK_NAME = "TelemetryStat";
-  private static final Logger LOG = Loggers.get(TelemetryDaemon.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TelemetryDaemon.class);
   private static final String LOCK_DELAY_SEC = "sonar.telemetry.lock.delay";
+  static final String I_PROP_MESSAGE_SEQUENCE = "telemetry.messageSeq";
 
   private final TelemetryDataLoader dataLoader;
   private final TelemetryDataJsonWriter dataJsonWriter;
@@ -62,10 +60,9 @@ public class TelemetryDaemon implements Startable {
   private final InternalProperties internalProperties;
   private final System2 system2;
 
-  private ScheduledExecutorService executorService;
-
   public TelemetryDaemon(TelemetryDataLoader dataLoader, TelemetryDataJsonWriter dataJsonWriter, TelemetryClient telemetryClient, Configuration config,
     InternalProperties internalProperties, GlobalLockManager lockManager, System2 system2) {
+    super(Executors.newSingleThreadScheduledExecutor(newThreadFactory()));
     this.dataLoader = dataLoader;
     this.dataJsonWriter = dataJsonWriter;
     this.telemetryClient = telemetryClient;
@@ -92,22 +89,8 @@ public class TelemetryDaemon implements Startable {
       return;
     }
     LOG.info("Sharing of SonarQube statistics is enabled.");
-    executorService = Executors.newSingleThreadScheduledExecutor(newThreadFactory());
     int frequencyInSeconds = frequency();
-    executorService.scheduleWithFixedDelay(telemetryCommand(), frequencyInSeconds, frequencyInSeconds, TimeUnit.SECONDS);
-  }
-
-  @Override
-  public void stop() {
-    try {
-      if (executorService == null) {
-        return;
-      }
-      executorService.shutdown();
-      executorService.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
+    scheduleWithFixedDelay(telemetryCommand(), frequencyInSeconds, frequencyInSeconds, TimeUnit.SECONDS);
   }
 
   private static ThreadFactory newThreadFactory() {
@@ -128,13 +111,26 @@ public class TelemetryDaemon implements Startable {
         long now = system2.now();
         if (shouldUploadStatistics(now)) {
           uploadStatistics();
-          internalProperties.write(I_PROP_LAST_PING, String.valueOf(startOfDay(now)));
+          updateTelemetryProps(now);
         }
       } catch (Exception e) {
-        LOG.debug("Error while checking SonarQube statistics: {}", e);
+        LOG.debug("Error while checking SonarQube statistics: {}", e.getMessage(), e);
       }
       // do not check at start up to exclude test instance which are not up for a long time
     };
+  }
+
+  private void updateTelemetryProps(long now) {
+    internalProperties.write(I_PROP_LAST_PING, String.valueOf(now));
+
+    Optional<String> currentSequence = internalProperties.read(I_PROP_MESSAGE_SEQUENCE);
+    if (currentSequence.isEmpty()) {
+      internalProperties.write(I_PROP_MESSAGE_SEQUENCE, String.valueOf(1));
+      return;
+    }
+
+    long current = Long.parseLong(currentSequence.get());
+    internalProperties.write(I_PROP_MESSAGE_SEQUENCE, String.valueOf(current + 1));
   }
 
   private void optOut() {
@@ -154,15 +150,12 @@ public class TelemetryDaemon implements Startable {
       dataJsonWriter.writeTelemetryData(json, statistics);
     }
     telemetryClient.upload(jsonString.toString());
+    dataLoader.reset();
   }
 
   private boolean shouldUploadStatistics(long now) {
     Optional<Long> lastPing = internalProperties.read(I_PROP_LAST_PING).map(Long::valueOf);
-    return !lastPing.isPresent() || now - lastPing.get() >= SEVEN_DAYS;
-  }
-
-  private static long startOfDay(long now) {
-    return parseDate(formatDate(new Date(now))).getTime();
+    return lastPing.isEmpty() || now - lastPing.get() >= ONE_DAY;
   }
 
   private int frequency() {

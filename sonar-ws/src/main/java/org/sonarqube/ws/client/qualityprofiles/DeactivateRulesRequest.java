@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -257,7 +257,7 @@ public class DeactivateRulesRequest {
   }
 
   /**
-   * Example value: "squid:S001"
+   * Example value: "java:S001"
    */
   public DeactivateRulesRequest setRuleKey(String ruleKey) {
     this.ruleKey = ruleKey;

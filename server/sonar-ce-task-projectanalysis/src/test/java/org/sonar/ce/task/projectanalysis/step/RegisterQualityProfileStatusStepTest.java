@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,7 +46,6 @@ import org.sonar.ce.task.step.TestComputationStepContext;
 import org.sonar.server.qualityprofile.QPMeasureData;
 import org.sonar.server.qualityprofile.QualityProfile;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -107,7 +106,7 @@ public class RegisterQualityProfileStatusStepTest {
 
     underTest.execute(new TestComputationStepContext());
 
-    verify(qProfileStatusRepository).register(eq(qp.getQpKey()), eq(REMOVED));
+    verify(qProfileStatusRepository).register(qp.getQpKey(), REMOVED);
     verifyNoMoreInteractions(qProfileStatusRepository);
   }
 
@@ -120,8 +119,8 @@ public class RegisterQualityProfileStatusStepTest {
     mockRawQProfiles(ImmutableList.of(qp1, qp2));
     underTest.execute(new TestComputationStepContext());
 
-    verify(qProfileStatusRepository).register(eq(qp1.getQpKey()), eq(UNCHANGED));
-    verify(qProfileStatusRepository).register(eq(qp2.getQpKey()), eq(ADDED));
+    verify(qProfileStatusRepository).register(qp1.getQpKey(), UNCHANGED);
+    verify(qProfileStatusRepository).register(qp2.getQpKey(), ADDED);
     verifyNoMoreInteractions(qProfileStatusRepository);
   }
 
@@ -134,7 +133,7 @@ public class RegisterQualityProfileStatusStepTest {
     mockRawQProfiles(ImmutableList.of(qp2));
     underTest.execute(new TestComputationStepContext());
 
-    verify(qProfileStatusRepository).register(eq(qp2.getQpKey()), eq(UPDATED));
+    verify(qProfileStatusRepository).register(qp2.getQpKey(), UPDATED);
     verifyNoMoreInteractions(qProfileStatusRepository);
   }
 
@@ -146,7 +145,7 @@ public class RegisterQualityProfileStatusStepTest {
     mockRawQProfiles(ImmutableList.of(qp1));
     underTest.execute(new TestComputationStepContext());
 
-    verify(qProfileStatusRepository).register(eq(qp1.getQpKey()), eq(UNCHANGED));
+    verify(qProfileStatusRepository).register(qp1.getQpKey(), UNCHANGED);
     verifyNoMoreInteractions(qProfileStatusRepository);
   }
 

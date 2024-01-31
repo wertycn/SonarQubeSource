@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,21 +18,22 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import SeverityIcon from 'sonar-ui-common/components/icons/SeverityIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import SeverityIcon from '../../components/icons/SeverityIcon';
+import { translate } from '../../helpers/l10n';
 
 interface Props {
   className?: string;
+  fill?: string;
   severity: string;
 }
 
-export default function SeverityHelper({ className, severity }: Props) {
+export default function SeverityHelper({ className, severity, fill }: Props) {
   if (!severity) {
     return null;
   }
   return (
     <span className={className}>
-      <SeverityIcon className="little-spacer-right" severity={severity} />
+      <SeverityIcon className="sw-mr-1" fill={fill} severity={severity} aria-hidden />
       {translate('severity', severity)}
     </span>
   );

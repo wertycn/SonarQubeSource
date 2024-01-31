@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,18 +23,20 @@ import com.google.common.collect.ImmutableList;
 import java.util.Arrays;
 import java.util.List;
 import javax.annotation.Nullable;
-import org.sonar.api.notifications.NotificationChannel;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.server.notification.NotificationChannel;
 import org.sonar.server.notification.NotificationDispatcherMetadata;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class NotificationCenter {
 
-  private static final Logger LOG = Loggers.get(NotificationCenter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(NotificationCenter.class);
 
   private final NotificationDispatcherMetadata[] dispatchersMetadata;
   private final NotificationChannel[] channels;
 
+  @Autowired(required = false)
   public NotificationCenter(NotificationDispatcherMetadata[] metadata, NotificationChannel[] channels) {
     this.dispatchersMetadata = metadata;
     this.channels = channels;
@@ -43,6 +45,7 @@ public class NotificationCenter {
   /**
    * Default constructor when no channels.
    */
+  @Autowired(required = false)
   public NotificationCenter(NotificationDispatcherMetadata[] metadata) {
     this(metadata, new NotificationChannel[0]);
     LOG.warn("There is no notification channel - no notification will be delivered!");
@@ -51,10 +54,12 @@ public class NotificationCenter {
   /**
    * Default constructor when no dispatcher metadata.
    */
+  @Autowired(required = false)
   public NotificationCenter(NotificationChannel[] channels) {
     this(new NotificationDispatcherMetadata[0], channels);
   }
 
+  @Autowired(required = false)
   public NotificationCenter() {
     this(new NotificationDispatcherMetadata[0], new NotificationChannel[0]);
     LOG.warn("There is no notification channel - no notification will be delivered!");

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,5 +39,6 @@ public interface AlmSettingMapper {
 
   void update(@Param("dto") AlmSettingDto almSettingDto);
 
-  void deleteByKey(@Param("key") String key);
+  int deleteByKey(@Param("key") String key);
+
 }

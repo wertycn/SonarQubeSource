@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,66 +19,29 @@
  */
 package org.sonar.server.issue.index;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.search.SearchHit;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.api.impl.utils.TestSystem2;
 import org.sonar.api.issue.Issue;
 import org.sonar.api.rule.Severity;
-import org.sonar.api.utils.System2;
-import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.server.es.EsTester;
 import org.sonar.server.es.SearchOptions;
-import org.sonar.server.permission.index.IndexPermissions;
-import org.sonar.server.permission.index.PermissionIndexerTester;
-import org.sonar.server.permission.index.WebAuthorizationTypeSupport;
-import org.sonar.server.tester.UserSessionRule;
 
-import static java.util.Arrays.asList;
-import static java.util.Arrays.stream;
-import static java.util.TimeZone.getTimeZone;
-import static java.util.stream.Collectors.toList;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.rules.ExpectedException.none;
-import static org.mockito.Mockito.mock;
-import static org.sonar.api.resources.Qualifiers.PROJECT;
 import static org.sonar.api.utils.DateUtils.parseDateTime;
 import static org.sonar.db.component.ComponentTesting.newFileDto;
 import static org.sonar.db.component.ComponentTesting.newPrivateProjectDto;
 import static org.sonar.server.issue.IssueDocTesting.newDoc;
 
-public class IssueIndexSortTest {
-
-  @Rule
-  public EsTester es = EsTester.create();
-  @Rule
-  public UserSessionRule userSessionRule = UserSessionRule.standalone();
-  @Rule
-  public ExpectedException expectedException = none();
-  private final System2 system2 = new TestSystem2().setNow(1_500_000_000_000L).setDefaultTimeZone(getTimeZone("GMT-01:00"));
-  @Rule
-  public DbTester db = DbTester.create(system2);
-
-  private final AsyncIssueIndexing asyncIssueIndexing = mock(AsyncIssueIndexing.class);
-  private final IssueIndexer issueIndexer = new IssueIndexer(es.client(), db.getDbClient(), new IssueIteratorFactory(db.getDbClient()), asyncIssueIndexing);
-  private final PermissionIndexerTester authorizationIndexer = new PermissionIndexerTester(es, issueIndexer);
-  private final IssueIndex underTest = new IssueIndex(es.client(), system2, userSessionRule, new WebAuthorizationTypeSupport(userSessionRule));
+public class IssueIndexSortTest extends IssueIndexTestCommon {
 
   @Test
   public void sort_by_status() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
 
     indexIssues(
-      newDoc("I1", file).setStatus(Issue.STATUS_OPEN),
-      newDoc("I2", file).setStatus(Issue.STATUS_CLOSED),
-      newDoc("I3", file).setStatus(Issue.STATUS_REOPENED));
+      newDoc("I1", project.uuid(), file).setStatus(Issue.STATUS_OPEN),
+      newDoc("I2", project.uuid(), file).setStatus(Issue.STATUS_CLOSED),
+      newDoc("I3", project.uuid(), file).setStatus(Issue.STATUS_REOPENED));
 
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_STATUS).asc(true);
     assertThatSearchReturnsOnly(query, "I2", "I1", "I3");
@@ -90,14 +53,14 @@ public class IssueIndexSortTest {
   @Test
   public void sort_by_severity() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
 
     indexIssues(
-      newDoc("I1", file).setSeverity(Severity.BLOCKER),
-      newDoc("I2", file).setSeverity(Severity.INFO),
-      newDoc("I3", file).setSeverity(Severity.MINOR),
-      newDoc("I4", file).setSeverity(Severity.CRITICAL),
-      newDoc("I5", file).setSeverity(Severity.MAJOR));
+      newDoc("I1", project.uuid(), file).setSeverity(Severity.BLOCKER),
+      newDoc("I2", project.uuid(), file).setSeverity(Severity.INFO),
+      newDoc("I3", project.uuid(), file).setSeverity(Severity.MINOR),
+      newDoc("I4", project.uuid(), file).setSeverity(Severity.CRITICAL),
+      newDoc("I5", project.uuid(), file).setSeverity(Severity.MAJOR));
 
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_SEVERITY).asc(true);
     assertThatSearchReturnsOnly(query, "I2", "I3", "I5", "I4", "I1");
@@ -109,11 +72,11 @@ public class IssueIndexSortTest {
   @Test
   public void sort_by_creation_date() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
 
     indexIssues(
-      newDoc("I1", file).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("I2", file).setFuncCreationDate(parseDateTime("2014-09-24T00:00:00+0100")));
+      newDoc("I1", project.uuid(), file).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("I2", project.uuid(), file).setFuncCreationDate(parseDateTime("2014-09-24T00:00:00+0100")));
 
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_CREATION_DATE).asc(true);
     SearchResponse result = underTest.search(query.build(), new SearchOptions());
@@ -126,11 +89,11 @@ public class IssueIndexSortTest {
   @Test
   public void sort_by_update_date() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
 
     indexIssues(
-      newDoc("I1", file).setFuncUpdateDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("I2", file).setFuncUpdateDate(parseDateTime("2014-09-24T00:00:00+0100")));
+      newDoc("I1", project.uuid(), file).setFuncUpdateDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("I2", project.uuid(), file).setFuncUpdateDate(parseDateTime("2014-09-24T00:00:00+0100")));
 
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_UPDATE_DATE).asc(true);
     SearchResponse result = underTest.search(query.build(), new SearchOptions());
@@ -143,12 +106,12 @@ public class IssueIndexSortTest {
   @Test
   public void sort_by_close_date() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
 
     indexIssues(
-      newDoc("I1", file).setFuncCloseDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("I2", file).setFuncCloseDate(parseDateTime("2014-09-24T00:00:00+0100")),
-      newDoc("I3", file).setFuncCloseDate(null));
+      newDoc("I1", project.uuid(), file).setFuncCloseDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("I2", project.uuid(), file).setFuncCloseDate(parseDateTime("2014-09-24T00:00:00+0100")),
+      newDoc("I3", project.uuid(), file).setFuncCloseDate(null));
 
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_CLOSE_DATE).asc(true);
     SearchResponse result = underTest.search(query.build(), new SearchOptions());
@@ -166,15 +129,15 @@ public class IssueIndexSortTest {
 
     indexIssues(
       // file F1
-      newDoc("F1_2", file1).setLine(20),
-      newDoc("F1_1", file1).setLine(null),
-      newDoc("F1_3", file1).setLine(25),
+      newDoc("F1_2", project.uuid(), file1).setLine(20),
+      newDoc("F1_1", project.uuid(), file1).setLine(null),
+      newDoc("F1_3", project.uuid(), file1).setLine(25),
 
       // file F2
-      newDoc("F2_1", file2).setLine(9),
-      newDoc("F2_2", file2).setLine(109),
+      newDoc("F2_1", project.uuid(), file2).setLine(9),
+      newDoc("F2_2", project.uuid(), file2).setLine(109),
       // two issues on the same line -> sort by key
-      newDoc("F2_3", file2).setLine(109));
+      newDoc("F2_3", project.uuid(), file2).setLine(109));
 
     // ascending sort -> F1 then F2. Line "0" first.
     IssueQuery.Builder query = IssueQuery.builder().sort(IssueQuery.SORT_BY_FILE_LINE).asc(true);
@@ -196,40 +159,21 @@ public class IssueIndexSortTest {
 
     indexIssues(
       // file F1 from project P1
-      newDoc("F1_1", file1).setLine(20).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("F1_2", file1).setLine(null).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("F1_3", file1).setLine(25).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F1_1", project1.uuid(), file1).setLine(20).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F1_2", project1.uuid(), file1).setLine(null).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F1_3", project1.uuid(), file1).setLine(25).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
 
       // file F2 from project P1
-      newDoc("F2_1", file2).setLine(9).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
-      newDoc("F2_2", file2).setLine(109).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F2_1", project1.uuid(), file2).setLine(9).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F2_2", project1.uuid(), file2).setLine(109).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
       // two issues on the same line -> sort by key
-      newDoc("F2_3", file2).setLine(109).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
+      newDoc("F2_3", project1.uuid(), file2).setLine(109).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")),
 
       // file F3 from project P2
-      newDoc("F3_1", file3).setLine(20).setFuncCreationDate(parseDateTime("2014-09-24T00:00:00+0100")),
-      newDoc("F3_2", file3).setLine(20).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")));
+      newDoc("F3_1", project2.uuid(), file3).setLine(20).setFuncCreationDate(parseDateTime("2014-09-24T00:00:00+0100")),
+      newDoc("F3_2", project2.uuid(), file3).setLine(20).setFuncCreationDate(parseDateTime("2014-09-23T00:00:00+0100")));
 
     assertThatSearchReturnsOnly(IssueQuery.builder(), "F3_1", "F1_2", "F1_1", "F1_3", "F2_1", "F2_2", "F2_3", "F3_2");
-  }
-
-  private void indexIssues(IssueDoc... issues) {
-    issueIndexer.index(asList(issues).iterator());
-    authorizationIndexer.allow(stream(issues).map(issue -> new IndexPermissions(issue.projectUuid(), PROJECT).allowAnyone()).collect(toList()));
-  }
-
-  /**
-   * Execute the search request and return the document ids of results.
-   */
-  private List<String> searchAndReturnKeys(IssueQuery.Builder query) {
-    return Arrays.stream(underTest.search(query.build(), new SearchOptions()).getHits().getHits())
-      .map(SearchHit::getId)
-      .collect(Collectors.toList());
-  }
-
-  private void assertThatSearchReturnsOnly(IssueQuery.Builder query, String... expectedIssueKeys) {
-    List<String> keys = searchAndReturnKeys(query);
-    assertThat(keys).containsExactlyInAnyOrder(expectedIssueKeys);
   }
 
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,44 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { GRADLE_SCANNER_VERSION } from '../../helpers/constants';
+import { convertGithubApiUrlToLink, stripTrailingSlash } from '../../helpers/urls';
 import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../types/alm-settings';
+import { UserToken } from '../../types/token';
+import { GradleBuildDSL } from './types';
 
 export function quote(os: string): (s: string) => string {
   return os === 'win' ? (s: string) => `"${s}"` : (s: string) => s;
 }
 
-export function mavenPomSnippet(key: string) {
-  return `<properties>
-  <sonar.projectKey>${key}</sonar.projectKey>
-</properties>`;
+export function buildGradleSnippet(key: string, name: string, build: GradleBuildDSL) {
+  const map = {
+    [GradleBuildDSL.Groovy]: `plugins {
+  id "org.sonarqube" version "${GRADLE_SCANNER_VERSION}"
 }
 
-export function buildGradleSnippet(key: string) {
-  return `plugins {
-  id "org.sonarqube" version "3.1.1"
-}
-
-sonarqube {
+sonar {
   properties {
     property "sonar.projectKey", "${key}"
+    property "sonar.projectName", "${name}"
   }
-}`;
+}`,
+    [GradleBuildDSL.Kotlin]: `plugins {
+  id("org.sonarqube") version "${GRADLE_SCANNER_VERSION}"
+}
+    
+sonar {
+  properties {
+    property("sonar.projectKey", "${key}")
+    property("sonar.projectName", "${name}")
+  }
+}`,
+  };
+  return map[build];
 }
 
-export function getUniqueTokenName(tokens: T.UserToken[], initialTokenName = '') {
-  const hasToken = (name: string) => tokens.find(token => token.name === name) !== undefined;
+export function getUniqueTokenName(tokens: UserToken[], initialTokenName: string) {
+  const hasToken = (name: string) => tokens.find((token) => token.name === name) !== undefined;
 
   if (!hasToken(initialTokenName)) {
     return initialTokenName;
@@ -57,17 +69,25 @@ export function getUniqueTokenName(tokens: T.UserToken[], initialTokenName = '')
 
 export function buildGithubLink(
   almBinding: AlmSettingsInstance,
-  projectBinding: ProjectAlmBindingResponse
+  projectBinding: ProjectAlmBindingResponse,
 ) {
   if (almBinding.url === undefined) {
     return null;
   }
 
   // strip the api path:
-  const urlRoot = almBinding.url
-    .replace(/\/api\/v\d+\/?$/, '') // GH Enterprise
-    .replace(/^https?:\/\/api\.github\.com/, 'https://github.com') // GH.com
-    .replace(/\/$/, '');
+  const urlRoot = convertGithubApiUrlToLink(almBinding.url);
 
-  return `${urlRoot}/${projectBinding.repository}`;
+  return `${stripTrailingSlash(urlRoot)}/${projectBinding.repository}`;
+}
+
+export function buildBitbucketCloudLink(
+  almBinding: AlmSettingsInstance,
+  projectBinding: ProjectAlmBindingResponse,
+) {
+  if (almBinding.url === undefined || projectBinding.repository === undefined) {
+    return null;
+  }
+
+  return `${stripTrailingSlash(almBinding.url)}/${projectBinding.repository}`;
 }

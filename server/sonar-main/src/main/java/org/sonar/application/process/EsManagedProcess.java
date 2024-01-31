@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,9 @@
  */
 package org.sonar.application.process;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.elasticsearch.ElasticsearchStatusException;
+import java.net.ConnectException;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
-import org.elasticsearch.rest.RestStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.application.es.EsConnector;
@@ -37,15 +36,19 @@ import static org.sonar.application.process.EsManagedProcess.Status.YELLOW;
 public class EsManagedProcess extends AbstractManagedProcess {
   private static final Logger LOG = LoggerFactory.getLogger(EsManagedProcess.class);
   private static final int WAIT_FOR_UP_DELAY_IN_MILLIS = 100;
-  private static final int WAIT_FOR_UP_TIMEOUT = 10 * 60; /* 1min */
 
   private volatile boolean nodeOperational = false;
-  private final AtomicBoolean firstMasterNotDiscoveredLog = new AtomicBoolean(true);
+  private final int waitForUpTimeout;
   private final EsConnector esConnector;
 
   public EsManagedProcess(Process process, ProcessId processId, EsConnector esConnector) {
+    this(process, processId, esConnector, 10 * 60);
+  }
+
+  EsManagedProcess(Process process, ProcessId processId, EsConnector esConnector, int waitForUpTimeout) {
     super(process, processId);
     this.esConnector = esConnector;
+    this.waitForUpTimeout = waitForUpTimeout;
   }
 
   @Override
@@ -80,7 +83,7 @@ public class EsManagedProcess extends AbstractManagedProcess {
         i++;
         status = checkStatus();
       }
-    } while (i < WAIT_FOR_UP_TIMEOUT);
+    } while (i < waitForUpTimeout);
     return status == YELLOW || status == GREEN;
   }
 
@@ -89,12 +92,11 @@ public class EsManagedProcess extends AbstractManagedProcess {
       return esConnector.getClusterHealthStatus()
         .map(EsManagedProcess::convert)
         .orElse(CONNECTION_REFUSED);
-    } catch (ElasticsearchStatusException e) {
-      if (e.status() == RestStatus.SERVICE_UNAVAILABLE && e.getMessage().contains("type=master_not_discovered_exception")) {
-        if (firstMasterNotDiscoveredLog.getAndSet(false)) {
-          LOG.info("Elasticsearch is waiting for a master to be elected. Did you start all the search nodes ?");
-        }
+    } catch (ElasticsearchException e) {
+      if (e.getRootCause() instanceof ConnectException) {
+        return CONNECTION_REFUSED;
       }
+      LOG.error("Failed to check status", e);
       return KO;
     } catch (Exception e) {
       LOG.error("Failed to check status", e);

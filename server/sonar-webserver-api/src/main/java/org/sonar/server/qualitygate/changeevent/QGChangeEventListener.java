@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,9 +20,14 @@
 package org.sonar.server.qualitygate.changeevent;
 
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ServerSide;
+
+import static org.sonar.api.rules.RuleType.VULNERABILITY;
 
 @ServerSide
 public interface QGChangeEventListener {
@@ -42,10 +47,20 @@ public interface QGChangeEventListener {
 
     RuleType getType();
 
+    Map<SoftwareQuality, Severity> getImpacts();
+
     String getSeverity();
 
     default boolean isNotClosed() {
       return !Status.CLOSED_STATUSES.contains(getStatus());
+    }
+
+    default boolean isVulnerability() {
+      return getType() == VULNERABILITY;
+    }
+
+    default boolean fromAlm() {
+      return false;
     }
   }
 

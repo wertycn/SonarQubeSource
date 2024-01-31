@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonarqube.ws.client.usertokens;
 
 import javax.annotation.Generated;
+import javax.annotation.Nullable;
 
 /**
  * This is part of the internal API.
@@ -32,6 +33,9 @@ public class GenerateRequest {
 
   private String login;
   private String name;
+  private String type;
+  private String projectKey;
+  private String expirationDate;
 
   /**
    * Example value: "g.hopper"
@@ -56,5 +60,32 @@ public class GenerateRequest {
 
   public String getName() {
     return name;
+  }
+
+  public String getType() {
+    return type;
+  }
+
+  public GenerateRequest setType(String type) {
+    this.type = type;
+    return this;
+  }
+
+  public String getProjectKey() {
+    return projectKey;
+  }
+
+  public GenerateRequest setProjectKey(@Nullable String projectKey) {
+    this.projectKey = projectKey;
+    return this;
+  }
+
+  public String getExpirationDate() {
+    return expirationDate;
+  }
+
+  public GenerateRequest setExpirationDate(String expirationDate) {
+    this.expirationDate = expirationDate;
+    return this;
   }
 }

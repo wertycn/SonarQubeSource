@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,14 +22,12 @@ package org.sonar.scanner.issue.ignore.scanner;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
+import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.scanner.issue.ignore.IgnoreIssuesFilter;
 import org.sonar.scanner.issue.ignore.pattern.IssueExclusionPatternInitializer;
 import org.sonar.scanner.issue.ignore.pattern.IssuePattern;
@@ -41,9 +39,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class IssueExclusionsLoaderTest {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Mock
   private IssueExclusionPatternInitializer exclusionPatternInitializer;
@@ -61,7 +56,7 @@ public class IssueExclusionsLoaderTest {
 
   @Test
   public void testToString() {
-    assertThat(scanner.toString()).isEqualTo("Issues Exclusions - Source Scanner");
+    assertThat(scanner).hasToString("Issues Exclusions - Source Scanner");
   }
 
   @Test
@@ -78,7 +73,7 @@ public class IssueExclusionsLoaderTest {
   public void populateRuleExclusionPatterns() {
     IssuePattern pattern1 = new IssuePattern("org/foo/Bar*.java", "*");
     IssuePattern pattern2 = new IssuePattern("org/foo/Hell?.java", "checkstyle:MagicNumber");
-    when(exclusionPatternInitializer.getMulticriteriaPatterns()).thenReturn(Arrays.asList(new IssuePattern[] {pattern1, pattern2}));
+    when(exclusionPatternInitializer.getMulticriteriaPatterns()).thenReturn(Arrays.asList(pattern1, pattern2));
 
     IssueExclusionsLoader loader = new IssueExclusionsLoader(exclusionPatternInitializer, ignoreIssuesFilter, mock(AnalysisWarnings.class));
     DefaultInputFile file1 = TestInputFileBuilder.create("foo", "org/foo/Bar.java").build();

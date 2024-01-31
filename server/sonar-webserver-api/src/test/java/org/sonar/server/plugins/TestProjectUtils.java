@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,9 @@
  */
 package org.sonar.server.plugins;
 
-import org.apache.commons.io.FileUtils;
-
 import java.io.File;
 import java.util.Collection;
+import org.apache.commons.io.FileUtils;
 
 public class TestProjectUtils {
 

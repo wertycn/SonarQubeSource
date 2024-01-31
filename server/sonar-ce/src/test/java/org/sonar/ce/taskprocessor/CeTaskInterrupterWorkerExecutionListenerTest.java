@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,8 +34,6 @@ import static org.mockito.Mockito.verify;
 public class CeTaskInterrupterWorkerExecutionListenerTest {
   private CeTaskInterrupter ceTaskInterrupter = mock(CeTaskInterrupter.class);
   private CeTaskInterrupterWorkerExecutionListener underTest = new CeTaskInterrupterWorkerExecutionListener(ceTaskInterrupter);
-
-
   @Test
   public void onStart_delegates_to_ceTaskInterrupter_onStart() {
     CeTask ceTask = mock(CeTask.class);

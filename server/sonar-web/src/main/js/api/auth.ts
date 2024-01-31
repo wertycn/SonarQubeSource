@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { request } from 'sonar-ui-common/helpers/request';
+import { request } from '../helpers/request';
 
-export function login(login: string, password: string): Promise<Response> {
+export function logIn(login: string, password: string): Promise<Response> {
   return request('/api/authentication/login')
     .setMethod('POST')
     .setData({ login, password })
@@ -27,11 +27,8 @@ export function login(login: string, password: string): Promise<Response> {
     .then(basicCheckStatus);
 }
 
-export function logout(): Promise<Response> {
-  return request('/api/authentication/logout')
-    .setMethod('POST')
-    .submit()
-    .then(basicCheckStatus);
+export function logOut(): Promise<Response> {
+  return request('/api/authentication/logout').setMethod('POST').submit().then(basicCheckStatus);
 }
 
 function basicCheckStatus(response: Response): Promise<Response> {

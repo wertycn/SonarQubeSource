@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import java.io.File;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.utils.TempFolder;
 
@@ -32,14 +31,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TempFolderProviderTest {
-
-  @Rule
-  public ExpectedException throwable = ExpectedException.none();
-
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
 
-  TempFolderProvider underTest = new TempFolderProvider();
+  private final TempFolderProvider underTest = new TempFolderProvider();
 
   @Test
   public void existing_temp_dir() throws Exception {

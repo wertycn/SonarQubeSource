@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,9 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
 import org.sonar.db.DbClient;
 import org.sonar.server.es.Index;
@@ -42,8 +40,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class EsDbCompatibilityImplTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private DbClient dbClient = mock(DbClient.class, Mockito.RETURNS_DEEP_STUBS);
   private MetadataIndex metadataIndex = spy(new TestMetadataIndex());

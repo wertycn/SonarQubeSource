@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -86,7 +86,7 @@ public class UpdateConditionAction implements QualityGatesWsAction {
       QualityGateConditionDto condition = wsSupport.getCondition(dbSession, id);
       QualityGateDto qualityGateDto = dbClient.qualityGateDao().selectByUuid(dbSession, condition.getQualityGateUuid());
       checkState(qualityGateDto != null, "Condition '%s' is linked to an unknown quality gate '%s'", id, condition.getQualityGateUuid());
-      wsSupport.checkCanEdit(qualityGateDto);
+      wsSupport.checkCanLimitedEdit(dbSession, qualityGateDto);
       QualityGateConditionDto updatedCondition = qualityGateConditionsUpdater.updateCondition(dbSession, condition, metric, operator, error);
       UpdateConditionResponse.Builder updateConditionResponse = UpdateConditionResponse.newBuilder()
         .setId(updatedCondition.getUuid())

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,31 +23,37 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.Param;
 import org.sonar.api.utils.Paging;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DatabaseUtils;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ComponentQuery;
+import org.sonar.db.component.ProjectLastAnalysisDateDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.permission.GlobalPermission;
+import org.sonar.server.management.ManagedProjectService;
 import org.sonar.server.project.Visibility;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Projects.SearchWsResponse;
 
 import static java.util.Optional.ofNullable;
 import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toMap;
 import static org.sonar.api.resources.Qualifiers.APP;
 import static org.sonar.api.resources.Qualifiers.PROJECT;
 import static org.sonar.api.resources.Qualifiers.VIEW;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.api.utils.DateUtils.parseDateOrDateTime;
+import static org.sonar.db.Pagination.forPage;
 import static org.sonar.server.project.Visibility.PRIVATE;
 import static org.sonar.server.project.Visibility.PUBLIC;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
@@ -67,20 +73,30 @@ public class SearchAction implements ProjectsWsAction {
 
   private final DbClient dbClient;
   private final UserSession userSession;
+  private final ManagedProjectService managedProjectService;
 
-  public SearchAction(DbClient dbClient, UserSession userSession) {
+  public SearchAction(DbClient dbClient, UserSession userSession, ManagedProjectService managedProjectService) {
     this.dbClient = dbClient;
     this.userSession = userSession;
+    this.managedProjectService = managedProjectService;
   }
 
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction(ACTION_SEARCH)
       .setSince("6.3")
-      .setDescription("Search for projects or views to administrate them.<br>" +
-        "Requires 'Administer System' permission")
+      .setDescription("""
+        Search for projects or views to administrate them.
+        <ul>
+          <li>The response field 'lastAnalysisDate' takes into account the analysis of all branches and pull requests, not only the main branch.</li>
+          <li>The response field 'revision' takes into account the analysis of the main branch only.</li>
+        </ul>
+        Requires 'Administer System' permission""")
       .addPagingParams(100, MAX_PAGE_SIZE)
       .setResponseExample(getClass().getResource("search-example.json"))
+      .setChangelog(new Change("10.2", "Response includes 'managed' field."))
+      .setChangelog(new Change("9.1", "The parameter '" + PARAM_ANALYZED_BEFORE + "' and the field 'lastAnalysisDate' of the returned projects "
+        + "take into account the analysis of all branches and pull requests, not only the main branch."))
       .setHandler(this);
 
     action.createParam(Param.TEXT_QUERY)
@@ -105,7 +121,7 @@ public class SearchAction implements ProjectsWsAction {
       .setPossibleValues(Visibility.getLabels());
 
     action.createParam(PARAM_ANALYZED_BEFORE)
-      .setDescription("Filter the projects for which last analysis is older than the given date (exclusive).<br> " +
+      .setDescription("Filter the projects for which the last analysis of all branches are older than the given date (exclusive).<br> " +
         "Either a date (server timezone) or datetime can be provided.")
       .setSince("6.6")
       .setExampleValue("2017-10-19 or 2017-10-19T13:00:00+0200");
@@ -152,26 +168,45 @@ public class SearchAction implements ProjectsWsAction {
 
       ComponentQuery query = buildDbQuery(request);
       Paging paging = buildPaging(dbSession, request, query);
-      List<ComponentDto> components = dbClient.componentDao().selectByQuery(dbSession, query, paging.offset(), paging.pageSize());
-      Set<String> componentUuids = components.stream().map(ComponentDto::uuid).collect(MoreCollectors.toHashSet(components.size()));
+      List<ComponentDto> components = dbClient.componentDao().selectByQuery(dbSession, query, forPage(paging.pageIndex()).andSize(paging.pageSize()));
+      Set<String> componentUuids = components.stream().map(ComponentDto::uuid).collect(Collectors.toSet());
+      List<BranchDto> branchDtos = dbClient.branchDao().selectByUuids(dbSession, componentUuids);
+      Map<String, String> componentUuidToProjectUuid = branchDtos.stream().collect(Collectors.toMap(BranchDto::getUuid,BranchDto::getProjectUuid));
+      Map<String, Boolean> projectUuidToManaged = managedProjectService.getProjectUuidToManaged(dbSession, new HashSet<>(componentUuidToProjectUuid.values()));
+      Map<String, Boolean> componentUuidToManaged = toComponentUuidToManaged(componentUuidToProjectUuid, projectUuidToManaged);
+      Map<String, Long> lastAnalysisDateByComponentUuid = dbClient.snapshotDao().selectLastAnalysisDateByProjectUuids(dbSession, componentUuidToProjectUuid.values()).stream()
+        .collect(Collectors.toMap(ProjectLastAnalysisDateDto::getProjectUuid, ProjectLastAnalysisDateDto::getDate));
       Map<String, SnapshotDto> snapshotsByComponentUuid = dbClient.snapshotDao()
         .selectLastAnalysesByRootComponentUuids(dbSession, componentUuids).stream()
-        .collect(MoreCollectors.uniqueIndex(SnapshotDto::getComponentUuid, identity()));
-      return buildResponse(components, snapshotsByComponentUuid, paging);
+        .collect(Collectors.toMap(SnapshotDto::getRootComponentUuid, identity()));
+
+      return buildResponse(components, snapshotsByComponentUuid, lastAnalysisDateByComponentUuid, componentUuidToProjectUuid, componentUuidToManaged, paging);
     }
+  }
+
+  private Map<String, Boolean> toComponentUuidToManaged(Map<String, String> componentUuidToProjectUuid, Map<String, Boolean> projectUuidToManaged) {
+    return componentUuidToProjectUuid.keySet().stream()
+      .collect(toMap(identity(), componentUuid -> isComponentManaged(
+        componentUuidToProjectUuid.get(componentUuid),
+        projectUuidToManaged))
+      );
+  }
+
+  private boolean isComponentManaged(String projectUuid, Map<String, Boolean> projectUuidToManaged) {
+    return ofNullable(projectUuidToManaged.get(projectUuid)).orElse(false);
   }
 
   static ComponentQuery buildDbQuery(SearchRequest request) {
     List<String> qualifiers = request.getQualifiers();
     ComponentQuery.Builder query = ComponentQuery.builder()
-      .setQualifiers(qualifiers.toArray(new String[qualifiers.size()]));
+      .setQualifiers(qualifiers.toArray(new String[0]));
 
     ofNullable(request.getQuery()).ifPresent(q -> {
       query.setNameOrKeyQuery(q);
       query.setPartialMatchOnKey(true);
     });
     ofNullable(request.getVisibility()).ifPresent(v -> query.setPrivate(Visibility.isPrivate(v)));
-    ofNullable(request.getAnalyzedBefore()).ifPresent(d -> query.setAnalyzedBefore(parseDateOrDateTime(d).getTime()));
+    ofNullable(request.getAnalyzedBefore()).ifPresent(d -> query.setAllBranchesAnalyzedBefore(parseDateOrDateTime(d).getTime()));
     query.setOnProvisionedOnly(request.isOnProvisionedOnly());
     ofNullable(request.getProjects()).ifPresent(keys -> query.setComponentKeys(new HashSet<>(keys)));
 
@@ -185,7 +220,8 @@ public class SearchAction implements ProjectsWsAction {
       .andTotal(total);
   }
 
-  private static SearchWsResponse buildResponse(List<ComponentDto> components, Map<String, SnapshotDto> snapshotsByComponentUuid, Paging paging) {
+  private static SearchWsResponse buildResponse(List<ComponentDto> components, Map<String, SnapshotDto> snapshotsByComponentUuid,
+    Map<String, Long> lastAnalysisDateByComponentUuid, Map<String, String> projectUuidByComponentUuid, Map<String, Boolean> componentUuidToManaged, Paging paging) {
     SearchWsResponse.Builder responseBuilder = newBuilder();
     responseBuilder.getPagingBuilder()
       .setPageIndex(paging.pageIndex())
@@ -194,22 +230,21 @@ public class SearchAction implements ProjectsWsAction {
       .build();
 
     components.stream()
-      .map(dto -> dtoToProject(dto, snapshotsByComponentUuid.get(dto.uuid())))
+      .map(dto -> dtoToProject(dto, snapshotsByComponentUuid.get(dto.uuid()), lastAnalysisDateByComponentUuid.get(projectUuidByComponentUuid.get(dto.uuid())),
+        PROJECT.equals(dto.qualifier()) ? componentUuidToManaged.get(dto.uuid()) : null))
       .forEach(responseBuilder::addComponents);
     return responseBuilder.build();
   }
 
-  private static Component dtoToProject(ComponentDto dto, @Nullable SnapshotDto snapshot) {
+  private static Component dtoToProject(ComponentDto dto, @Nullable SnapshotDto snapshot, @Nullable Long lastAnalysisDate, @Nullable Boolean isManaged) {
     Component.Builder builder = Component.newBuilder()
-      .setKey(dto.getDbKey())
+      .setKey(dto.getKey())
       .setName(dto.name())
       .setQualifier(dto.qualifier())
       .setVisibility(dto.isPrivate() ? PRIVATE.getLabel() : PUBLIC.getLabel());
-    if (snapshot != null) {
-      // FIXME created_at should not be nullable
-      ofNullable(snapshot.getCreatedAt()).ifPresent(d -> builder.setLastAnalysisDate(formatDateTime(d)));
-      ofNullable(snapshot.getRevision()).ifPresent(builder::setRevision);
-    }
+    ofNullable(snapshot).map(SnapshotDto::getRevision).ifPresent(builder::setRevision);
+    ofNullable(lastAnalysisDate).ifPresent(d -> builder.setLastAnalysisDate(formatDateTime(d)));
+    ofNullable(isManaged).ifPresent(builder::setManaged);
 
     return builder.build();
   }

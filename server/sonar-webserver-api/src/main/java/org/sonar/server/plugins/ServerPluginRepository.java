@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@ import javax.annotation.CheckForNull;
 import org.sonar.api.Plugin;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
+import org.sonar.core.plugin.PluginType;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
@@ -60,7 +61,7 @@ public class ServerPluginRepository implements PluginRepository {
 
   @Override
   public Collection<PluginInfo> getPluginInfos() {
-    return Collections.unmodifiableCollection(pluginByKey.values().stream().map(ServerPlugin::getPluginInfo).collect(Collectors.toList()));
+    return pluginByKey.values().stream().map(ServerPlugin::getPluginInfo).toList();
   }
 
   @Override
@@ -89,7 +90,7 @@ public class ServerPluginRepository implements PluginRepository {
       .stream()
       .filter(p -> p.getType() == type)
       .map(ServerPlugin::getPluginInfo)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @Override
@@ -103,7 +104,7 @@ public class ServerPluginRepository implements PluginRepository {
   public Collection<Plugin> getPluginInstances() {
     return pluginByKey.values().stream()
       .map(ServerPlugin::getInstance)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @Override

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.server.user;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbClient;
 import org.sonar.db.user.UserDto;
+import org.sonar.db.user.UserTokenDto;
 import org.sonar.server.authentication.UserLastConnectionDatesUpdater;
 
 import static java.util.Objects.requireNonNull;
@@ -38,14 +39,27 @@ public class UserSessionFactoryImpl implements UserSessionFactory {
   }
 
   @Override
-  public ServerUserSession create(UserDto user) {
+  public ServerUserSession create(UserDto user, boolean isAuthenticatedGuiSession) {
     requireNonNull(user, "UserDto must not be null");
     userLastConnectionDatesUpdater.updateLastConnectionDateIfNeeded(user);
-    return new ServerUserSession(dbClient, user);
+    return new ServerUserSession(dbClient, user, isAuthenticatedGuiSession);
+  }
+
+  @Override
+  public TokenUserSession create(UserDto user, UserTokenDto userToken) {
+    requireNonNull(user, "UserDto must not be null");
+    requireNonNull(userToken, "UserTokenDto must not be null");
+    userLastConnectionDatesUpdater.updateLastConnectionDateIfNeeded(user);
+    return new TokenUserSession(dbClient, user, userToken);
+  }
+
+  @Override
+  public GithubWebhookUserSession createGithubWebhookUserSession() {
+    return new GithubWebhookUserSession();
   }
 
   @Override
   public ServerUserSession createAnonymous() {
-    return new ServerUserSession(dbClient, null);
+    return new ServerUserSession(dbClient, null, false);
   }
 }

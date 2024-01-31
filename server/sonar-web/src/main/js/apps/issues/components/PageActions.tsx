@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,42 +17,32 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { KeyboardHint } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import HomePageSelect from '../../../components/controls/HomePageSelect';
-import PageShortcutsTooltip from '../../../components/ui/PageShortcutsTooltip';
-import { isSonarCloud } from '../../../helpers/system';
+import { translate } from '../../../helpers/l10n';
+import { Paging } from '../../../types/types';
 import IssuesCounter from './IssuesCounter';
 import TotalEffort from './TotalEffort';
 
 export interface PageActionsProps {
   canSetHome: boolean;
   effortTotal: number | undefined;
-  paging?: T.Paging;
-  selectedIndex?: number;
+  paging?: Paging;
 }
 
 export default function PageActions(props: PageActionsProps) {
-  const { canSetHome, effortTotal, paging, selectedIndex } = props;
+  const { canSetHome, effortTotal, paging } = props;
 
   return (
-    <div className="display-flex-center display-flex-justify-end">
-      <PageShortcutsTooltip
-        leftAndRightLabel={translate('issues.to_navigate')}
-        upAndDownLabel={translate('issues.to_select_issues')}
-      />
+    <div className="sw-body-sm sw-flex sw-items-center sw-gap-6 sw-justify-end sw-flex-1">
+      <KeyboardHint title={translate('issues.to_select_issues')} command="ArrowUp ArrowDown" />
+      <KeyboardHint title={translate('issues.to_navigate')} command="ArrowLeft ArrowRight" />
 
-      <div className="spacer-left issues-page-actions">
-        {paging != null && <IssuesCounter current={selectedIndex} total={paging.total} />}
-        {effortTotal !== undefined && <TotalEffort effort={effortTotal} />}
-      </div>
+      {paging != null && <IssuesCounter total={paging.total} />}
+      {effortTotal !== undefined && <TotalEffort effort={effortTotal} />}
 
-      {canSetHome && (
-        <HomePageSelect
-          className="huge-spacer-left"
-          currentPage={isSonarCloud() ? { type: 'MY_ISSUES' } : { type: 'ISSUES' }}
-        />
-      )}
+      {canSetHome && <HomePageSelect currentPage={{ type: 'ISSUES' }} />}
     </div>
   );
 }

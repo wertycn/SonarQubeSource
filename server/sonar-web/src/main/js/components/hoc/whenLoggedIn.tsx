@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,13 +18,13 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import handleRequiredAuthentication from 'sonar-ui-common/helpers/handleRequiredAuthentication';
-import { isLoggedIn } from '../../helpers/users';
+import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
+import handleRequiredAuthentication from '../../helpers/handleRequiredAuthentication';
+import { CurrentUser, isLoggedIn } from '../../types/users';
 import { getWrappedDisplayName } from './utils';
-import { withCurrentUser } from './withCurrentUser';
 
-export function whenLoggedIn<P>(WrappedComponent: React.ComponentType<P>) {
-  class Wrapper extends React.Component<P & { currentUser: T.CurrentUser }> {
+export function whenLoggedIn<P>(WrappedComponent: React.ComponentType<React.PropsWithChildren<P>>) {
+  class Wrapper extends React.Component<P & { currentUser: CurrentUser }> {
     static displayName = getWrappedDisplayName(WrappedComponent, 'whenLoggedIn');
 
     componentDidMount() {
@@ -36,11 +36,10 @@ export function whenLoggedIn<P>(WrappedComponent: React.ComponentType<P>) {
     render() {
       if (isLoggedIn(this.props.currentUser)) {
         return <WrappedComponent {...this.props} />;
-      } else {
-        return null;
       }
+      return null;
     }
   }
 
-  return withCurrentUser(Wrapper);
+  return withCurrentUserContext(Wrapper);
 }

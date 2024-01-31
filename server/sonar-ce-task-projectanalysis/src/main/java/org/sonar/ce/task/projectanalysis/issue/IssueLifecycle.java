@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.util.Date;
 import java.util.Optional;
+import javax.inject.Inject;
+import org.jetbrains.annotations.NotNull;
 import org.sonar.api.issue.Issue;
+import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.rules.RuleType;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.core.issue.DefaultIssue;
@@ -36,6 +39,8 @@ import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.workflow.IssueWorkflow;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Optional.ofNullable;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByScanBuilder;
 
 /**
  * Sets the appropriate fields when an issue is :
@@ -54,12 +59,14 @@ public class IssueLifecycle {
   private final DebtCalculator debtCalculator;
   private final AnalysisMetadataHolder analysisMetadataHolder;
 
+  @Inject
   public IssueLifecycle(AnalysisMetadataHolder analysisMetadataHolder, IssueWorkflow workflow, IssueFieldsSetter updater, DebtCalculator debtCalculator,
     RuleRepository ruleRepository) {
-    this(analysisMetadataHolder, IssueChangeContext.createScan(new Date(analysisMetadataHolder.getAnalysisDate())), workflow, updater, debtCalculator, ruleRepository);
+    this(analysisMetadataHolder, issueChangeContextByScanBuilder(new Date(analysisMetadataHolder.getAnalysisDate())).build(), workflow, updater, debtCalculator, ruleRepository);
   }
 
-  @VisibleForTesting IssueLifecycle(AnalysisMetadataHolder analysisMetadataHolder, IssueChangeContext changeContext, IssueWorkflow workflow, IssueFieldsSetter updater,
+  @VisibleForTesting
+  IssueLifecycle(AnalysisMetadataHolder analysisMetadataHolder, IssueChangeContext changeContext, IssueWorkflow workflow, IssueFieldsSetter updater,
     DebtCalculator debtCalculator, RuleRepository ruleRepository) {
     this.analysisMetadataHolder = analysisMetadataHolder;
     this.workflow = workflow;
@@ -78,16 +85,21 @@ public class IssueLifecycle {
     issue.setEffort(debtCalculator.calculate(issue));
     setType(issue, rule);
     setStatus(issue, rule);
+    setCleanCodeAttribute(issue, rule);
   }
 
-  private void setType(DefaultIssue issue, Rule rule) {
+  private static void setCleanCodeAttribute(DefaultIssue issue, Rule rule) {
+    issue.setCleanCodeAttribute(ofNullable(rule.cleanCodeAttribute()).orElse(CleanCodeAttribute.defaultCleanCodeAttribute()));
+  }
+
+  private static void setType(DefaultIssue issue, Rule rule) {
     if (issue.isFromExternalRuleEngine()) {
       return;
     }
     issue.setType(requireNonNull(rule.getType(), "No rule type"));
   }
 
-  private void setStatus(DefaultIssue issue, Rule rule) {
+  private static void setStatus(DefaultIssue issue, Rule rule) {
     if (rule.getType() == RuleType.SECURITY_HOTSPOT || issue.type() == RuleType.SECURITY_HOTSPOT) {
       issue.setStatus(Issue.STATUS_TO_REVIEW);
     } else {
@@ -124,6 +136,7 @@ public class IssueLifecycle {
       to.setManualSeverity(true);
       to.setSeverity(from.severity());
     }
+    to.setCleanCodeAttribute(from.getCleanCodeAttribute());
     copyChangesOfIssueFromOtherBranch(to, from);
   }
 
@@ -149,13 +162,15 @@ public class IssueLifecycle {
   /**
    * Copy a diff from another issue
    */
-  private static Optional<FieldDiffs> copyFieldDiffOfIssueFromOtherBranch(String issueKey, FieldDiffs c) {
+  private static Optional<FieldDiffs> copyFieldDiffOfIssueFromOtherBranch(String issueKey, FieldDiffs source) {
     FieldDiffs result = new FieldDiffs();
     result.setIssueKey(issueKey);
-    result.setUserUuid(c.userUuid());
-    result.setCreationDate(c.creationDate());
+    source.userUuid().ifPresent(result::setUserUuid);
+    source.webhookSource().ifPresent(result::setWebhookSource);
+    source.externalUser().ifPresent(result::setExternalUser);
+    result.setCreationDate(source.creationDate());
     // Don't copy "file" changelogs as they refer to file uuids that might later be purged
-    c.diffs().entrySet().stream()
+    source.diffs().entrySet().stream()
       .filter(e -> !e.getKey().equals(IssueFieldsSetter.FILE))
       .forEach(e -> result.setDiff(e.getKey(), e.getValue().oldValue(), e.getValue().newValue()));
     if (result.diffs().isEmpty()) {
@@ -174,6 +189,7 @@ public class IssueLifecycle {
       raw.setChanged(true);
     }
     setType(raw, rule);
+    setCleanCodeAttribute(raw, rule);
     copyFields(raw, base);
     base.changes().forEach(raw::addChange);
 
@@ -187,19 +203,37 @@ public class IssueLifecycle {
     // (in which case base issue belongs to original file and raw issue to component)
     raw.setComponentUuid(base.componentUuid());
     raw.setComponentKey(base.componentKey());
-    raw.setModuleUuid(base.moduleUuid());
-    raw.setModuleUuidPath(base.moduleUuidPath());
 
     // fields coming from raw
     updater.setPastLine(raw, base.getLine());
     updater.setPastLocations(raw, base.getLocations());
-    updater.setPastMessage(raw, base.getMessage(), changeContext);
+    updater.setRuleDescriptionContextKey(raw, base.getRuleDescriptionContextKey().orElse(null));
+    updater.setPastMessage(raw, base.getMessage(), base.getMessageFormattings(), changeContext);
     updater.setPastGap(raw, base.gap(), changeContext);
     updater.setPastEffort(raw, base.effort(), changeContext);
+    updater.setCodeVariants(raw, requireNonNull(base.codeVariants()), changeContext);
+    updater.setImpacts(raw, base.impacts(), changeContext);
+    updater.setCleanCodeAttribute(raw, base.getCleanCodeAttribute(), changeContext);
   }
 
   public void doAutomaticTransition(DefaultIssue issue) {
     workflow.doAutomaticTransition(issue, changeContext);
+  }
+
+  public void doManualTransition(DefaultIssue issue, String transitionKey, String userUuid) {
+    workflow.doManualTransition(issue, transitionKey, getIssueChangeContextWithUser(userUuid));
+  }
+
+  public void addComment(DefaultIssue issue, String comment, String userUuid) {
+    updater.addComment(issue, comment, getIssueChangeContextWithUser(userUuid));
+  }
+
+  @NotNull
+  private IssueChangeContext getIssueChangeContextWithUser(String userUuid) {
+    return IssueChangeContext.newBuilder()
+      .setDate(changeContext.date())
+      .setWebhookSource(changeContext.getWebhookSource())
+      .setUserUuid(userUuid).build();
   }
 
   private void copyFields(DefaultIssue toIssue, DefaultIssue fromIssue) {
@@ -210,11 +244,12 @@ public class IssueLifecycle {
     toIssue.setResolution(fromIssue.resolution());
     toIssue.setStatus(fromIssue.status());
     toIssue.setAssigneeUuid(fromIssue.assignee());
+    toIssue.setAssigneeLogin(fromIssue.assigneeLogin());
     toIssue.setAuthorLogin(fromIssue.authorLogin());
     toIssue.setTags(fromIssue.tags());
-    toIssue.setAttributes(fromIssue.attributes());
     toIssue.setEffort(debtCalculator.calculate(toIssue));
     toIssue.setOnDisabledRule(fromIssue.isOnDisabledRule());
     toIssue.setSelectedAt(fromIssue.selectedAt());
+    toIssue.setIsNewCodeReferenceIssue(fromIssue.isNewCodeReferenceIssue());
   }
 }

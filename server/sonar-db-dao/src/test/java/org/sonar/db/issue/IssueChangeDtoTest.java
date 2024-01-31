@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -115,8 +115,8 @@ public class IssueChangeDtoTest {
       .setIssueChangeCreationDate(System2.INSTANCE.now());
 
     FieldDiffs diffs = changeDto.toFieldDiffs();
-    assertThat(diffs.userUuid()).isEqualTo("user_uuid");
-    assertThat(diffs.issueKey()).isEqualTo("ABCDE");
+    assertThat(diffs.userUuid()).contains("user_uuid");
+    assertThat(diffs.issueKey()).contains("ABCDE");
     assertThat(diffs.creationDate()).isNotNull();
   }
 
@@ -130,8 +130,8 @@ public class IssueChangeDtoTest {
       .setCreatedAt(System2.INSTANCE.now());
 
     FieldDiffs diffs = changeDto.toFieldDiffs();
-    assertThat(diffs.userUuid()).isEqualTo("user_uuid");
-    assertThat(diffs.issueKey()).isEqualTo("ABCDE");
+    assertThat(diffs.userUuid()).contains("user_uuid");
+    assertThat(diffs.issueKey()).contains("ABCDE");
     assertThat(diffs.creationDate()).isNotNull();
   }
 

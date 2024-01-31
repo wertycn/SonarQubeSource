@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,45 +20,64 @@
 package org.sonar.server.authentication;
 
 import java.util.Optional;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.stubbing.Answer;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.authentication.event.AuthenticationEvent;
-import org.sonar.server.authentication.event.AuthenticationException;
+import org.sonar.db.user.UserTokenDto;
 import org.sonar.server.tester.AnonymousMockUserSession;
 import org.sonar.server.tester.MockUserSession;
+import org.sonar.server.user.GithubWebhookUserSession;
 import org.sonar.server.user.UserSession;
 import org.sonar.server.user.UserSessionFactory;
+import org.sonar.server.usertoken.UserTokenAuthentication;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.sonar.db.user.TokenType.USER_TOKEN;
 import static org.sonar.db.user.UserTesting.newUserDto;
 
 public class RequestAuthenticatorImplTest {
 
   private static final UserDto A_USER = newUserDto();
+  private static final UserTokenDto A_USER_TOKEN = mockUserTokenDto(A_USER);
 
-  private HttpServletRequest request = mock(HttpServletRequest.class);
-  private HttpServletResponse response = mock(HttpServletResponse.class);
-  private JwtHttpHandler jwtHttpHandler = mock(JwtHttpHandler.class);
-  private BasicAuthentication basicAuthentication = mock(BasicAuthentication.class);
-  private HttpHeadersAuthentication httpHeadersAuthentication = mock(HttpHeadersAuthentication.class);
-  private UserSessionFactory sessionFactory = mock(UserSessionFactory.class);
-  private CustomAuthentication customAuthentication1 = mock(CustomAuthentication.class);
-  private CustomAuthentication customAuthentication2 = mock(CustomAuthentication.class);
-  private RequestAuthenticator underTest = new RequestAuthenticatorImpl(jwtHttpHandler, basicAuthentication, httpHeadersAuthentication, sessionFactory,
-    new CustomAuthentication[]{customAuthentication1, customAuthentication2});
+  private final HttpRequest request = mock(HttpRequest.class);
+  private final HttpResponse response = mock(HttpResponse.class);
+  private final JwtHttpHandler jwtHttpHandler = mock(JwtHttpHandler.class);
+  private final BasicAuthentication basicAuthentication = mock(BasicAuthentication.class);
+  private final UserTokenAuthentication userTokenAuthentication = mock(UserTokenAuthentication.class);
+  private final GithubWebhookAuthentication githubWebhookAuthentication = mock(GithubWebhookAuthentication.class);
+  private final HttpHeadersAuthentication httpHeadersAuthentication = mock(HttpHeadersAuthentication.class);
+  private final UserSessionFactory sessionFactory = mock(UserSessionFactory.class);
+  private final RequestAuthenticator underTest = new RequestAuthenticatorImpl(jwtHttpHandler, basicAuthentication, userTokenAuthentication, httpHeadersAuthentication,
+    githubWebhookAuthentication, sessionFactory);
+
+  private final GithubWebhookUserSession githubWebhookMockUserSession = mock(GithubWebhookUserSession.class);
 
   @Before
   public void setUp() {
-    when(sessionFactory.create(A_USER)).thenReturn(new MockUserSession(A_USER));
+    when(sessionFactory.create(eq(A_USER), anyBoolean())).thenAnswer((Answer<UserSession>) invocation -> {
+      MockUserSession mockUserSession = new MockUserSession(A_USER);
+      Boolean isAuthenticatedBrowserSession = invocation.getArgument(1, Boolean.class);
+      if (isAuthenticatedBrowserSession) {
+        mockUserSession.flagAsBrowserSession();
+      }
+      return mockUserSession;
+    })
+
+      .thenReturn(new MockUserSession(A_USER));
+    when(sessionFactory.create(A_USER, A_USER_TOKEN)).thenReturn(new MockUserSession(A_USER));
     when(sessionFactory.createAnonymous()).thenReturn(new AnonymousMockUserSession());
+    when(sessionFactory.createGithubWebhookUserSession()).thenReturn(githubWebhookMockUserSession);
   }
 
   @Test
@@ -66,7 +85,22 @@ public class RequestAuthenticatorImplTest {
     when(httpHeadersAuthentication.authenticate(request, response)).thenReturn(Optional.empty());
     when(jwtHttpHandler.validateToken(request, response)).thenReturn(Optional.of(A_USER));
 
-    assertThat(underTest.authenticate(request, response).getUuid()).isEqualTo(A_USER.getUuid());
+    UserSession userSession = underTest.authenticate(request, response);
+    assertThat(userSession.getUuid()).isEqualTo(A_USER.getUuid());
+    assertThat(userSession.isAuthenticatedBrowserSession()).isTrue();
+
+    verify(response, never()).setStatus(anyInt());
+  }
+
+  @Test
+  public void authenticate_from_githubWebhook() {
+    when(httpHeadersAuthentication.authenticate(request, response)).thenReturn(Optional.empty());
+    when(jwtHttpHandler.validateToken(request, response)).thenReturn(Optional.empty());
+    when(githubWebhookAuthentication.authenticate(request)).thenReturn(Optional.of(UserAuthResult.withGithubWebhook()));
+
+    UserSession userSession = underTest.authenticate(request, response);
+    assertThat(userSession).isInstanceOf(GithubWebhookUserSession.class);
+    assertThat(userSession.isAuthenticatedBrowserSession()).isFalse();
     verify(response, never()).setStatus(anyInt());
   }
 
@@ -76,10 +110,29 @@ public class RequestAuthenticatorImplTest {
     when(httpHeadersAuthentication.authenticate(request, response)).thenReturn(Optional.empty());
     when(jwtHttpHandler.validateToken(request, response)).thenReturn(Optional.empty());
 
-    assertThat(underTest.authenticate(request, response).getUuid()).isEqualTo(A_USER.getUuid());
+    UserSession userSession = underTest.authenticate(request, response);
+    assertThat(userSession.getUuid()).isEqualTo(A_USER.getUuid());
+    assertThat(userSession.isAuthenticatedBrowserSession()).isFalse();
 
     verify(jwtHttpHandler).validateToken(request, response);
     verify(basicAuthentication).authenticate(request);
+    verify(response, never()).setStatus(anyInt());
+  }
+
+  @Test
+  public void authenticate_from_basic_token() {
+    when(request.getHeader("Authorization")).thenReturn("Basic dGVzdDo=");
+    when(userTokenAuthentication.getUserToken("test")).thenReturn(A_USER_TOKEN);
+    when(userTokenAuthentication.authenticate(request)).thenReturn(Optional.of(new UserAuthResult(A_USER, A_USER_TOKEN, UserAuthResult.AuthType.TOKEN)));
+    when(httpHeadersAuthentication.authenticate(request, response)).thenReturn(Optional.empty());
+    when(jwtHttpHandler.validateToken(request, response)).thenReturn(Optional.empty());
+
+    UserSession userSession = underTest.authenticate(request, response);
+    assertThat(userSession.getUuid()).isEqualTo(A_USER.getUuid());
+    assertThat(userSession.isAuthenticatedBrowserSession()).isFalse();
+
+    verify(jwtHttpHandler).validateToken(request, response);
+    verify(userTokenAuthentication).authenticate(request);
     verify(response, never()).setStatus(anyInt());
   }
 
@@ -88,7 +141,9 @@ public class RequestAuthenticatorImplTest {
     when(httpHeadersAuthentication.authenticate(request, response)).thenReturn(Optional.of(A_USER));
     when(jwtHttpHandler.validateToken(request, response)).thenReturn(Optional.empty());
 
-    assertThat(underTest.authenticate(request, response).getUuid()).isEqualTo(A_USER.getUuid());
+    UserSession userSession = underTest.authenticate(request, response);
+    assertThat(userSession.getUuid()).isEqualTo(A_USER.getUuid());
+    assertThat(userSession.isAuthenticatedBrowserSession()).isFalse();
 
     verify(httpHeadersAuthentication).authenticate(request, response);
     verify(jwtHttpHandler, never()).validateToken(request, response);
@@ -104,31 +159,17 @@ public class RequestAuthenticatorImplTest {
     UserSession session = underTest.authenticate(request, response);
     assertThat(session.isLoggedIn()).isFalse();
     assertThat(session.getUuid()).isNull();
+    assertThat(session.isAuthenticatedBrowserSession()).isFalse();
+
     verify(response, never()).setStatus(anyInt());
   }
 
-  @Test
-  public void delegate_to_CustomAuthentication() {
-    when(customAuthentication1.authenticate(request, response)).thenReturn(Optional.of(new MockUserSession("foo")));
-
-    UserSession session = underTest.authenticate(request, response);
-
-    assertThat(session.getLogin()).isEqualTo("foo");
+  private static UserTokenDto mockUserTokenDto(UserDto userDto) {
+    UserTokenDto userTokenDto = new UserTokenDto();
+    userTokenDto.setType(USER_TOKEN.name());
+    userTokenDto.setName("User Token");
+    userTokenDto.setUserUuid(userDto.getUuid());
+    return userTokenDto;
   }
 
-  @Test
-  public void CustomAuthentication_has_priority_over_core_authentications() {
-    // use-case: both custom and core authentications check the HTTP header "Authorization".
-    // The custom authentication should be able to test the header because that the core authentication
-    // throws an exception.
-    when(customAuthentication1.authenticate(request, response)).thenReturn(Optional.of(new MockUserSession("foo")));
-    when(basicAuthentication.authenticate(request)).thenThrow(AuthenticationException.newBuilder()
-      .setSource(AuthenticationEvent.Source.sso())
-      .setMessage("message")
-      .build());
-
-    UserSession session = underTest.authenticate(request, response);
-
-    assertThat(session.getLogin()).isEqualTo("foo");
-  }
 }

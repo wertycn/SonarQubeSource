@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -105,11 +105,12 @@ public class NodeStatsResponseTest {
     assertThat(nodeStats.getOpenFileDescriptors()).isEqualTo(296);
     assertThat(nodeStats.getMaxFileDescriptors()).isEqualTo(10240);
     assertThat(nodeStats.getDiskAvailableBytes()).isEqualTo(136144027648L);
+    assertThat(nodeStats.getDiskTotalBytes()).isEqualTo(250685575168L);
 
     assertThat(nodeStats.getFieldDataCircuitBreakerLimit()).isEqualTo(207591833);
     assertThat(nodeStats.getFieldDataCircuitBreakerEstimation()).isEqualTo(4880);
     assertThat(nodeStats.getRequestCircuitBreakerLimit()).isEqualTo(311387750L);
-    assertThat(nodeStats.getRequestCircuitBreakerEstimation()).isEqualTo(1);
+    assertThat(nodeStats.getRequestCircuitBreakerEstimation()).isOne();
 
     JvmStats jvmStats = nodeStats.getJvmStats();
     assertThat(jvmStats).isNotNull();

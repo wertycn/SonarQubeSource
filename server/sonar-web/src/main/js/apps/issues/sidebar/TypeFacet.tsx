@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,44 +17,45 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BugIcon, CodeSmellIcon, FacetBox, FacetItem, VulnerabilityIcon } from 'design-system';
 import { orderBy, without } from 'lodash';
 import * as React from 'react';
-import IssueTypeIcon from 'sonar-ui-common/components/icons/IssueTypeIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import FacetBox from '../../../components/facet/FacetBox';
-import FacetHeader from '../../../components/facet/FacetHeader';
-import FacetItem from '../../../components/facet/FacetItem';
-import FacetItemsList from '../../../components/facet/FacetItemsList';
-import MultipleSelectionHint from '../../../components/facet/MultipleSelectionHint';
 import { ISSUE_TYPES } from '../../../helpers/constants';
-import { formatFacetStat, Query } from '../utils';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { Dict } from '../../../types/types';
+import { Query, formatFacetStat } from '../utils';
+import { FacetItemsList } from './FacetItemsList';
+import { MultipleSelectionHint } from './MultipleSelectionHint';
 
 interface Props {
   fetching: boolean;
+  needIssueSync?: boolean;
   onChange: (changes: Partial<Query>) => void;
   onToggle: (property: string) => void;
   open: boolean;
-  stats: T.Dict<number> | undefined;
+  stats: Dict<number> | undefined;
   types: string[];
 }
 
-export default class TypeFacet extends React.PureComponent<Props> {
+const AVAILABLE_TYPES = ISSUE_TYPES.filter((t) => t !== 'SECURITY_HOTSPOT');
+
+export class TypeFacet extends React.PureComponent<Props> {
   property = 'types';
 
   static defaultProps = {
-    open: true
+    open: true,
   };
 
   handleItemClick = (itemValue: string, multiple: boolean) => {
     const { types } = this.props;
     if (multiple) {
       const newValue = orderBy(
-        types.includes(itemValue) ? without(types, itemValue) : [...types, itemValue]
+        types.includes(itemValue) ? without(types, itemValue) : [...types, itemValue],
       );
       this.props.onChange({ [this.property]: newValue });
     } else {
       this.props.onChange({
-        [this.property]: types.includes(itemValue) && types.length < 2 ? [] : [itemValue]
+        [this.property]: types.includes(itemValue) && types.length < 2 ? [] : [itemValue],
       });
     }
   };
@@ -69,6 +70,7 @@ export default class TypeFacet extends React.PureComponent<Props> {
 
   getStat(type: string) {
     const { stats } = this.props;
+
     return stats ? stats[type] : undefined;
   }
 
@@ -77,49 +79,59 @@ export default class TypeFacet extends React.PureComponent<Props> {
   }
 
   renderItem = (type: string) => {
+    const { needIssueSync } = this.props;
     const active = this.isFacetItemActive(type);
     const stat = this.getStat(type);
 
     return (
       <FacetItem
         active={active}
-        key={type}
-        name={
-          <span className="display-flex-center">
-            <IssueTypeIcon className="little-spacer-right" query={type} />{' '}
-            {translate('issue.type', type)}
-          </span>
+        className="it__search-navigator-facet"
+        icon={
+          {
+            BUG: <BugIcon />,
+            CODE_SMELL: <CodeSmellIcon />,
+            VULNERABILITY: <VulnerabilityIcon />,
+          }[type]
         }
+        key={type}
+        name={translate('issue.type', type)}
         onClick={this.handleItemClick}
-        stat={formatFacetStat(stat)}
+        stat={(!needIssueSync && formatFacetStat(stat)) ?? 0}
         value={type}
       />
     );
   };
 
   render() {
-    const { types, stats = {} } = this.props;
-    const values = types.map(type => translate('issue.type', type));
+    const { fetching, open, types } = this.props;
+
+    const nbSelectableItems = AVAILABLE_TYPES.filter(this.getStat.bind(this)).length;
+    const nbSelectedItems = types.length;
+    const typeFacetHeaderId = `facet_${this.property}`;
 
     return (
-      <FacetBox property={this.property}>
-        <FacetHeader
-          fetching={this.props.fetching}
-          name={translate('issues.facet', this.property)}
-          onClear={this.handleClear}
-          onClick={this.handleHeaderClick}
-          open={this.props.open}
-          values={values}
-        />
+      <FacetBox
+        className="it__search-navigator-facet-box it__search-navigator-facet-header"
+        clearIconLabel={translate('clear')}
+        count={nbSelectedItems}
+        countLabel={translateWithParameters('x_selected', nbSelectedItems)}
+        data-property={this.property}
+        id={typeFacetHeaderId}
+        loading={fetching}
+        name={translate('issues.facet', this.property)}
+        onClear={this.handleClear}
+        onClick={this.handleHeaderClick}
+        open={open}
+      >
+        <FacetItemsList labelledby={typeFacetHeaderId}>
+          {AVAILABLE_TYPES.map(this.renderItem)}
+        </FacetItemsList>
 
-        {this.props.open && (
-          <>
-            <FacetItemsList>
-              {ISSUE_TYPES.filter(t => t !== 'SECURITY_HOTSPOT').map(this.renderItem)}
-            </FacetItemsList>
-            <MultipleSelectionHint options={Object.keys(stats).length} values={types.length} />
-          </>
-        )}
+        <MultipleSelectionHint
+          nbSelectableItems={nbSelectableItems}
+          nbSelectedItems={nbSelectedItems}
+        />
       </FacetBox>
     );
   }

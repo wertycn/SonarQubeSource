@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,7 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
 import java.util.Optional;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.PathAwareCrawler;
@@ -47,10 +47,9 @@ import static org.sonar.api.measures.CoreMetrics.TEST_SUCCESS_DENSITY_KEY;
  * Computes unit test measures on files and then aggregates them on higher components.
  */
 public class UnitTestMeasuresStep implements ComputationStep {
-
   private static final String[] METRICS = new String[] {TESTS_KEY, TEST_ERRORS_KEY, TEST_FAILURES_KEY, SKIPPED_TESTS_KEY, TEST_SUCCESS_DENSITY_KEY, TEST_EXECUTION_TIME_KEY};
 
-  private static final ImmutableList<Formula> FORMULAS = ImmutableList.of(new UnitTestsFormula());
+  private static final List<Formula<?>> FORMULAS = List.of(new UnitTestsFormula());
 
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
@@ -119,8 +118,8 @@ public class UnitTestMeasuresStep implements ComputationStep {
         int tests = counter.testsCounter.getValue().get();
         int errors = counter.testsErrorsCounter.getValue().get();
         int failures = counter.testsFailuresCounter.getValue().get();
-        double density = (errors + failures) * 100d / tests;
-        return Optional.of(Measure.newMeasureBuilder().create(100d - density, decimalScale));
+        double density = (errors + failures) * 100D / tests;
+        return Optional.of(Measure.newMeasureBuilder().create(100D - density, decimalScale));
       }
       return Optional.empty();
     }

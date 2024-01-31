@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { get, remove, save } from 'sonar-ui-common/helpers/storage';
+import { get, remove, save } from '../../helpers/storage';
 
 const RECENT_HISTORY = 'sonar_recent_history';
 const HISTORY_LIMIT = 10;
@@ -54,7 +54,7 @@ export default class RecentHistory {
   static add(componentKey: string, componentName: string, icon: string) {
     const sonarHistory = RecentHistory.get();
     const newEntry = { key: componentKey, name: componentName, icon };
-    let newHistory = sonarHistory.filter(entry => entry.key !== newEntry.key);
+    let newHistory = sonarHistory.filter((entry) => entry.key !== newEntry.key);
     newHistory.unshift(newEntry);
     newHistory = newHistory.slice(0, HISTORY_LIMIT);
     RecentHistory.set(newHistory);
@@ -62,7 +62,7 @@ export default class RecentHistory {
 
   static remove(componentKey: string) {
     const history = RecentHistory.get();
-    const newHistory = history.filter(entry => entry.key !== componentKey);
+    const newHistory = history.filter((entry) => entry.key !== componentKey);
     RecentHistory.set(newHistory);
   }
 }

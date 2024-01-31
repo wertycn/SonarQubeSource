@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -99,8 +99,8 @@ public class PluginInfoTest {
     assertThat(java1.equals(null)).isFalse();
     assertThat(javaNoVersion.equals(javaNoVersion)).isTrue();
 
-    assertThat(java1.hashCode()).isEqualTo(java1.hashCode());
-    assertThat(javaNoVersion.hashCode()).isEqualTo(javaNoVersion.hashCode());
+    assertThat(java1).hasSameHashCodeAs(java1);
+    assertThat(javaNoVersion).hasSameHashCodeAs(javaNoVersion);
   }
 
   /**
@@ -187,9 +187,10 @@ public class PluginInfoTest {
     assertThat(pluginInfo.getLicense()).isNull();
     assertThat(pluginInfo.getOrganizationName()).isNull();
     assertThat(pluginInfo.getOrganizationUrl()).isNull();
-    assertThat(pluginInfo.getMinimalSqVersion()).isNull();
+    assertThat(pluginInfo.getMinimalSonarPluginApiVersion()).isNull();
     assertThat(pluginInfo.getRequiredPlugins()).isEmpty();
     assertThat(pluginInfo.isSonarLintSupported()).isFalse();
+    assertThat(pluginInfo.getRequiredForLanguages()).isEmpty();
   }
 
   @Test
@@ -210,6 +211,7 @@ public class PluginInfoTest {
     manifest.setIssueTrackerUrl("http://jira.com");
     manifest.setRequirePlugins(new String[] {"java:2.0", "pmd:1.3"});
     manifest.setSonarLintSupported(true);
+    manifest.setRequiredForLanguages(new String[]{"java", "xml"});
 
     File jarFile = temp.newFile();
     PluginInfo pluginInfo = PluginInfo.create(jarFile, manifest);
@@ -222,9 +224,10 @@ public class PluginInfoTest {
     assertThat(pluginInfo.getLicense()).isEqualTo("LGPL");
     assertThat(pluginInfo.getOrganizationName()).isEqualTo("SonarSource");
     assertThat(pluginInfo.getOrganizationUrl()).isEqualTo("http://sonarsource.com");
-    assertThat(pluginInfo.getMinimalSqVersion().getName()).isEqualTo("4.5.1");
+    assertThat(pluginInfo.getMinimalSonarPluginApiVersion().getName()).isEqualTo("4.5.1");
     assertThat(pluginInfo.getRequiredPlugins()).extracting("key").containsOnly("java", "pmd");
     assertThat(pluginInfo.isSonarLintSupported()).isTrue();
+    assertThat(pluginInfo.getRequiredForLanguages()).containsOnly("java", "xml");
   }
 
   @Test
@@ -272,7 +275,7 @@ public class PluginInfoTest {
 
     assertThat(checkstyleInfo.getName()).isEqualTo("Checkstyle");
     assertThat(checkstyleInfo.getDocumentationPath()).isNull();
-    assertThat(checkstyleInfo.getMinimalSqVersion()).isEqualTo(Version.create("2.8"));
+    assertThat(checkstyleInfo.getMinimalSonarPluginApiVersion()).isEqualTo(Version.create("2.8"));
   }
 
   @Test
@@ -287,7 +290,7 @@ public class PluginInfoTest {
   @Test
   public void test_toString() {
     PluginInfo pluginInfo = new PluginInfo("java").setVersion(Version.create("1.1"));
-    assertThat(pluginInfo.toString()).isEqualTo("[java / 1.1]");
+    assertThat(pluginInfo).hasToString("[java / 1.1]");
 
     pluginInfo.setImplementationBuild("SHA1");
     assertThat(pluginInfo).hasToString("[java / 1.1 / SHA1]");
@@ -319,7 +322,7 @@ public class PluginInfoTest {
   PluginInfo withMinSqVersion(@Nullable String version) {
     PluginInfo pluginInfo = new PluginInfo("foo");
     if (version != null) {
-      pluginInfo.setMinimalSqVersion(Version.create(version));
+      pluginInfo.setMinimalSonarPluginApiVersion(Version.create(version));
     }
     return pluginInfo;
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.joran.spi.JoranException;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.junit.rules.ExternalResource;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -66,7 +65,7 @@ public class LoggingRule extends ExternalResource {
     return TestLogbackAppender.events.stream()
       .filter(e -> e.getLoggerName().equals(loggerClass.getName()))
       .map(LoggingEvent::getFormattedMessage)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public List<String> getLogs(Level level) {
@@ -74,7 +73,7 @@ public class LoggingRule extends ExternalResource {
       .filter(e -> e.getLoggerName().equals(loggerClass.getName()))
       .filter(e -> e.getLevel().levelStr.equals(level.name()))
       .map(LoggingEvent::getFormattedMessage)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public boolean hasLog(Level level, String message) {

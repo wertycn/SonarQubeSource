@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,14 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { TableRow } from 'design-system';
 import * as React from 'react';
+import { AppStateContext } from '../../../app/components/app-state/AppStateContext';
+import { EditionKey } from '../../../types/editions';
 import { Task as ITask } from '../../../types/tasks';
 import TaskActions from './TaskActions';
 import TaskComponent from './TaskComponent';
 import TaskDate from './TaskDate';
-import TaskDay from './TaskDay';
 import TaskExecutionTime from './TaskExecutionTime';
-import TaskId from './TaskId';
+import TaskNodeName from './TaskNodeName';
 import TaskStatus from './TaskStatus';
 import TaskSubmitter from './TaskSubmitter';
 
@@ -33,23 +35,20 @@ interface Props {
   onCancelTask: (task: ITask) => Promise<void>;
   onFilterTask: (task: ITask) => void;
   task: ITask;
-  previousTask?: ITask;
 }
 
-export default function Task(props: Props) {
-  const { task, component, onCancelTask, onFilterTask, previousTask } = props;
+export default function Task(props: Readonly<Props>) {
+  const { task, component, onCancelTask, onFilterTask } = props;
+
+  const appState = React.useContext(AppStateContext);
+  const isDataCenter = appState.edition === EditionKey.datacenter;
 
   return (
-    <tr>
+    <TableRow>
       <TaskStatus status={task.status} />
       <TaskComponent task={task} />
-      <TaskId id={task.id} />
-      <TaskSubmitter submitter={task.submitterLogin} />
-      <TaskDay
-        prevSubmittedAt={previousTask && previousTask.submittedAt}
-        submittedAt={task.submittedAt}
-      />
-      <TaskDate date={task.submittedAt} />
+      {isDataCenter && <TaskNodeName nodeName={task.nodeName} />}
+      <TaskSubmitter submittedAt={task.submittedAt} submitter={task.submitterLogin} />
       <TaskDate baseDate={task.submittedAt} date={task.startedAt} />
       <TaskDate baseDate={task.submittedAt} date={task.executedAt} />
       <TaskExecutionTime ms={task.executionTimeMs} />
@@ -59,6 +58,6 @@ export default function Task(props: Props) {
         onFilterTask={onFilterTask}
         task={task}
       />
-    </tr>
+    </TableRow>
   );
 }

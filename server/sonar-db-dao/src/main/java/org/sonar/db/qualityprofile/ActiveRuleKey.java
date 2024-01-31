@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -97,7 +97,7 @@ public class ActiveRuleKey implements Serializable, Comparable<ActiveRuleKey> {
   }
 
   /**
-   * Format is "qprofile:rule", for example "12345:squid:AvoidCycle"
+   * Format is "qprofile:rule", for example "12345:java:AvoidCycle"
    */
   @Override
   public String toString() {

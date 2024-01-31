@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,35 +18,27 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import CreateYmlFile from './CreateYmlFile';
+import { Component } from '../../../../types/types';
+import CreateYmlFile from '../../components/CreateYmlFile';
+import { GITHUB_ACTIONS_RUNS_ON_WINDOWS } from '../constants';
+import { generateGitHubActionsYaml } from '../utils';
 
 export interface DotNetProps {
   branchesEnabled?: boolean;
-  component: T.Component;
+  mainBranchName: string;
+  component: Component;
 }
 
-const dotnetYamlTemplate = (projectKey: string, branchesEnabled: boolean) => `name: Build
-on:
-  push:
-    branches:
-      - master # or the name of your main branch
-${branchesEnabled ? '  pull_request:\n    types: [opened, synchronize, reopened]' : ''}
-jobs:
-  build:
-    name: Build
-    runs-on: windows-latest
-    steps:
-      - name: Set up JDK 11
+function dotnetYamlSteps(projectKey: string) {
+  return `
+      - name: Set up JDK 17
         uses: actions/setup-java@v1
         with:
-          java-version: 1.11
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          java-version: 17
       - name: Cache SonarQube packages
         uses: actions/cache@v1
         with:
-          path: ~\\sonar\\cache
+          path: ~\\.sonar\\cache
           key: \${{ runner.os }}-sonar
           restore-keys: \${{ runner.os }}-sonar
       - name: Cache SonarQube scanner
@@ -63,15 +55,24 @@ jobs:
           New-Item -Path .\\.sonar\\scanner -ItemType Directory
           dotnet tool update dotnet-sonarscanner --tool-path .\\.sonar\\scanner
       - name: Build and analyze
-        env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
         shell: powershell
         run: |
-          .\\.sonar\\scanner\\dotnet-sonarscanner begin /k:"${projectKey}" /d:sonar.login="\${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="\${{ secrets.SONAR_HOST_URL }}"
+          .\\.sonar\\scanner\\dotnet-sonarscanner begin /k:"${projectKey}" /d:sonar.token="\${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="\${{ secrets.SONAR_HOST_URL }}"
           dotnet build
-          .\\.sonar\\scanner\\dotnet-sonarscanner end /d:sonar.login="\${{ secrets.SONAR_TOKEN }}"`;
+          .\\.sonar\\scanner\\dotnet-sonarscanner end /d:sonar.token="\${{ secrets.SONAR_TOKEN }}"`;
+}
 
 export default function DotNet(props: DotNetProps) {
-  const { component, branchesEnabled } = props;
-  return <CreateYmlFile yamlTemplate={dotnetYamlTemplate(component.key, !!branchesEnabled)} />;
+  const { component, branchesEnabled, mainBranchName } = props;
+  return (
+    <CreateYmlFile
+      yamlFileName=".github/workflows/build.yml"
+      yamlTemplate={generateGitHubActionsYaml(
+        mainBranchName,
+        !!branchesEnabled,
+        GITHUB_ACTIONS_RUNS_ON_WINDOWS,
+        dotnetYamlSteps(component.key),
+      )}
+    />
+  );
 }

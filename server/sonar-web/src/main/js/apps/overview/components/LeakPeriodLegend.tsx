@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,28 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as differenceInDays from 'date-fns/difference_in_days';
+import { differenceInDays } from 'date-fns';
 import * as React from 'react';
-import { InjectedIntlProps, injectIntl } from 'react-intl';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import DateFormatter, { longFormatterOption } from 'sonar-ui-common/components/intl/DateFormatter';
-import DateFromNow from 'sonar-ui-common/components/intl/DateFromNow';
-import DateTimeFormatter, {
-  formatterOption
-} from 'sonar-ui-common/components/intl/DateTimeFormatter';
-import { translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { getPeriodDate, getPeriodLabel } from '../../../helpers/periods';
+import { injectIntl, WrappedComponentProps } from 'react-intl';
+import Tooltip from '../../../components/controls/Tooltip';
+import DateFormatter, { longFormatterOption } from '../../../components/intl/DateFormatter';
+import DateFromNow from '../../../components/intl/DateFromNow';
+import DateTimeFormatter, { formatterOption } from '../../../components/intl/DateTimeFormatter';
+import { translateWithParameters } from '../../../helpers/l10n';
+import { getNewCodePeriodDate, getNewCodePeriodLabel } from '../../../helpers/new-code-period';
+import { NewCodeDefinitionType } from '../../../types/new-code-definition';
+import { Dict, Period } from '../../../types/types';
 
 interface Props {
-  period: T.Period;
+  period: Period;
 }
 
-const MODE_INCLUDES_TIME: T.Dict<boolean> = {
+const MODE_INCLUDES_TIME: Dict<boolean> = {
   manual_baseline: true,
-  SPECIFIC_ANALYSIS: true
+  SPECIFIC_ANALYSIS: true,
 };
 
-export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlProps> {
+export class LeakPeriodLegend extends React.PureComponent<Props & WrappedComponentProps> {
   formatDate = (date: string) => {
     return this.props.intl.formatDate(date, longFormatterOption);
   };
@@ -49,15 +49,15 @@ export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlPr
 
   render() {
     const { period } = this.props;
-    const leakPeriodLabel = getPeriodLabel(
+    const leakPeriodLabel = getNewCodePeriodLabel(
       period,
-      MODE_INCLUDES_TIME[period.mode] ? this.formatDateTime : this.formatDate
+      MODE_INCLUDES_TIME[period.mode] ? this.formatDateTime : this.formatDate,
     );
     if (!leakPeriodLabel) {
       return null;
     }
 
-    if (period.mode === 'days' || period.mode === 'NUMBER_OF_DAYS') {
+    if (period.mode === 'days' || period.mode === NewCodeDefinitionType.NumberOfDays) {
       return (
         <div className="overview-legend overview-legend-spaced-line">
           {translateWithParameters('overview.new_code_period_x', leakPeriodLabel)}
@@ -65,7 +65,7 @@ export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlPr
       );
     }
 
-    const leakPeriodDate = getPeriodDate(period);
+    const leakPeriodDate = getNewCodePeriodDate(period);
     if (!leakPeriodDate) {
       return null;
     }
@@ -76,7 +76,7 @@ export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlPr
           period.mode === 'previous_analysis'
             ? 'overview.previous_analysis_on_x'
             : 'overview.started_on_x',
-          formattedLeakPeriodDate
+          formattedLeakPeriodDate,
         )}
       </span>
     );
@@ -85,7 +85,7 @@ export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlPr
       differenceInDays(new Date(), leakPeriodDate) < 1 ? (
         <DateTimeFormatter date={leakPeriodDate}>{formattedDateFunction}</DateTimeFormatter>
       ) : (
-        <DateFormatter date={leakPeriodDate} long={true}>
+        <DateFormatter date={leakPeriodDate} long>
           {formattedDateFunction}
         </DateFormatter>
       );
@@ -96,13 +96,13 @@ export class LeakPeriodLegend extends React.PureComponent<Props & InjectedIntlPr
           {translateWithParameters('overview.new_code_period_x', leakPeriodLabel)}
           <br />
           <DateFromNow date={leakPeriodDate}>
-            {fromNow => (
+            {(fromNow) => (
               <span className="note">
                 {translateWithParameters(
                   period.mode === 'previous_analysis'
                     ? 'overview.previous_analysis_x'
                     : 'overview.started_x',
-                  fromNow
+                  fromNow,
                 )}
               </span>
             )}

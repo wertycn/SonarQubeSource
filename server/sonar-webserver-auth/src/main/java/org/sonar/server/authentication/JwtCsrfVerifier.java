@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,19 @@
  */
 package org.sonar.server.authentication;
 
-import com.google.common.collect.ImmutableSet;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.StringUtils;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
 import org.sonar.server.authentication.event.AuthenticationException;
 
 import static org.apache.commons.lang.StringUtils.isBlank;
+import static org.sonar.server.authentication.Cookies.SAMESITE_LAX;
+import static org.sonar.server.authentication.Cookies.SET_COOKIE;
 import static org.sonar.server.authentication.Cookies.newCookieBuilder;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Method;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
@@ -40,18 +41,24 @@ public class JwtCsrfVerifier {
   private static final String CSRF_STATE_COOKIE = "XSRF-TOKEN";
   private static final String CSRF_HEADER = "X-XSRF-TOKEN";
 
-  private static final Set<String> UPDATE_METHODS = ImmutableSet.of("POST", "PUT", "DELETE");
+  private static final Set<String> UPDATE_METHODS = Set.of("POST", "PUT", "DELETE");
   private static final String API_URL = "/api";
 
-  public String generateState(HttpServletRequest request, HttpServletResponse response, int timeoutInSeconds) {
+  public String generateState(HttpRequest request, HttpResponse response, int timeoutInSeconds) {
     // Create a state token to prevent request forgery.
     // Store it in the cookie for later validation.
     String state = new BigInteger(130, new SecureRandom()).toString(32);
-    response.addCookie(newCookieBuilder(request).setName(CSRF_STATE_COOKIE).setValue(state).setHttpOnly(false).setExpiry(timeoutInSeconds).build());
+    response.addHeader(SET_COOKIE, newCookieBuilder(request)
+      .setName(CSRF_STATE_COOKIE)
+      .setValue(state)
+      .setHttpOnly(false)
+      .setExpiry(timeoutInSeconds)
+      .setSameSite(SAMESITE_LAX)
+      .toValueString());
     return state;
   }
 
-  public void verifyState(HttpServletRequest request, @Nullable String csrfState, @Nullable String login) {
+  public void verifyState(HttpRequest request, @Nullable String csrfState, @Nullable String login) {
     if (!shouldRequestBeChecked(request)) {
       return;
     }
@@ -77,15 +84,22 @@ public class JwtCsrfVerifier {
     return null;
   }
 
-  public void refreshState(HttpServletRequest request, HttpServletResponse response, String csrfState, int timeoutInSeconds) {
-    response.addCookie(newCookieBuilder(request).setName(CSRF_STATE_COOKIE).setValue(csrfState).setHttpOnly(false).setExpiry(timeoutInSeconds).build());
+  public void refreshState(HttpRequest request, HttpResponse response, String csrfState, int timeoutInSeconds) {
+    response.addHeader(SET_COOKIE,
+      newCookieBuilder(request)
+        .setName(CSRF_STATE_COOKIE)
+        .setValue(csrfState)
+        .setHttpOnly(false)
+        .setExpiry(timeoutInSeconds)
+        .setSameSite(SAMESITE_LAX)
+        .toValueString());
   }
 
-  public void removeState(HttpServletRequest request, HttpServletResponse response) {
+  public void removeState(HttpRequest request, HttpResponse response) {
     response.addCookie(newCookieBuilder(request).setName(CSRF_STATE_COOKIE).setValue(null).setHttpOnly(false).setExpiry(0).build());
   }
 
-  private static boolean shouldRequestBeChecked(HttpServletRequest request) {
+  private static boolean shouldRequestBeChecked(HttpRequest request) {
     if (UPDATE_METHODS.contains(request.getMethod())) {
       String path = request.getRequestURI().replaceFirst(request.getContextPath(), "");
       return path.startsWith(API_URL);

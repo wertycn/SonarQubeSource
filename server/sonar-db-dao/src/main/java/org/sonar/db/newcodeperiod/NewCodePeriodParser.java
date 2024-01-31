@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,15 +19,9 @@
  */
 package org.sonar.db.newcodeperiod;
 
-import java.time.LocalDate;
-
 public class NewCodePeriodParser {
   private NewCodePeriodParser() {
     // static only
-  }
-
-  public static LocalDate parseDate(String value) {
-    return LocalDate.parse(value);
   }
 
   public static int parseDays(String value) {

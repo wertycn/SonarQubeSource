@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BranchIcon, MainBranchIcon, PullRequestIcon, ThemeColors } from 'design-system';
 import * as React from 'react';
-import BranchIcon from 'sonar-ui-common/components/icons/BranchIcon';
-import { IconProps } from 'sonar-ui-common/components/icons/Icon';
-import PullRequestIcon from 'sonar-ui-common/components/icons/PullRequestIcon';
-import { isPullRequest } from '../../helpers/branch-like';
+import { IconProps } from '../../components/icons/Icon';
+import { isMainBranch, isPullRequest } from '../../helpers/branch-like';
 import { BranchLike } from '../../types/branch-like';
 
-export interface BranchLikeIconProps extends IconProps {
+export interface BranchLikeIconProps extends Omit<IconProps, 'fill'> {
   branchLike: BranchLike;
+  fill?: ThemeColors;
 }
 
 export default function BranchLikeIcon({ branchLike, ...props }: BranchLikeIconProps) {
   if (isPullRequest(branchLike)) {
-    return <PullRequestIcon {...props} />;
-  } else {
-    return <BranchIcon {...props} />;
+    return <PullRequestIcon fill="pageContentLight" {...props} />;
+  } else if (isMainBranch(branchLike)) {
+    return <MainBranchIcon fill="pageContentLight" {...props} />;
   }
+  return <BranchIcon fill="pageContentLight" {...props} />;
 }

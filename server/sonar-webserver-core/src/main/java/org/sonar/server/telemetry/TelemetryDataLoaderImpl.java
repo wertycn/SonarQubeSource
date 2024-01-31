@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,78 +21,123 @@ package org.sonar.server.telemetry;
 
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.ServerSide;
-import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.alm.setting.ALM;
-import org.sonar.db.alm.setting.AlmSettingDto;
-import org.sonar.db.component.ProjectCountPerAnalysisPropertyValue;
-import org.sonar.db.measure.SumNclocDbQuery;
-import org.sonar.server.es.SearchOptions;
-import org.sonar.server.measure.index.ProjectMeasuresIndex;
-import org.sonar.server.measure.index.ProjectMeasuresStatistics;
-import org.sonar.server.platform.DockerSupport;
+import org.sonar.db.alm.setting.ProjectAlmKeyAndProject;
+import org.sonar.db.component.AnalysisPropertyValuePerProject;
+import org.sonar.db.component.BranchMeasuresDto;
+import org.sonar.db.component.PrBranchAnalyzedLanguageCountByProjectDto;
+import org.sonar.db.component.SnapshotDto;
+import org.sonar.db.measure.ProjectLocDistributionDto;
+import org.sonar.db.measure.ProjectMainBranchLiveMeasureDto;
+import org.sonar.db.metric.MetricDto;
+import org.sonar.db.newcodeperiod.NewCodePeriodDto;
+import org.sonar.db.project.ProjectDto;
+import org.sonar.db.property.PropertyDto;
+import org.sonar.db.property.PropertyQuery;
+import org.sonar.db.qualitygate.ProjectQgateAssociationDto;
+import org.sonar.db.qualitygate.QualityGateConditionDto;
+import org.sonar.db.qualitygate.QualityGateDto;
+import org.sonar.server.management.ManagedInstanceService;
+import org.sonar.server.platform.ContainerSupport;
 import org.sonar.server.property.InternalProperties;
+import org.sonar.server.qualitygate.Condition;
+import org.sonar.server.qualitygate.QualityGateCaycChecker;
+import org.sonar.server.qualitygate.QualityGateFinder;
 import org.sonar.server.telemetry.TelemetryData.Database;
-import org.sonar.server.user.index.UserIndex;
-import org.sonar.server.user.index.UserQuery;
+import org.sonar.server.telemetry.TelemetryData.NewCodeDefinition;
 
 import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
-import static org.apache.commons.lang.StringUtils.startsWith;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toMap;
+import static org.sonar.api.internal.apachecommons.lang.StringUtils.startsWithIgnoreCase;
+import static org.sonar.api.measures.CoreMetrics.BUGS_KEY;
+import static org.sonar.api.measures.CoreMetrics.DEVELOPMENT_COST_KEY;
+import static org.sonar.api.measures.CoreMetrics.NCLOC_KEY;
+import static org.sonar.api.measures.CoreMetrics.NCLOC_LANGUAGE_DISTRIBUTION_KEY;
+import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_KEY;
+import static org.sonar.api.measures.CoreMetrics.TECHNICAL_DEBT_KEY;
+import static org.sonar.api.measures.CoreMetrics.VULNERABILITIES_KEY;
+import static org.sonar.core.config.CorePropertyDefinitions.SONAR_ANALYSIS_DETECTEDCI;
+import static org.sonar.core.config.CorePropertyDefinitions.SONAR_ANALYSIS_DETECTEDSCM;
 import static org.sonar.core.platform.EditionProvider.Edition.COMMUNITY;
 import static org.sonar.core.platform.EditionProvider.Edition.DATACENTER;
 import static org.sonar.core.platform.EditionProvider.Edition.ENTERPRISE;
+import static org.sonar.db.newcodeperiod.NewCodePeriodType.REFERENCE_BRANCH;
 import static org.sonar.server.metric.UnanalyzedLanguageMetrics.UNANALYZED_CPP_KEY;
 import static org.sonar.server.metric.UnanalyzedLanguageMetrics.UNANALYZED_C_KEY;
+import static org.sonar.server.qualitygate.Condition.Operator.fromDbValue;
+import static org.sonar.server.telemetry.TelemetryDaemon.I_PROP_MESSAGE_SEQUENCE;
 
 @ServerSide
 public class TelemetryDataLoaderImpl implements TelemetryDataLoader {
+  private static final String UNDETECTED = "undetected";
+  public static final String EXTERNAL_SECURITY_REPORT_EXPORTED_AT = "project.externalSecurityReportExportedAt";
+
+  private static final Map<String, String> LANGUAGES_BY_SECURITY_JSON_PROPERTY_MAP = Map.of(
+    "sonar.security.config.javasecurity", "java",
+    "sonar.security.config.phpsecurity", "php",
+    "sonar.security.config.pythonsecurity", "python",
+    "sonar.security.config.roslyn.sonaranalyzer.security.cs", "csharp");
+
   private final Server server;
   private final DbClient dbClient;
   private final PluginRepository pluginRepository;
-  private final UserIndex userIndex;
-  private final ProjectMeasuresIndex projectMeasuresIndex;
   private final PlatformEditionProvider editionProvider;
   private final Configuration configuration;
   private final InternalProperties internalProperties;
-  private final DockerSupport dockerSupport;
-  @CheckForNull
-  private final LicenseReader licenseReader;
+  private final ContainerSupport containerSupport;
+  private final QualityGateCaycChecker qualityGateCaycChecker;
+  private final QualityGateFinder qualityGateFinder;
+  private final ManagedInstanceService managedInstanceService;
+  private final CloudUsageDataProvider cloudUsageDataProvider;
+  private final QualityProfileDataProvider qualityProfileDataProvider;
+  private final Set<NewCodeDefinition> newCodeDefinitions = new HashSet<>();
+  private final Map<String, NewCodeDefinition> ncdByProject = new HashMap<>();
+  private final Map<String, NewCodeDefinition> ncdByBranch = new HashMap<>();
+  private final Map<String, String> defaultQualityProfileByLanguage = new HashMap<>();
+  private final Map<ProjectLanguageKey, String> qualityProfileByProjectAndLanguage = new HashMap<>();
+  private NewCodeDefinition instanceNcd = NewCodeDefinition.getInstanceDefault();
 
-  public TelemetryDataLoaderImpl(Server server, DbClient dbClient, PluginRepository pluginRepository, UserIndex userIndex, ProjectMeasuresIndex projectMeasuresIndex,
-                                 PlatformEditionProvider editionProvider, InternalProperties internalProperties, Configuration configuration, DockerSupport dockerSupport) {
-    this(server, dbClient, pluginRepository, userIndex, projectMeasuresIndex, editionProvider, internalProperties, configuration, dockerSupport, null);
-  }
-
-  public TelemetryDataLoaderImpl(Server server, DbClient dbClient, PluginRepository pluginRepository, UserIndex userIndex, ProjectMeasuresIndex projectMeasuresIndex,
-                                 PlatformEditionProvider editionProvider, InternalProperties internalProperties, Configuration configuration,
-                                 DockerSupport dockerSupport, @Nullable LicenseReader licenseReader) {
+  @Inject
+  public TelemetryDataLoaderImpl(Server server, DbClient dbClient, PluginRepository pluginRepository,
+    PlatformEditionProvider editionProvider, InternalProperties internalProperties, Configuration configuration,
+    ContainerSupport containerSupport, QualityGateCaycChecker qualityGateCaycChecker, QualityGateFinder qualityGateFinder,
+    ManagedInstanceService managedInstanceService, CloudUsageDataProvider cloudUsageDataProvider, QualityProfileDataProvider qualityProfileDataProvider) {
     this.server = server;
     this.dbClient = dbClient;
     this.pluginRepository = pluginRepository;
-    this.userIndex = userIndex;
-    this.projectMeasuresIndex = projectMeasuresIndex;
     this.editionProvider = editionProvider;
     this.internalProperties = internalProperties;
     this.configuration = configuration;
-    this.dockerSupport = dockerSupport;
-    this.licenseReader = licenseReader;
+    this.containerSupport = containerSupport;
+    this.qualityGateCaycChecker = qualityGateCaycChecker;
+    this.qualityGateFinder = qualityGateFinder;
+    this.managedInstanceService = managedInstanceService;
+    this.cloudUsageDataProvider = cloudUsageDataProvider;
+    this.qualityProfileDataProvider = qualityProfileDataProvider;
   }
 
   private static Database loadDatabaseMetadata(DbSession dbSession) {
@@ -108,107 +153,377 @@ public class TelemetryDataLoaderImpl implements TelemetryDataLoader {
   public TelemetryData load() {
     TelemetryData.Builder data = TelemetryData.builder();
 
+    data.setMessageSequenceNumber(retrieveCurrentMessageSequenceNumber() + 1);
     data.setServerId(server.getId());
     data.setVersion(server.getVersion());
     data.setEdition(editionProvider.get().orElse(null));
-    ofNullable(licenseReader)
-      .flatMap(reader -> licenseReader.read())
-      .ifPresent(license -> data.setLicenseType(license.getType()));
     Function<PluginInfo, String> getVersion = plugin -> plugin.getVersion() == null ? "undefined" : plugin.getVersion().getName();
-    Map<String, String> plugins = pluginRepository.getPluginInfos().stream().collect(MoreCollectors.uniqueIndex(PluginInfo::getKey, getVersion));
+    Map<String, String> plugins = pluginRepository.getPluginInfos().stream().collect(toMap(PluginInfo::getKey, getVersion));
     data.setPlugins(plugins);
-    long userCount = userIndex.search(UserQuery.builder().build(), new SearchOptions().setLimit(1)).getTotal();
-    data.setUserCount(userCount);
-    ProjectMeasuresStatistics projectMeasuresStatistics = projectMeasuresIndex.searchTelemetryStatistics();
-    data.setProjectMeasuresStatistics(projectMeasuresStatistics);
     try (DbSession dbSession = dbClient.openSession(false)) {
-      data.setDatabase(loadDatabaseMetadata(dbSession));
-      data.setUsingBranches(dbClient.branchDao().hasNonMainBranches(dbSession));
-      SumNclocDbQuery query = SumNclocDbQuery.builder()
-        .setOnlyPrivateProjects(false)
-        .build();
-      data.setNcloc(dbClient.liveMeasureDao().sumNclocOfBiggestBranch(dbSession, query));
-      long numberOfUnanalyzedCMeasures = dbClient.liveMeasureDao().countProjectsHavingMeasure(dbSession, UNANALYZED_C_KEY);
-      long numberOfUnanalyzedCppMeasures = dbClient.liveMeasureDao().countProjectsHavingMeasure(dbSession, UNANALYZED_CPP_KEY);
-      editionProvider.get()
-        .filter(edition -> edition.equals(COMMUNITY))
-        .ifPresent(edition -> {
-          data.setHasUnanalyzedC(numberOfUnanalyzedCMeasures > 0);
-          data.setHasUnanalyzedCpp(numberOfUnanalyzedCppMeasures > 0);
-        });
+      var branchMeasuresDtos = dbClient.branchDao().selectBranchMeasuresWithCaycMetric(dbSession);
+      loadNewCodeDefinitions(dbSession, branchMeasuresDtos);
+      loadQualityProfiles(dbSession);
 
-      data.setAlmIntegrationCountByAlm(countAlmUsage(dbSession));
-      data.setExternalAuthenticationProviders(dbClient.userDao().selectExternalIdentityProviders(dbSession));
-      data.setSonarlintWeeklyUsers(dbClient.userDao().countSonarlintWeeklyUsers(dbSession));
-      addScmInformationToTelemetry(dbSession, data);
-      addCiInformationToTelemetry(dbSession, data);
+      data.setDatabase(loadDatabaseMetadata(dbSession));
+      data.setNcdId(instanceNcd.hashCode());
+      data.setNewCodeDefinitions(newCodeDefinitions);
+
+      String defaultQualityGateUuid = qualityGateFinder.getDefault(dbSession).getUuid();
+      String sonarWayQualityGateUuid = qualityGateFinder.getSonarWay(dbSession).getUuid();
+      List<ProjectDto> projects = dbClient.projectDao().selectProjects(dbSession);
+
+      data.setDefaultQualityGate(defaultQualityGateUuid);
+      data.setSonarWayQualityGate(sonarWayQualityGateUuid);
+      resolveUnanalyzedLanguageCode(data, dbSession);
+      resolveProjectStatistics(data, dbSession, defaultQualityGateUuid, projects);
+      resolveProjects(data, dbSession);
+      resolveBranches(data, branchMeasuresDtos);
+      resolveQualityGates(data, dbSession);
+      resolveUsers(data, dbSession);
     }
+
+    data.setQualityProfiles(qualityProfileDataProvider.retrieveQualityProfilesData());
 
     setSecurityCustomConfigIfPresent(data);
 
     Optional<String> installationDateProperty = internalProperties.read(InternalProperties.INSTALLATION_DATE);
     installationDateProperty.ifPresent(s -> data.setInstallationDate(Long.valueOf(s)));
     Optional<String> installationVersionProperty = internalProperties.read(InternalProperties.INSTALLATION_VERSION);
-    data.setInstallationVersion(installationVersionProperty.orElse(null));
-    data.setInDocker(dockerSupport.isRunningInDocker());
-    return data.build();
+
+    return data
+      .setInstallationVersion(installationVersionProperty.orElse(null))
+      .setInContainer(containerSupport.isRunningInContainer())
+      .setManagedInstanceInformation(buildManagedInstanceInformation())
+      .setCloudUsage(buildCloudUsage())
+      .build();
+  }
+
+  private void resolveBranches(TelemetryData.Builder data, List<BranchMeasuresDto> branchMeasuresDtos) {
+    var branches = branchMeasuresDtos.stream()
+      .map(dto -> {
+        var projectNcd = ncdByProject.getOrDefault(dto.getProjectUuid(), instanceNcd);
+        var ncdId = ncdByBranch.getOrDefault(dto.getBranchUuid(), projectNcd).hashCode();
+        return new TelemetryData.Branch(
+          dto.getProjectUuid(), dto.getBranchUuid(), ncdId,
+          dto.getGreenQualityGateCount(), dto.getAnalysisCount(), dto.getExcludeFromPurge());
+      })
+      .toList();
+    data.setBranches(branches);
+  }
+
+  @Override
+  public void reset() {
+    this.newCodeDefinitions.clear();
+    this.ncdByBranch.clear();
+    this.ncdByProject.clear();
+    this.instanceNcd = NewCodeDefinition.getInstanceDefault();
+    this.defaultQualityProfileByLanguage.clear();
+    this.qualityProfileByProjectAndLanguage.clear();
+  }
+
+  private void  loadNewCodeDefinitions(DbSession dbSession, List<BranchMeasuresDto> branchMeasuresDtos) {
+    var branchUuidByKey = branchMeasuresDtos.stream()
+      .collect(Collectors.toMap(dto -> createBranchUniqueKey(dto.getProjectUuid(), dto.getBranchKey()), BranchMeasuresDto::getBranchUuid));
+    List<NewCodePeriodDto> newCodePeriodDtos = dbClient.newCodePeriodDao().selectAll(dbSession);
+    NewCodeDefinition ncd;
+    boolean hasInstance = false;
+    for (var dto : newCodePeriodDtos) {
+      String projectUuid = dto.getProjectUuid();
+      String branchUuid = dto.getBranchUuid();
+      if (branchUuid == null && projectUuid == null) {
+        ncd = new NewCodeDefinition(dto.getType().name(), dto.getValue(), "instance");
+        this.instanceNcd = ncd;
+        hasInstance = true;
+      } else if (projectUuid != null) {
+        var value = dto.getType() == REFERENCE_BRANCH ? branchUuidByKey.get(createBranchUniqueKey(projectUuid, dto.getValue())) : dto.getValue();
+        if (branchUuid == null || isCommunityEdition()) {
+          ncd = new NewCodeDefinition(dto.getType().name(), value, "project");
+          this.ncdByProject.put(projectUuid, ncd);
+        } else {
+          ncd = new NewCodeDefinition(dto.getType().name(), value, "branch");
+          this.ncdByBranch.put(branchUuid, ncd);
+        }
+      } else {
+        throw new IllegalStateException(String.format("Error in loading telemetry data. New code definition for branch %s doesn't have a projectUuid", branchUuid));
+      }
+      this.newCodeDefinitions.add(ncd);
+    }
+    if (!hasInstance) {
+      this.newCodeDefinitions.add(NewCodeDefinition.getInstanceDefault());
+    }
+  }
+
+  private void loadQualityProfiles(DbSession dbSession) {
+    dbClient.qualityProfileDao().selectAllDefaultProfiles(dbSession)
+      .forEach(defaultQualityProfile -> this.defaultQualityProfileByLanguage.put(defaultQualityProfile.getLanguage(), defaultQualityProfile.getKee()));
+
+    dbClient.qualityProfileDao().selectAllProjectAssociations(dbSession)
+      .forEach(projectAssociation -> qualityProfileByProjectAndLanguage.put(
+        new ProjectLanguageKey(projectAssociation.projectUuid(), projectAssociation.language()),
+        projectAssociation.profileKey()));
+  }
+
+  private boolean isCommunityEdition() {
+    var edition = editionProvider.get();
+    return edition.isPresent() && edition.get() == COMMUNITY;
+  }
+
+  private static String createBranchUniqueKey(String projectUuid, @Nullable String branchKey) {
+    return projectUuid + "-" + branchKey;
+  }
+
+  private void resolveUnanalyzedLanguageCode(TelemetryData.Builder data, DbSession dbSession) {
+    long numberOfUnanalyzedCMeasures = dbClient.liveMeasureDao().countProjectsHavingMeasure(dbSession, UNANALYZED_C_KEY);
+    long numberOfUnanalyzedCppMeasures = dbClient.liveMeasureDao().countProjectsHavingMeasure(dbSession, UNANALYZED_CPP_KEY);
+    editionProvider.get()
+      .filter(edition -> edition.equals(COMMUNITY))
+      .ifPresent(edition -> {
+        data.setHasUnanalyzedC(numberOfUnanalyzedCMeasures > 0);
+        data.setHasUnanalyzedCpp(numberOfUnanalyzedCppMeasures > 0);
+      });
+  }
+
+  private Long retrieveCurrentMessageSequenceNumber() {
+    return internalProperties.read(I_PROP_MESSAGE_SEQUENCE).map(Long::parseLong).orElse(0L);
+  }
+
+  private void resolveProjectStatistics(TelemetryData.Builder data, DbSession dbSession, String defaultQualityGateUuid, List<ProjectDto> projects) {
+    Map<String, String> scmByProject = getAnalysisPropertyByProject(dbSession, SONAR_ANALYSIS_DETECTEDSCM);
+    Map<String, String> ciByProject = getAnalysisPropertyByProject(dbSession, SONAR_ANALYSIS_DETECTEDCI);
+    Map<String, ProjectAlmKeyAndProject> almAndUrlByProject = getAlmAndUrlByProject(dbSession);
+    Map<String, PrBranchAnalyzedLanguageCountByProjectDto> prAndBranchCountByProject = dbClient.branchDao().countPrBranchAnalyzedLanguageByProjectUuid(dbSession)
+      .stream().collect(toMap(PrBranchAnalyzedLanguageCountByProjectDto::getProjectUuid, Function.identity()));
+    Map<String, String> qgatesByProject = getProjectQgatesMap(dbSession);
+    Map<String, Map<String, Number>> metricsByProject = getProjectMetricsByMetricKeys(dbSession, TECHNICAL_DEBT_KEY, DEVELOPMENT_COST_KEY, SECURITY_HOTSPOTS_KEY,
+      VULNERABILITIES_KEY,
+      BUGS_KEY);
+    Map<String, Long> securityReportExportedAtByProjectUuid = getSecurityReportExportedAtDateByProjectUuid(dbSession);
+
+    List<TelemetryData.ProjectStatistics> projectStatistics = new ArrayList<>();
+    for (ProjectDto project : projects) {
+      String projectUuid = project.getUuid();
+      Map<String, Number> metrics = metricsByProject.getOrDefault(projectUuid, Collections.emptyMap());
+      Optional<PrBranchAnalyzedLanguageCountByProjectDto> counts = ofNullable(prAndBranchCountByProject.get(projectUuid));
+
+      TelemetryData.ProjectStatistics stats = new TelemetryData.ProjectStatistics.Builder()
+        .setProjectUuid(projectUuid)
+        .setBranchCount(counts.map(PrBranchAnalyzedLanguageCountByProjectDto::getBranch).orElse(0L))
+        .setPRCount(counts.map(PrBranchAnalyzedLanguageCountByProjectDto::getPullRequest).orElse(0L))
+        .setQG(qgatesByProject.getOrDefault(projectUuid, defaultQualityGateUuid))
+        .setScm(Optional.ofNullable(scmByProject.get(projectUuid)).orElse(UNDETECTED))
+        .setCi(Optional.ofNullable(ciByProject.get(projectUuid)).orElse(UNDETECTED))
+        .setDevops(resolveDevopsPlatform(almAndUrlByProject, projectUuid))
+        .setBugs(metrics.getOrDefault("bugs", null))
+        .setDevelopmentCost(metrics.getOrDefault("development_cost", null))
+        .setVulnerabilities(metrics.getOrDefault("vulnerabilities", null))
+        .setSecurityHotspots(metrics.getOrDefault("security_hotspots", null))
+        .setTechnicalDebt(metrics.getOrDefault("sqale_index", null))
+        .setNcdId(ncdByProject.getOrDefault(projectUuid, instanceNcd).hashCode())
+        .setExternalSecurityReportExportedAt(securityReportExportedAtByProjectUuid.get(projectUuid))
+        .setCreationMethod(project.getCreationMethod())
+        .build();
+      projectStatistics.add(stats);
+    }
+    data.setProjectStatistics(projectStatistics);
+  }
+
+  private Map<String, Long> getSecurityReportExportedAtDateByProjectUuid(DbSession dbSession) {
+    PropertyQuery propertyQuery = PropertyQuery.builder().setKey(EXTERNAL_SECURITY_REPORT_EXPORTED_AT).build();
+    List<PropertyDto> properties = dbClient.propertiesDao().selectByQuery(propertyQuery, dbSession);
+    return properties.stream()
+      .collect(toMap(PropertyDto::getEntityUuid, propertyDto -> Long.parseLong(propertyDto.getValue())));
+  }
+
+  private static String resolveDevopsPlatform(Map<String, ProjectAlmKeyAndProject> almAndUrlByProject, String projectUuid) {
+    if (almAndUrlByProject.containsKey(projectUuid)) {
+      ProjectAlmKeyAndProject projectAlmKeyAndProject = almAndUrlByProject.get(projectUuid);
+      return getAlmName(projectAlmKeyAndProject.getAlmId(), projectAlmKeyAndProject.getUrl());
+    }
+    return UNDETECTED;
+  }
+
+  private void resolveProjects(TelemetryData.Builder data, DbSession dbSession) {
+    Map<String, String> metricUuidMap = getNclocMetricUuidMap(dbSession);
+    String nclocUuid = metricUuidMap.get(NCLOC_KEY);
+    String nclocDistributionUuid = metricUuidMap.get(NCLOC_LANGUAGE_DISTRIBUTION_KEY);
+    List<ProjectLocDistributionDto> branchesWithLargestNcloc = dbClient.liveMeasureDao().selectLargestBranchesLocDistribution(dbSession, nclocUuid, nclocDistributionUuid);
+    List<String> branchUuids = branchesWithLargestNcloc.stream().map(ProjectLocDistributionDto::branchUuid).toList();
+    Map<String, Long> latestSnapshotMap = dbClient.snapshotDao().selectLastAnalysesByRootComponentUuids(dbSession, branchUuids)
+      .stream()
+      .collect(toMap(SnapshotDto::getRootComponentUuid, SnapshotDto::getAnalysisDate));
+    data.setProjects(buildProjectsList(branchesWithLargestNcloc, latestSnapshotMap));
+  }
+
+  private List<TelemetryData.Project> buildProjectsList(List<ProjectLocDistributionDto> branchesWithLargestNcloc, Map<String, Long> latestSnapshotMap) {
+    return branchesWithLargestNcloc.stream()
+      .flatMap(measure -> Arrays.stream(measure.locDistribution().split(";"))
+        .map(languageAndLoc -> languageAndLoc.split("="))
+        .map(languageAndLoc -> new TelemetryData.Project(
+          measure.projectUuid(),
+          latestSnapshotMap.get(measure.branchUuid()),
+          languageAndLoc[0],
+          getQualityProfile(measure.projectUuid(), languageAndLoc[0]),
+          Long.parseLong(languageAndLoc[1]))))
+      .toList();
+  }
+
+  private String getQualityProfile(String projectUuid, String language) {
+    String qualityProfile = this.qualityProfileByProjectAndLanguage.get(new ProjectLanguageKey(projectUuid, language));
+    if (qualityProfile != null) {
+      return qualityProfile;
+    }
+    return this.defaultQualityProfileByLanguage.get(language);
+  }
+
+  private Map<String, String> getNclocMetricUuidMap(DbSession dbSession) {
+    return dbClient.metricDao().selectByKeys(dbSession, asList(NCLOC_KEY, NCLOC_LANGUAGE_DISTRIBUTION_KEY))
+      .stream()
+      .collect(toMap(MetricDto::getKey, MetricDto::getUuid));
+  }
+
+  private void resolveQualityGates(TelemetryData.Builder data, DbSession dbSession) {
+    List<TelemetryData.QualityGate> qualityGates = new ArrayList<>();
+    Collection<QualityGateDto> qualityGateDtos = dbClient.qualityGateDao().selectAll(dbSession);
+    Collection<QualityGateConditionDto> qualityGateConditions = dbClient.gateConditionDao().selectAll(dbSession);
+    Map<String, MetricDto> metricsByUuid = getMetricsByUuid(dbSession, qualityGateConditions);
+
+    Map<String, List<Condition>> conditionsMap = mapQualityGateConditions(qualityGateConditions, metricsByUuid);
+
+    for (QualityGateDto qualityGateDto : qualityGateDtos) {
+      String qualityGateUuid = qualityGateDto.getUuid();
+      List<Condition> conditions = conditionsMap.getOrDefault(qualityGateUuid, Collections.emptyList());
+      qualityGates.add(
+        new TelemetryData.QualityGate(qualityGateDto.getUuid(), qualityGateCaycChecker.checkCaycCompliant(dbSession,
+          qualityGateDto.getUuid()).toString(), conditions));
+    }
+
+    data.setQualityGates(qualityGates);
+  }
+
+  private static Map<String, List<Condition>> mapQualityGateConditions(Collection<QualityGateConditionDto> qualityGateConditions, Map<String, MetricDto> metricsByUuid) {
+    Map<String, List<Condition>> conditionsMap = new HashMap<>();
+
+    for (QualityGateConditionDto condition : qualityGateConditions) {
+      String qualityGateUuid = condition.getQualityGateUuid();
+
+      MetricDto metricDto = metricsByUuid.get(condition.getMetricUuid());
+      String metricKey = metricDto != null ? metricDto.getKey() : "Unknown Metric";
+
+      Condition telemetryCondition = new Condition(
+        metricKey,
+        fromDbValue(condition.getOperator()),
+        condition.getErrorThreshold()
+      );
+
+      conditionsMap
+        .computeIfAbsent(qualityGateUuid, k -> new ArrayList<>())
+        .add(telemetryCondition);
+    }
+
+    return conditionsMap;
+  }
+
+  private Map<String, MetricDto> getMetricsByUuid(DbSession dbSession, Collection<QualityGateConditionDto> conditions) {
+    Set<String> metricUuids = conditions.stream().map(QualityGateConditionDto::getMetricUuid).collect(Collectors.toSet());
+    return dbClient.metricDao().selectByUuids(dbSession, metricUuids).stream().filter(MetricDto::isEnabled).collect(Collectors.toMap(MetricDto::getUuid, Function.identity()));
+  }
+
+  private void resolveUsers(TelemetryData.Builder data, DbSession dbSession) {
+    data.setUsers(dbClient.userDao().selectUsersForTelemetry(dbSession));
   }
 
   private void setSecurityCustomConfigIfPresent(TelemetryData.Builder data) {
     editionProvider.get()
       .filter(edition -> asList(ENTERPRISE, DATACENTER).contains(edition))
-      .ifPresent(edition -> {
-        List<String> customSecurityConfigs = new LinkedList<>();
-        configuration.get("sonar.security.config.javasecurity")
-          .ifPresent(s -> customSecurityConfigs.add("java"));
-        configuration.get("sonar.security.config.phpsecurity")
-          .ifPresent(s -> customSecurityConfigs.add("php"));
-        configuration.get("sonar.security.config.pythonsecurity")
-          .ifPresent(s -> customSecurityConfigs.add("python"));
-        configuration.get("sonar.security.config.roslyn.sonaranalyzer.security.cs")
-          .ifPresent(s -> customSecurityConfigs.add("csharp"));
-        data.setCustomSecurityConfigs(customSecurityConfigs);
-      });
+      .ifPresent(edition -> data.setCustomSecurityConfigs(getCustomerSecurityConfigurations()));
   }
 
-  private void addScmInformationToTelemetry(DbSession dbSession, TelemetryData.Builder data) {
-    Map<String, Long> projectCountPerScmDetected = dbClient.analysisPropertiesDao()
-      .selectProjectCountPerAnalysisPropertyValueInLastAnalysis(dbSession, CorePropertyDefinitions.SONAR_ANALYSIS_DETECTEDSCM)
+  private Map<String, String> getAnalysisPropertyByProject(DbSession dbSession, String analysisPropertyKey) {
+    return dbClient.analysisPropertiesDao()
+      .selectAnalysisPropertyValueInLastAnalysisPerProject(dbSession, analysisPropertyKey)
       .stream()
-      .collect(Collectors.toMap(ProjectCountPerAnalysisPropertyValue::getPropertyValue, ProjectCountPerAnalysisPropertyValue::getCount));
-    data.setProjectCountByScm(projectCountPerScmDetected);
+      .collect(toMap(AnalysisPropertyValuePerProject::getProjectUuid, AnalysisPropertyValuePerProject::getPropertyValue));
   }
 
-  private void addCiInformationToTelemetry(DbSession dbSession, TelemetryData.Builder data) {
-    Map<String, Long> projectCountPerCiDetected = dbClient.analysisPropertiesDao()
-      .selectProjectCountPerAnalysisPropertyValueInLastAnalysis(dbSession, CorePropertyDefinitions.SONAR_ANALYSIS_DETECTEDCI)
+  private Map<String, ProjectAlmKeyAndProject> getAlmAndUrlByProject(DbSession dbSession) {
+    List<ProjectAlmKeyAndProject> projectAlmKeyAndProjects = dbClient.projectAlmSettingDao().selectAlmTypeAndUrlByProject(dbSession);
+    return projectAlmKeyAndProjects.stream().collect(toMap(ProjectAlmKeyAndProject::getProjectUuid, Function.identity()));
+  }
+
+  private static String getAlmName(String alm, String url) {
+    if (checkIfCloudAlm(alm, ALM.GITHUB.getId(), url, "https://api.github.com")) {
+      return "github_cloud";
+    }
+
+    if (checkIfCloudAlm(alm, ALM.GITLAB.getId(), url, "https://gitlab.com/api/v4")) {
+      return "gitlab_cloud";
+    }
+
+    if (checkIfCloudAlm(alm, ALM.AZURE_DEVOPS.getId(), url, "https://dev.azure.com")) {
+      return "azure_devops_cloud";
+    }
+
+    if (ALM.BITBUCKET_CLOUD.getId().equals(alm)) {
+      return alm;
+    }
+
+    return alm + "_server";
+  }
+
+  private Map<String, String> getProjectQgatesMap(DbSession dbSession) {
+    return dbClient.projectQgateAssociationDao().selectAll(dbSession)
       .stream()
-      .collect(Collectors.toMap(ProjectCountPerAnalysisPropertyValue::getPropertyValue, ProjectCountPerAnalysisPropertyValue::getCount));
-    data.setProjectCountByCi(projectCountPerCiDetected);
+      .collect(toMap(ProjectQgateAssociationDto::getUuid, p -> Optional.ofNullable(p.getGateUuid()).orElse("")));
   }
 
-  private Map<String, Long> countAlmUsage(DbSession dbSession) {
-    return dbClient.almSettingDao().selectAll(dbSession).stream()
-      .collect(Collectors.groupingBy(almSettingDto -> {
-        if (checkIfCloudAlm(almSettingDto, ALM.GITHUB, "https://api.github.com")) {
-          return "github_cloud";
-        } else if (checkIfCloudAlm(almSettingDto, ALM.GITLAB, "https://gitlab.com/api/v4")) {
-          return "gitlab_cloud";
-        } else if (checkIfCloudAlm(almSettingDto, ALM.AZURE_DEVOPS, "https://dev.azure.com")) {
-          return "azure_devops_cloud";
-        } else if (ALM.BITBUCKET_CLOUD.equals(almSettingDto.getAlm())) {
-          return almSettingDto.getRawAlm();
-        }
-        return almSettingDto.getRawAlm() + "_server";
-      }, Collectors.counting()));
+  private Map<String, Map<String, Number>> getProjectMetricsByMetricKeys(DbSession dbSession, String... metricKeys) {
+    Map<String, String> metricNamesByUuid = dbClient.metricDao().selectByKeys(dbSession, asList(metricKeys))
+      .stream()
+      .collect(toMap(MetricDto::getUuid, MetricDto::getKey));
+
+    // metrics can be empty for un-analyzed projects
+    if (metricNamesByUuid.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    return dbClient.liveMeasureDao().selectForProjectMainBranchesByMetricUuids(dbSession, metricNamesByUuid.keySet())
+      .stream()
+      .collect(groupingBy(ProjectMainBranchLiveMeasureDto::getProjectUuid,
+        toMap(lmDto -> metricNamesByUuid.get(lmDto.getMetricUuid()),
+          lmDto -> Optional.ofNullable(lmDto.getValue()).orElseGet(() -> Double.valueOf(lmDto.getTextValue())),
+          (oldValue, newValue) -> newValue, HashMap::new)));
   }
 
-  private static boolean checkIfCloudAlm(AlmSettingDto almSettingDto, ALM alm, String url) {
-    return alm.equals(almSettingDto.getAlm()) && startsWith(almSettingDto.getUrl(), url);
+  private static boolean checkIfCloudAlm(String almRaw, String alm, String url, String cloudUrl) {
+    return alm.equals(almRaw) && startsWithIgnoreCase(url, cloudUrl);
   }
 
   @Override
   public String loadServerId() {
     return server.getId();
+  }
+
+  private Set<String> getCustomerSecurityConfigurations() {
+    return LANGUAGES_BY_SECURITY_JSON_PROPERTY_MAP.keySet().stream()
+      .filter(this::isPropertyPresentInConfiguration)
+      .map(LANGUAGES_BY_SECURITY_JSON_PROPERTY_MAP::get)
+      .collect(Collectors.toSet());
+  }
+
+  private boolean isPropertyPresentInConfiguration(String property) {
+    return configuration.get(property).isPresent();
+  }
+
+  private TelemetryData.ManagedInstanceInformation buildManagedInstanceInformation() {
+    String provider = managedInstanceService.isInstanceExternallyManaged() ? managedInstanceService.getProviderName() : null;
+    return new TelemetryData.ManagedInstanceInformation(managedInstanceService.isInstanceExternallyManaged(), provider);
+  }
+
+  private TelemetryData.CloudUsage buildCloudUsage() {
+    return cloudUsageDataProvider.getCloudUsage();
+  }
+
+  private record ProjectLanguageKey(String projectKey, String language) {
   }
 }

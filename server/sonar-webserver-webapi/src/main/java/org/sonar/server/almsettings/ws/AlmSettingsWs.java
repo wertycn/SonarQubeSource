@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ public class AlmSettingsWs implements WebService {
   @Override
   public void define(Context context) {
     NewController controller = context.createController("api/alm_settings")
-      .setDescription("Manage ALM Settings")
+      .setDescription("Manage DevOps Platform Settings")
       .setSince("8.1");
 
     actions.forEach(a -> a.define(controller));

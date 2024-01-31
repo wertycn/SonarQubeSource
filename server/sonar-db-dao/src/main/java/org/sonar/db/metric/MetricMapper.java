@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,10 +20,8 @@
 package org.sonar.db.metric;
 
 import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.session.RowBounds;
+import org.sonar.db.Pagination;
 
 public interface MetricMapper {
 
@@ -37,21 +35,13 @@ public interface MetricMapper {
 
   List<MetricDto> selectAll();
 
-  List<MetricDto> selectAllEnabled();
-
-  List<MetricDto> selectAllEnabled(Map<String, Object> properties, RowBounds rowBounds);
+  List<MetricDto> selectAllEnabled(@Param("pagination")Pagination pagination);
 
   void insert(MetricDto dto);
 
-  List<String> selectDomains();
-
-  void disableByUuids(@Param("uuids") List<String> uuids);
-
   int disableByKey(@Param("key") String key);
 
-  int countEnabled(@Param("isCustom") @Nullable Boolean isCustom);
+  int countEnabled();
 
   void update(MetricDto metric);
-
-  List<MetricDto> selectAvailableCustomMetricsByComponentUuid(String projectUuid);
 }

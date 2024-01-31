@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON } from '../helpers/request';
+import { Metric } from '../types/types';
 
 export interface MetricsResponse {
-  metrics: T.Metric[];
+  metrics: Metric[];
   p: number;
   ps: number;
   total: number;
@@ -39,14 +40,14 @@ export function getAllMetrics(data?: {
   isCustom?: boolean;
   p?: number;
   ps?: number;
-}): Promise<T.Metric[]> {
+}): Promise<Metric[]> {
   return inner(data);
 
   function inner(
     data: { p?: number; ps?: number } = { ps: 500 },
-    prev?: MetricsResponse
-  ): Promise<T.Metric[]> {
-    return getMetrics(data).then(r => {
+    prev?: MetricsResponse,
+  ): Promise<Metric[]> {
+    return getMetrics(data).then((r) => {
       const result = prev ? prev.metrics.concat(r.metrics) : r.metrics;
       if (r.p * r.ps >= r.total) {
         return result;
@@ -54,37 +55,4 @@ export function getAllMetrics(data?: {
       return inner({ ...data, p: r.p + 1 }, { ...r, metrics: result });
     });
   }
-}
-
-export function getMetricDomains(): Promise<string[]> {
-  return getJSON('/api/metrics/domains').then(r => r.domains, throwGlobalError);
-}
-
-export function getMetricTypes(): Promise<string[]> {
-  return getJSON('/api/metrics/types').then(r => r.types, throwGlobalError);
-}
-
-export function createMetric(data: {
-  description?: string;
-  domain?: string;
-  key: string;
-  name: string;
-  type: string;
-}): Promise<T.Metric> {
-  return postJSON('/api/metrics/create', data).catch(throwGlobalError);
-}
-
-export function updateMetric(data: {
-  description?: string;
-  domain?: string;
-  id: string;
-  key?: string;
-  name?: string;
-  type?: string;
-}) {
-  return post('/api/metrics/update', data).catch(throwGlobalError);
-}
-
-export function deleteMetric(data: { keys: string }) {
-  return post('/api/metrics/delete', data).catch(throwGlobalError);
 }

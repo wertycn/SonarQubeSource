@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -61,6 +61,10 @@ public class CeActivityDao implements Dao {
     return mapper(dbSession).selectOlderThan(beforeDate);
   }
 
+  public List<CeActivityDto> selectNewerThan(DbSession dbSession, long beforeDate) {
+    return mapper(dbSession).selectNewerThan(beforeDate);
+  }
+
   public List<CeActivityDto> selectByTaskType(DbSession dbSession, String taskType) {
     return mapper(dbSession).selectByTaskType(taskType);
   }
@@ -73,23 +77,27 @@ public class CeActivityDao implements Dao {
    * Ordered by id desc -> newest to oldest
    */
   public List<CeActivityDto> selectByQuery(DbSession dbSession, CeTaskQuery query, Pagination pagination) {
-    if (query.isShortCircuitedByMainComponentUuids()) {
+    if (query.isShortCircuitedByEntityUuids()) {
       return Collections.emptyList();
     }
 
     return mapper(dbSession).selectByQuery(query, pagination);
   }
 
-  public int countLastByStatusAndMainComponentUuid(DbSession dbSession, CeActivityDto.Status status, @Nullable String mainComponentUuid) {
-    return mapper(dbSession).countLastByStatusAndMainComponentUuid(status, mainComponentUuid);
+  public int countByQuery(DbSession dbSession, CeTaskQuery query) {
+    return mapper(dbSession).countByQuery(query);
+  }
+
+  public int countLastByStatusAndEntityUuid(DbSession dbSession, CeActivityDto.Status status, @Nullable String entityUuid) {
+    return mapper(dbSession).countLastByStatusAndEntityUuid(status, entityUuid);
   }
 
   public Optional<CeActivityDto> selectLastByComponentUuidAndTaskType(DbSession dbSession, String componentUuid, String taskType) {
     return Optional.ofNullable(mapper(dbSession).selectLastByComponentUuidAndTaskType(componentUuid, taskType));
   }
 
-  public boolean hasAnyFailedIssueSyncTask(DbSession dbSession) {
-    return mapper(dbSession).hasAnyFailedIssueSyncTask() > 0;
+  public boolean hasAnyFailedOrCancelledIssueSyncTask(DbSession dbSession) {
+    return mapper(dbSession).hasAnyFailedOrCancelledIssueSyncTask() > 0;
   }
 
   private static CeActivityMapper mapper(DbSession dbSession) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,20 @@
  */
 package org.sonar.db.ce;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import java.util.List;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
 
 public class CeActivityDto {
 
-  private static final int MAX_SIZE_ERROR_MESSAGE = 1000;
+  private static final int ERROR_MESSAGE_MAX_SIZE = 1000;
+  private static final int NODE_NAME_MAX_SIZE = 100;
 
   public enum Status {
     SUCCESS, FAILED, CANCELED
@@ -38,20 +40,18 @@ public class CeActivityDto {
 
   private String uuid;
   /**
-   * Can be {@code null} when task is not associated to any data in table PROJECTS, but must always be non {@code null}
-   * at the same time as {@link #mainComponentUuid}.
+   * Can be {@code null} when task is not associated to any data in table COMPONENTS, but must always be non {@code null}
+   * at the same time as {@link #entityUuid}.
    * <p>
-   * The component uuid of a any component (project or not) is its own UUID.
+   * The component uuid of any component (project or not) is its own UUID.
    */
   private String componentUuid;
   /**
-   * Can be {@code null} when task is not associated to any data in table PROJECTS, but must always be non {@code null}
+   * Can be {@code null} when task is not associated to any component, but must always be non {@code null}
    * at the same time as {@link #componentUuid}.
    * <p>
-   * The main component uuid of the main branch of project is its own UUID. For other branches of a project, it is the
-   * project UUID of the main branch of that project ({@link ComponentDto#getMainBranchProjectUuid()}).
    */
-  private String mainComponentUuid;
+  private String entityUuid;
   private String analysisUuid;
   private Status status;
   private String taskType;
@@ -98,12 +98,14 @@ public class CeActivityDto {
    * This property can not be populated when inserting but <strong>is populated when reading</strong>.
    */
   private boolean hasScannerContext;
+
   /**
-   * Count of warnings attached to the current activity.
+   * Messages attached to the current activity.
    * <p>
-   * This property can not be populated when inserting but <strong>is populated when retrieving the activity by UUID</strong>.
+   * This property can not be populated when inserting but <strong>is populated when retrieving the activity</strong>.
    */
-  private int warningCount = 0;
+  private List<CeTaskMessageDto> ceTaskMessageDtos;
+  private String nodeName;
 
   CeActivityDto() {
     // required for MyBatis
@@ -113,9 +115,9 @@ public class CeActivityDto {
     this.uuid = queueDto.getUuid();
     this.taskType = queueDto.getTaskType();
     this.componentUuid = queueDto.getComponentUuid();
-    this.mainComponentUuid = queueDto.getMainComponentUuid();
+    this.entityUuid = queueDto.getEntityUuid();
     this.isLastKey = format("%s%s", taskType, Strings.nullToEmpty(componentUuid));
-    this.mainIsLastKey = format("%s%s", taskType, Strings.nullToEmpty(mainComponentUuid));
+    this.mainIsLastKey = format("%s%s", taskType, Strings.nullToEmpty(entityUuid));
     this.submitterUuid = queueDto.getSubmitterUuid();
     this.workerUuid = queueDto.getWorkerUuid();
     this.submittedAt = queueDto.getCreatedAt();
@@ -153,13 +155,13 @@ public class CeActivityDto {
   }
 
   @CheckForNull
-  public String getMainComponentUuid() {
-    return mainComponentUuid;
+  public String getEntityUuid() {
+    return entityUuid;
   }
 
-  public CeActivityDto setMainComponentUuid(@Nullable String s) {
-    validateUuid(s, "MAIN_COMPONENT_UUID");
-    this.mainComponentUuid = s;
+  public CeActivityDto setEntityUuid(@Nullable String s) {
+    validateUuid(s, "ENTITY_UUID");
+    this.entityUuid = s;
     return this;
   }
 
@@ -287,7 +289,7 @@ public class CeActivityDto {
   }
 
   public CeActivityDto setErrorMessage(@Nullable String errorMessage) {
-    this.errorMessage = ensureNotTooBig(removeCharZeros(errorMessage), MAX_SIZE_ERROR_MESSAGE);
+    this.errorMessage = ensureNotTooBig(removeCharZeros(errorMessage), ERROR_MESSAGE_MAX_SIZE);
     return this;
   }
 
@@ -321,13 +323,23 @@ public class CeActivityDto {
     return this;
   }
 
-  public int getWarningCount() {
-    return warningCount;
+  public List<CeTaskMessageDto> getCeTaskMessageDtos() {
+    return ceTaskMessageDtos;
   }
 
-  protected CeActivityDto setWarningCount(int warningCount) {
-    checkArgument(warningCount >= 0);
-    this.warningCount = warningCount;
+  @VisibleForTesting
+  protected CeActivityDto setCeTaskMessageDtos(List<CeTaskMessageDto> ceTaskMessageDtos) {
+    this.ceTaskMessageDtos = ceTaskMessageDtos;
+    return this;
+  }
+
+  @CheckForNull
+  public String getNodeName() {
+    return nodeName;
+  }
+
+  public CeActivityDto setNodeName(@Nullable String nodeName) {
+    this.nodeName = ensureNotTooBig(nodeName, NODE_NAME_MAX_SIZE);
     return this;
   }
 
@@ -335,8 +347,9 @@ public class CeActivityDto {
   public String toString() {
     return "CeActivityDto{" +
       "uuid='" + uuid + '\'' +
+      ", nodeName='" + nodeName + '\'' +
       ", componentUuid='" + componentUuid + '\'' +
-      ", mainComponentUuid='" + mainComponentUuid + '\'' +
+      ", entityUuid='" + entityUuid + '\'' +
       ", analysisUuid='" + analysisUuid + '\'' +
       ", status=" + status +
       ", taskType='" + taskType + '\'' +
@@ -355,7 +368,6 @@ public class CeActivityDto {
       ", errorMessage='" + errorMessage + '\'' +
       ", errorStacktrace='" + errorStacktrace + '\'' +
       ", hasScannerContext=" + hasScannerContext +
-      ", warningCount=" + warningCount +
       '}';
   }
 

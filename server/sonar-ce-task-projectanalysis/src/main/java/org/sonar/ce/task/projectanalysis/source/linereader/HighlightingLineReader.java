@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,8 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.source.linereader.RangeOffsetConverter.RangeOffsetConverterException;
 import org.sonar.db.protobuf.DbFileSources;
@@ -41,15 +41,12 @@ import static org.sonar.ce.task.projectanalysis.source.linereader.RangeOffsetCon
 
 public class HighlightingLineReader implements LineReader {
 
-  private static final Logger LOG = Loggers.get(HighlightingLineReader.class);
-
-  private ReadError readError = null;
+  private static final Logger LOG = LoggerFactory.getLogger(HighlightingLineReader.class);
 
   private static final Map<HighlightingType, String> cssClassByType = ImmutableMap.<HighlightingType, String>builder()
     .put(HighlightingType.ANNOTATION, "a")
     .put(HighlightingType.CONSTANT, "c")
     .put(HighlightingType.COMMENT, "cd")
-    .put(HighlightingType.CPP_DOC, "cppd")
     .put(HighlightingType.STRUCTURED_COMMENT, "j")
     .put(HighlightingType.KEYWORD, "k")
     .put(HighlightingType.KEYWORD_LIGHT, "h")
@@ -61,7 +58,7 @@ public class HighlightingLineReader implements LineReader {
   private final Iterator<ScannerReport.SyntaxHighlightingRule> lineHighlightingIterator;
   private final RangeOffsetConverter rangeOffsetConverter;
   private final List<ScannerReport.SyntaxHighlightingRule> highlightingList;
-
+  private ReadError readError = null;
   private ScannerReport.SyntaxHighlightingRule currentItem;
 
   public HighlightingLineReader(Component file, Iterator<ScannerReport.SyntaxHighlightingRule> lineHighlightingIterator, RangeOffsetConverter rangeOffsetConverter) {
@@ -83,7 +80,7 @@ public class HighlightingLineReader implements LineReader {
         processHighlightings(lineBuilder);
       } catch (RangeOffsetConverterException e) {
         readError = new ReadError(HIGHLIGHTING, lineBuilder.getLine());
-        LOG.debug(format("Inconsistency detected in Highlighting data. Highlighting will be ignored for file '%s'", file.getDbKey()), e);
+        LOG.debug(format("Inconsistency detected in Highlighting data. Highlighting will be ignored for file '%s'", file.getKey()), e);
       }
     }
     return Optional.ofNullable(readError);

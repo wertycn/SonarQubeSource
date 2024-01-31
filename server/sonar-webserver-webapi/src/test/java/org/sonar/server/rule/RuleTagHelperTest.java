@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -65,7 +65,7 @@ public class RuleTagHelperTest {
       RuleTagHelper.applyTags(rule, Sets.newHashSet("Java Eight"));
       fail();
     } catch (IllegalArgumentException e) {
-      assertThat(e.getMessage()).startsWith("Tag 'Java Eight' is invalid");
+      assertThat(e.getMessage()).startsWith("Entry 'Java Eight' is invalid");
     }
   }
 

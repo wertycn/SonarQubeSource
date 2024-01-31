@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ public class AlmIntegrationsWs implements WebService {
   @Override
   public void define(Context context) {
     NewController controller = context.createController("api/alm_integrations")
-      .setDescription("Manage ALM Integrations")
+      .setDescription("Manage DevOps Platform Integrations")
       .setSince("8.2");
 
     actions.forEach(a -> a.define(controller));

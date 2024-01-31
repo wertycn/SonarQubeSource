@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import org.sonar.api.rule.RuleKey;
@@ -37,13 +36,8 @@ import org.sonar.api.rules.RulePriority;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.rule.RuleDao;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
-import org.sonar.markdown.Markdown;
-
-import static com.google.common.collect.Lists.newArrayList;
-import static java.util.Optional.empty;
 
 /**
  * Will be removed in the future.
@@ -52,21 +46,34 @@ public class DefaultRuleFinder implements ServerRuleFinder {
 
   private final DbClient dbClient;
   private final RuleDao ruleDao;
+  private final RuleDescriptionFormatter ruleDescriptionFormatter;
 
-  public DefaultRuleFinder(DbClient dbClient) {
+  public DefaultRuleFinder(DbClient dbClient, RuleDescriptionFormatter ruleDescriptionFormatter) {
     this.dbClient = dbClient;
     this.ruleDao = dbClient.ruleDao();
+    this.ruleDescriptionFormatter = ruleDescriptionFormatter;
   }
 
   @Override
-  public Optional<RuleDefinitionDto> findDtoByKey(RuleKey key) {
+  public Optional<RuleDto> findDtoByKey(RuleKey key) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      Optional<RuleDefinitionDto> rule = ruleDao.selectDefinitionByKey(dbSession, key);
-      if (rule.isPresent() && rule.get().getStatus() != RuleStatus.REMOVED) {
-        return rule;
-      } else {
-        return empty();
-      }
+      return ruleDao.selectByKey(dbSession, key)
+        .filter(r -> r.getStatus() != RuleStatus.REMOVED);
+    }
+  }
+
+  @Override
+  public Optional<RuleDto> findDtoByUuid(String uuid) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return ruleDao.selectByUuid(uuid, dbSession)
+        .filter(r -> r.getStatus() != RuleStatus.REMOVED);
+    }
+  }
+
+  @Override
+  public Collection<RuleDto> findAll() {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return ruleDao.selectEnabled(dbSession);
     }
   }
 
@@ -114,7 +121,7 @@ public class DefaultRuleFinder implements ServerRuleFinder {
 
   private Collection<org.sonar.api.rules.Rule> convertToRuleApi(DbSession dbSession, List<RuleDto> ruleDtos) {
     List<org.sonar.api.rules.Rule> rules = new ArrayList<>();
-    List<RuleKey> ruleKeys = ruleDtos.stream().map(RuleDto::getKey).collect(Collectors.toList());
+    List<RuleKey> ruleKeys = ruleDtos.stream().map(RuleDto::getKey).toList();
     List<RuleParamDto> ruleParamDtos = ruleDao.selectRuleParamsByRuleKeys(dbSession, ruleKeys);
     ImmutableListMultimap<String, RuleParamDto> ruleParamByRuleUuid = FluentIterable.from(ruleParamDtos).index(RuleParamDtoToRuleUuid.INSTANCE);
     for (RuleDto rule : ruleDtos) {
@@ -123,12 +130,10 @@ public class DefaultRuleFinder implements ServerRuleFinder {
     return rules;
   }
 
-  private static org.sonar.api.rules.Rule toRule(RuleDto rule, List<RuleParamDto> params) {
+  private org.sonar.api.rules.Rule toRule(RuleDto rule, List<RuleParamDto> params) {
     String severity = rule.getSeverityString();
-    String description = rule.getDescription();
-    RuleDto.Format descriptionFormat = rule.getDescriptionFormat();
 
-    org.sonar.api.rules.Rule apiRule = new org.sonar.api.rules.Rule();
+    org.sonar.api.rules.Rule apiRule = org.sonar.api.rules.Rule.create();
     apiRule
       .setName(rule.getName())
       .setLanguage(rule.getLanguage())
@@ -142,20 +147,16 @@ public class DefaultRuleFinder implements ServerRuleFinder {
       .setStatus(rule.getStatus().name())
       .setSystemTags(rule.getSystemTags().toArray(new String[rule.getSystemTags().size()]))
       .setTags(rule.getTags().toArray(new String[rule.getTags().size()]));
-    if (description != null && descriptionFormat != null) {
-      if (RuleDto.Format.HTML.equals(descriptionFormat)) {
-        apiRule.setDescription(description);
-      } else {
-        apiRule.setDescription(Markdown.convertToHtml(description));
-      }
-    }
 
-    List<org.sonar.api.rules.RuleParam> apiParams = newArrayList();
+    Optional.ofNullable(ruleDescriptionFormatter.getDescriptionAsHtml(rule)).ifPresent(apiRule::setDescription);
+
     for (RuleParamDto param : params) {
-      apiParams.add(new org.sonar.api.rules.RuleParam(apiRule, param.getName(), param.getDescription(), param.getType())
-        .setDefaultValue(param.getDefaultValue()));
+      apiRule.createParameter()
+        .setType(param.getType())
+        .setDescription(param.getDescription())
+        .setKey(param.getName())
+        .setDefaultValue(param.getDefaultValue());
     }
-    apiRule.setParams(apiParams);
 
     return apiRule;
   }

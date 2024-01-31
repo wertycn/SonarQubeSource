@@ -16,12 +16,22 @@
         {
           "key": "E21",
           "category": "QUALITY_PROFILE",
-          "name": "Quality Profile changed to Sonar Way"
+          "name": "Quality Profile changed to Sonar Way",
+          "qualityProfile": {
+            "key": "Profile Key",
+            "name": "Profile Name",
+            "languageKey": "The Key of the Language"
+          }
         },
         {
           "key": "E22",
           "category": "OTHER",
           "name": "6.3"
+        },
+        {
+          "key": "E23",
+          "category": "QUALITY_PROFILE",
+          "name": "Use 'Sonar Way update profile' (JavaScript)"
         }
       ]
     },
@@ -34,13 +44,13 @@
       "manualNewCodePeriodBaseline": true,
       "events": [
         {
-          "key": "E11",
+          "key": "AXt91FkXy_c4CIP4ds6A",
           "category": "QUALITY_GATE",
-          "name": "Quality Gate is Red (was Orange)",
-          "description": "Coverage is \u003c 80%"
+          "name": "Failed",
+          "description": "Coverage on New Code < 85, Reliability Rating > 4, Maintainability Rating on New Code > 1, Reliability Rating on New Code > 1, Security Rating on New Code > 1, Duplicated Lines (%) on New Code > 3"
         },
         {
-          "key": "E12",
+          "key": "AXx_QFJ6Wa8wkfuJ6r5P",
           "category": "VERSION",
           "name": "6.3"
         }
@@ -52,6 +62,7 @@
       "projectVersion": "1.2",
       "buildString": "1.2.0.321",
       "manualNewCodePeriodBaseline": false,
+      "detectedCI": "Jenkins",
       "events": [
         {
           "key": "E31",
@@ -61,15 +72,17 @@
           "qualityGate": {
             "status": "ERROR",
             "stillFailing": true,
-            "failing": [{
-              "key": "app1",
-              "name": "My project",
-              "branch": "master"
-            },{
-              "key": "app2",
-              "name": "Another project",
-              "branch": "master"
-            }
+            "failing": [
+              {
+                "key": "app1",
+                "name": "My project",
+                "branch": "master"
+              },
+              {
+                "key": "app2",
+                "name": "Another project",
+                "branch": "master"
+              }
             ]
           }
         }

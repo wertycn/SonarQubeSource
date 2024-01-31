@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,9 @@ public class LiveMeasureModule extends Module {
   @Override
   protected void configureModule() {
     add(
-      IssueMetricFormulaFactoryImpl.class,
+      MeasureUpdateFormulaFactoryImpl.class,
+      ComponentIndexFactory.class,
+      LiveMeasureTreeUpdaterImpl.class,
       LiveMeasureComputerImpl.class,
       LiveQualityGateComputerImpl.class);
   }

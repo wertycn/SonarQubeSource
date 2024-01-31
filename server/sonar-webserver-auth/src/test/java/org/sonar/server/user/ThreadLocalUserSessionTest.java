@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,23 @@ package org.sonar.server.user;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.sonar.api.resources.Qualifiers;
+import org.sonar.db.component.ComponentDto;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.GroupTesting;
+import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.UnauthorizedException;
 import org.sonar.server.tester.AnonymousMockUserSession;
 import org.sonar.server.tester.MockUserSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.sonar.api.web.UserRole.USER;
 
 public class ThreadLocalUserSessionTest {
 
-  private ThreadLocalUserSession threadLocalUserSession = new ThreadLocalUserSession();
+  private final ThreadLocalUserSession threadLocalUserSession = new ThreadLocalUserSession();
 
   @Before
   public void setUp() {
@@ -63,8 +68,14 @@ public class ThreadLocalUserSessionTest {
     assertThat(threadLocalUserSession.getLogin()).isEqualTo("karadoc");
     assertThat(threadLocalUserSession.getUuid()).isEqualTo("karadoc-uuid");
     assertThat(threadLocalUserSession.isLoggedIn()).isTrue();
+    assertThat(threadLocalUserSession.isActive()).isTrue();
     assertThat(threadLocalUserSession.shouldResetPassword()).isTrue();
     assertThat(threadLocalUserSession.getGroups()).extracting(GroupDto::getUuid).containsOnly(group.getUuid());
+    assertThat(threadLocalUserSession.hasChildProjectsPermission(USER, new ComponentDto())).isFalse();
+    assertThat(threadLocalUserSession.hasChildProjectsPermission(USER, new ProjectDto())).isFalse();
+    assertThat(threadLocalUserSession.hasPortfolioChildProjectsPermission(USER, new ComponentDto())).isFalse();
+    assertThat(threadLocalUserSession.hasEntityPermission(USER, new ProjectDto().getUuid())).isFalse();
+    assertThat(threadLocalUserSession.isAuthenticatedBrowserSession()).isFalse();
   }
 
   @Test
@@ -82,8 +93,44 @@ public class ThreadLocalUserSessionTest {
 
   @Test
   public void throw_UnauthorizedException_when_no_session() {
-    assertThatThrownBy(() -> threadLocalUserSession.get())
+    assertThatThrownBy(threadLocalUserSession::get)
       .isInstanceOf(UnauthorizedException.class);
   }
 
+  @Test
+  public void throw_ForbiddenException_when_no_access_to_applications_projects() {
+    GroupDto group = GroupTesting.newGroupDto();
+    MockUserSession expected = new MockUserSession("karadoc")
+      .setUuid("karadoc-uuid")
+      .setResetPassword(true)
+      .setLastSonarlintConnectionDate(1000L)
+      .setGroups(group);
+    threadLocalUserSession.set(expected);
+
+    ComponentDto componentDto = new ComponentDto().setQualifier(Qualifiers.APP);
+    ProjectDto projectDto = new ProjectDto().setQualifier(Qualifiers.APP).setUuid("project-uuid");
+    assertThatThrownBy(() -> threadLocalUserSession.checkChildProjectsPermission(USER, componentDto))
+      .isInstanceOf(ForbiddenException.class);
+    assertThatThrownBy(() -> threadLocalUserSession.checkChildProjectsPermission(USER, projectDto))
+      .isInstanceOf(ForbiddenException.class);
+  }
+
+  @Test
+  public void checkChildProjectsPermission_gets_session_when_user_has_access_to_applications_projects() {
+    GroupDto group = GroupTesting.newGroupDto();
+    MockUserSession expected = new MockUserSession("karadoc")
+      .setUuid("karadoc-uuid")
+      .setResetPassword(true)
+      .setLastSonarlintConnectionDate(1000L)
+      .setGroups(group);
+
+    ProjectDto subProjectDto = new ProjectDto().setQualifier(Qualifiers.PROJECT).setUuid("subproject-uuid");
+    ProjectDto applicationAsProjectDto = new ProjectDto().setQualifier(Qualifiers.APP).setUuid("application-project-uuid");
+
+    expected.registerProjects(subProjectDto);
+    expected.registerApplication(applicationAsProjectDto, subProjectDto);
+    threadLocalUserSession.set(expected);
+
+    assertThat(threadLocalUserSession.checkChildProjectsPermission(USER, applicationAsProjectDto)).isEqualTo(threadLocalUserSession);
+  }
 }

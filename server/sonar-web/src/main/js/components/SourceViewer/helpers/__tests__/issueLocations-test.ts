@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { mockFlowLocation, mockSourceLine } from '../../../../helpers/testMocks';
+import { mockSourceLine } from '../../../../helpers/mocks/sources';
+import { mockFlowLocation } from '../../../../helpers/testMocks';
 import { getLinearLocations, getSecondaryIssueLocationsForLine } from '../issueLocations';
 
 describe('getSecondaryIssueLocationsForLine', () => {
@@ -25,7 +26,7 @@ describe('getSecondaryIssueLocationsForLine', () => {
     const sourceLine = mockSourceLine({ line: 2 });
     expect(getSecondaryIssueLocationsForLine(sourceLine, undefined)).toEqual([]);
     expect(getSecondaryIssueLocationsForLine(sourceLine, [mockFlowLocation()])).toEqual([
-      { from: 0, index: undefined, line: 2, startLine: 1, text: undefined, to: 2 }
+      { from: 0, index: undefined, line: 2, startLine: 1, text: undefined, to: 2 },
     ]);
   });
 });
@@ -36,11 +37,11 @@ describe('getLinearLocations', () => {
       [
         { from: 3, line: 6, to: 999999 },
         { from: 0, line: 7, to: 999999 },
-        { from: 0, line: 8, to: 56 }
-      ]
+        { from: 0, line: 8, to: 56 },
+      ],
     );
-    expect(
-      getLinearLocations({ startLine: 6, startOffset: 0, endLine: 6, endOffset: 42 })
-    ).toEqual([{ from: 0, line: 6, to: 42 }]);
+    expect(getLinearLocations({ startLine: 6, startOffset: 0, endLine: 6, endOffset: 42 })).toEqual(
+      [{ from: 0, line: 6, to: 42 }],
+    );
   });
 });

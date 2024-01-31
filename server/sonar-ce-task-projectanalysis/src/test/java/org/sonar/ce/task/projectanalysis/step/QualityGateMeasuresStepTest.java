@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import org.assertj.core.api.AbstractAssert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.sonar.api.config.internal.ConfigurationBridge;
@@ -57,13 +56,14 @@ import org.sonar.ce.task.projectanalysis.qualitygate.QualityGateStatusHolder;
 import org.sonar.ce.task.step.TestComputationStepContext;
 
 import static com.google.common.collect.ImmutableList.of;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.measures.CoreMetrics.ALERT_STATUS_KEY;
+import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilder;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.Level.ERROR;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.Level.OK;
-import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilder;
 import static org.sonar.ce.task.projectanalysis.measure.MeasureAssert.assertThat;
 
 public class QualityGateMeasuresStepTest {
@@ -77,8 +77,6 @@ public class QualityGateMeasuresStepTest {
   private static final String SOME_QG_UUID = "7521551";
   private static final String SOME_QG_NAME = "name";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public TreeRootHolderRule treeRootHolder = new TreeRootHolderRule();
   @Rule
@@ -110,7 +108,7 @@ public class QualityGateMeasuresStepTest {
       public String answer(InvocationOnMock invocation) {
         Condition condition = (Condition) invocation.getArguments()[0];
         EvaluationResult evaluationResult = (EvaluationResult) invocation.getArguments()[1];
-        return dumbResultTextAnswer(condition, evaluationResult.getLevel(), evaluationResult.getValue());
+        return dumbResultTextAnswer(condition, evaluationResult.level(), evaluationResult.value());
       }
     });
   }
@@ -145,10 +143,9 @@ public class QualityGateMeasuresStepTest {
 
     underTest.execute(new TestComputationStepContext());
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Quality gate status has not been set yet");
-
-    qualityGateStatusHolder.getStatus();
+    assertThatThrownBy(() -> qualityGateStatusHolder.getStatus())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Quality gate status has not been set yet");
   }
 
   @Test
@@ -264,9 +261,7 @@ public class QualityGateMeasuresStepTest {
     Condition periodCondition = createLessThanCondition(INT_METRIC_1, "1");
 
     qualityGateHolder.setQualityGate(new QualityGate(SOME_QG_UUID, SOME_QG_NAME, of(fixedCondition, periodCondition)));
-    Measure measure = newMeasureBuilder()
-      .setVariation(rawValue)
-      .create(rawValue, null);
+    Measure measure = newMeasureBuilder().create(rawValue);
     measureRepository.addRawMeasure(PROJECT_REF, INT_METRIC_1_KEY, measure);
 
     underTest.execute(new TestComputationStepContext());

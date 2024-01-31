@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,25 +21,26 @@ package org.sonar.scanner.scm;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.Collections;
-import org.junit.Rule;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.scm.git.ChangedFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ScmChangedFilesTest {
   private ScmChangedFiles scmChangedFiles;
 
-  @Rule
-  public ExpectedException exception = ExpectedException.none();
-
   @Test
   public void testGetter() {
-    Collection<Path> files = Collections.singletonList(Paths.get("files"));
+    Path filePath = Paths.get("files");
+    ChangedFile file = ChangedFile.of(filePath);
+    Set<ChangedFile> files = Set.of(file);
     scmChangedFiles = new ScmChangedFiles(files);
-    assertThat(scmChangedFiles.get()).containsOnly(Paths.get("files"));
+    assertThat(scmChangedFiles.get()).containsOnly(file);
   }
 
   @Test
@@ -48,16 +49,29 @@ public class ScmChangedFilesTest {
     assertThat(scmChangedFiles.isValid()).isFalse();
     assertThat(scmChangedFiles.get()).isNull();
 
-    exception.expect(IllegalStateException.class);
-    assertThat(scmChangedFiles.isChanged(Paths.get("files2"))).isTrue();
+    assertThatThrownBy(() -> scmChangedFiles.isChanged(Paths.get("files2")))
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
   public void testConfirm() {
-    Collection<Path> files = Collections.singletonList(Paths.get("files"));
+    Path filePath = Paths.get("files");
+    Set<ChangedFile> files = Set.of(ChangedFile.of(filePath));
     scmChangedFiles = new ScmChangedFiles(files);
     assertThat(scmChangedFiles.isValid()).isTrue();
     assertThat(scmChangedFiles.isChanged(Paths.get("files"))).isTrue();
     assertThat(scmChangedFiles.isChanged(Paths.get("files2"))).isFalse();
+  }
+
+  /**
+   * On Windows the Path object (WindowsPath) is the same for file.js and for File.js. We just want to make sure we don't fail in this case.
+   */
+  @Test
+  public void constructor_givenTwoSimiliarFileNames_shouldNotThrowException() {
+    ChangedFile first = ChangedFile.of(Path.of("file.js"));
+    ChangedFile second = ChangedFile.of(Path.of("File.js"));
+    Set<ChangedFile> changedFiles = Stream.of(first, second).collect(Collectors.toSet());
+
+    assertThatNoException().isThrownBy(() -> new ScmChangedFiles(changedFiles));
   }
 }

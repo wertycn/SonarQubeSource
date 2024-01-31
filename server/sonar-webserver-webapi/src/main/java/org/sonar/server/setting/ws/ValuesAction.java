@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,11 +21,10 @@ package org.sonar.server.setting.ws;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Ordering;
-import com.google.common.collect.TreeMultimap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +34,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import org.sonar.api.config.Configuration;
 import org.sonar.api.config.PropertyDefinition;
 import org.sonar.api.config.PropertyDefinitions;
 import org.sonar.api.server.ws.Change;
@@ -43,13 +41,13 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.web.UserRole;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.property.PropertyDto;
-import org.sonar.server.component.ComponentFinder;
+import org.sonar.markdown.Markdown;
+import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Settings;
 import org.sonarqube.ws.Settings.ValuesWsResponse;
@@ -59,9 +57,9 @@ import static java.util.stream.Stream.concat;
 import static org.apache.commons.lang.StringUtils.isEmpty;
 import static org.sonar.api.CoreProperties.SERVER_ID;
 import static org.sonar.api.CoreProperties.SERVER_STARTTIME;
+import static org.sonar.api.PropertyType.FORMATTED_TEXT;
 import static org.sonar.api.PropertyType.PROPERTY_SET;
 import static org.sonar.api.web.UserRole.USER;
-import static org.sonar.process.ProcessProperties.Property.SONARCLOUD_ENABLED;
 import static org.sonar.server.setting.ws.PropertySetExtractor.extractPropertySetKeys;
 import static org.sonar.server.setting.ws.SettingsWsParameters.PARAM_COMPONENT;
 import static org.sonar.server.setting.ws.SettingsWsParameters.PARAM_KEYS;
@@ -71,27 +69,20 @@ import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class ValuesAction implements SettingsWsAction {
-
   private static final Splitter COMMA_SPLITTER = Splitter.on(",");
   private static final String COMMA_ENCODED_VALUE = "%2C";
-  private static final Splitter DOT_SPLITTER = Splitter.on(".").omitEmptyStrings();
-  private static final Set<String> SERVER_SETTING_KEYS = ImmutableSet.of(SERVER_STARTTIME, SERVER_ID);
+  private static final Set<String> SERVER_SETTING_KEYS = Set.of(SERVER_STARTTIME, SERVER_ID);
 
   private final DbClient dbClient;
-  private final ComponentFinder componentFinder;
   private final UserSession userSession;
   private final PropertyDefinitions propertyDefinitions;
   private final SettingsWsSupport settingsWsSupport;
-  private final boolean isSonarCloud;
 
-  public ValuesAction(DbClient dbClient, ComponentFinder componentFinder, UserSession userSession, PropertyDefinitions propertyDefinitions,
-    SettingsWsSupport settingsWsSupport, Configuration configuration) {
+  public ValuesAction(DbClient dbClient, UserSession userSession, PropertyDefinitions propertyDefinitions, SettingsWsSupport settingsWsSupport) {
     this.dbClient = dbClient;
-    this.componentFinder = componentFinder;
     this.userSession = userSession;
     this.propertyDefinitions = propertyDefinitions;
     this.settingsWsSupport = settingsWsSupport;
-    this.isSonarCloud = configuration.getBoolean(SONARCLOUD_ENABLED.getKey()).orElse(false);
   }
 
   @Override
@@ -101,15 +92,13 @@ public class ValuesAction implements SettingsWsAction {
         "If no value has been set for a setting, then the default value is returned.<br>" +
         "The settings from conf/sonar.properties are excluded from results.<br>" +
         "Requires 'Browse' or 'Execute Analysis' permission when a component is specified.<br/>" +
-        "To access secured settings, one of the following permissions is required: " +
-        "<ul>" +
-        "<li>'Execute Analysis'</li>" +
-        "<li>'Administer System'</li>" +
-        "<li>'Administer' rights on the specified component</li>" +
-        "</ul>")
+        "Secured settings values are not returned by the endpoint.<br/>")
       .setResponseExample(getClass().getResource("values-example.json"))
       .setSince("6.3")
       .setChangelog(
+        new Change("10.1", String.format("The use of module keys in parameter '%s' is removed", PARAM_COMPONENT)),
+        new Change("9.1", "The secured settings values are no longer returned. Secured settings keys that have a value " +
+          "are now returned in setSecuredSettings array."),
         new Change("7.6", String.format("The use of module keys in parameter '%s' is deprecated", PARAM_COMPONENT)),
         new Change("7.1", "The settings from conf/sonar.properties are excluded from results."))
       .setHandler(this);
@@ -129,8 +118,7 @@ public class ValuesAction implements SettingsWsAction {
   private ValuesWsResponse doHandle(Request request) {
     try (DbSession dbSession = dbClient.openSession(true)) {
       ValuesRequest valuesRequest = ValuesRequest.from(request);
-      Optional<ComponentDto> component = loadComponent(dbSession, valuesRequest);
-
+      Optional<EntityDto> component = loadComponent(dbSession, valuesRequest);
       Set<String> keys = loadKeys(valuesRequest);
       Map<String, String> keysToDisplayMap = getKeysToDisplayMap(keys);
       List<Setting> settings = loadSettings(dbSession, component, keysToDisplayMap.keySet());
@@ -150,33 +138,36 @@ public class ValuesAction implements SettingsWsAction {
     return result;
   }
 
-  private Optional<ComponentDto> loadComponent(DbSession dbSession, ValuesRequest valuesRequest) {
+  private Optional<EntityDto> loadComponent(DbSession dbSession, ValuesRequest valuesRequest) {
     String componentKey = valuesRequest.getComponent();
     if (componentKey == null) {
       return Optional.empty();
     }
-    ComponentDto component = componentFinder.getByKey(dbSession, componentKey);
-    if (!userSession.hasComponentPermission(USER, component) &&
-      !userSession.hasComponentPermission(UserRole.SCAN, component) &&
+
+    EntityDto entity = dbClient.entityDao().selectByKey(dbSession, componentKey)
+      .orElseThrow(() -> new NotFoundException(format("Component key '%s' not found", componentKey)));
+
+    if (!userSession.hasEntityPermission(USER, entity) &&
+      !userSession.hasEntityPermission(UserRole.SCAN, entity) &&
       !userSession.hasPermission(GlobalPermission.SCAN)) {
       throw insufficientPrivilegesException();
     }
-    return Optional.of(component);
+    return Optional.of(entity);
   }
 
-  private List<Setting> loadSettings(DbSession dbSession, Optional<ComponentDto> component, Set<String> keys) {
-    // List of settings must be kept in the following orders : default -> global -> component -> branch
+  private List<Setting> loadSettings(DbSession dbSession, Optional<EntityDto> component, Set<String> keys) {
+    // List of settings must be kept in the following orders : default -> global -> component
     List<Setting> settings = new ArrayList<>();
     settings.addAll(loadDefaultValues(keys));
     settings.addAll(loadGlobalSettings(dbSession, keys));
-    if (component.isPresent() && component.get().getBranch() != null && component.get().getMainBranchProjectUuid() != null) {
-      ComponentDto project = dbClient.componentDao().selectOrFailByUuid(dbSession, component.get().getMainBranchProjectUuid());
-      settings.addAll(loadComponentSettings(dbSession, keys, project).values());
-    }
-    component.ifPresent(componentDto -> settings.addAll(loadComponentSettings(dbSession, keys, componentDto).values()));
+    component.ifPresent(c -> settings.addAll(loadComponentSettings(dbSession, c, keys)));
     return settings.stream()
       .filter(s -> settingsWsSupport.isVisible(s.getKey(), component))
-      .collect(Collectors.toList());
+      .toList();
+  }
+
+  private Collection<Setting> loadComponentSettings(DbSession dbSession, EntityDto entity, Set<String> keys) {
+    return loadComponentSettings(dbSession, keys, entity.getUuid());
   }
 
   private List<Setting> loadDefaultValues(Set<String> keys) {
@@ -184,7 +175,7 @@ public class ValuesAction implements SettingsWsAction {
       .filter(definition -> keys.contains(definition.key()))
       .filter(defaultProperty -> !isEmpty(defaultProperty.defaultValue()))
       .map(Setting::createFromDefinition)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private Map<String, String> getKeysToDisplayMap(Set<String> keys) {
@@ -196,36 +187,27 @@ public class ValuesAction implements SettingsWsAction {
   }
 
   private List<Setting> loadGlobalSettings(DbSession dbSession, Set<String> keys) {
-    Set<String> allowedKeys;
-    if (isSonarCloud && !userSession.isSystemAdministrator()) {
-      // remove the global settings that require admin permission
-      allowedKeys = keys.stream().filter(k -> !isSecured(k)).collect(Collectors.toSet());
-    } else {
-      allowedKeys = keys;
-    }
-    List<PropertyDto> properties = dbClient.propertiesDao().selectGlobalPropertiesByKeys(dbSession, allowedKeys);
+    List<PropertyDto> properties = dbClient.propertiesDao().selectGlobalPropertiesByKeys(dbSession, keys);
     List<PropertyDto> propertySets = dbClient.propertiesDao().selectGlobalPropertiesByKeys(dbSession, getPropertySetKeys(properties));
     return properties.stream()
-      .map(property -> Setting.createFromDto(property, getPropertySets(property.getKey(), propertySets, null), propertyDefinitions.get(property.getKey())))
-      .collect(MoreCollectors.toList(properties.size()));
+      .map(property -> Setting.createFromDto(property, filterPropertySets(property.getKey(), propertySets, null), propertyDefinitions.get(property.getKey())))
+      .toList();
   }
 
   /**
-   * Return list of settings by component uuid, sorted from project to lowest module
+   * Return list of settings by component uuids
    */
-  private Multimap<String, Setting> loadComponentSettings(DbSession dbSession, Set<String> keys, ComponentDto component) {
-    List<String> componentUuids = DOT_SPLITTER.splitToList(component.moduleUuidPath());
-    List<PropertyDto> properties = dbClient.propertiesDao().selectPropertiesByKeysAndComponentUuids(dbSession, keys, componentUuids);
-    List<PropertyDto> propertySets = dbClient.propertiesDao().selectPropertiesByKeysAndComponentUuids(dbSession, getPropertySetKeys(properties), componentUuids);
+  private Collection<Setting> loadComponentSettings(DbSession dbSession, Set<String> keys, String entityUuid) {
+    List<PropertyDto> properties = dbClient.propertiesDao().selectPropertiesByKeysAndEntityUuids(dbSession, keys, Set.of(entityUuid));
+    List<PropertyDto> propertySets = dbClient.propertiesDao().selectPropertiesByKeysAndEntityUuids(dbSession, getPropertySetKeys(properties), Set.of(entityUuid));
 
-    Multimap<String, Setting> settingsByUuid = TreeMultimap.create(Ordering.explicit(componentUuids), Ordering.arbitrary());
+    List<Setting> settings = new LinkedList<>();
     for (PropertyDto propertyDto : properties) {
-      String componentUuid = propertyDto.getComponentUuid();
+      String componentUuid = propertyDto.getEntityUuid();
       String propertyKey = propertyDto.getKey();
-      settingsByUuid.put(componentUuid,
-        Setting.createFromDto(propertyDto, getPropertySets(propertyKey, propertySets, componentUuid), propertyDefinitions.get(propertyKey)));
+      settings.add(Setting.createFromDto(propertyDto, filterPropertySets(propertyKey, propertySets, componentUuid), propertyDefinitions.get(propertyKey)));
     }
-    return settingsByUuid;
+    return settings;
   }
 
   private Set<String> getPropertySetKeys(List<PropertyDto> properties) {
@@ -236,23 +218,23 @@ public class ValuesAction implements SettingsWsAction {
       .collect(Collectors.toSet());
   }
 
-  private static List<PropertyDto> getPropertySets(String propertyKey, List<PropertyDto> propertySets, @Nullable String componentUuid) {
+  private static List<PropertyDto> filterPropertySets(String propertyKey, List<PropertyDto> propertySets, @Nullable String componentUuid) {
     return propertySets.stream()
-      .filter(propertyDto -> Objects.equals(propertyDto.getComponentUuid(), componentUuid))
+      .filter(propertyDto -> Objects.equals(propertyDto.getEntityUuid(), componentUuid))
       .filter(propertyDto -> propertyDto.getKey().startsWith(propertyKey + "."))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private class ValuesResponseBuilder {
     private final List<Setting> settings;
-    private final Optional<ComponentDto> requestedComponent;
+    private final Optional<EntityDto> requestedComponent;
 
     private final ValuesWsResponse.Builder valuesWsBuilder = ValuesWsResponse.newBuilder();
     private final Map<String, Settings.Setting.Builder> settingsBuilderByKey = new HashMap<>();
     private final Map<String, Setting> settingsByParentKey = new HashMap<>();
     private final Map<String, String> keysToDisplayMap;
 
-    ValuesResponseBuilder(List<Setting> settings, Optional<ComponentDto> requestedComponent, Map<String, String> keysToDisplayMap) {
+    ValuesResponseBuilder(List<Setting> settings, Optional<EntityDto> requestedComponent, Map<String, String> keysToDisplayMap) {
       this.settings = settings;
       this.requestedComponent = requestedComponent;
       this.keysToDisplayMap = keysToDisplayMap;
@@ -266,6 +248,12 @@ public class ValuesAction implements SettingsWsAction {
 
     private void processSettings() {
       settings.forEach(setting -> {
+        if (isSecured(setting.getKey())) {
+          if (!setting.isDefault()) {
+            valuesWsBuilder.addSetSecuredSettings(setting.getKey());
+          }
+          return;
+        }
         Settings.Setting.Builder valueBuilder = getOrCreateValueBuilder(keysToDisplayMap.get(setting.getKey()));
         setInherited(setting, valueBuilder);
         setValue(setting, valueBuilder);
@@ -280,7 +268,7 @@ public class ValuesAction implements SettingsWsAction {
     private void setInherited(Setting setting, Settings.Setting.Builder valueBuilder) {
       boolean isDefault = setting.isDefault();
       boolean isGlobal = !requestedComponent.isPresent();
-      boolean isOnComponent = requestedComponent.isPresent() && Objects.equals(setting.getComponentUuid(), requestedComponent.get().uuid());
+      boolean isOnComponent = requestedComponent.isPresent() && Objects.equals(setting.getComponentUuid(), requestedComponent.get().getUuid());
       boolean isSet = isGlobal || isOnComponent;
       valueBuilder.setInherited(isDefault || !isSet);
     }
@@ -294,6 +282,8 @@ public class ValuesAction implements SettingsWsAction {
       }
       if (definition.type().equals(PROPERTY_SET)) {
         valueBuilder.setFieldValues(createFieldValuesBuilder(filterVisiblePropertySets(setting.getPropertySets())));
+      } else if (definition.type().equals(FORMATTED_TEXT)) {
+        valueBuilder.setValues(createFormattedTextValuesBuilder(value));
       } else if (definition.multiValues()) {
         valueBuilder.setValues(createValuesBuilder(value));
       } else {
@@ -324,7 +314,12 @@ public class ValuesAction implements SettingsWsAction {
     }
 
     private Settings.Values.Builder createValuesBuilder(String value) {
-      List<String> values = COMMA_SPLITTER.splitToList(value).stream().map(v -> v.replace(COMMA_ENCODED_VALUE, ",")).collect(Collectors.toList());
+      List<String> values = COMMA_SPLITTER.splitToList(value).stream().map(v -> v.replace(COMMA_ENCODED_VALUE, ",")).toList();
+      return Settings.Values.newBuilder().addAllValues(values);
+    }
+
+    private Settings.Values.Builder createFormattedTextValuesBuilder(String value) {
+      List<String> values = List.of(value, Markdown.convertToHtml(value));
       return Settings.Values.newBuilder().addAllValues(values);
     }
 

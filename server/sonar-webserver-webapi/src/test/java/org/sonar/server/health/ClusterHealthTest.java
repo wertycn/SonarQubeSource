@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,9 +26,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.process.cluster.health.NodeDetails;
 import org.sonar.process.cluster.health.NodeHealth;
 
@@ -36,29 +34,25 @@ import static java.util.stream.Collectors.toSet;
 import static java.util.stream.Stream.concat;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.process.cluster.health.NodeHealth.newNodeHealthBuilder;
-import static org.sonar.server.health.Health.newHealthCheckBuilder;
 
 public class ClusterHealthTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final Random random = new Random();
 
   @Test
   public void constructor_fails_with_NPE_if_Health_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("health can't be null");
-
-    new ClusterHealth(null, Collections.emptySet());
+    assertThatThrownBy(() -> new ClusterHealth(null, Collections.emptySet()))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessageContaining("health can't be null");
   }
 
   @Test
   public void constructor_fails_with_NPE_if_NodeHealth_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("nodes can't be null");
-
-    new ClusterHealth(Health.GREEN, null);
+    assertThatThrownBy(() -> new ClusterHealth(Health.GREEN, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessageContaining("nodes can't be null");
   }
 
   @Test
@@ -81,9 +75,9 @@ public class ClusterHealthTest {
       .isEqualTo(underTest)
       .isEqualTo(new ClusterHealth(health, nodeHealths))
       .isNotEqualTo(new Object())
-      .isNotEqualTo(null)
+      .isNotNull()
       .isNotEqualTo(new ClusterHealth(
-        newHealthCheckBuilder()
+        Health.builder()
           .setStatus(health.getStatus())
           .addCause("foo_bar")
           .build(),
@@ -99,7 +93,7 @@ public class ClusterHealthTest {
     Set<NodeHealth> nodeHealths = randomNodeHealths();
     ClusterHealth underTest = new ClusterHealth(health, nodeHealths);
 
-    assertThat(underTest.hashCode()).isEqualTo(underTest.hashCode());
+    assertThat(underTest).hasSameHashCodeAs(underTest);
   }
 
   @Test
@@ -109,7 +103,7 @@ public class ClusterHealthTest {
 
     ClusterHealth underTest = new ClusterHealth(health, nodeHealths);
 
-    assertThat(underTest.toString()).isEqualTo("ClusterHealth{health=" + health + ", nodes=" + nodeHealths + "}");
+    assertThat(underTest).hasToString("ClusterHealth{health=" + health + ", nodes=" + nodeHealths + "}");
   }
 
   @Test
@@ -124,7 +118,7 @@ public class ClusterHealthTest {
   }
 
   private Health randomHealth() {
-    Health.Builder healthBuilder = newHealthCheckBuilder();
+    Health.Builder healthBuilder = Health.builder();
     healthBuilder.setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)]);
     IntStream.range(0, random.nextInt(3)).mapToObj(i -> randomAlphanumeric(3)).forEach(healthBuilder::addCause);
     return healthBuilder.build();

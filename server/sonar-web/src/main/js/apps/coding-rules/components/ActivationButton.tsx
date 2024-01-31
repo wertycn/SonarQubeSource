@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,57 +17,48 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
 import { Profile as BaseProfile } from '../../../api/quality-profiles';
+import { Rule, RuleActivation, RuleDetails } from '../../../types/types';
 import ActivationFormModal from './ActivationFormModal';
 
 interface Props {
-  activation?: T.RuleActivation;
+  activation?: RuleActivation;
   buttonText: string;
   className?: string;
   modalHeader: string;
-  onDone: (severity: string) => Promise<void>;
+  onDone?: (severity: string) => Promise<void> | void;
   profiles: BaseProfile[];
-  rule: T.Rule | T.RuleDetails;
+  rule: Rule | RuleDetails;
+  ariaLabel?: string;
 }
 
-interface State {
-  modal: boolean;
-}
+export default function ActivationButton(props: Props) {
+  const { className, ariaLabel, buttonText, activation, modalHeader, profiles, rule } = props;
+  const [modalOpen, setModalOpen] = React.useState(false);
 
-export default class ActivationButton extends React.PureComponent<Props, State> {
-  state: State = { modal: false };
+  return (
+    <>
+      <ButtonSecondary
+        aria-label={ariaLabel}
+        className={className}
+        id="coding-rules-quality-profile-activate"
+        onClick={() => setModalOpen(true)}
+      >
+        {buttonText}
+      </ButtonSecondary>
 
-  handleButtonClick = () => {
-    this.setState({ modal: true });
-  };
-
-  handleCloseModal = () => {
-    this.setState({ modal: false });
-  };
-
-  render() {
-    return (
-      <>
-        <Button
-          className={this.props.className}
-          id="coding-rules-quality-profile-activate"
-          onClick={this.handleButtonClick}>
-          {this.props.buttonText}
-        </Button>
-
-        {this.state.modal && (
-          <ActivationFormModal
-            activation={this.props.activation}
-            modalHeader={this.props.modalHeader}
-            onClose={this.handleCloseModal}
-            onDone={this.props.onDone}
-            profiles={this.props.profiles}
-            rule={this.props.rule}
-          />
-        )}
-      </>
-    );
-  }
+      {modalOpen && (
+        <ActivationFormModal
+          activation={activation}
+          modalHeader={modalHeader}
+          onClose={() => setModalOpen(false)}
+          onDone={props.onDone}
+          profiles={profiles}
+          rule={rule}
+        />
+      )}
+    </>
+  );
 }

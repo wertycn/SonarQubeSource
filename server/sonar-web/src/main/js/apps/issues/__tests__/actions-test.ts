@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,15 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { mockIssue } from '../../../helpers/testMocks';
-import { enableLocationsNavigator, selectFlow, selectLocation } from '../actions';
-import { State } from '../components/App';
+import { enableLocationsNavigator, selectFlow } from '../actions';
+import { State } from '../components/IssuesApp';
 
 describe('selectFlow', () => {
   it('should select flow and enable locations navigator', () => {
     expect(selectFlow(5)()).toEqual({
       locationsNavigator: true,
       selectedFlowIndex: 5,
-      selectedLocationIndex: 0
+      selectedLocationIndex: undefined,
     });
   });
 });
@@ -34,26 +34,26 @@ describe('selectFlow', () => {
 describe('enableLocationsNavigator', () => {
   it('should compute the correct flow index', () => {
     expect(
-      enableLocationsNavigator({ openIssue: mockIssue(true), selectedFlowIndex: 20 } as State)
+      enableLocationsNavigator({ openIssue: mockIssue(true), selectedFlowIndex: 20 } as State),
     ).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedFlowIndex: 20
-      })
+        selectedFlowIndex: 20,
+      }),
     );
     expect(enableLocationsNavigator({ openIssue: mockIssue(true) } as State)).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedFlowIndex: 0
-      })
+        selectedFlowIndex: 0,
+      }),
     );
     expect(
-      enableLocationsNavigator({ openIssue: mockIssue(true, { flows: [] }) } as State)
+      enableLocationsNavigator({ openIssue: mockIssue(true, { flows: [] }) } as State),
     ).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedFlowIndex: undefined
-      })
+        selectedFlowIndex: undefined,
+      }),
     );
   });
 
@@ -61,26 +61,26 @@ describe('enableLocationsNavigator', () => {
     expect(enableLocationsNavigator({ openIssue: mockIssue(true) } as State)).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedLocationIndex: undefined
-      })
+        selectedLocationIndex: undefined,
+      }),
     );
 
     expect(
-      enableLocationsNavigator({ openIssue: mockIssue(true), selectedLocationIndex: -1 } as State)
+      enableLocationsNavigator({ openIssue: mockIssue(true), selectedLocationIndex: -1 } as State),
     ).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedLocationIndex: 0
-      })
+        selectedLocationIndex: 0,
+      }),
     );
 
     expect(
-      enableLocationsNavigator({ openIssue: mockIssue(true), selectedLocationIndex: 20 } as State)
+      enableLocationsNavigator({ openIssue: mockIssue(true), selectedLocationIndex: 20 } as State),
     ).toEqual(
       expect.objectContaining({
         locationsNavigator: true,
-        selectedLocationIndex: 20
-      })
+        selectedLocationIndex: 20,
+      }),
     );
   });
 
@@ -88,32 +88,12 @@ describe('enableLocationsNavigator', () => {
     expect(enableLocationsNavigator({ openIssue: mockIssue() } as State)).toBeNull();
     expect(
       enableLocationsNavigator({
-        openIssue: mockIssue(true, { flows: [], secondaryLocations: [] })
-      } as State)
+        openIssue: mockIssue(true, { flows: [], secondaryLocations: [] }),
+      } as State),
     ).toBeNull();
   });
 
   it('should do nothing if there is no open issue', () => {
     expect(enableLocationsNavigator({} as State)).toBeNull();
-  });
-});
-
-describe('selectLocation', () => {
-  it('should select location and enable locations navigator', () => {
-    expect(selectLocation(5)({ openIssue: mockIssue() })).toEqual({
-      locationsNavigator: true,
-      selectedLocationIndex: 5
-    });
-  });
-
-  it('should deselect location when clicked again', () => {
-    expect(selectLocation(5)({ openIssue: mockIssue(), selectedLocationIndex: 5 })).toEqual({
-      locationsNavigator: false,
-      selectedLocationIndex: undefined
-    });
-  });
-
-  it('should ignore if no open issue', () => {
-    expect(selectLocation(5)({ openIssue: undefined })).toBeNull();
   });
 });

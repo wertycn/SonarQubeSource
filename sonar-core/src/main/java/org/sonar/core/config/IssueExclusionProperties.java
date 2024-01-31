@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.core.config;
 
-import com.google.common.collect.ImmutableList;
 import java.util.List;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.PropertyType;
@@ -43,7 +42,7 @@ public final class IssueExclusionProperties {
   private static final String PROPERTY_RULE_KEY_PATTERN = "Rule Key Pattern";
   private static final String PROPERTY_RULE_KEY_PATTERN_HELP = "<br/>A rule key pattern consists of the rule repository name, followed by a colon, followed by a rule key "
     + "or rule name fragment. For example:"
-    + "<ul><li>squid:S1195</li><li>squid:*Naming*</li></ul>";
+    + "<ul><li>java:S1195</li><li>java:*Naming*</li></ul>";
 
   public static final String BLOCK_SUFFIX = ".block";
   public static final String PATTERNS_BLOCK_KEY = EXCLUSION_KEY_PREFIX + BLOCK_SUFFIX;
@@ -54,14 +53,12 @@ public final class IssueExclusionProperties {
   public static final String PATTERNS_ALLFILE_KEY = EXCLUSION_KEY_PREFIX + ALLFILE_SUFFIX;
   public static final String FILE_REGEXP = "fileRegexp";
 
-  public static final int LARGE_SIZE = 40;
-
   private IssueExclusionProperties() {
     // only static
   }
 
   public static List<PropertyDefinition> all() {
-    return ImmutableList.of(
+    return List.of(
       PropertyDefinition.builder(PATTERNS_MULTICRITERIA_EXCLUSION_KEY)
         .category(CoreProperties.CATEGORY_EXCLUSIONS)
         .subCategory(SUB_CATEGORY_IGNORE_ISSUES)
@@ -74,13 +71,11 @@ public final class IssueExclusionProperties {
             .name(PROPERTY_RULE_KEY_PATTERN)
             .description("Pattern to match rules which should be ignored.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build(),
           PropertyFieldDefinition.build(RESOURCE_KEY)
             .name(PROPERTY_FILE_PATH_PATTERN)
             .description("Pattern to match files which should be ignored.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build()
         )
         .build(),
@@ -88,7 +83,7 @@ public final class IssueExclusionProperties {
         .category(CoreProperties.CATEGORY_EXCLUSIONS)
         .subCategory(SUB_CATEGORY_IGNORE_ISSUES)
         .name("Ignore Issues in Blocks")
-        .description("Patterns to ignore all issues (except the ones from the common repository) on specific blocks of code, " +
+        .description("Patterns to ignore all issues on specific blocks of code, " +
           "while continuing to scan and mark issues on the remainder of the file.")
         .onQualifiers(Qualifiers.PROJECT)
         .index(2)
@@ -97,13 +92,11 @@ public final class IssueExclusionProperties {
             .name("Regular Expression for Start of Block")
             .description("If this regular expression is found in a file, then following lines are ignored until end of block.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build(),
           PropertyFieldDefinition.build(END_BLOCK_REGEXP)
             .name("Regular Expression for End of Block")
             .description("If specified, this regular expression is used to determine the end of code blocks to ignore. If not, then block ends at the end of file.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build()
         )
         .build(),
@@ -111,7 +104,7 @@ public final class IssueExclusionProperties {
         .category(CoreProperties.CATEGORY_EXCLUSIONS)
         .subCategory(SUB_CATEGORY_IGNORE_ISSUES)
         .name("Ignore Issues on Files")
-        .description("Patterns to ignore all issues (except the ones from the common repository) on files that contain a block of code matching a given regular expression.")
+        .description("Patterns to ignore all issues on files that contain a block of code matching a given regular expression.")
         .onQualifiers(Qualifiers.PROJECT)
         .index(1)
         .fields(
@@ -119,7 +112,6 @@ public final class IssueExclusionProperties {
             .name("Regular Expression")
             .description("If this regular expression is found in a file, then the whole file is ignored.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build()
         )
         .build(),
@@ -135,16 +127,14 @@ public final class IssueExclusionProperties {
             .name(PROPERTY_RULE_KEY_PATTERN)
             .description("Pattern used to match rules which should be restricted.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build(),
           PropertyFieldDefinition.build(RESOURCE_KEY)
             .name(PROPERTY_FILE_PATH_PATTERN)
             .description("Pattern used to match files to which the rules should be restricted.")
             .type(PropertyType.STRING)
-            .indicativeSize(LARGE_SIZE)
             .build()
         )
         .build()
-      );
+    );
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,18 +22,22 @@ package org.sonarqube.ws.client;
 import javax.annotation.Generated;
 import org.sonarqube.ws.client.almintegrations.AlmIntegrationsService;
 import org.sonarqube.ws.client.almsettings.AlmSettingsService;
+import org.sonarqube.ws.client.analysiscache.AnalysisCacheService;
 import org.sonarqube.ws.client.analysisreports.AnalysisReportsService;
 import org.sonarqube.ws.client.applications.ApplicationsService;
 import org.sonarqube.ws.client.authentication.AuthenticationService;
 import org.sonarqube.ws.client.batch.BatchService;
 import org.sonarqube.ws.client.ce.CeService;
 import org.sonarqube.ws.client.components.ComponentsService;
-import org.sonarqube.ws.client.custommeasures.CustomMeasuresService;
 import org.sonarqube.ws.client.developers.DevelopersService;
 import org.sonarqube.ws.client.duplications.DuplicationsService;
 import org.sonarqube.ws.client.editions.EditionsService;
 import org.sonarqube.ws.client.emails.EmailsService;
 import org.sonarqube.ws.client.favorites.FavoritesService;
+import org.sonarqube.ws.client.github.provisioning.permissions.GithubPermissionsService;
+import org.sonarqube.ws.client.githubprovisioning.GithubProvisioningService;
+import org.sonarqube.ws.client.gitlab.configuration.GitlabConfigurationService;
+import org.sonarqube.ws.client.gitlab.synchronization.run.GitlabSynchronizationRunService;
 import org.sonarqube.ws.client.governancereports.GovernanceReportsService;
 import org.sonarqube.ws.client.hotspots.HotspotsService;
 import org.sonarqube.ws.client.issues.IssuesService;
@@ -41,6 +45,7 @@ import org.sonarqube.ws.client.l10n.L10nService;
 import org.sonarqube.ws.client.languages.LanguagesService;
 import org.sonarqube.ws.client.measures.MeasuresService;
 import org.sonarqube.ws.client.metrics.MetricsService;
+import org.sonarqube.ws.client.monitoring.MonitoringService;
 import org.sonarqube.ws.client.navigation.NavigationService;
 import org.sonarqube.ws.client.newcodeperiods.NewCodePeriodsService;
 import org.sonarqube.ws.client.notifications.NotificationsService;
@@ -54,9 +59,10 @@ import org.sonarqube.ws.client.projectlinks.ProjectLinksService;
 import org.sonarqube.ws.client.projectpullrequests.ProjectPullRequestsService;
 import org.sonarqube.ws.client.projects.ProjectsService;
 import org.sonarqube.ws.client.projecttags.ProjectTagsService;
-import org.sonarqube.ws.client.properties.PropertiesService;
+import org.sonarqube.ws.client.push.SonarLintServerPushService;
 import org.sonarqube.ws.client.qualitygates.QualitygatesService;
 import org.sonarqube.ws.client.qualityprofiles.QualityprofilesService;
+import org.sonarqube.ws.client.regulatoryreports.RegulatoryReportsService;
 import org.sonarqube.ws.client.roots.RootsService;
 import org.sonarqube.ws.client.rules.RulesService;
 import org.sonarqube.ws.client.securityreports.SecurityReportsService;
@@ -65,10 +71,8 @@ import org.sonarqube.ws.client.settings.SettingsService;
 import org.sonarqube.ws.client.sources.SourcesService;
 import org.sonarqube.ws.client.support.SupportService;
 import org.sonarqube.ws.client.system.SystemService;
-import org.sonarqube.ws.client.timemachine.TimemachineService;
 import org.sonarqube.ws.client.updatecenter.UpdatecenterService;
 import org.sonarqube.ws.client.usergroups.UserGroupsService;
-import org.sonarqube.ws.client.userproperties.UserPropertiesService;
 import org.sonarqube.ws.client.users.UsersService;
 import org.sonarqube.ws.client.usertokens.UserTokensService;
 import org.sonarqube.ws.client.views.ViewsService;
@@ -88,12 +92,12 @@ class DefaultWsClient implements WsClient {
 
   private final AlmIntegrationsService almIntegrationsService;
   private final AlmSettingsService almSettingsService;
+  private final AnalysisCacheService analysisCacheService;
   private final AnalysisReportsService analysisReportsService;
   private final ApplicationsService applicationsService;
   private final AuthenticationService authenticationService;
   private final CeService ceService;
   private final ComponentsService componentsService;
-  private final CustomMeasuresService customMeasuresService;
   private final DevelopersService developersService;
   private final DuplicationsService duplicationsService;
   private final EditionsService editionsService;
@@ -106,6 +110,7 @@ class DefaultWsClient implements WsClient {
   private final LanguagesService languagesService;
   private final MeasuresService measuresService;
   private final MetricsService metricsService;
+  private final MonitoringService monitoringService;
   private final NavigationService navigationService;
   private final NewCodePeriodsService newCodePeriodsService;
   private final NotificationsService notificationsService;
@@ -119,7 +124,6 @@ class DefaultWsClient implements WsClient {
   private final ProjectPullRequestsService projectPullRequestsService;
   private final ProjectTagsService projectTagsService;
   private final ProjectsService projectsService;
-  private final PropertiesService propertiesService;
   private final QualitygatesService qualitygatesService;
   private final QualityprofilesService qualityprofilesService;
   private final RootsService rootsService;
@@ -129,10 +133,8 @@ class DefaultWsClient implements WsClient {
   private final SourcesService sourcesService;
   private final SupportService supportService;
   private final SystemService systemService;
-  private final TimemachineService timemachineService;
   private final UpdatecenterService updatecenterService;
   private final UserGroupsService userGroupsService;
-  private final UserPropertiesService userPropertiesService;
   private final UserTokensService userTokensService;
   private final UsersService usersService;
   private final ViewsService viewsService;
@@ -140,18 +142,25 @@ class DefaultWsClient implements WsClient {
   private final WebservicesService webservicesService;
   private final BatchService batchService;
   private final SecurityReportsService securityReportsService;
+  private final RegulatoryReportsService regulatoryReportsService;
+  private final SonarLintServerPushService sonarLintPushService;
+  private final GithubProvisioningService githubProvisioningService;
+  private final GithubPermissionsService githubPermissionsService;
+  private final GitlabConfigurationService gitlabConfigurationService;
+
+  private final GitlabSynchronizationRunService gitlabSynchronizationRunService;
 
   DefaultWsClient(WsConnector wsConnector) {
     this.wsConnector = wsConnector;
 
     this.almIntegrationsService = new AlmIntegrationsService(wsConnector);
     this.almSettingsService = new AlmSettingsService(wsConnector);
+    this.analysisCacheService = new AnalysisCacheService(wsConnector);
     this.analysisReportsService = new AnalysisReportsService(wsConnector);
     this.applicationsService = new ApplicationsService(wsConnector);
     this.authenticationService = new AuthenticationService(wsConnector);
     this.ceService = new CeService(wsConnector);
     this.componentsService = new ComponentsService(wsConnector);
-    this.customMeasuresService = new CustomMeasuresService(wsConnector);
     this.developersService = new DevelopersService(wsConnector);
     this.duplicationsService = new DuplicationsService(wsConnector);
     this.editionsService = new EditionsService(wsConnector);
@@ -164,6 +173,7 @@ class DefaultWsClient implements WsClient {
     this.languagesService = new LanguagesService(wsConnector);
     this.measuresService = new MeasuresService(wsConnector);
     this.metricsService = new MetricsService(wsConnector);
+    this.monitoringService = new MonitoringService(wsConnector);
     this.navigationService = new NavigationService(wsConnector);
     this.newCodePeriodsService = new NewCodePeriodsService(wsConnector);
     this.notificationsService = new NotificationsService(wsConnector);
@@ -177,7 +187,6 @@ class DefaultWsClient implements WsClient {
     this.projectPullRequestsService = new ProjectPullRequestsService(wsConnector);
     this.projectTagsService = new ProjectTagsService(wsConnector);
     this.projectsService = new ProjectsService(wsConnector);
-    this.propertiesService = new PropertiesService(wsConnector);
     this.qualitygatesService = new QualitygatesService(wsConnector);
     this.qualityprofilesService = new QualityprofilesService(wsConnector);
     this.rootsService = new RootsService(wsConnector);
@@ -187,10 +196,8 @@ class DefaultWsClient implements WsClient {
     this.sourcesService = new SourcesService(wsConnector);
     this.supportService = new SupportService(wsConnector);
     this.systemService = new SystemService(wsConnector);
-    this.timemachineService = new TimemachineService(wsConnector);
     this.updatecenterService = new UpdatecenterService(wsConnector);
     this.userGroupsService = new UserGroupsService(wsConnector);
-    this.userPropertiesService = new UserPropertiesService(wsConnector);
     this.userTokensService = new UserTokensService(wsConnector);
     this.usersService = new UsersService(wsConnector);
     this.viewsService = new ViewsService(wsConnector);
@@ -198,6 +205,12 @@ class DefaultWsClient implements WsClient {
     this.webservicesService = new WebservicesService(wsConnector);
     this.batchService = new BatchService(wsConnector);
     this.securityReportsService = new SecurityReportsService(wsConnector);
+    this.sonarLintPushService = new SonarLintServerPushService(wsConnector);
+    this.regulatoryReportsService = new RegulatoryReportsService(wsConnector);
+    this.githubProvisioningService = new GithubProvisioningService(wsConnector);
+    this.githubPermissionsService = new GithubPermissionsService(wsConnector);
+    this.gitlabConfigurationService = new GitlabConfigurationService(wsConnector);
+    this.gitlabSynchronizationRunService = new GitlabSynchronizationRunService(wsConnector);
   }
 
   @Override
@@ -214,6 +227,11 @@ class DefaultWsClient implements WsClient {
   @Override
   public AlmSettingsService almSettings() {
     return almSettingsService;
+  }
+
+  @Override
+  public AnalysisCacheService analysisCache() {
+    return analysisCacheService;
   }
 
   @Override
@@ -242,13 +260,13 @@ class DefaultWsClient implements WsClient {
   }
 
   @Override
-  public CustomMeasuresService customMeasures() {
-    return customMeasuresService;
+  public DevelopersService developers() {
+    return developersService;
   }
 
   @Override
-  public DevelopersService developers() {
-    return developersService;
+  public RegulatoryReportsService regulatoryReports() {
+    return regulatoryReportsService;
   }
 
   @Override
@@ -269,6 +287,21 @@ class DefaultWsClient implements WsClient {
   @Override
   public FavoritesService favorites() {
     return favoritesService;
+  }
+
+  @Override
+  public GithubPermissionsService githubPermissionsService() {
+    return githubPermissionsService;
+  }
+
+  @Override
+  public GitlabConfigurationService gitlabConfigurationService() {
+    return gitlabConfigurationService;
+  }
+
+  @Override
+  public GitlabSynchronizationRunService gitlabSynchronizationRunService() {
+    return gitlabSynchronizationRunService;
   }
 
   @Override
@@ -304,6 +337,16 @@ class DefaultWsClient implements WsClient {
   @Override
   public MetricsService metrics() {
     return metricsService;
+  }
+
+  @Override
+  public MonitoringService monitoring() {
+    return monitoringService;
+  }
+
+  @Override
+  public SonarLintServerPushService sonarLintPush() {
+    return sonarLintPushService;
   }
 
   @Override
@@ -372,11 +415,6 @@ class DefaultWsClient implements WsClient {
   }
 
   @Override
-  public PropertiesService properties() {
-    return propertiesService;
-  }
-
-  @Override
   public QualitygatesService qualitygates() {
     return qualitygatesService;
   }
@@ -407,6 +445,11 @@ class DefaultWsClient implements WsClient {
   }
 
   @Override
+  public GithubProvisioningService githubProvisioning() {
+    return githubProvisioningService;
+  }
+
+  @Override
   public SourcesService sources() {
     return sourcesService;
   }
@@ -422,11 +465,6 @@ class DefaultWsClient implements WsClient {
   }
 
   @Override
-  public TimemachineService timemachine() {
-    return timemachineService;
-  }
-
-  @Override
   public UpdatecenterService updatecenter() {
     return updatecenterService;
   }
@@ -434,11 +472,6 @@ class DefaultWsClient implements WsClient {
   @Override
   public UserGroupsService userGroups() {
     return userGroupsService;
-  }
-
-  @Override
-  public UserPropertiesService userProperties() {
-    return userPropertiesService;
   }
 
   @Override

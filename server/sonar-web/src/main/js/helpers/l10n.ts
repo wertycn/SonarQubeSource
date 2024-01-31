@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,98 +17,119 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { toNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import SonarUiCommonInitializer, { DEFAULT_LOCALE } from 'sonar-ui-common/helpers/init';
-import {
-  get as loadFromLocalStorage,
-  save as saveInLocalStorage
-} from 'sonar-ui-common/helpers/storage';
-import { fetchL10nBundle } from '../api/l10n';
-import { L10nBundle, L10nBundleRequestParams } from '../types/l10n';
+import { getMessages } from './l10nBundle';
 
-const L10N_BUNDLE_LS_KEY = 'l10n.bundle';
+export function hasMessage(...keys: string[]): boolean {
+  const messageKey = keys.join('.');
 
-export async function loadL10nBundle() {
-  const bundle = await getLatestL10nBundle().catch(() => ({
-    locale: DEFAULT_LOCALE,
-    messages: {}
-  }));
+  return getMessages()[messageKey] !== undefined;
+}
 
-  SonarUiCommonInitializer.setLocale(bundle.locale).setMessages(bundle.messages);
-  // No need to load english (default) bundle, it's coming with react-intl
-  if (bundle.locale !== DEFAULT_LOCALE) {
-    const [intlBundle, intl] = await Promise.all([
-      import(`react-intl/locale-data/${bundle.locale}`),
-      import('react-intl')
-    ]);
+export function translate(...keys: string[]): string {
+  const messageKey = keys.join('.');
+  const l10nMessages = getMessages();
 
-    intl.addLocaleData(intlBundle.default);
+  if (process.env.NODE_ENV === 'development' && !l10nMessages[messageKey]) {
+    // eslint-disable-next-line no-console
+    console.error(`No message for: ${messageKey}`);
   }
 
-  return bundle;
+  return l10nMessages[messageKey] || messageKey;
 }
 
-export async function getLatestL10nBundle() {
-  const browserLocale = getPreferredLanguage();
-  const cachedBundle = loadL10nBundleFromLocalStorage();
+export function translateWithParameters(
+  messageKey: string,
+  ...parameters: Array<string | number>
+): string {
+  const message = getMessages()[messageKey];
 
-  const params: L10nBundleRequestParams = {};
-
-  if (browserLocale) {
-    params.locale = browserLocale;
-
-    if (
-      cachedBundle.locale &&
-      browserLocale.startsWith(cachedBundle.locale) &&
-      cachedBundle.timestamp &&
-      cachedBundle.messages
-    ) {
-      params.ts = cachedBundle.timestamp;
-    }
+  if (message) {
+    return parameters
+      .map((parameter) => String(parameter))
+      .reduce((acc, parameter, index) => acc.replaceAll(`{${index}}`, () => parameter), message);
   }
 
-  const { effectiveLocale, messages } = await fetchL10nBundle(params).catch(response => {
-    if (response && response.status === 304) {
-      return {
-        effectiveLocale: cachedBundle.locale || browserLocale || DEFAULT_LOCALE,
-        messages: cachedBundle.messages ?? {}
-      };
-    } else {
-      throw new Error(`Unexpected status code: ${response.status}`);
-    }
-  });
-
-  const bundle = {
-    timestamp: toNotSoISOString(new Date()),
-    locale: effectiveLocale,
-    messages
-  };
-
-  saveL10nBundleToLocalStorage(bundle);
-
-  return bundle;
-}
-
-export function getCurrentL10nBundle() {
-  return loadL10nBundleFromLocalStorage();
-}
-
-function getPreferredLanguage() {
-  return window.navigator.languages ? window.navigator.languages[0] : window.navigator.language;
-}
-
-function loadL10nBundleFromLocalStorage() {
-  let bundle: L10nBundle;
-
-  try {
-    bundle = JSON.parse(loadFromLocalStorage(L10N_BUNDLE_LS_KEY) ?? '{}');
-  } catch {
-    bundle = {};
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.error(`No message for: ${messageKey}`);
   }
 
-  return bundle;
+  return `${messageKey}.${parameters.join('.')}`;
 }
 
-function saveL10nBundleToLocalStorage(bundle: L10nBundle) {
-  saveInLocalStorage(L10N_BUNDLE_LS_KEY, JSON.stringify(bundle));
+export function getLocalizedMetricName(
+  metric: { key: string; name?: string },
+  short = false,
+): string {
+  const bundleKey = `metric.${metric.key}.${short ? 'short_name' : 'name'}`;
+
+  if (hasMessage(bundleKey)) {
+    return translate(bundleKey);
+  } else if (short) {
+    return getLocalizedMetricName(metric);
+  }
+
+  return metric.name || metric.key;
+}
+
+export function getLocalizedCategoryMetricName(metric: { key: string; name?: string }) {
+  const bundleKey = `metric.${metric.key}.extra_short_name`;
+
+  return hasMessage(bundleKey) ? translate(bundleKey) : getLocalizedMetricName(metric, true);
+}
+
+export function getLocalizedMetricDomain(domainName: string) {
+  const bundleKey = `metric_domain.${domainName}`;
+
+  return hasMessage(bundleKey) ? translate(bundleKey) : domainName;
+}
+
+export function getMonthName(index: number) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return translate(months[index]);
+}
+
+export function getShortMonthName(index: number) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return translate(months[index]);
+}
+
+export function getWeekDayName(index: number) {
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  return weekdays[index] ? translate(weekdays[index]) : '';
+}
+
+export function getShortWeekDayName(index: number) {
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return weekdays[index] ? translate(weekdays[index]) : '';
 }

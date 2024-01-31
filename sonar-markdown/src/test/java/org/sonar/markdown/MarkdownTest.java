@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,15 +26,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class MarkdownTest {
 
   @Test
-  public void shouldDecorateUrl() {
+  public void shouldDecorateAbsoluteUrl() {
     assertThat(Markdown.convertToHtml("http://google.com"))
-        .isEqualTo("<a href=\"http://google.com\" target=\"_blank\">http://google.com</a>");
+        .isEqualTo("<a href=\"http://google.com\" target=\"_blank\" rel=\"noopener noreferrer\">http://google.com</a>");
+  }
+
+  @Test
+  public void shouldDecorateRelativeUrl() {
+    assertThat(Markdown.convertToHtml("[Google](/google/com)"))
+      .isEqualTo("<a href=\"/google/com\">Google</a>");
   }
 
   @Test
   public void shouldDecorateDocumentedLink() {
-    assertThat(Markdown.convertToHtml("For more details, please [check online documentation](http://docs.sonarqube.org/display/SONAR)."))
-        .isEqualTo("For more details, please <a href=\"http://docs.sonarqube.org/display/SONAR\" target=\"_blank\">check online documentation</a>.");
+    assertThat(Markdown.convertToHtml("For more details, please [check online documentation](http://docs.sonarsource.com/sonarqube/display/SONAR)."))
+        .isEqualTo("For more details, please <a href=\"http://docs.sonarsource.com/sonarqube/display/SONAR\" target=\"_blank\" rel=\"noopener noreferrer\">check online documentation</a>.");
   }
 
 
@@ -61,8 +67,8 @@ public class MarkdownTest {
 
   @Test
   public void shouldDecorateHeadings() {
-    assertThat(Markdown.convertToHtml("  = Top\r== Sub\r\n=== Sub sub\n ==== \n 1.five"))
-        .isEqualTo("<h1>Top</h1><h2>Sub</h2><h3>Sub sub</h3><h4></h4> 1.five");
+    assertThat(Markdown.convertToHtml("  = Top\r== Sub\r\n=== Sub sub\n ==== \n ===== five\n============ max"))
+        .isEqualTo("<h1>Top</h1><h2>Sub</h2><h3>Sub sub</h3><h4></h4><h5>five</h5><h6>max</h6>");
   }
 
   @Test

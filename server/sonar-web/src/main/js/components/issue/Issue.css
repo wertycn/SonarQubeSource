@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,14 +22,17 @@
   padding-top: var(--gridSize);
   padding-bottom: var(--gridSize);
   background-color: var(--issueBgColor);
-  transition: all 0.3s ease, border 0s ease;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  cursor: pointer;
 }
 
-.issue.hotspot {
-  background-color: var(--hotspotBgColor);
+.issue.no-click {
+  cursor: initial;
 }
 
-.issue.selected {
+.issue.selected,
+.issue-message-box.selected {
   box-shadow: none;
   outline: none;
   border: 2px solid var(--blue) !important;
@@ -40,23 +43,26 @@
   margin-top: 5px;
 }
 
-.issue.selected + .issue {
-  border-top-color: transparent;
-}
-
 .issue-row {
   display: flex;
   margin-bottom: 5px;
+  align-items: flex-start;
 }
 
 .issue-row-meta {
-  flex-grow: 0;
   padding-right: 5px;
   white-space: nowrap;
 }
 
+.issue-message .button-plain {
+  line-height: 18px;
+  font-size: var(--baseFontSize);
+  font-weight: 600;
+  text-align: left;
+}
+
 .issue-message {
-  flex-grow: 1;
+  flex: 1;
   padding-left: var(--gridSize);
   padding-right: var(--gridSize);
   line-height: 18px;
@@ -70,7 +76,6 @@
   justify-content: space-between;
   flex-wrap: wrap;
   align-items: center;
-  padding-left: var(--gridSize);
 }
 
 .issue-meta-list {
@@ -79,8 +84,9 @@
 }
 
 .issue-meta {
-  line-height: 16px;
+  line-height: var(--smallFontSize);
   font-size: var(--smallFontSize);
+  display: flex;
 }
 
 .issue-meta + .issue-meta {
@@ -95,11 +101,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.issue-see-rule {
-  border-bottom: none;
-  font-size: var(--smallFontSize);
 }
 
 .issue-changelog {
@@ -150,7 +151,6 @@
   line-height: 1.5;
   overflow: hidden;
   outline: none;
-  word-break: break-all;
 }
 
 .issue-comment-text.markdown pre {
@@ -243,4 +243,53 @@
 
 .issue .badge-error {
   background-color: var(--badgeRedBackgroundOnIssue);
+}
+
+.issue-message-box {
+  background-color: var(--issueBgColor);
+  border: 2px solid transparent;
+  margin: 10px 0px;
+}
+
+.issue-message-highlight-CODE {
+  background-color: var(--whitea60);
+  border-radius: 4px;
+  font-family: var(--sourceCodeFontFamily);
+  font-weight: 400;
+  line-height: 1.4em;
+  padding: 2px 2px 0;
+}
+
+.issue-message-box.secondary-issue {
+  background-color: var(--secondIssueBgColor);
+}
+
+.issue-message-box.secondary-issue:hover,
+.issue:hover {
+  border: 2px dashed var(--blue);
+  outline: 0;
+  cursor: pointer;
+}
+
+.issue-get-perma-link {
+  flex-shrink: 0;
+}
+
+.issue-comment-list-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.issue-comment-tile {
+  background-color: var(--barBackgroundColor);
+}
+
+.issue .button-link {
+  color: var(--veryDarkBlue);
+}
+
+.issue .button-link:hover,
+.issue .button-link:focus,
+.issue .button-link:active {
+  color: var(--darkBlue);
 }

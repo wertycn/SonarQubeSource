@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,64 +17,77 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { MetricsEnum, MetricsRatingBadge } from 'design-system';
 import * as React from 'react';
-import SecurityHotspotIcon from 'sonar-ui-common/components/icons/SecurityHotspotIcon';
-import Rating from 'sonar-ui-common/components/ui/Rating';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { formatMeasure } from '../../../helpers/measures';
+import { MetricType } from '../../../types/metrics';
+import { Dict, RawQuery } from '../../../types/types';
 import { Facet } from '../types';
-import Filter from './Filter';
-import FilterHeader from './FilterHeader';
+import RangeFacetBase from './RangeFacetBase';
 
 export interface Props {
-  className?: string;
   facet?: Facet;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
+  onQueryChange: (change: RawQuery) => void;
   property?: string;
   value?: any;
 }
 
-const labels: T.Dict<string> = {
+const labels: Dict<string> = {
   1: '≥ 80%',
   2: '70% - 80%',
   3: '50% - 70%',
   4: '30% - 50%',
-  5: '< 30%'
+  5: '< 30%',
 };
 
 export default function SecurityReviewFilter(props: Props) {
-  const { property = 'security_review' } = props;
+  const { facet, maxFacetValue, property = 'security_review', value } = props;
 
   return (
-    <Filter
-      className={props.className}
-      facet={props.facet}
-      header={
-        <FilterHeader name={translate('metric_domain.SecurityReview')}>
-          <span className="note little-spacer-left">
-            {'( '}
-            <SecurityHotspotIcon className="little-spacer-right" />
-            {translate('metric.security_hotspots.name')}
-            {' )'}
-          </span>
-        </FilterHeader>
-      }
+    <RangeFacetBase
+      facet={facet}
+      header={translate('metric_domain.SecurityReview')}
       highlightUnder={1}
-      maxFacetValue={props.maxFacetValue}
+      maxFacetValue={maxFacetValue}
       onQueryChange={props.onQueryChange}
       options={[1, 2, 3, 4, 5]}
       property={property}
+      renderAccessibleLabel={renderAccessibleLabel}
       renderOption={renderOption}
-      value={props.value}
+      value={value}
     />
   );
 }
 
-function renderOption(option: number, selected: boolean) {
+function renderAccessibleLabel(option: number) {
+  if (option === 1) {
+    return translateWithParameters(
+      'projects.facets.rating_label_single_x',
+      translate('metric_domain.SecurityReview'),
+      formatMeasure(option, MetricType.Rating),
+    );
+  }
+
+  return translateWithParameters(
+    'projects.facets.rating_label_multi_x',
+    translate('metric_domain.SecurityReview'),
+    formatMeasure(option, MetricType.Rating),
+  );
+}
+
+function renderOption(option: number) {
+  const ratingFormatted = formatMeasure(option, MetricType.Rating);
+
   return (
-    <span>
-      <Rating muted={!selected} small={true} value={option} />
-      <span className="spacer-left">{labels[option]}</span>
-    </span>
+    <div className="sw-flex sw-items-center">
+      <MetricsRatingBadge
+        label={ratingFormatted}
+        rating={ratingFormatted as MetricsEnum}
+        size="xs"
+      />
+      <span className="sw-ml-2">{labels[option]}</span>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,15 +19,16 @@
  */
 // Do not import dependencies in this helper, to keep initial bundle load as small as possible
 
-import { ExtensionStartMethod } from '../types/extension';
+import { ExtensionRegistryEntry, ExtensionStartMethod } from '../types/extension';
+import { Dict } from '../types/types';
 import { getEnhancedWindow } from './browser';
 
 const WEB_ANALYTICS_EXTENSION = 'sq-web-analytics';
 
-const extensions: T.Dict<ExtensionStartMethod> = {};
+const extensions: Dict<ExtensionRegistryEntry> = {};
 
-function registerExtension(key: string, start: ExtensionStartMethod) {
-  extensions[key] = start;
+function registerExtension(key: string, start: ExtensionStartMethod, providesCSSFile = false) {
+  extensions[key] = { start, providesCSSFile };
 }
 
 function setWebAnalyticsPageChangeHandler(pageHandler: (pathname: string) => void) {
@@ -42,10 +43,10 @@ export function installWebAnalyticsHandler() {
   getEnhancedWindow().setWebAnalyticsPageChangeHandler = setWebAnalyticsPageChangeHandler;
 }
 
-export function getExtensionFromCache(key: string): Function | undefined {
+export function getExtensionFromCache(key: string): ExtensionRegistryEntry | undefined {
   return extensions[key];
 }
 
 export function getWebAnalyticsPageHandlerFromCache(): Function | undefined {
-  return extensions[WEB_ANALYTICS_EXTENSION];
+  return extensions[WEB_ANALYTICS_EXTENSION]?.start;
 }

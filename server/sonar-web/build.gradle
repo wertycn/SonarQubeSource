@@ -1,33 +1,81 @@
-sonarqube {
+sonar {
   properties {
     property "sonar.projectName", "${projectTitle} :: Web"
     property "sonar.sources", "src/main/js"
+    property "sonar.exclusions", "src/main/js/**/__tests__/**,src/main/js/**/__mocks__/**,src/main/js/@types/**,src/main/js/helpers/mocks/**,src/main/js/api/mocks/**,src/main/js/helpers/testUtils.ts,src/main/js/helpers/testMocks.ts,src/main/js/helpers/testReactTestingUtils.tsx,src/main/js/helpers/testSelector.ts"
     property "sonar.tests", "src/main/js"
     property "sonar.test.inclusions", "src/main/js/**/__tests__/**"
-    property "sonar.exclusions", "src/main/js/**/__tests__/**"
-    property "sonar.eslint.reportPaths", "eslint-report.json"
+    property "sonar.coverage.exclusions", "src/main/js/api/**,src/main/js/**/routes.ts,src/main/js/app/index.ts,src/main/js/app/utils/startReactApp.tsx,src/main/js/components/icons/**"
+    property "sonar.eslint.reportPaths", "eslint-report/eslint-report.json"
     property "sonar.javascript.lcov.reportPaths", "coverage/lcov.info"
   }
 }
 
-apply plugin: 'com.github.node-gradle.node'
-
 def webappDir = "${buildDir}/webapp"
 
-yarn_run {
-  ['config', 'public', 'scripts', 'src', '../sonar-docs/src'].each {
+task "yarn_design-system"(type: Exec) {
+  inputs.dir('design-system/src')
+  workingDir "design-system"
+  commandLine osAdaptiveCommand(['npm', 'run', 'build-release'])
+  outputs.dir("design-system/lib")
+  outputs.cacheIf { true }
+}
+
+task yarn_run(type: Exec) {
+  dependsOn "yarn_design-system"
+
+  tasks."yarn_design-system".getOutputs().getFiles().each {
     inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE)
   }
-  ['babel.config.js', 'package.json', 'tsconfig.json', 'yarn.lock'].each {
+
+  ['config', 'public', 'scripts', 'src'].each {
+    inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE)
+  }
+  ['package.json', 'tsconfig.json', 'yarn.lock', 'tailwind.config.js', 'tailwind.base.config.js'].each {
     inputs.file(it).withPathSensitivity(PathSensitivity.RELATIVE)
   }
   outputs.dir(webappDir)
   outputs.cacheIf { true }
-  args = ['build-release']
+
+  commandLine osAdaptiveCommand(['npm', 'run', 'build-release'])
 }
 build.dependsOn(yarn_run)
 
-"yarn_check-ci" {
+task "yarn_lint-report-ci"(type: Exec) {
+  dependsOn "yarn_design-system"
+  
+  // Note that outputs are not relocatable, because contain absolute paths, and that's why inputs are not relativized
+  ['config', 'src/main/js'].each {
+    inputs.dir(it)
+  }
+  ['package.json', 'yarn.lock', 'tsconfig.json', '.eslintrc'].each {
+    inputs.file(it)
+  }
+  outputs.dir('eslint-report')
+  outputs.cacheIf { true }
+
+  commandLine osAdaptiveCommand(['npm', 'run', 'lint-report-ci'])
+}
+
+task "yarn_validate-ci"(type: Exec) {
+  dependsOn "yarn_design-system"
+  
+  // Note that outputs are not relocatable, because contain absolute paths, and that's why inputs are not relativized
+  ['config', 'src/main/js', 'design-system'].each {
+    inputs.dir(it)
+  }
+  ['package.json', 'yarn.lock', 'tsconfig.json', '.eslintrc', 'jest.config.js'].each {
+    inputs.file(it)
+  }
+  outputs.dir('coverage')
+  outputs.cacheIf { true }
+
+  commandLine osAdaptiveCommand(['npm', 'run', 'validate-ci'])
+}
+
+task "yarn_check-ci"(type: Exec) {
+  dependsOn "yarn_design-system"
+  
   // Note that outputs are not relocatable, because contain absolute paths, and that's why inputs are not relativized
   ['config', 'src'].each {
     inputs.dir(it)
@@ -36,34 +84,10 @@ build.dependsOn(yarn_run)
     inputs.file(it)
   }
 
-  dependsOn(yarn)
+  commandLine osAdaptiveCommand(['npm', 'run', 'check-ci'])
 }
 
-"yarn_validate-ci" {
-  // Note that outputs are not relocatable, because contain absolute paths, and that's why inputs are not relativized
-  ['config', 'src/main/js'].each {
-    inputs.dir(it)
-  }
-  ['package.json', 'yarn.lock', 'tsconfig.json', '.eslintrc'].each {
-    inputs.file(it)
-  }
-  outputs.file('eslint-report.json')
-  outputs.dir('coverage')
-  outputs.cacheIf { true }
-
-  dependsOn(yarn)
-}
-
-// Check for known vulnerabilities
-yarn_audit {
-  inputs.file('package.json')
-  outputs.cacheIf { false }
-  args = ['--groups', 'dependencies', '--level', 'high']
-  ignoreExitValue = true
-  dependsOn(yarn)
-}
-
-def sources = fileTree(dir: "src") + fileTree(dir: "scripts") + fileTree(dir: "config") + fileTree(dir: "__mocks__")
+def sources = fileTree(dir: "src/main/js") + fileTree(dir: "scripts") + fileTree(dir: "config") + fileTree(dir: "eslint-local-rules") + fileTree(dir: "__mocks__") + fileTree(dir: "design-system/config") + fileTree(dir: "design-system/src") + files("file:tailwind.config.js") + files("file:jest.config.js") + files("file:tailwind.base.config.js") + files("file:tailwind.config.js") + files("file:tailwind.utilities.js")
 
 task licenseCheckWeb(type: com.hierynomus.gradle.license.tasks.LicenseCheck) {
   source = sources

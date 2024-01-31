@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,15 +27,12 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class WebJvmOptionsTest {
   @Rule
   public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   private File tmpDir;
-  private JavaVersion javaVersion = mock(JavaVersion.class);
   private WebJvmOptions underTest;
 
   @Before
@@ -44,24 +41,21 @@ public class WebJvmOptionsTest {
   }
 
   @Test
-  public void constructor_sets_mandatory_JVM_options_before_java11() {
-    when(javaVersion.isAtLeastJava11()).thenReturn(false);
-    underTest = new WebJvmOptions(tmpDir, javaVersion);
-    assertThat(underTest.getAll()).containsExactly(
-      "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(), "-XX:-OmitStackTraceInFastThrow");
-  }
-
-  @Test
-  public void constructor_sets_mandatory_JVM_options_for_java11() {
-    when(javaVersion.isAtLeastJava11()).thenReturn(true);
-    underTest = new WebJvmOptions(tmpDir, javaVersion);
+  public void constructor_sets_mandatory_JVM_options() {
+    underTest = new WebJvmOptions(tmpDir);
 
     assertThat(underTest.getAll()).containsExactly(
       "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8", "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(), "-XX:-OmitStackTraceInFastThrow",
       "--add-opens=java.base/java.util=ALL-UNNAMED",
       "--add-opens=java.base/java.lang=ALL-UNNAMED",
       "--add-opens=java.base/java.io=ALL-UNNAMED",
-      "--add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED");
+      "--add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED",
+      "--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio=ALL-UNNAMED",
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.management/sun.management=ALL-UNNAMED",
+      "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
+      "-Dcom.redhat.fips=false");
   }
 
 }

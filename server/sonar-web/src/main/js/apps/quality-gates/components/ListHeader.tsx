@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,49 +17,57 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, HelperHintIcon, Title } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ModalButton from 'sonar-ui-common/components/controls/ModalButton';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
+import ModalButton, { ModalProps } from '../../../components/controls/ModalButton';
+import { translate } from '../../../helpers/l10n';
 import CreateQualityGateForm from './CreateQualityGateForm';
 
 interface Props {
   canCreate: boolean;
-  refreshQualityGates: () => Promise<void>;
 }
 
-export default function ListHeader({ canCreate, refreshQualityGates }: Props) {
-  return (
-    <header className="page-header">
-      {canCreate && (
-        <div className="page-actions">
-          <ModalButton
-            modal={({ onClose }) => (
-              <CreateQualityGateForm onClose={onClose} onCreate={refreshQualityGates} />
-            )}>
-            {({ onClick }) => (
-              <Button data-test="quality-gates__add" onClick={onClick}>
-                {translate('create')}
-              </Button>
-            )}
-          </ModalButton>
-        </div>
-      )}
+function CreateQualityGateModal() {
+  const renderModal = React.useCallback(
+    ({ onClose }: ModalProps) => <CreateQualityGateForm onClose={onClose} />,
+    [],
+  );
 
-      <div className="display-flex-center">
-        <h1 className="page-title">{translate('quality_gates.page')}</h1>
+  return (
+    <div>
+      <ModalButton modal={renderModal}>
+        {({ onClick }) => (
+          <ButtonPrimary data-test="quality-gates__add" onClick={onClick}>
+            {translate('create')}
+          </ButtonPrimary>
+        )}
+      </ModalButton>
+    </div>
+  );
+}
+
+export default function ListHeader({ canCreate }: Readonly<Props>) {
+  return (
+    <div className="sw-flex sw-justify-between sw-pb-4">
+      <div className="sw-flex sw-justify-between">
+        <Title className="sw-flex sw-items-center sw-body-md-highlight sw-mb-0">
+          {translate('quality_gates.page')}
+        </Title>
         <DocumentationTooltip
-          className="spacer-left"
+          className="sw-ml-2"
           content={translate('quality_gates.help')}
           links={[
             {
-              href: '/documentation/user-guide/quality-gates/',
-              label: translate('learn_more')
-            }
+              href: '/user-guide/quality-gates/',
+              label: translate('learn_more'),
+            },
           ]}
-        />
+        >
+          <HelperHintIcon />
+        </DocumentationTooltip>
       </div>
-    </header>
+      {canCreate && <CreateQualityGateModal />}
+    </div>
   );
 }

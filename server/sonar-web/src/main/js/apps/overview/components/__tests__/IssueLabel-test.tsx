@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,79 +17,92 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
 import { mockPullRequest } from '../../../../helpers/mocks/branch-like';
-import { mockComponent, mockMeasureEnhanced, mockMetric } from '../../../../helpers/testMocks';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { mockMeasureEnhanced, mockMetric } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { ComponentQualifier } from '../../../../types/component';
 import { IssueType } from '../../../../types/issues';
 import { MetricKey } from '../../../../types/metrics';
 import { IssueLabel, IssueLabelProps } from '../IssueLabel';
 
-it('should render correctly for bugs', () => {
+it('should render correctly for bugs', async () => {
   const measures = [
     mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.bugs }) }),
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_bugs }) })
+    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_bugs }) }),
   ];
-  expect(shallowRender({ measures })).toMatchSnapshot();
-  expect(shallowRender({ measures, useDiffMetric: true })).toMatchSnapshot();
+
+  const rtl = renderIssueLabel({ measures });
+  expect(
+    await screen.findByRole('link', {
+      name: 'overview.see_list_of_x_y_issues.1.0.metric.bugs.name',
+    }),
+  ).toBeInTheDocument();
+
+  rtl.unmount();
+
+  renderIssueLabel({ measures, useDiffMetric: true });
+
+  expect(
+    await screen.findByRole('link', {
+      name: 'overview.see_list_of_x_y_issues.1.0.metric.new_bugs.name',
+    }),
+  ).toBeInTheDocument();
 });
 
-it('should render correctly for code smells', () => {
-  const type = IssueType.CodeSmell;
-  const measures = [
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.code_smells }) }),
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_code_smells }) })
-  ];
-  expect(shallowRender({ measures, type })).toMatchSnapshot();
-  expect(shallowRender({ measures, type, useDiffMetric: true })).toMatchSnapshot();
-});
-
-it('should render correctly for vulnerabilities', () => {
-  const type = IssueType.Vulnerability;
-  const measures = [
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.vulnerabilities }) }),
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_vulnerabilities }) })
-  ];
-  expect(shallowRender({ measures, type })).toMatchSnapshot();
-  expect(shallowRender({ measures, type, useDiffMetric: true })).toMatchSnapshot();
-});
-
-it('should render correctly for hotspots', () => {
+it('should render correctly for hotspots with tooltip', async () => {
   const helpTooltip = 'tooltip text';
   const type = IssueType.SecurityHotspot;
   const measures = [
     mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.security_hotspots }) }),
-    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_security_hotspots }) })
+    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_security_hotspots }) }),
   ];
+
+  renderIssueLabel({
+    helpTooltip,
+    measures,
+    type,
+  });
+
   expect(
-    shallowRender({
-      helpTooltip,
-      measures,
-      type
-    })
-  ).toMatchSnapshot();
-  expect(
-    shallowRender({
-      helpTooltip,
-      measures,
-      type,
-      useDiffMetric: true
-    })
-  ).toMatchSnapshot();
+    await screen.findByRole('link', {
+      name: 'overview.see_list_of_x_y_issues.1.0.metric.security_hotspots.name',
+    }),
+  ).toBeInTheDocument();
+
+  expect(screen.getByText('tooltip text')).toBeInTheDocument();
 });
 
-it('should render correctly if no values are present', () => {
-  expect(shallowRender()).toMatchSnapshot();
+it('should render correctly for a re-indexing Application', () => {
+  const type = IssueType.SecurityHotspot;
+  const measures = [
+    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.security_hotspots }) }),
+    mockMeasureEnhanced({ metric: mockMetric({ key: MetricKey.new_security_hotspots }) }),
+  ];
+
+  renderIssueLabel({
+    component: mockComponent({ needIssueSync: true, qualifier: ComponentQualifier.Application }),
+    measures,
+    type,
+  });
+
+  expect(
+    screen.queryByRole('link', {
+      name: 'overview.see_list_of_x_y_issues.1.0.metric.security_hotspots.name',
+    }),
+  ).not.toBeInTheDocument();
 });
 
-function shallowRender(props: Partial<IssueLabelProps> = {}) {
-  return shallow(
+function renderIssueLabel(props: Partial<IssueLabelProps> = {}) {
+  return renderComponent(
     <IssueLabel
       branchLike={mockPullRequest()}
       component={mockComponent()}
       measures={[]}
       type={IssueType.Bug}
       {...props}
-    />
+    />,
   );
 }

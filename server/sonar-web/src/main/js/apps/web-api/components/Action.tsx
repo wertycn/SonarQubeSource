@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
 import * as React from 'react';
-import { Link } from 'react-router';
-import LinkIcon from 'sonar-ui-common/components/icons/LinkIcon';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import Link from '../../../components/common/Link';
+import LinkIcon from '../../../components/icons/LinkIcon';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { queryToSearch } from '../../../helpers/urls';
+import { WebApi } from '../../../types/types';
 import { getActionKey, serializeQuery } from '../utils';
 import ActionChangelog from './ActionChangelog';
 import DeprecatedBadge from './DeprecatedBadge';
@@ -30,8 +32,8 @@ import Params from './Params';
 import ResponseExample from './ResponseExample';
 
 interface Props {
-  action: T.WebApi.Action;
-  domain: T.WebApi.Domain;
+  action: WebApi.Action;
+  domain: WebApi.Domain;
   showDeprecated: boolean;
   showInternal: boolean;
 }
@@ -46,33 +48,33 @@ export default class Action extends React.PureComponent<Props, State> {
   state: State = {
     showChangelog: false,
     showParams: false,
-    showResponse: false
+    showResponse: false,
   };
 
   handleShowParamsClick = (e: React.SyntheticEvent<HTMLElement>) => {
     e.preventDefault();
-    this.setState(state => ({
+    this.setState((state) => ({
       showChangelog: false,
       showResponse: false,
-      showParams: !state.showParams
+      showParams: !state.showParams,
     }));
   };
 
   handleShowResponseClick = (e: React.SyntheticEvent<HTMLElement>) => {
     e.preventDefault();
-    this.setState(state => ({
+    this.setState((state) => ({
       showChangelog: false,
       showParams: false,
-      showResponse: !state.showResponse
+      showResponse: !state.showResponse,
     }));
   };
 
   handleChangelogClick = (e: React.SyntheticEvent<HTMLElement>) => {
     e.preventDefault();
-    this.setState(state => ({
+    this.setState((state) => ({
       showChangelog: !state.showChangelog,
       showParams: false,
-      showResponse: false
+      showResponse: false,
     }));
   };
 
@@ -88,7 +90,8 @@ export default class Action extends React.PureComponent<Props, State> {
               <a
                 className={classNames({ selected: showParams })}
                 href="#"
-                onClick={this.handleShowParamsClick}>
+                onClick={this.handleShowParamsClick}
+              >
                 {translate('api_documentation.parameters')}
               </a>
             </li>
@@ -99,7 +102,8 @@ export default class Action extends React.PureComponent<Props, State> {
               <a
                 className={classNames({ selected: showResponse })}
                 href="#"
-                onClick={this.handleShowResponseClick}>
+                onClick={this.handleShowResponseClick}
+              >
                 {translate('api_documentation.response_example')}
               </a>
             </li>
@@ -110,7 +114,8 @@ export default class Action extends React.PureComponent<Props, State> {
               <a
                 className={classNames({ selected: showChangelog })}
                 href="#"
-                onClick={this.handleChangelogClick}>
+                onClick={this.handleChangelogClick}
+              >
                 {translate('api_documentation.changelog')}
               </a>
             </li>
@@ -135,11 +140,14 @@ export default class Action extends React.PureComponent<Props, State> {
             className="spacer-right link-no-underline"
             to={{
               pathname: '/web_api/' + actionKey,
-              query: serializeQuery({
-                deprecated: Boolean(action.deprecatedSince),
-                internal: Boolean(action.internal)
-              })
-            }}>
+              search: queryToSearch(
+                serializeQuery({
+                  deprecated: Boolean(action.deprecatedSince),
+                  internal: Boolean(action.internal),
+                }),
+              ),
+            }}
+          >
             <LinkIcon />
           </Link>
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -60,7 +60,7 @@ public class CeTaskMessagesMessageTest {
       .isEqualTo(new Message(text, timestamp))
       .isNotEqualTo(new Message(text + "ç", timestamp))
       .isNotEqualTo(new Message(text, timestamp + 10_999L))
-      .isNotEqualTo(null)
+      .isNotNull()
       .isNotEqualTo(new Object());
   }
 

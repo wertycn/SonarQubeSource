@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,32 +18,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import Level from 'sonar-ui-common/components/ui/Level';
-import { getBranchStatusByBranchLike, Store } from '../../store/rootReducer';
+import Level from '../../components/ui/Level';
 import { BranchLike } from '../../types/branch-like';
 
-interface ExposedProps {
+export interface BranchStatusProps {
   branchLike: BranchLike;
-  component: string;
 }
 
-interface BranchStatusProps {
-  status?: string;
-}
+export default function BranchStatus(props: BranchStatusProps) {
+  const { branchLike } = props;
 
-export function BranchStatus({ status }: BranchStatusProps) {
-  if (!status) {
+  if (!branchLike.status) {
     return null;
   }
 
-  return <Level level={status} small={true} />;
+  return <Level level={branchLike.status.qualityGateStatus} small />;
 }
-
-const mapStateToProps = (state: Store, props: ExposedProps) => {
-  const { branchLike, component } = props;
-  const { status } = getBranchStatusByBranchLike(state, component, branchLike);
-  return { status };
-};
-
-export default connect(mapStateToProps)(BranchStatus);

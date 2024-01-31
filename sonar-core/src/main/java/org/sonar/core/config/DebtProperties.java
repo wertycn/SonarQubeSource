@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.core.config;
 
-import com.google.common.collect.ImmutableList;
 import java.util.List;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.PropertyType;
@@ -33,7 +32,7 @@ class DebtProperties {
   }
 
   static List<PropertyDefinition> all() {
-    return ImmutableList.of(
+    return List.of(
       PropertyDefinition.builder(CoreProperties.DEVELOPMENT_COST)
         .defaultValue("" + CoreProperties.DEVELOPMENT_COST_DEF_VALUE)
         .name("Development cost")
@@ -57,7 +56,7 @@ class DebtProperties {
 
       PropertyDefinition.builder(CoreProperties.LANGUAGE_SPECIFIC_PARAMETERS)
         .name("Language specific parameters")
-        .description("The parameters specified here for a given language will override the general parameters defined in this section.")
+        .description("DEPRECATED - The parameters specified here for a given language will override the general parameters defined in this section.")
         .category(CoreProperties.CATEGORY_TECHNICAL_DEBT)
         .deprecatedKey("languageSpecificParameters")
         .fields(

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,51 +17,49 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
-import CoverageRating from '../../../../../components/ui/CoverageRating';
+
+import { renderComponent } from '../../../../../helpers/testReactTestingUtils';
 import { ComponentQualifier } from '../../../../../types/component';
 import { MetricKey } from '../../../../../types/metrics';
+import { Dict } from '../../../../../types/types';
 import ProjectCardMeasures, { ProjectCardMeasuresProps } from '../ProjectCardMeasures';
 
-jest.mock(
-  'date-fns/difference_in_milliseconds',
-  () => () => 1000 * 60 * 60 * 24 * 30 * 8 // ~ 8 months
-);
+jest.mock('date-fns', () => ({
+  differenceInMilliseconds: () => 1000 * 60 * 60 * 24 * 30 * 8, // ~ 8 months
+}));
 
 describe('Overall measures', () => {
   it('should be rendered properly', () => {
-    const wrapper = shallowRender();
-    expect(wrapper).toMatchSnapshot();
+    renderProjectCardMeasures();
+    expect(screen.getByTitle('metric.bugs.name')).toBeInTheDocument();
   });
 
   it("should be not be rendered if there's no line of code", () => {
-    let wrapper = shallowRender({ [MetricKey.ncloc]: undefined });
-    expect(wrapper).toMatchSnapshot('project');
-
-    wrapper = shallowRender(
-      { ncloc: undefined },
-      { componentQualifier: ComponentQualifier.Application }
-    );
-    expect(wrapper).toMatchSnapshot('application');
+    renderProjectCardMeasures({ [MetricKey.ncloc]: undefined });
+    expect(screen.getByText('overview.project.main_branch_empty')).toBeInTheDocument();
   });
 
-  it('should not render coverage graph if there is no value for it', () => {
-    const wrapper = shallowRender({ [MetricKey.coverage]: undefined });
-    expect(wrapper.find(CoverageRating).exists()).toBe(false);
+  it("should be not be rendered if there's no line of code and application", () => {
+    renderProjectCardMeasures(
+      { [MetricKey.ncloc]: undefined },
+      { componentQualifier: ComponentQualifier.Application },
+    );
+    expect(screen.getByText('portfolio.app.empty')).toBeInTheDocument();
   });
 });
 
 describe('New code measures', () => {
   it('should be rendered properly', () => {
-    const wrapper = shallowRender({}, { isNewCode: true });
-    expect(wrapper).toMatchSnapshot();
+    renderProjectCardMeasures({}, { isNewCode: true });
+    expect(screen.getByLabelText(MetricKey.new_security_hotspots_reviewed)).toBeInTheDocument();
   });
 });
 
-function shallowRender(
-  measuresOverride: T.Dict<string | undefined> = {},
-  props: Partial<ProjectCardMeasuresProps> = {}
+function renderProjectCardMeasures(
+  measuresOverride: Dict<string | undefined> = {},
+  props: Partial<ProjectCardMeasuresProps> = {},
 ) {
   const measures = {
     [MetricKey.alert_status]: 'ERROR',
@@ -83,16 +81,15 @@ function shallowRender(
     [MetricKey.new_coverage]: '26.55',
     [MetricKey.new_duplicated_lines_density]: '0.55',
     [MetricKey.new_lines]: '87',
-    ...measuresOverride
+    ...measuresOverride,
   };
 
-  return shallow<ProjectCardMeasuresProps>(
+  renderComponent(
     <ProjectCardMeasures
       componentQualifier={ComponentQualifier.Project}
       isNewCode={false}
       measures={measures}
-      newCodeStartingDate="2018-01-01"
       {...props}
-    />
+    />,
   );
 }

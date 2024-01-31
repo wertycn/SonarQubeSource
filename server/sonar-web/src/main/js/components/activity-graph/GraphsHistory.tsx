@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { isEqual } from 'lodash';
+import { LightLabel, Spinner } from 'design-system';
+import { isEqual, uniqBy } from 'lodash';
 import * as React from 'react';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
-import { GraphType, MeasureHistory, Serie } from '../../types/project-activity';
+import { translate, translateWithParameters } from '../../helpers/l10n';
+import { GraphType, MeasureHistory, ParsedAnalysis, Serie } from '../../types/project-activity';
 import GraphHistory from './GraphHistory';
-import './styles.css';
 import { getSeriesMetricType, hasHistoryData, isCustomGraph } from './utils';
 
 interface Props {
-  analyses: T.ParsedAnalysis[];
+  analyses: ParsedAnalysis[];
+  ariaLabel?: string;
+  canShowDataAsTable?: boolean;
   graph: GraphType;
   graphs: Serie[][];
   graphEndDate?: Date;
@@ -51,41 +51,29 @@ export default class GraphsHistory extends React.PureComponent<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      selectedDate: props.selectedDate
+      selectedDate: props.selectedDate,
     };
   }
 
-  componentWillReceiveProps(nextProps: Props) {
-    if (!isEqual(nextProps.selectedDate, this.props.selectedDate)) {
-      this.setState({ selectedDate: nextProps.selectedDate });
+  componentDidUpdate(prevProps: Props) {
+    if (!isEqual(prevProps.selectedDate, this.props.selectedDate)) {
+      this.setState({ selectedDate: this.props.selectedDate });
     }
   }
-
-  getSelectedDateEvents = () => {
-    const { selectedDate } = this.state;
-    const { analyses } = this.props;
-    if (analyses && selectedDate) {
-      const analysis = analyses.find(a => a.date.valueOf() === selectedDate.valueOf());
-      if (analysis) {
-        return analysis.events;
-      }
-    }
-    return [];
-  };
 
   updateTooltip = (selectedDate?: Date) => {
     this.setState({ selectedDate });
   };
 
   render() {
-    const { graph, loading, series } = this.props;
+    const { analyses, graph, loading, series, ariaLabel, canShowDataAsTable } = this.props;
     const isCustom = isCustomGraph(graph);
 
     if (loading) {
       return (
-        <div className="activity-graph-container flex-grow display-flex-column display-flex-stretch display-flex-justify-center">
-          <div className="text-center">
-            <DeferredSpinner loading={loading} />
+        <div className="sw-flex sw-justify-center sw-flex-col sw-items-stretch sw-grow">
+          <div className="sw-text-center">
+            <Spinner ariaLabel={translate('loading')} loading={loading} />
           </div>
         </div>
       );
@@ -93,49 +81,52 @@ export default class GraphsHistory extends React.PureComponent<Props, State> {
 
     if (!hasHistoryData(series)) {
       return (
-        <div className="activity-graph-container flex-grow display-flex-column display-flex-stretch display-flex-justify-center">
-          <div className="display-flex-center display-flex-justify-center">
-            <img
-              alt="" /* Make screen readers ignore this image; it's purely eye candy. */
-              className="spacer-right"
-              height={52}
-              src={`${getBaseUrl()}/images/activity-chart.svg`}
-            />
-            <div className="big-spacer-left big text-muted" style={{ maxWidth: 300 }}>
-              {translate(
-                isCustom
-                  ? 'project_activity.graphs.custom.no_history'
-                  : 'component_measures.no_history'
-              )}
-            </div>
-          </div>
+        <div className="sw-flex sw-items-center sw-justify-center sw-h-full">
+          <LightLabel className="sw-body-sm">
+            {translate(
+              isCustom
+                ? 'project_activity.graphs.custom.no_history'
+                : 'component_measures.no_history',
+            )}
+          </LightLabel>
         </div>
       );
     }
-    const events = this.getSelectedDateEvents();
     const showAreas = [GraphType.coverage, GraphType.duplications].includes(graph);
     return (
-      <div className="display-flex-justify-center display-flex-column display-flex-stretch flex-grow">
-        {this.props.graphs.map((graphSeries, idx) => (
-          <GraphHistory
-            events={events}
-            graph={graph}
-            graphEndDate={this.props.graphEndDate}
-            graphStartDate={this.props.graphStartDate}
-            isCustom={isCustom}
-            key={idx}
-            leakPeriodDate={this.props.leakPeriodDate}
-            measuresHistory={this.props.measuresHistory}
-            metricsType={getSeriesMetricType(graphSeries)}
-            removeCustomMetric={this.props.removeCustomMetric}
-            selectedDate={this.state.selectedDate}
-            series={graphSeries}
-            showAreas={showAreas}
-            updateGraphZoom={this.props.updateGraphZoom}
-            updateSelectedDate={this.props.updateSelectedDate}
-            updateTooltip={this.updateTooltip}
-          />
-        ))}
+      <div className="sw-flex sw-justify-center sw-flex-col sw-items-stretch sw-grow">
+        {this.props.graphs.map((graphSeries, idx) => {
+          return (
+            <GraphHistory
+              analyses={analyses}
+              canShowDataAsTable={canShowDataAsTable}
+              graph={graph}
+              graphEndDate={this.props.graphEndDate}
+              graphStartDate={this.props.graphStartDate}
+              isCustom={isCustom}
+              key={idx}
+              leakPeriodDate={this.props.leakPeriodDate}
+              measuresHistory={this.props.measuresHistory}
+              metricsType={getSeriesMetricType(graphSeries)}
+              removeCustomMetric={this.props.removeCustomMetric}
+              selectedDate={this.state.selectedDate}
+              series={graphSeries}
+              graphDescription={
+                ariaLabel ??
+                translateWithParameters(
+                  'project_activity.graphs.explanation_x',
+                  uniqBy(graphSeries, 'name')
+                    .map(({ translatedName }) => translatedName)
+                    .join(', '),
+                )
+              }
+              showAreas={showAreas}
+              updateGraphZoom={this.props.updateGraphZoom}
+              updateSelectedDate={this.props.updateSelectedDate}
+              updateTooltip={this.updateTooltip}
+            />
+          );
+        })}
       </div>
     );
   }

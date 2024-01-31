@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -45,16 +47,16 @@ import org.sonar.api.rules.RuleFinder;
 import org.sonar.api.rules.RulePriority;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.utils.ValidationMessages;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.ActiveRuleParamDto;
 import org.sonar.db.qualityprofile.OrgActiveRuleDto;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.exceptions.NotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.sonar.server.exceptions.BadRequestException.checkRequest;
 
@@ -67,6 +69,7 @@ public class QProfileExporters {
   private final ProfileExporter[] exporters;
   private final ProfileImporter[] importers;
 
+  @Autowired(required = false)
   public QProfileExporters(DbClient dbClient, RuleFinder ruleFinder, QProfileRules qProfileRules, ProfileExporter[] exporters, ProfileImporter[] importers) {
     this.dbClient = dbClient;
     this.ruleFinder = ruleFinder;
@@ -76,22 +79,25 @@ public class QProfileExporters {
   }
 
   /**
-   * Used by Pico if no {@link ProfileImporter} is found
+   * Used by the ioc container if no {@link ProfileImporter} is found
    */
+  @Autowired(required = false)
   public QProfileExporters(DbClient dbClient, RuleFinder ruleFinder, QProfileRules qProfileRules, ProfileExporter[] exporters) {
     this(dbClient, ruleFinder, qProfileRules, exporters, new ProfileImporter[0]);
   }
 
   /**
-   * Used by Pico if no {@link ProfileExporter} is found
+   * Used by the ioc container if no {@link ProfileExporter} is found
    */
+  @Autowired(required = false)
   public QProfileExporters(DbClient dbClient, RuleFinder ruleFinder, QProfileRules qProfileRules, ProfileImporter[] importers) {
     this(dbClient, ruleFinder, qProfileRules, new ProfileExporter[0], importers);
   }
 
   /**
-   * Used by Pico if no {@link ProfileImporter} nor {@link ProfileExporter} is found
+   * Used by the ioc container if no {@link ProfileImporter} nor {@link ProfileExporter} is found
    */
+  @Autowired(required = false)
   public QProfileExporters(DbClient dbClient, RuleFinder ruleFinder, QProfileRules qProfileRules) {
     this(dbClient, ruleFinder, qProfileRules, new ProfileExporter[0], new ProfileImporter[0]);
   }
@@ -159,14 +165,14 @@ public class QProfileExporters {
   }
 
   private List<ActiveRuleChange> importProfile(QProfileDto profile, RulesProfile definition, DbSession dbSession) {
-    Map<RuleKey, RuleDefinitionDto> rulesByRuleKey = dbClient.ruleDao().selectAllDefinitions(dbSession)
+    Map<RuleKey, RuleDto> rulesByRuleKey = dbClient.ruleDao().selectAll(dbSession)
       .stream()
-      .collect(MoreCollectors.uniqueIndex(RuleDefinitionDto::getKey));
+      .collect(Collectors.toMap(RuleDto::getKey, Function.identity()));
     List<ActiveRule> activeRules = definition.getActiveRules();
     List<RuleActivation> activations = activeRules.stream()
       .map(activeRule -> toRuleActivation(activeRule, rulesByRuleKey))
       .filter(Objects::nonNull)
-      .collect(MoreCollectors.toArrayList(activeRules.size()));
+      .toList();
     return qProfileRules.activateAndCommit(dbSession, profile, activations);
   }
 
@@ -186,16 +192,16 @@ public class QProfileExporters {
   }
 
   @CheckForNull
-  private static RuleActivation toRuleActivation(ActiveRule activeRule, Map<RuleKey, RuleDefinitionDto> rulesByRuleKey) {
+  private static RuleActivation toRuleActivation(ActiveRule activeRule, Map<RuleKey, RuleDto> rulesByRuleKey) {
     RuleKey ruleKey = activeRule.getRule().ruleKey();
-    RuleDefinitionDto ruleDefinition = rulesByRuleKey.get(ruleKey);
-    if (ruleDefinition == null) {
+    RuleDto ruleDto = rulesByRuleKey.get(ruleKey);
+    if (ruleDto == null) {
       return null;
     }
     String severity = activeRule.getSeverity().name();
     Map<String, String> params = activeRule.getActiveRuleParams().stream()
-      .collect(MoreCollectors.uniqueIndex(ActiveRuleParam::getKey, ActiveRuleParam::getValue));
-    return RuleActivation.create(ruleDefinition.getUuid(), severity, params);
+      .collect(Collectors.toMap(ActiveRuleParam::getKey, ActiveRuleParam::getValue));
+    return RuleActivation.create(ruleDto.getUuid(), severity, params);
   }
 
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.ce.monitoring;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface CeTasksMBean {
 
@@ -34,7 +33,7 @@ public interface CeTasksMBean {
   /**
    * The age, in ms, of the oldest pending task.
    */
-  Optional<Long> getLongestTimePending();
+  long getLongestTimePending();
 
   /**
    * Count of tasks under processing.

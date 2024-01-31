@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import Link from '../../components/common/Link';
+import Modal from '../../components/controls/Modal';
+import { Button } from '../../components/controls/buttons';
+import { isInput } from '../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../helpers/keycodes';
+import { translate } from '../../helpers/l10n';
+import { getKeyboardShortcutEnabled } from '../../helpers/preferences';
 
 type Shortcuts = Array<{
   category: string;
@@ -36,8 +41,8 @@ const CATEGORIES: { left: Shortcuts; right: Shortcuts } = {
       category: 'global',
       shortcuts: [
         { keys: ['s'], action: 'search' },
-        { keys: ['?'], action: 'open_shortcuts' }
-      ]
+        { keys: ['?'], action: 'open_shortcuts' },
+      ],
     },
     {
       category: 'issues_page',
@@ -51,11 +56,10 @@ const CATEGORIES: { left: Shortcuts; right: Shortcuts } = {
         { keys: ['a'], action: 'assign' },
         { keys: ['m'], action: 'assign_to_me' },
         { keys: ['i'], action: 'severity' },
-        { keys: ['c'], action: 'comment' },
         { keys: ['ctrl', '+', 'enter'], action: 'submit_comment' },
-        { keys: ['t'], action: 'tags' }
-      ]
-    }
+        { keys: ['t'], action: 'tags' },
+      ],
+    },
   ],
   right: [
     {
@@ -63,26 +67,26 @@ const CATEGORIES: { left: Shortcuts; right: Shortcuts } = {
       shortcuts: [
         { keys: ['↑', '↓'], action: 'select_files' },
         { keys: ['→'], action: 'open_file' },
-        { keys: ['←'], action: 'back' }
-      ]
+        { keys: ['←'], action: 'back' },
+      ],
     },
     {
       category: 'measures_page',
       shortcuts: [
         { keys: ['↑', '↓'], action: 'select_files' },
         { keys: ['→'], action: 'open_file' },
-        { keys: ['←'], action: 'back' }
-      ]
+        { keys: ['←'], action: 'back' },
+      ],
     },
     {
       category: 'rules_page',
       shortcuts: [
         { keys: ['↑', '↓'], action: 'navigate' },
         { keys: ['→'], action: 'rule_details' },
-        { keys: ['←'], action: 'back' }
-      ]
-    }
-  ]
+        { keys: ['←'], action: 'back' },
+      ],
+    },
+  ],
 };
 
 function renderShortcuts(list: Shortcuts) {
@@ -102,7 +106,7 @@ function renderShortcuts(list: Shortcuts) {
               {shortcuts.map(({ action, keys }) => (
                 <tr key={action}>
                   <td>
-                    {keys.map(k =>
+                    {keys.map((k) =>
                       k === '+' ? (
                         <span key={k} className="little-spacer-right">
                           {k}
@@ -111,7 +115,7 @@ function renderShortcuts(list: Shortcuts) {
                         <code key={k} className="little-spacer-right">
                           {k}
                         </code>
-                      )
+                      ),
                     )}
                   </td>
                   <td>{translate('keyboard_shortcuts', category, action)}</td>
@@ -129,22 +133,24 @@ export default function KeyboardShortcutsModal() {
   const [display, setDisplay] = React.useState(false);
 
   React.useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      const { tagName } = event.target as HTMLElement;
-
-      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) {
-        return; // Ignore keys when typed in an input
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!getKeyboardShortcutEnabled()) {
+        return true;
       }
 
-      if (event.key === '?') {
-        setDisplay(d => !d);
+      if (isInput(event)) {
+        return true;
+      }
+
+      if (event.key === KeyboardKeys.KeyQuestionMark) {
+        setDisplay((d) => !d);
       }
     };
 
-    window.addEventListener('keypress', handleKeyPress);
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('keypress', handleKeyPress);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [setDisplay]);
 
@@ -156,8 +162,17 @@ export default function KeyboardShortcutsModal() {
 
   return (
     <Modal contentLabel={title} onRequestClose={() => setDisplay(false)} size="medium">
-      <div className="modal-head">
+      <div className="modal-head display-flex-space-between">
         <h2>{title}</h2>
+        <Link
+          to="/account"
+          onClick={() => {
+            setDisplay(false);
+            return true;
+          }}
+        >
+          {translate('keyboard_shortcuts.disable_link')}
+        </Link>
       </div>
 
       <div className="modal-body modal-container markdown display-flex-start shortcuts-modal">

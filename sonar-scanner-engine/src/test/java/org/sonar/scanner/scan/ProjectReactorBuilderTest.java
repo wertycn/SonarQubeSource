@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,23 +31,21 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.bootstrap.ProjectReactor;
 import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.scanner.bootstrap.ScannerProperties;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class ProjectReactorBuilderTest {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Rule
   public LogTester logTester = new LogTester();
@@ -65,37 +63,36 @@ public class ProjectReactorBuilderTest {
 
   @Test
   public void should_fail_if_sources_are_missing_in_leaf_module() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("The folder 'unexisting-source-dir' does not exist for 'com.foo.project' (base directory = "
-      + getResource(this.getClass(), "simple-project-with-unexisting-source-dir") + ")");
-
-    loadProjectDefinition("simple-project-with-unexisting-source-dir");
+    assertThatThrownBy(() -> loadProjectDefinition("simple-project-with-unexisting-source-dir"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The folder 'unexisting-source-dir' does not exist for 'com.foo.project' (base directory = "
+        + getResource(this.getClass(), "simple-project-with-unexisting-source-dir") + ")");
   }
 
   @Test
   public void should_not_fail_if_sources_are_missing_in_intermediate_module() {
-    loadProjectDefinition("multi-module-pom-in-root");
+    assertThatNoException()
+      .isThrownBy(() -> loadProjectDefinition("multi-module-pom-in-root"));
   }
 
   @Test
   public void shouldNotFailIfBlankSourceDirectory() {
-    loadProjectDefinition("simple-project-with-blank-source-dir");
+    assertThatNoException()
+      .isThrownBy(() -> loadProjectDefinition("simple-project-with-blank-source-dir"));
   }
 
   @Test
   public void modulesDuplicateIds() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("Two modules have the same id: 'module1'. Each module must have a unique id.");
-
-    loadProjectDefinition("multi-module-duplicate-id");
+    assertThatThrownBy(() -> loadProjectDefinition("multi-module-duplicate-id"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Two modules have the same id: 'module1'. Each module must have a unique id.");
   }
 
   @Test
   public void sonarModuleIdIsForbidden() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("'sonar' is not a valid module id. Please check property 'sonar.modules'.");
-
-    loadProjectDefinition("multi-module-sonar-module");
+    assertThatThrownBy(() -> loadProjectDefinition("multi-module-sonar-module"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("'sonar' is not a valid module id. Please check property 'sonar.modules'.");
   }
 
   @Test
@@ -103,7 +100,7 @@ public class ProjectReactorBuilderTest {
     ProjectDefinition rootProject = loadProjectDefinition("multi-module-repeated-id");
 
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(1);
+    assertThat(modules.size()).isOne();
     // Module 1
     ProjectDefinition module1 = modules.get(0);
     assertThat(module1.getKey()).isEqualTo("com.foo.project:module1");
@@ -133,8 +130,8 @@ public class ProjectReactorBuilderTest {
     assertThat(rootProject.getName()).isEqualTo("Foo Project");
     assertThat(rootProject.getVersion()).isEqualTo("1.0-SNAPSHOT");
     assertThat(rootProject.getDescription()).isEqualTo("Description of Foo Project");
-    assertThat(rootProject.sources().contains("sources")).isTrue();
-    assertThat(rootProject.tests().contains("tests")).isTrue();
+    assertThat(rootProject.sources()).contains("sources");
+    assertThat(rootProject.tests()).contains("tests");
     // and module properties must have been cleaned
     assertThat(rootProject.properties().get("module1.sonar.projectKey")).isNull();
     assertThat(rootProject.properties().get("module2.sonar.projectKey")).isNull();
@@ -144,7 +141,7 @@ public class ProjectReactorBuilderTest {
 
     // CHECK MODULES
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(2);
+    assertThat(modules).hasSize(2);
 
     // Module 1
     ProjectDefinition module1 = modules.get(0);
@@ -195,7 +192,7 @@ public class ProjectReactorBuilderTest {
 
     // CHECK MODULES
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(2);
+    assertThat(modules).hasSize(2);
 
     // Module 2
     ProjectDefinition module2 = modules.get(1);
@@ -214,7 +211,7 @@ public class ProjectReactorBuilderTest {
 
     // CHECK MODULES
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(2);
+    assertThat(modules).hasSize(2);
 
     // Module 1
     ProjectDefinition module1 = modules.get(0);
@@ -237,44 +234,54 @@ public class ProjectReactorBuilderTest {
   public void shouldDefineMultiModuleProjectWithBaseDir() {
     ProjectDefinition rootProject = loadProjectDefinition("multi-module-with-basedir");
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(1);
+    assertThat(modules.size()).isOne();
     assertThat(modules.get(0).getKey()).isEqualTo("com.foo.project:com.foo.project.module1");
   }
 
   @Test
   public void shouldFailIfUnexistingModuleBaseDir() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("The base directory of the module 'module1' does not exist: "
-      + getResource(this.getClass(), "multi-module-with-unexisting-basedir").getAbsolutePath() + File.separator + "module1");
-
-    loadProjectDefinition("multi-module-with-unexisting-basedir");
+    assertThatThrownBy(() -> loadProjectDefinition("multi-module-with-unexisting-basedir"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The base directory of the module 'module1' does not exist: "
+        + getResource(this.getClass(), "multi-module-with-unexisting-basedir").getAbsolutePath() + File.separator + "module1");
   }
 
   @Test
   public void shouldFailIfUnexistingSourceFolderInheritedInMultimodule() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("The folder 'unexisting-source-dir' does not exist for 'com.foo.project:module1' (base directory = "
-      + getResource(this.getClass(), "multi-module-with-unexisting-source-dir").getAbsolutePath() + File.separator + "module1)");
-
-    loadProjectDefinition("multi-module-with-unexisting-source-dir");
+    assertThatThrownBy(() -> loadProjectDefinition("multi-module-with-unexisting-source-dir"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The folder 'unexisting-source-dir' does not exist for 'com.foo.project:module1' (base directory = "
+        + getResource(this.getClass(), "multi-module-with-unexisting-source-dir").getAbsolutePath() + File.separator + "module1)");
   }
 
   @Test
   public void shouldFailIfExplicitUnexistingTestFolder() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("The folder 'tests' does not exist for 'com.foo.project' (base directory = "
-      + getResource(this.getClass(), "simple-project-with-unexisting-test-dir").getAbsolutePath());
-
-    loadProjectDefinition("simple-project-with-unexisting-test-dir");
+    assertThatThrownBy(() -> loadProjectDefinition("simple-project-with-unexisting-test-dir"))
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("The folder 'tests' does not exist for 'com.foo.project' (base directory = "
+        + getResource(this.getClass(), "simple-project-with-unexisting-test-dir").getAbsolutePath());
   }
 
   @Test
   public void shouldFailIfExplicitUnexistingTestFolderOnModule() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("The folder 'tests' does not exist for 'module1' (base directory = "
-      + getResource(this.getClass(), "multi-module-with-explicit-unexisting-test-dir").getAbsolutePath() + File.separator + "module1)");
+    assertThatThrownBy(() -> loadProjectDefinition("multi-module-with-explicit-unexisting-test-dir"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The folder 'tests' does not exist for 'module1' (base directory = "
+        + getResource(this.getClass(), "multi-module-with-explicit-unexisting-test-dir").getAbsolutePath() + File.separator + "module1)");
+  }
 
-    loadProjectDefinition("multi-module-with-explicit-unexisting-test-dir");
+  @Test
+  public void should_fail_with_asterisks_in_sources() {
+    assertThatThrownBy(() -> loadProjectDefinition("simple-project-with-asterisks-in-sources"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage(ProjectReactorBuilder.WILDCARDS_NOT_SUPPORTED);
+  }
+
+  @Test
+  public void should_fail_with_asterisks_in_tests() {
+    assertThatThrownBy(() -> loadProjectDefinition("simple-project-with-asterisks-in-tests"))
+      .isInstanceOf(MessageException.class)
+      .hasMessage(ProjectReactorBuilder.WILDCARDS_NOT_SUPPORTED);
   }
 
   @Test
@@ -307,7 +314,7 @@ public class ProjectReactorBuilderTest {
     }
     assertThat(module11.properties().get("module1.module11.property")).isNull();
     assertThat(module11.properties().get("module11.property")).isNull();
-    assertThat(module11.properties().get("property")).isEqualTo("My module11 property");
+    assertThat(module11.properties()).containsEntry("property", "My module11 property");
     assertThat(module12.properties().get("module11.property")).isNull();
     assertThat(module12.properties().get("property")).isNull();
   }
@@ -318,10 +325,9 @@ public class ProjectReactorBuilderTest {
     props.put("foo1", "bla");
     props.put("foo4", "bla");
 
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("You must define the following mandatory properties for 'Unknown': foo2, foo3");
-
-    ProjectReactorBuilder.checkMandatoryProperties(props, new String[] {"foo1", "foo2", "foo3"});
+    assertThatThrownBy(() -> ProjectReactorBuilder.checkMandatoryProperties(props, new String[] {"foo1", "foo2", "foo3"}))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("You must define the following mandatory properties for 'Unknown': foo2, foo3");
   }
 
   @Test
@@ -330,10 +336,9 @@ public class ProjectReactorBuilderTest {
     props.put("foo1", "bla");
     props.put("sonar.projectKey", "my-project");
 
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("You must define the following mandatory properties for 'my-project': foo2, foo3");
-
-    ProjectReactorBuilder.checkMandatoryProperties(props, new String[] {"foo1", "foo2", "foo3"});
+    assertThatThrownBy(() -> ProjectReactorBuilder.checkMandatoryProperties(props, new String[] {"foo1", "foo2", "foo3"}))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("You must define the following mandatory properties for 'my-project': foo2, foo3");
   }
 
   @Test
@@ -380,10 +385,11 @@ public class ProjectReactorBuilderTest {
 
     ProjectReactorBuilder.mergeParentProperties(childProps, parentProps);
 
-    assertThat(childProps).hasSize(4);
-    assertThat(childProps.get("toBeMergeProps")).isEqualTo("fooParent");
-    assertThat(childProps.get("existingChildProp")).isEqualTo("barChild");
-    assertThat(childProps.get("otherProp")).isEqualTo("tutuChild");
+    assertThat(childProps)
+      .hasSize(4)
+      .containsEntry("toBeMergeProps", "fooParent")
+      .containsEntry("existingChildProp", "barChild")
+      .containsEntry("otherProp", "tutuChild");
     assertThat(childProps.get("sonar.projectDescription")).isNull();
     assertThat(childProps.get("duplicatedProp")).isSameAs(parentProps.get("duplicatedProp"));
   }
@@ -439,10 +445,9 @@ public class ProjectReactorBuilderTest {
     // Now, add it and check again
     root.addSubProject(mod2);
 
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("Project 'root' can't have 2 modules with the following key: mod2");
-
-    ProjectReactorBuilder.checkUniquenessOfChildKey(mod2, root);
+    assertThatThrownBy(() -> ProjectReactorBuilder.checkUniquenessOfChildKey(mod2, root))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Project 'root' can't have 2 modules with the following key: mod2");
   }
 
   @Test
@@ -459,13 +464,15 @@ public class ProjectReactorBuilderTest {
 
     // should be set
     ProjectReactorBuilder.setModuleKeyAndNameIfNotDefined(props, "foo", "parent");
-    assertThat(props.get("sonar.moduleKey")).isEqualTo("parent:foo");
-    assertThat(props.get("sonar.projectName")).isEqualTo("foo");
+    assertThat(props)
+      .containsEntry("sonar.moduleKey", "parent:foo")
+      .containsEntry("sonar.projectName", "foo");
 
     // but not this 2nd time
     ProjectReactorBuilder.setModuleKeyAndNameIfNotDefined(props, "bar", "parent");
-    assertThat(props.get("sonar.moduleKey")).isEqualTo("parent:foo");
-    assertThat(props.get("sonar.projectName")).isEqualTo("foo");
+    assertThat(props)
+      .containsEntry("sonar.moduleKey", "parent:foo")
+      .containsEntry("sonar.projectName", "foo");
   }
 
   private ProjectDefinition loadProjectDefinition(String projectFolder) {
@@ -540,8 +547,8 @@ public class ProjectReactorBuilderTest {
     assertThat(rootProject.getName()).isEqualTo("Foo Project");
     assertThat(rootProject.getVersion()).isEqualTo("1.0-SNAPSHOT");
     assertThat(rootProject.getDescription()).isEqualTo("Description of Foo Project");
-    assertThat(rootProject.sources().contains("sources")).isTrue();
-    assertThat(rootProject.tests().contains("tests")).isTrue();
+    assertThat(rootProject.sources()).contains("sources");
+    assertThat(rootProject.tests()).contains("tests");
     // Module properties must have been cleaned
     assertThat(rootProject.properties().get("module1.sonar.projectKey")).isNull();
     assertThat(rootProject.properties().get("module2.sonar.projectKey")).isNull();
@@ -553,7 +560,7 @@ public class ProjectReactorBuilderTest {
 
     // CHECK MODULES
     List<ProjectDefinition> modules = rootProject.getSubProjects();
-    assertThat(modules.size()).isEqualTo(2);
+    assertThat(modules).hasSize(2);
 
     // Module 1
     ProjectDefinition module1 = modules.get(0);

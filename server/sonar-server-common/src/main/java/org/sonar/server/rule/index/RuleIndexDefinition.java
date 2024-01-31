@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  */
 package org.sonar.server.rule.index;
 
-import com.google.common.collect.ImmutableSet;
 import java.util.Set;
+import javax.inject.Inject;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.server.es.Index;
@@ -62,11 +62,12 @@ public class RuleIndexDefinition implements IndexDefinition {
   public static final String FIELD_RULE_UPDATED_AT = "updatedAt";
   public static final String FIELD_RULE_CWE = "cwe";
   public static final String FIELD_RULE_OWASP_TOP_10 = "owaspTop10";
+  public static final String FIELD_RULE_OWASP_TOP_10_2021 = "owaspTop10-2021";
   public static final String FIELD_RULE_SANS_TOP_25 = "sansTop25";
   public static final String FIELD_RULE_SONARSOURCE_SECURITY = "sonarsourceSecurity";
   public static final String FIELD_RULE_TAGS = "tags";
 
-  public static final Set<String> SORT_FIELDS = ImmutableSet.of(
+  public static final Set<String> SORT_FIELDS = Set.of(
     FIELD_RULE_NAME,
     FIELD_RULE_UPDATED_AT,
     FIELD_RULE_CREATED_AT,
@@ -79,9 +80,17 @@ public class RuleIndexDefinition implements IndexDefinition {
   public static final String FIELD_ACTIVE_RULE_PROFILE_UUID = "activeRule_ruleProfile";
   public static final String FIELD_ACTIVE_RULE_SEVERITY = "activeRule_severity";
 
+  public static final String FIELD_RULE_CLEAN_CODE_ATTRIBUTE_CATEGORY = "cleanCodeAttributeCategory";
+  public static final String FIELD_RULE_IMPACTS = "impacts";
+  public static final String SUB_FIELD_SOFTWARE_QUALITY = "softwareQuality";
+  public static final String SUB_FIELD_SEVERITY = "severity";
+  public static final String FIELD_RULE_IMPACT_SOFTWARE_QUALITY = FIELD_RULE_IMPACTS + "." + SUB_FIELD_SOFTWARE_QUALITY;
+  public static final String FIELD_RULE_IMPACT_SEVERITY = FIELD_RULE_IMPACTS + "." + SUB_FIELD_SEVERITY;
+
   private final Configuration config;
   private final boolean enableSource;
 
+  @Inject
   public RuleIndexDefinition(Configuration config) {
     this(config, false);
   }
@@ -121,10 +130,9 @@ public class RuleIndexDefinition implements IndexDefinition {
     ruleMapping.keywordFieldBuilder(FIELD_RULE_INTERNAL_KEY).disableNorms().disableSearch().build();
 
     ruleMapping.keywordFieldBuilder(FIELD_RULE_NAME).addSubFields(SORTABLE_ANALYZER, SEARCH_GRAMS_ANALYZER).build();
-    ruleMapping.keywordFieldBuilder(FIELD_RULE_HTML_DESCRIPTION)
+    ruleMapping.textFieldBuilder(FIELD_RULE_HTML_DESCRIPTION)
       .disableSearch()
       .disableNorms()
-      .disableSortingAndAggregating()
       .addSubFields(ENGLISH_HTML_ANALYZER)
       .build();
     ruleMapping.keywordFieldBuilder(FIELD_RULE_SEVERITY).disableNorms().build();
@@ -143,8 +151,15 @@ public class RuleIndexDefinition implements IndexDefinition {
 
     ruleMapping.keywordFieldBuilder(FIELD_RULE_CWE).disableNorms().build();
     ruleMapping.keywordFieldBuilder(FIELD_RULE_OWASP_TOP_10).disableNorms().build();
+    ruleMapping.keywordFieldBuilder(FIELD_RULE_OWASP_TOP_10_2021).disableNorms().build();
     ruleMapping.keywordFieldBuilder(FIELD_RULE_SANS_TOP_25).disableNorms().build();
     ruleMapping.keywordFieldBuilder(FIELD_RULE_SONARSOURCE_SECURITY).disableNorms().build();
+
+    ruleMapping.keywordFieldBuilder(FIELD_RULE_CLEAN_CODE_ATTRIBUTE_CATEGORY).disableNorms().build();
+    ruleMapping.nestedFieldBuilder(FIELD_RULE_IMPACTS)
+      .addKeywordField(SUB_FIELD_SOFTWARE_QUALITY)
+      .addKeywordField(SUB_FIELD_SEVERITY)
+      .build();
 
     // Active rule
     index.createTypeMapping(TYPE_ACTIVE_RULE)

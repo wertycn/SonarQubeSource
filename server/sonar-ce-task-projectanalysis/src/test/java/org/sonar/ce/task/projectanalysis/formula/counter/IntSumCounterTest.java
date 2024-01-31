@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,7 +48,7 @@ public class IntSumCounterTest {
 
     sumCounter.initialize(counterInitializationContext);
 
-    assertThat(sumCounter.getValue().get()).isEqualTo(10);
+    assertThat(sumCounter.getValue()).contains(10);
   }
 
   @Test
@@ -68,7 +68,7 @@ public class IntSumCounterTest {
 
     sumCounter.aggregate(anotherCounter);
 
-    assertThat(sumCounter.getValue().get()).isEqualTo(10);
+    assertThat(sumCounter.getValue()).contains(10);
   }
 
   @Test

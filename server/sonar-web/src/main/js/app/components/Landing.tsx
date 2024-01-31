@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,44 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { withRouter, WithRouterProps } from 'react-router';
+import { Navigate, To } from 'react-router-dom';
 import { getHomePageUrl } from '../../helpers/urls';
-import { isLoggedIn } from '../../helpers/users';
-import { getCurrentUser, Store } from '../../store/rootReducer';
+import { CurrentUser, isLoggedIn } from '../../types/users';
+import withCurrentUserContext from './current-user/withCurrentUserContext';
 
-interface StateProps {
-  currentUser: T.CurrentUser | undefined;
+export interface LandingProps {
+  currentUser: CurrentUser;
 }
 
-interface OwnProps {
-  location: Location;
-}
-
-class Landing extends React.PureComponent<StateProps & OwnProps & WithRouterProps> {
-  componentDidMount() {
-    const { currentUser } = this.props;
-    if (currentUser && isLoggedIn(currentUser)) {
-      if (currentUser.homepage) {
-        const homepage = getHomePageUrl(currentUser.homepage);
-        this.props.router.replace(homepage);
-      } else {
-        this.props.router.replace('/projects');
-      }
-    } else {
-      this.props.router.replace('/about');
-    }
+export function Landing({ currentUser }: LandingProps) {
+  let redirectUrl: To;
+  if (isLoggedIn(currentUser) && currentUser.homepage) {
+    redirectUrl = getHomePageUrl(currentUser.homepage);
+  } else {
+    redirectUrl = '/projects';
   }
 
-  render() {
-    return null;
-  }
+  return <Navigate to={redirectUrl} replace />;
 }
 
-const mapStateToProps = (state: Store) => ({
-  currentUser: getCurrentUser(state)
-});
-
-export default withRouter(connect(mapStateToProps)(Landing));
+export default withCurrentUserContext(Landing);

@@ -49,16 +49,19 @@ message Metadata {
   string scm_revision_id = 13;
 
   string pull_request_key = 14;
-  map<string, string> modules_project_relative_path_by_key = 15;
+
+  reserved 15; // modules_project_relative_path_by_key (no longer used)
 
   string projectVersion = 16;
   string buildString = 17;
 
   string target_branch_name = 18;
 
-  int64 forkDate = 19;
+  reserved 19; // forkDate (no longer used)
 
   map<string, int32> not_analyzed_files_by_language = 20;
+
+  string new_code_reference_branch = 21;
 
   message QProfile {
     string key = 1;
@@ -129,6 +132,8 @@ message Component {
 
   // Path relative to project base directory
   string project_relative_path = 14;
+  bool markedAsUnchanged = 15;
+  string old_relative_file_path = 16;
 
   enum ComponentType {
     UNSET = 0;
@@ -192,17 +197,26 @@ message Issue {
   // Will be identical to the first location of the first flow
   TextRange text_range = 6;
   repeated Flow flow = 7;
+  bool quickFixAvailable = 8;
+  optional string ruleDescriptionContextKey = 9;
+  repeated MessageFormatting msgFormatting = 10;
+  repeated string codeVariants = 11;
+  repeated Impact overridenImpacts = 12;
 }
 
 message ExternalIssue {
   string engine_id = 1;
   string rule_id = 2;
   string msg = 3;
-  Severity severity = 4;
+  optional Severity severity = 4;
   int64 effort = 5;
   TextRange text_range = 6;
   repeated Flow flow = 7;
-  IssueType type = 8;
+  optional IssueType type = 8;
+  repeated MessageFormatting msgFormatting = 9;
+  repeated Impact impacts = 10;
+  optional string cleanCodeAttribute = 11;
+
 }
 
 message AdHocRule {
@@ -210,8 +224,10 @@ message AdHocRule {
     string rule_id = 2;
     string name = 3;
     string description = 4;
-    Severity severity = 5;
-    IssueType type = 6;
+  optional Severity severity = 5;
+  optional IssueType type = 6;
+  optional string cleanCodeAttribute = 7;
+  repeated Impact defaultImpacts = 8;
 }
 
 enum IssueType {
@@ -227,10 +243,29 @@ message IssueLocation {
   // Only when component is a file. Can be empty for a file if this is an issue global to the file.
   TextRange text_range = 2;
   string msg = 3;
+  repeated MessageFormatting msgFormatting = 4;
+}
+
+message MessageFormatting {
+  int32 start = 1;
+  int32 end = 2;
+  MessageFormattingType type = 3;
+}
+
+enum MessageFormattingType {
+  CODE = 0;
 }
 
 message Flow {
   repeated IssueLocation location = 1;
+  string description = 2;
+  FlowType type = 3;
+}
+
+enum FlowType {
+  UNDEFINED = 0;
+  DATA = 1;
+  EXECUTION = 2;
 }
 
 message Changesets {
@@ -320,7 +355,6 @@ message SyntaxHighlightingRule {
     ANNOTATION = 1;
     CONSTANT = 2;
     COMMENT = 3;
-    CPP_DOC = 4;
     STRUCTURED_COMMENT = 5;
     KEYWORD = 6;
     HIGHLIGHTING_STRING = 7;
@@ -332,4 +366,9 @@ message SyntaxHighlightingRule {
 message AnalysisWarning {
   string text = 1;
   int64 timestamp = 2;
+}
+
+message Impact {
+  string software_quality = 1;
+  string severity = 2;
 }

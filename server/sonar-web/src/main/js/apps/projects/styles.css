@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,19 +36,14 @@
   padding-left: 32px;
 }
 
-.projects-topbar-item.disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
-.projects-topbar-item.disabled * {
-  pointer-events: none !important;
-}
-
 .projects-topbar-item-search {
   position: relative;
   flex: 1;
   height: var(--controlHeight);
+}
+
+.projects-header-row {
+  padding-top: 2px;
 }
 
 .projects-list .page-actions {
@@ -87,78 +82,120 @@
 .projects-facet-bar-inner {
   min-width: 1px;
   height: 10px;
-  background-color: var(--gray71);
+  background-color: var(--gray60);
   transition: width 0.3s ease;
-}
-
-.search-navigator-facet.active .projects-facet-bar-inner,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet
-  .projects-facet-bar-inner {
-  background-color: var(--blue);
-}
-
-.projects-visualization {
-  position: relative;
-  height: 600px;
-}
-
-.projects-visualization .measure-details-bubble-chart-axis.y {
-  width: 300px;
-  left: 15px;
-  margin-top: 150px;
-  transform-origin: 0 0;
-  text-align: center;
-}
-
-.projects-visualizations-footer {
-  margin-top: 8px;
-  padding: 15px 60px;
-  border-top: 1px solid var(--barBorderColor);
-  font-size: var(--smallFontSize);
-  line-height: 1.4;
-  text-align: center;
-}
-
-.projects-visualizations-footer .note {
-  font-style: italic;
-}
-
-.measure-details-bubble-chart-title {
-  position: absolute;
-  left: 20px;
-}
-
-.measure-details-bubble-chart-axis {
-  position: absolute;
-  color: var(--secondFontColor);
-  font-size: var(--smallFontSize);
-}
-
-.measure-details-bubble-chart-axis.x {
-  left: 50%;
-  bottom: 16px;
-  width: 500px;
-  margin-left: -250px;
-  text-align: center;
-}
-
-.measure-details-bubble-chart-axis.y {
-  top: 50%;
-  left: -20px;
-  transform: rotate(-90deg);
-}
-
-.measure-details-bubble-chart-axis.size {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  top: 16px;
-  width: 100%;
 }
 
 .projects-empty-list {
   padding: calc(4 * var(--gridSize)) 0;
   text-align: center;
+}
+
+/***
+  Custom filter highlights.
+  Projects filters are special, as some elements allow the selection of "everything
+  worse than" filters (e.g., "Rating B or worse"). We still select a single element,
+  but we want to give a visual indication that we selected multiple fitlers.
+  That's where the following selectors come in, which extend and override styles
+  from ../../components/search-navigator.css
+***/
+
+/*
+  Completely remove the border of the child facet. Handle them at the parent
+  <li> level.
+*/
+.search-navigator-facet-worse-than-highlight .search-navigator-facet {
+  border: 0 !important;
+}
+
+.search-navigator-facet-worse-than-highlight {
+  padding: 1px 0;
+  border-width: 0 1px;
+  border-color: transparent;
+  border-style: solid;
+  box-sizing: border-box;
+}
+
+/*
+  When:
+  - Being hovered
+  - Or, being a sibling of something hovered
+  - Or, being active
+  - Or, being a sibling of something active
+  show the left and right borders.
+*/
+.search-navigator-facet-worse-than-highlight:hover,
+.search-navigator-facet-worse-than-highlight:hover ~ .search-navigator-facet-worse-than-highlight,
+.search-navigator-facet-worse-than-highlight.active,
+.search-navigator-facet-worse-than-highlight.active ~ .search-navigator-facet-worse-than-highlight {
+  border-left-color: var(--blue);
+  border-right-color: var(--blue);
+}
+
+/*
+  When:
+  - Being hovered
+  - Or, being active
+  show the top border, and remove the top padding.
+*/
+.search-navigator-facet-worse-than-highlight:hover,
+.search-navigator-facet-worse-than-highlight.active {
+  border-top: 1px solid var(--blue) !important;
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
+  padding-top: 0 !important;
+}
+
+/*
+  When:
+  - Being hovered AND the last element of the highlightable group
+  - Or, being the last element of the highlightable group AND a sibling of something hovered
+  - Or, being active AND the last element of the highlightable group
+  - Or, being the last element of the highlightable group AND a sibling of something active
+  show the bottom border, and remove the bottom padding.
+*/
+.search-navigator-facet-worse-than-highlight.last:hover,
+.search-navigator-facet-worse-than-highlight:hover
+  ~ .search-navigator-facet-worse-than-highlight.last,
+.search-navigator-facet-worse-than-highlight.active.last,
+.search-navigator-facet-worse-than-highlight.active
+  ~ .search-navigator-facet-worse-than-highlight.last {
+  border-bottom: 1px solid var(--blue) !important;
+  border-bottom-left-radius: 2px;
+  border-bottom-right-radius: 2px;
+  padding-bottom: 0 !important;
+}
+
+/*
+  When:
+  - Being active
+  - Or, being a sibling of something active
+  show a light blue background color.
+*/
+.search-navigator-facet-worse-than-highlight.active,
+.search-navigator-facet-worse-than-highlight.active ~ .search-navigator-facet-worse-than-highlight {
+  background-color: var(--veryLightBlue);
+}
+
+/*
+  When:
+  - Being hovered AND a sibling of something active
+  - Or, being a sibling of something hovered AND a sibling of something active
+  show a darker blue background color.
+*/
+.search-navigator-facet-worse-than-highlight.active
+  ~ .search-navigator-facet-worse-than-highlight:hover,
+.search-navigator-facet-worse-than-highlight.active
+  ~ .search-navigator-facet-worse-than-highlight:hover
+  ~ .search-navigator-facet-worse-than-highlight {
+  background-color: #a1cde8;
+}
+
+.project-filters-list {
+  /*
+   * On Firefox on Windows, the scrollbar hides the sidebar's content.
+   * Using 'scrollbar-gutter:stable' is a workaround to ensure consistency with other browsers.
+   * @see https://bugzilla.mozilla.org/show_bug.cgi?id=764076
+   */
+  scrollbar-gutter: stable;
 }

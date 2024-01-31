@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,62 +23,75 @@ import {
   AlmSettingsBindingStatusType,
   AlmSettingsInstance,
   AzureBindingDefinition,
-  BitbucketBindingDefinition,
   BitbucketCloudBindingDefinition,
+  BitbucketServerBindingDefinition,
   GithubBindingDefinition,
   GitlabBindingDefinition,
+  ProjectAlmBindingConfigurationErrors,
+  ProjectAlmBindingConfigurationErrorScope,
   ProjectAlmBindingResponse,
   ProjectAzureBindingResponse,
   ProjectBitbucketBindingResponse,
+  ProjectBitbucketCloudBindingResponse,
   ProjectGitHubBindingResponse,
-  ProjectGitLabBindingResponse
+  ProjectGitLabBindingResponse,
 } from '../../types/alm-settings';
 
 export function mockAlmSettingsInstance(
-  overrides: Partial<AlmSettingsInstance> = {}
+  overrides: Partial<AlmSettingsInstance> = {},
 ): AlmSettingsInstance {
   return {
     alm: AlmKeys.GitHub,
     key: 'key',
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockBitbucketCloudAlmSettingsInstance(
+  overrides: Partial<AlmSettingsInstance> = {},
+): AlmSettingsInstance {
+  return {
+    alm: AlmKeys.BitbucketCloud,
+    key: 'key',
+    ...overrides,
   };
 }
 
 export function mockAzureBindingDefinition(
-  overrides: Partial<AzureBindingDefinition> = {}
+  overrides: Partial<AzureBindingDefinition> = {},
 ): AzureBindingDefinition {
   return {
     key: 'key',
     personalAccessToken: 'asdf1234',
-    ...overrides
+    ...overrides,
   };
 }
 
-export function mockBitbucketBindingDefinition(
-  overrides: Partial<BitbucketBindingDefinition> = {}
-): BitbucketBindingDefinition {
+export function mockBitbucketServerBindingDefinition(
+  overrides: Partial<BitbucketServerBindingDefinition> = {},
+): BitbucketServerBindingDefinition {
   return {
     key: 'key',
     personalAccessToken: 'asdf1234',
     url: 'http://bbs.enterprise.com',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockBitbucketCloudBindingDefinition(
-  overrides: Partial<BitbucketCloudBindingDefinition> = {}
+  overrides: Partial<BitbucketCloudBindingDefinition> = {},
 ): BitbucketCloudBindingDefinition {
   return {
     key: 'key',
     clientId: 'client1',
     clientSecret: '**clientsecret**',
     workspace: 'workspace',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockGithubBindingDefinition(
-  overrides: Partial<GithubBindingDefinition> = {}
+  overrides: Partial<GithubBindingDefinition> = {},
 ): GithubBindingDefinition {
   return {
     key: 'key',
@@ -87,33 +100,35 @@ export function mockGithubBindingDefinition(
     clientId: 'client1',
     clientSecret: '**clientsecret**',
     privateKey: 'asdf1234',
-    ...overrides
+    webhookSecret: 'verySecretText!!',
+    ...overrides,
   };
 }
 
 export function mockGitlabBindingDefinition(
-  overrides: Partial<GitlabBindingDefinition> = {}
+  overrides: Partial<GitlabBindingDefinition> = {},
 ): GitlabBindingDefinition {
   return {
     key: 'foo',
     personalAccessToken: 'foobar',
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockProjectAlmBindingResponse(
-  overrides: Partial<ProjectAlmBindingResponse> = {}
+  overrides: Partial<ProjectAlmBindingResponse> = {},
 ): ProjectAlmBindingResponse {
   return {
     alm: AlmKeys.GitHub,
     key: 'foo',
+    repository: 'repo',
     monorepo: false,
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockProjectBitbucketBindingResponse(
-  overrides: Partial<ProjectBitbucketBindingResponse> = {}
+  overrides: Partial<ProjectBitbucketBindingResponse> = {},
 ): ProjectBitbucketBindingResponse {
   return {
     alm: AlmKeys.BitbucketServer,
@@ -121,24 +136,36 @@ export function mockProjectBitbucketBindingResponse(
     repository: 'PROJECT_KEY',
     slug: 'repo-slug',
     monorepo: true,
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockProjectBitbucketCloudBindingResponse(
+  overrides: Partial<ProjectBitbucketCloudBindingResponse> = {},
+): ProjectBitbucketCloudBindingResponse {
+  return {
+    alm: AlmKeys.BitbucketCloud,
+    key: 'foo',
+    repository: 'repo-slug',
+    monorepo: true,
+    ...overrides,
   };
 }
 
 export function mockProjectGithubBindingResponse(
-  overrides: Partial<ProjectGitHubBindingResponse> = {}
+  overrides: Partial<ProjectGitHubBindingResponse> = {},
 ): ProjectGitHubBindingResponse {
   return {
     alm: AlmKeys.GitHub,
     key: 'foo',
     repository: 'PROJECT_KEY',
     monorepo: true,
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockProjectGitLabBindingResponse(
-  overrides: Partial<ProjectGitLabBindingResponse> = {}
+  overrides: Partial<ProjectGitLabBindingResponse> = {},
 ): ProjectGitLabBindingResponse {
   return {
     alm: AlmKeys.GitLab,
@@ -146,12 +173,12 @@ export function mockProjectGitLabBindingResponse(
     repository: 'PROJECT_KEY',
     url: 'https://gitlab.com/api/v4',
     monorepo: true,
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockProjectAzureBindingResponse(
-  overrides: Partial<ProjectAzureBindingResponse> = {}
+  overrides: Partial<ProjectAzureBindingResponse> = {},
 ): ProjectAzureBindingResponse {
   return {
     alm: AlmKeys.Azure,
@@ -160,17 +187,27 @@ export function mockProjectAzureBindingResponse(
     repository: 'REPOSITORY_NAME',
     url: 'https://ado.my_company.com/mycollection',
     monorepo: false,
-    ...overrides
+    ...overrides,
   };
 }
 
 export function mockAlmSettingsBindingStatus(
-  overrides: Partial<AlmSettingsBindingStatus>
+  overrides: Partial<AlmSettingsBindingStatus>,
 ): AlmSettingsBindingStatus {
   return {
     alertSuccess: false,
     failureMessage: '',
     type: AlmSettingsBindingStatusType.Validating,
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockProjectAlmBindingConfigurationErrors(
+  overrides: Partial<ProjectAlmBindingConfigurationErrors> = {},
+): ProjectAlmBindingConfigurationErrors {
+  return {
+    scope: ProjectAlmBindingConfigurationErrorScope.Global,
+    errors: [{ msg: 'Foo bar is not correct' }, { msg: 'Bar baz has no permissions here' }],
+    ...overrides,
   };
 }

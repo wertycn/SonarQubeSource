@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,10 +21,10 @@ package org.sonar.application.cluster;
 
 import java.net.InetAddress;
 import java.util.Optional;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.sonar.application.AppStateListener;
@@ -35,19 +35,18 @@ import org.sonar.process.NetworkUtilsImpl;
 import org.sonar.process.ProcessId;
 import org.sonar.process.cluster.hz.HazelcastMember;
 import org.sonar.process.cluster.hz.HazelcastMemberBuilder;
-import org.sonar.process.cluster.hz.InetAdressResolver;
+import org.sonar.process.cluster.hz.JoinConfigurationType;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.sonar.process.cluster.hz.HazelcastObjects.CLUSTER_NAME;
 import static org.sonar.process.cluster.hz.HazelcastObjects.SONARQUBE_VERSION;
 
 public class ClusterAppStateImplTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Rule
   public TestRule safeguardTimeout = new DisableOnDebug(Timeout.seconds(60));
@@ -56,8 +55,8 @@ public class ClusterAppStateImplTest {
   public void tryToLockWebLeader_returns_true_only_for_the_first_call() {
     try (ClusterAppStateImpl underTest = new ClusterAppStateImpl(new TestAppSettings(), newHzMember(),
       mock(EsConnector.class), mock(AppNodesClusterHostsConsistency.class))) {
-      assertThat(underTest.tryToLockWebLeader()).isEqualTo(true);
-      assertThat(underTest.tryToLockWebLeader()).isEqualTo(false);
+      assertThat(underTest.tryToLockWebLeader()).isTrue();
+      assertThat(underTest.tryToLockWebLeader()).isFalse();
     }
   }
 
@@ -70,10 +69,28 @@ public class ClusterAppStateImplTest {
       underTest.setOperational(ProcessId.ELASTICSEARCH);
       verify(listener, timeout(20_000)).onAppStateOperational(ProcessId.ELASTICSEARCH);
 
-      assertThat(underTest.isOperational(ProcessId.ELASTICSEARCH, true)).isEqualTo(true);
-      assertThat(underTest.isOperational(ProcessId.APP, true)).isEqualTo(false);
-      assertThat(underTest.isOperational(ProcessId.WEB_SERVER, true)).isEqualTo(false);
-      assertThat(underTest.isOperational(ProcessId.COMPUTE_ENGINE, true)).isEqualTo(false);
+      assertThat(underTest.isOperational(ProcessId.ELASTICSEARCH, true)).isTrue();
+      assertThat(underTest.isOperational(ProcessId.APP, true)).isFalse();
+      assertThat(underTest.isOperational(ProcessId.WEB_SERVER, true)).isFalse();
+      assertThat(underTest.isOperational(ProcessId.COMPUTE_ENGINE, true)).isFalse();
+    }
+  }
+
+  @Test
+  public void check_if_elasticsearch_is_operational_on_cluster() {
+    AppStateListener listener = mock(AppStateListener.class);
+    EsConnector esConnectorMock = mock(EsConnector.class);
+    when(esConnectorMock.getClusterHealthStatus())
+      .thenReturn(Optional.empty())
+      .thenReturn(Optional.of(ClusterHealthStatus.RED))
+      .thenReturn(Optional.of(ClusterHealthStatus.GREEN));
+    try (ClusterAppStateImpl underTest = createClusterAppState(esConnectorMock)) {
+      underTest.addListener(listener);
+
+      underTest.isOperational(ProcessId.ELASTICSEARCH, false);
+
+      //wait until undergoing thread marks ES as operational
+      verify(listener, timeout(20_000)).onAppStateOperational(ProcessId.ELASTICSEARCH);
     }
   }
 
@@ -110,10 +127,9 @@ public class ClusterAppStateImplTest {
   @Test
   public void reset_always_throws_ISE() {
     try (ClusterAppStateImpl underTest = createClusterAppState()) {
-      expectedException.expect(IllegalStateException.class);
-      expectedException.expectMessage("state reset is not supported in cluster mode");
-
-      underTest.reset();
+      assertThatThrownBy(underTest::reset)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("state reset is not supported in cluster mode");
     }
   }
 
@@ -124,11 +140,10 @@ public class ClusterAppStateImplTest {
       // Register first version
       underTest.getHazelcastMember().getAtomicReference(SONARQUBE_VERSION).set("6.6.0.1111");
 
-      expectedException.expect(IllegalStateException.class);
-      expectedException.expectMessage("The local version 6.7.0.9999 is not the same as the cluster 6.6.0.1111");
-
       // Registering a second different version must trigger an exception
-      underTest.registerSonarQubeVersion("6.7.0.9999");
+      assertThatThrownBy(() -> underTest.registerSonarQubeVersion("6.7.0.9999"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("The local version 6.7.0.9999 is not the same as the cluster 6.6.0.1111");
     }
   }
 
@@ -138,11 +153,10 @@ public class ClusterAppStateImplTest {
       // Register first version
       underTest.getHazelcastMember().getAtomicReference(CLUSTER_NAME).set("goodClusterName");
 
-      expectedException.expect(MessageException.class);
-      expectedException.expectMessage("This node has a cluster name [badClusterName], which does not match [goodClusterName] from the cluster");
-
       // Registering a second different cluster name must trigger an exception
-      underTest.registerClusterName("badClusterName");
+      assertThatThrownBy(() -> underTest.registerClusterName("badClusterName"))
+        .isInstanceOf(MessageException.class)
+        .hasMessage("This node has a cluster name [badClusterName], which does not match [goodClusterName] from the cluster");
     }
   }
 
@@ -164,17 +178,22 @@ public class ClusterAppStateImplTest {
   }
 
   private ClusterAppStateImpl createClusterAppState() {
-    return new ClusterAppStateImpl(new TestAppSettings(), newHzMember(), mock(EsConnector.class), mock(AppNodesClusterHostsConsistency.class));
+    return createClusterAppState(mock(EsConnector.class));
+  }
+
+  private ClusterAppStateImpl createClusterAppState(EsConnector esConnector) {
+    return new ClusterAppStateImpl(new TestAppSettings(), newHzMember(), esConnector, mock(AppNodesClusterHostsConsistency.class));
   }
 
   private static HazelcastMember newHzMember() {
     // use loopback for support of offline builds
     InetAddress loopback = InetAddress.getLoopbackAddress();
 
-    return new HazelcastMemberBuilder(new InetAdressResolver())
+    return new HazelcastMemberBuilder(JoinConfigurationType.TCP_IP)
       .setProcessId(ProcessId.COMPUTE_ENGINE)
       .setNodeName("bar")
       .setPort(NetworkUtilsImpl.INSTANCE.getNextLoopbackAvailablePort())
+      .setMembers(loopback.getHostAddress())
       .setNetworkInterface(loopback.getHostAddress())
       .build();
   }

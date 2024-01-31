@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,6 +44,15 @@ ol.list-styled {
   padding-left: 0;
   margin-left: -5px;
   list-style: none;
+}
+
+.list-breadcrumbs > li {
+  display: inline-block;
+}
+
+.list-breadcrumbs > li:not(:first-of-type)::before {
+  content: '/' / '';
+  margin-inline: 3px;
 }
 
 ul.list-inline > li,

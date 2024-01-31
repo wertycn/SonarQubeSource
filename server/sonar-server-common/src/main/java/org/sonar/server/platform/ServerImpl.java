@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,32 +19,28 @@
  */
 package org.sonar.server.platform;
 
-import java.io.File;
 import java.util.Date;
 import javax.annotation.CheckForNull;
 import org.sonar.api.CoreProperties;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.platform.Server;
 import org.sonar.api.server.ServerSide;
+import org.sonar.core.platform.SonarQubeVersion;
 
 @ComputeEngineSide
 @ServerSide
 public class ServerImpl extends Server {
-
   private final Configuration config;
   private final StartupMetadata state;
-  private final ServerFileSystem fs;
   private final UrlSettings urlSettings;
-  private final SonarRuntime runtime;
+  private final SonarQubeVersion version;
 
-  public ServerImpl(Configuration config, StartupMetadata state, ServerFileSystem fs, UrlSettings urlSettings, SonarRuntime runtime) {
+  public ServerImpl(Configuration config, StartupMetadata state, UrlSettings urlSettings, SonarQubeVersion version) {
     this.config = config;
     this.state = state;
-    this.fs = fs;
     this.urlSettings = urlSettings;
-    this.runtime = runtime;
+    this.version = version;
   }
 
   /**
@@ -57,13 +53,8 @@ public class ServerImpl extends Server {
   }
 
   @Override
-  public String getPermanentServerId() {
-    return getId();
-  }
-
-  @Override
   public String getVersion() {
-    return runtime.getApiVersion().toString();
+    return version.get().toString();
   }
 
   @Override
@@ -71,11 +62,6 @@ public class ServerImpl extends Server {
     return new Date(state.getStartedAt());
   }
 
-  @Override
-  public File getRootDir() {
-    return fs.getHomeDir();
-  }
-  
   @Override
   public String getContextPath() {
     return urlSettings.getContextPath();
@@ -85,20 +71,4 @@ public class ServerImpl extends Server {
   public String getPublicRootUrl() {
     return urlSettings.getBaseUrl();
   }
-
-  @Override
-  public boolean isDev() {
-    return false;
-  }
-
-  @Override
-  public boolean isSecured() {
-    return urlSettings.isSecured();
-  }
-
-  @Override
-  public String getURL() {
-    return urlSettings.getBaseUrl();
-  }
-
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,9 +23,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.Random;
 import java.util.stream.IntStream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.platform.Server;
 import org.sonar.process.NetworkUtils;
@@ -35,15 +33,14 @@ import org.sonar.process.cluster.health.NodeHealth;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_HOST;
-import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_NAME;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_HZ_PORT;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_NAME;
 
 public class NodeHealthProviderImplTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final Random random = new Random();
   private MapSettings mapSettings = new MapSettings();
@@ -53,19 +50,17 @@ public class NodeHealthProviderImplTest {
 
   @Test
   public void constructor_throws_ISE_if_node_name_property_is_not_set() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Property sonar.cluster.node.name is not defined");
-
-    new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
+    assertThatThrownBy(() -> new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Property sonar.cluster.node.name is not defined");
   }
 
   @Test
   public void constructor_thows_NPE_if_NetworkUtils_getHostname_returns_null() {
     mapSettings.setProperty(CLUSTER_NODE_NAME.getKey(), randomAlphanumeric(3));
 
-    expectedException.expect(NullPointerException.class);
-
-    new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
+    assertThatThrownBy(() -> new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -73,19 +68,17 @@ public class NodeHealthProviderImplTest {
     mapSettings.setProperty(CLUSTER_NODE_NAME.getKey(), randomAlphanumeric(3));
     when(networkUtils.getHostname()).thenReturn(randomAlphanumeric(23));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Property sonar.cluster.node.port is not defined");
-
-    new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
+    assertThatThrownBy(() -> new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Property sonar.cluster.node.port is not defined");
   }
 
   @Test
   public void constructor_throws_NPE_is_Server_getStartedAt_is_null() {
     setRequiredPropertiesForConstructor();
 
-    expectedException.expect(NullPointerException.class);
-
-    new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
+    assertThatThrownBy(() -> new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -95,7 +88,7 @@ public class NodeHealthProviderImplTest {
     when(networkUtils.getHostname()).thenReturn(randomAlphanumeric(4));
     Health.Status randomStatus = Health.Status.values()[random.nextInt(Health.Status.values().length)];
     String[] expected = IntStream.range(0, random.nextInt(4)).mapToObj(s -> randomAlphabetic(55)).toArray(String[]::new);
-    Health.Builder healthBuilder = Health.newHealthCheckBuilder()
+    Health.Builder healthBuilder = Health.builder()
       .setStatus(randomStatus);
     Arrays.stream(expected).forEach(healthBuilder::addCause);
     when(healthChecker.checkNode()).thenReturn(healthBuilder.build());
@@ -112,7 +105,7 @@ public class NodeHealthProviderImplTest {
     setRequiredPropertiesForConstructor();
     setStartedAt();
     when(networkUtils.getHostname()).thenReturn(randomAlphanumeric(23));
-    when(healthChecker.checkNode()).thenReturn(Health.newHealthCheckBuilder()
+    when(healthChecker.checkNode()).thenReturn(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build());
     NodeHealthProviderImpl underTest = new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
@@ -129,7 +122,7 @@ public class NodeHealthProviderImplTest {
     mapSettings.setProperty(CLUSTER_NODE_NAME.getKey(), name);
     mapSettings.setProperty(CLUSTER_NODE_HZ_PORT.getKey(), port);
     setStartedAt();
-    when(healthChecker.checkNode()).thenReturn(Health.newHealthCheckBuilder()
+    when(healthChecker.checkNode()).thenReturn(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build());
     when(networkUtils.getHostname()).thenReturn(randomAlphanumeric(3));
@@ -156,7 +149,7 @@ public class NodeHealthProviderImplTest {
     mapSettings.setProperty(CLUSTER_NODE_HZ_PORT.getKey(), 1 + random.nextInt(4));
     mapSettings.setProperty(CLUSTER_NODE_HOST.getKey(), host);
     setStartedAt();
-    when(healthChecker.checkNode()).thenReturn(Health.newHealthCheckBuilder()
+    when(healthChecker.checkNode()).thenReturn(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build());
     NodeHealthProviderImpl underTest = new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);
@@ -190,7 +183,7 @@ public class NodeHealthProviderImplTest {
       mapSettings.setProperty(CLUSTER_NODE_HOST.getKey(), hostPropertyValue);
     }
     setStartedAt();
-    when(healthChecker.checkNode()).thenReturn(Health.newHealthCheckBuilder()
+    when(healthChecker.checkNode()).thenReturn(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build());
     when(networkUtils.getHostname()).thenReturn(host);
@@ -214,7 +207,7 @@ public class NodeHealthProviderImplTest {
     when(networkUtils.getHostname()).thenReturn(randomAlphanumeric(4));
     Date date = new Date();
     when(server.getStartedAt()).thenReturn(date);
-    when(healthChecker.checkNode()).thenReturn(Health.newHealthCheckBuilder()
+    when(healthChecker.checkNode()).thenReturn(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build());
     NodeHealthProviderImpl underTest = new NodeHealthProviderImpl(mapSettings.asConfig(), healthChecker, server, networkUtils);

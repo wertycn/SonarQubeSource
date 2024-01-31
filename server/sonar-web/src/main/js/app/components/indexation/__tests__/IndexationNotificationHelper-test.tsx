@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,8 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { get, remove, save } from 'sonar-ui-common/helpers/storage';
+import { setImmediate } from 'timers';
 import { getIndexationStatus } from '../../../../api/ce';
+import { get, remove, save } from '../../../../helpers/storage';
 import { IndexationStatus } from '../../../../types/indexation';
 import IndexationNotificationHelper from '../IndexationNotificationHelper';
 
@@ -27,24 +28,32 @@ beforeEach(() => {
   jest.useFakeTimers();
 });
 
+afterEach(() => {
+  jest.runOnlyPendingTimers();
+  jest.useRealTimers();
+});
+
 jest.mock('../../../../api/ce', () => ({
-  getIndexationStatus: jest.fn()
+  getIndexationStatus: jest.fn().mockResolvedValue({}),
 }));
 
-jest.mock('sonar-ui-common/helpers/storage', () => ({
+jest.mock('../../../../helpers/storage', () => ({
   get: jest.fn(),
   remove: jest.fn(),
-  save: jest.fn()
+  save: jest.fn(),
 }));
 
 it('should properly start & stop polling for indexation status', async () => {
   const onNewStatus = jest.fn();
+
   const newStatus: IndexationStatus = {
+    completedCount: 23,
+    hasFailures: false,
     isCompleted: false,
-    percentCompleted: 100,
-    hasFailures: false
+    total: 42,
   };
-  (getIndexationStatus as jest.Mock).mockResolvedValueOnce(newStatus);
+
+  jest.mocked(getIndexationStatus).mockResolvedValueOnce(newStatus);
 
   IndexationNotificationHelper.startPolling(onNewStatus);
   expect(getIndexationStatus).toHaveBeenCalled();
@@ -55,7 +64,7 @@ it('should properly start & stop polling for indexation status', async () => {
   jest.runOnlyPendingTimers();
   expect(getIndexationStatus).toHaveBeenCalledTimes(2);
 
-  (getIndexationStatus as jest.Mock).mockClear();
+  jest.mocked(getIndexationStatus).mockClear();
 
   IndexationNotificationHelper.stopPolling();
   jest.runAllTimers();
@@ -68,7 +77,7 @@ it('should properly handle the flag to show the completed banner', () => {
 
   expect(save).toHaveBeenCalledWith(expect.any(String), 'true');
 
-  (get as jest.Mock).mockReturnValueOnce('true');
+  jest.mocked(get).mockReturnValueOnce('true');
   let shouldDisplay = IndexationNotificationHelper.shouldDisplayCompletedNotification();
 
   expect(shouldDisplay).toBe(true);

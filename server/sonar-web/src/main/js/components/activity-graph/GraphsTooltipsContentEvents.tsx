@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,38 +17,34 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import classNames from 'classnames';
 import * as React from 'react';
-import ProjectEventIcon from 'sonar-ui-common/components/icons/ProjectEventIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { AnalysisEvent } from '../../types/project-activity';
+import EventInner from './EventInner';
 
 interface Props {
   addSeparator: boolean;
-  events: T.AnalysisEvent[];
+  events: AnalysisEvent[];
 }
 
 export default function GraphsTooltipsContentEvents({ addSeparator, events }: Props) {
   return (
-    <tbody>
+    <>
+      <tr className="sw-h-8">
+        <td colSpan={3}>
+          {events.map((event) => (
+            <div key={event.key}>
+              <EventInner event={event} readonly />
+            </div>
+          ))}
+        </td>
+      </tr>
       {addSeparator && (
         <tr>
-          <td className="activity-graph-tooltip-separator" colSpan={3}>
+          <td colSpan={3}>
             <hr />
           </td>
         </tr>
       )}
-      <tr className="activity-graph-tooltip-line">
-        <td colSpan={3}>
-          <span>{translate('events')}:</span>
-          {events.map(event => (
-            <span className="spacer-left" key={event.key}>
-              <ProjectEventIcon
-                className={classNames('project-activity-event-icon', event.category)}
-              />
-            </span>
-          ))}
-        </td>
-      </tr>
-    </tbody>
+    </>
   );
 }

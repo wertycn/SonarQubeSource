@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,12 +25,12 @@ import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.LogTester;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
 import org.sonar.scanner.bootstrap.GlobalAnalysisMode;
 import org.sonar.scanner.report.CeTaskReportDataHolder;
@@ -44,6 +44,7 @@ import org.sonarqube.ws.client.MockWsResponse;
 import org.sonarqube.ws.client.WsRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -60,13 +61,11 @@ public class QualityGateCheckTest {
   @Rule
   public LogTester logTester = new LogTester();
 
-  @Rule
-  public ExpectedException exception = ExpectedException.none();
-
   QualityGateCheck underTest = new QualityGateCheck(wsClient, analysisMode, reportMetadataHolder, properties);
 
   @Before
   public void before() {
+    logTester.setLevel(Level.DEBUG);
     when(reportMetadataHolder.getCeTaskId()).thenReturn("task-1234");
     when(reportMetadataHolder.getDashboardUrl()).thenReturn("http://dashboard-url.com");
   }
@@ -88,8 +87,8 @@ public class QualityGateCheckTest {
 
     underTest.stop();
 
-    assertThat(logTester.logs())
-      .containsOnly(
+    assertThat(logTester.logs(Level.INFO))
+      .contains(
         "Waiting for the analysis report to be processed (max 5s)",
         "QUALITY GATE STATUS: PASSED - View details on http://dashboard-url.com");
   }
@@ -127,9 +126,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
   }
 
   @Test
@@ -145,9 +144,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
   }
 
   @Test
@@ -164,10 +163,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
-
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("QUALITY GATE STATUS: FAILED - View details on http://dashboard-url.com");
   }
 
   @Test
@@ -180,9 +178,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("Quality Gate check timeout exceeded - View details on http://dashboard-url.com");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Quality Gate check timeout exceeded - View details on http://dashboard-url.com");
   }
 
   @Test
@@ -197,9 +195,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("Failed to get Quality Gate status - HTTP code 400: content");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Failed to get Quality Gate status - HTTP code 400: content");
   }
 
   @Test
@@ -217,9 +215,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(IllegalStateException.class);
-    exception.expectMessage("Failed to parse response from quality-gate-url");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Failed to parse response from quality-gate-url");
   }
 
   @Test
@@ -231,9 +229,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("Failed to get CE Task status - HTTP code 400: content");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Failed to get CE Task status - HTTP code 400: content");
   }
 
   @Test
@@ -249,9 +247,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(IllegalStateException.class);
-    exception.expectMessage("Failed to parse response from ce-task-url");
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Failed to parse response from ce-task-url");
   }
 
   @Test
@@ -265,9 +263,9 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("CE Task finished abnormally with status: " + taskStatus.name());
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("CE Task finished abnormally with status: " + taskStatus.name());
   }
 
   private WsRequest newGetCeTaskRequest() {
@@ -302,9 +300,8 @@ public class QualityGateCheckTest {
 
     underTest.start();
 
-    exception.expect(IllegalStateException.class);
-
-    underTest.await();
+    assertThatThrownBy(() -> underTest.await())
+      .isInstanceOf(IllegalStateException.class);
   }
 
   private WsRequest newGetQualityGateRequest() {

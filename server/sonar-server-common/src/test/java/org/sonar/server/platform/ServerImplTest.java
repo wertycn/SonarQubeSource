@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,36 +19,22 @@
  */
 package org.sonar.server.platform;
 
-import java.io.File;
-import java.io.IOException;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import org.sonar.api.CoreProperties;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.Version;
+import org.sonar.core.platform.SonarQubeVersion;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ServerImplTest {
-
-  private MapSettings settings = new MapSettings();
-  private StartupMetadata state = mock(StartupMetadata.class);
-  private ServerFileSystem fs = mock(ServerFileSystem.class);
-  private UrlSettings urlSettings = mock(UrlSettings.class);
-  private SonarRuntime runtime = mock(SonarRuntime.class);
-  private ServerImpl underTest = new ServerImpl(settings.asConfig(), state, fs, urlSettings, runtime);
-
-  @Rule
-  public TemporaryFolder temp = new TemporaryFolder();
-
-  @Test
-  public void isDev_always_returns_false() {
-    assertThat(underTest.isDev()).isFalse();
-  }
+  private final MapSettings settings = new MapSettings();
+  private final StartupMetadata state = mock(StartupMetadata.class);
+  private final UrlSettings urlSettings = mock(UrlSettings.class);
+  private final SonarQubeVersion sonarQubeVersion = mock(SonarQubeVersion.class);
+  private final ServerImpl underTest = new ServerImpl(settings.asConfig(), state, urlSettings, sonarQubeVersion);
 
   @Test
   public void test_url_information() {
@@ -57,18 +43,7 @@ public class ServerImplTest {
     when(urlSettings.isSecured()).thenReturn(false);
 
     assertThat(underTest.getContextPath()).isEqualTo("/foo");
-    assertThat(underTest.getURL()).isEqualTo("http://localhost:9000/foo");
     assertThat(underTest.getPublicRootUrl()).isEqualTo("http://localhost:9000/foo");
-    assertThat(underTest.isDev()).isFalse();
-    assertThat(underTest.isSecured()).isFalse();
-  }
-
-  @Test
-  public void test_file_system_information() throws IOException {
-    File home = temp.newFolder();
-    when(fs.getHomeDir()).thenReturn(home);
-
-    assertThat(underTest.getRootDir()).isEqualTo(home);
   }
 
   @Test
@@ -84,13 +59,12 @@ public class ServerImplTest {
     settings.setProperty(CoreProperties.SERVER_ID, "foo");
 
     assertThat(underTest.getId()).isEqualTo("foo");
-    assertThat(underTest.getPermanentServerId()).isEqualTo("foo");
   }
 
   @Test
   public void test_getVersion() {
     Version version = Version.create(6, 1);
-    when(runtime.getApiVersion()).thenReturn(version);
+    when(sonarQubeVersion.get()).thenReturn(version);
 
     assertThat(underTest.getVersion()).isEqualTo(version.toString());
   }

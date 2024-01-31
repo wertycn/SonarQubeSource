@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,20 +23,18 @@ import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class PostgreSqlTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public LogTester logs = new LogTester();
 
@@ -78,34 +76,35 @@ public class PostgreSqlTest {
 
   @Test
   public void getSqlFromDual() {
-    assertThat(underTest.getSqlFromDual()).isEqualTo("");
+    assertThat(underTest.getSqlFromDual()).isEmpty();
   }
 
   @Test
   public void postgresql_9_2_is_not_supported() throws Exception {
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("Unsupported postgresql version: 9.2. Minimal supported version is 9.3.");
-
-    DatabaseMetaData metadata = newMetadata( 9, 2);
-    underTest.init(metadata);
+    assertThatThrownBy(() -> {
+      DatabaseMetaData metadata = newMetadata(9, 2);
+      underTest.init(metadata);
+    })
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Unsupported postgresql version: 9.2. Minimal supported version is 9.3.");
   }
 
   @Test
   public void postgresql_9_3_is_supported_without_upsert() throws Exception {
-    DatabaseMetaData metadata = newMetadata( 9, 3);
+    DatabaseMetaData metadata = newMetadata(9, 3);
     underTest.init(metadata);
 
     assertThat(underTest.supportsUpsert()).isFalse();
-    assertThat(logs.logs(LoggerLevel.WARN)).contains("Upgrading PostgreSQL to 9.5 or greater is recommended for better performances");
+    assertThat(logs.logs(Level.WARN)).contains("Upgrading PostgreSQL to 9.5 or greater is recommended for better performances");
   }
 
   @Test
   public void postgresql_9_5_is_supported_with_upsert() throws Exception {
-    DatabaseMetaData metadata = newMetadata( 9, 5);
+    DatabaseMetaData metadata = newMetadata(9, 5);
     underTest.init(metadata);
 
     assertThat(underTest.supportsUpsert()).isTrue();
-    assertThat(logs.logs(LoggerLevel.WARN)).isEmpty();
+    assertThat(logs.logs(Level.WARN)).isEmpty();
   }
 
   @Test
@@ -113,18 +112,37 @@ public class PostgreSqlTest {
     DatabaseMetaData metaData = newMetadata(9, 5);
     underTest.init(metaData);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("onInit() must be called once");
-
-    underTest.init(metaData);
+    assertThatThrownBy(() -> underTest.init(metaData))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("onInit() must be called once");
   }
 
   @Test
   public void supportsUpsert_throws_ISE_if_not_initialized() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("onInit() must be called before calling supportsUpsert()");
+    assertThatThrownBy(() -> underTest.supportsUpsert())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("onInit() must be called before calling supportsUpsert()");
+  }
 
-    underTest.supportsUpsert();
+  @Test
+  public void supportsNullNotDistinct_throws_ISE_if_not_initialized() {
+    assertThatThrownBy(() -> underTest.supportsNullNotDistinct())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("onInit() must be called before calling supportsNullNotDistinct()");
+  }
+
+  @Test
+  public void supportsNullNotDistinct_shouldReturnTrue_WhenPostgres15OrGreater() throws SQLException {
+    DatabaseMetaData metadata = newMetadata(15, 0);
+    underTest.init(metadata);
+    assertThat(underTest.supportsNullNotDistinct()).isTrue();
+  }
+
+  @Test
+  public void supportsNullNotDistinct_shouldReturnFalse_WhenPostgres14OrLesser() throws SQLException {
+    DatabaseMetaData metadata = newMetadata(14, 0);
+    underTest.init(metadata);
+    assertThat(underTest.supportsNullNotDistinct()).isFalse();
   }
 
   private DatabaseMetaData newMetadata(int dbMajorVersion, int dbMinorVersion) throws SQLException {

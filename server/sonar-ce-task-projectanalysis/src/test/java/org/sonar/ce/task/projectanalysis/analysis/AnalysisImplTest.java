@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,12 @@
  */
 package org.sonar.ce.task.projectanalysis.analysis;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class AnalysisImplTest {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private static final long ID = 10;
   private static final String UUID = "uuid ";
@@ -47,22 +43,16 @@ public class AnalysisImplTest {
 
   @Test
   public void fail_with_NPE_when_building_snapshot_without_uuid() {
-    thrown.expect(NullPointerException.class);
-    thrown.expectMessage("uuid cannot be null");
-
-    new Analysis.Builder()
-      .setCreatedAt(CREATED_AT)
-      .build();
+    assertThatThrownBy(() -> new Analysis.Builder().setCreatedAt(CREATED_AT).build())
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("uuid cannot be null");
   }
 
   @Test
   public void fail_with_NPE_when_building_snapshot_without_created_at() {
-    thrown.expect(NullPointerException.class);
-    thrown.expectMessage("createdAt cannot be null");
-
-    new Analysis.Builder()
-      .setUuid(UUID)
-      .build();
+    assertThatThrownBy(() -> new Analysis.Builder().setUuid(UUID).build())
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("createdAt cannot be null");
   }
 
   @Test
@@ -70,8 +60,7 @@ public class AnalysisImplTest {
     assertThat(new Analysis.Builder()
       .setUuid(UUID)
       .setCreatedAt(CREATED_AT)
-      .build().toString())
-        .isEqualTo("Analysis{uuid='uuid ', createdAt=123456789}");
+      .build()).hasToString("Analysis{uuid='uuid ', createdAt=123456789}");
   }
 
   @Test
@@ -89,13 +78,13 @@ public class AnalysisImplTest {
       .setCreatedAt(CREATED_AT)
       .build();
 
-    assertThat(analysis).isEqualTo(analysis);
-    assertThat(analysis).isEqualTo(sameAnalysis);
-    assertThat(analysis).isNotEqualTo(otherAnalysis);
-    assertThat(analysis).isNotEqualTo(null);
-
-    assertThat(analysis.hashCode()).isEqualTo(analysis.hashCode());
-    assertThat(analysis.hashCode()).isEqualTo(sameAnalysis.hashCode());
+    assertThat(analysis)
+      .isEqualTo(analysis)
+      .isEqualTo(sameAnalysis)
+      .isNotEqualTo(otherAnalysis)
+      .isNotNull()
+      .hasSameHashCodeAs(analysis.hashCode())
+      .hasSameHashCodeAs(sameAnalysis.hashCode());
     assertThat(analysis.hashCode()).isNotEqualTo(otherAnalysis.hashCode());
   }
 }

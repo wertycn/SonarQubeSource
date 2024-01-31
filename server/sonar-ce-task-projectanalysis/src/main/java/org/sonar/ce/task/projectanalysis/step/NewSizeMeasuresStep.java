@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,9 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -53,7 +53,6 @@ import static org.sonar.api.measures.CoreMetrics.NEW_LINES_KEY;
  * Computes measures on new code related to the size
  */
 public class NewSizeMeasuresStep implements ComputationStep {
-
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
   private final MeasureRepository measureRepository;
@@ -76,7 +75,7 @@ public class NewSizeMeasuresStep implements ComputationStep {
   public void execute(ComputationStep.Context context) {
     new PathAwareCrawler<>(
       FormulaExecutorComponentVisitor.newBuilder(metricRepository, measureRepository)
-        .buildFor(ImmutableList.of(duplicationFormula)))
+        .buildFor(List.of(duplicationFormula)))
       .visit(treeRootHolder.getRoot());
   }
 
@@ -107,7 +106,7 @@ public class NewSizeMeasuresStep implements ComputationStep {
         return;
       }
       Optional<Set<Integer>> changedLines = newLinesRepository.getNewLines(leaf);
-      if (!changedLines.isPresent()) {
+      if (changedLines.isEmpty()) {
         return;
       }
 
@@ -206,7 +205,7 @@ public class NewSizeMeasuresStep implements ComputationStep {
 
     private static Optional<Measure> createMeasure(IntValue intValue) {
       return intValue.isSet()
-        ? Optional.of(Measure.newMeasureBuilder().setVariation(intValue.getValue()).createNoValue())
+        ? Optional.of(Measure.newMeasureBuilder().create(intValue.getValue()))
         : Optional.empty();
     }
 
@@ -214,11 +213,11 @@ public class NewSizeMeasuresStep implements ComputationStep {
       IntValue newLines = counter.newLines;
       IntValue newDuplicatedLines = counter.newDuplicatedLines;
       if (newLines.isSet() && newDuplicatedLines.isSet()) {
-        int newLinesVariations = newLines.getValue();
-        int newDuplicatedLinesVariations = newDuplicatedLines.getValue();
-        if (newLinesVariations > 0d) {
-          double density = Math.min(100d, 100d * newDuplicatedLinesVariations / newLinesVariations);
-          return Optional.of(Measure.newMeasureBuilder().setVariation(density).createNoValue());
+        int newLinesValue = newLines.getValue();
+        int newDuplicatedLinesValue = newDuplicatedLines.getValue();
+        if (newLinesValue > 0D) {
+          double density = Math.min(100D, 100D * newDuplicatedLinesValue / newLinesValue);
+          return Optional.of(Measure.newMeasureBuilder().create(density));
         }
       }
       return Optional.empty();

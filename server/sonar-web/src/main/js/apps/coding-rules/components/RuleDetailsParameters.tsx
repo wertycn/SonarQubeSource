@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,42 +17,46 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { sanitize } from 'dompurify';
+import { CellComponent, Note, SubHeadingHighlight, Table, TableRow } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { sanitizeString } from '../../../helpers/sanitize';
+import { RuleParameter } from '../../../types/types';
 
 interface Props {
-  params: T.RuleParameter[];
+  params: RuleParameter[];
 }
 
-export default class RuleDetailsParameters extends React.PureComponent<Props> {
-  renderParameter = (param: T.RuleParameter) => (
-    <tr className="coding-rules-detail-parameter" key={param.key}>
-      <td className="coding-rules-detail-parameter-name">{param.key}</td>
-      <td className="coding-rules-detail-parameter-description">
-        <p
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: sanitize(param.htmlDesc || '') }}
-        />
-        {param.defaultValue !== undefined && (
-          <div className="note spacer-top">
-            {translate('coding_rules.parameters.default_value')}
-            <br />
-            <span className="coding-rules-detail-parameter-value">{param.defaultValue}</span>
-          </div>
-        )}
-      </td>
-    </tr>
+export default function RuleDetailsParameters({ params }: Props) {
+  return (
+    <div className="js-rule-parameters">
+      <SubHeadingHighlight as="h3">{translate('coding_rules.parameters')}</SubHeadingHighlight>
+      <Table className="sw-my-4" columnCount={2} columnWidths={[0, 'auto']}>
+        {params.map((param) => (
+          <TableRow key={param.key}>
+            <CellComponent className="sw-align-top sw-font-semibold">{param.key}</CellComponent>
+            <CellComponent>
+              <div className="sw-flex sw-flex-col sw-gap-2">
+                {param.htmlDesc !== undefined && (
+                  <div
+                    // eslint-disable-next-line react/no-danger
+                    dangerouslySetInnerHTML={{ __html: sanitizeString(param.htmlDesc) }}
+                  />
+                )}
+                {param.defaultValue !== undefined && (
+                  <Note as="div">
+                    {translate('coding_rules.parameters.default_value')}
+                    <br />
+                    <span className="coding-rules-detail-parameter-value">
+                      {param.defaultValue}
+                    </span>
+                  </Note>
+                )}
+              </div>
+            </CellComponent>
+          </TableRow>
+        ))}
+      </Table>
+    </div>
   );
-
-  render() {
-    return (
-      <div className="js-rule-parameters">
-        <h3 className="coding-rules-detail-title">{translate('coding_rules.parameters')}</h3>
-        <table className="coding-rules-detail-parameters">
-          <tbody>{this.props.params.map(this.renderParameter)}</tbody>
-        </table>
-      </div>
-    );
-  }
 }

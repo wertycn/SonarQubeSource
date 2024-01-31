@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,36 +18,23 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { FormattedMessage } from 'react-intl';
-import { ClipboardIconButton } from 'sonar-ui-common/components/controls/clipboard';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import CodeSnippet from '../../../common/CodeSnippet';
-import { mavenPomSnippet } from '../../utils';
-import CreateYmlFile from './CreateYmlFile';
+import { Component } from '../../../../types/types';
+import CreateYmlFile from '../../components/CreateYmlFile';
+import { GITHUB_ACTIONS_RUNS_ON_LINUX } from '../constants';
+import { generateGitHubActionsYaml } from '../utils';
 
 export interface JavaMavenProps {
   branchesEnabled?: boolean;
-  component: T.Component;
+  mainBranchName: string;
+  component: Component;
 }
 
-const mavenYamlTemplte = (branchesEnabled: boolean) => `name: Build
-on:
-  push:
-    branches:
-      - master # or the name of your main branch
-${branchesEnabled ? '  pull_request:\n    types: [opened, synchronize, reopened]' : ''}
-jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Set up JDK 11
+function mavenYamlSteps(projectKey: string, projectName: string) {
+  return `
+      - name: Set up JDK 17
         uses: actions/setup-java@v1
         with:
-          java-version: 11
+          java-version: 17
       - name: Cache SonarQube packages
         uses: actions/cache@v1
         with:
@@ -62,31 +49,22 @@ jobs:
           restore-keys: \${{ runner.os }}-m2
       - name: Build and analyze
         env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: \${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: \${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar`;
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=${projectKey} -Dsonar.projectName='${projectName}'`;
+}
 
 export default function JavaMaven(props: JavaMavenProps) {
-  const { component, branchesEnabled } = props;
+  const { component, branchesEnabled, mainBranchName } = props;
   return (
-    <>
-      <li className="abs-width-600">
-        <FormattedMessage
-          defaultMessage={translate('onboarding.tutorial.with.github_action.yaml.maven.pom')}
-          id="onboarding.tutorial.with.github_action.yaml.maven.pom"
-          values={{
-            pom: (
-              <>
-                <code className="rule">pom.xml</code>
-                <ClipboardIconButton copyValue="pom.xml" />
-              </>
-            )
-          }}
-        />
-        <CodeSnippet snippet={mavenPomSnippet(component.key)} />
-      </li>
-      <CreateYmlFile yamlTemplate={mavenYamlTemplte(!!branchesEnabled)} />
-    </>
+    <CreateYmlFile
+      yamlFileName=".github/workflows/build.yml"
+      yamlTemplate={generateGitHubActionsYaml(
+        mainBranchName,
+        !!branchesEnabled,
+        GITHUB_ACTIONS_RUNS_ON_LINUX,
+        mavenYamlSteps(component.key, component.name),
+      )}
+    />
   );
 }

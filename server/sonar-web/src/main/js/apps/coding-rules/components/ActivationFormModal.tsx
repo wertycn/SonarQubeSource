@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,232 +17,228 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
-import { sanitize } from 'dompurify';
+import {
+  ButtonPrimary,
+  FlagMessage,
+  FormField,
+  InputField,
+  InputSelect,
+  InputTextArea,
+  LabelValueSelectOption,
+  Modal,
+  Note,
+} from 'design-system';
 import * as React from 'react';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { activateRule, Profile } from '../../../api/quality-profiles';
-import SeverityHelper from '../../../components/shared/SeverityHelper';
-import { SEVERITIES } from '../../../helpers/constants';
+import { Profile } from '../../../api/quality-profiles';
+import DocLink from '../../../components/common/DocLink';
+import { translate } from '../../../helpers/l10n';
+import { sanitizeString } from '../../../helpers/sanitize';
+import { useActivateRuleMutation } from '../../../queries/quality-profiles';
+import { IssueSeverity } from '../../../types/issues';
+import { Dict, Rule, RuleActivation, RuleDetails } from '../../../types/types';
 import { sortProfiles } from '../../quality-profiles/utils';
+import { SeveritySelect } from './SeveritySelect';
 
 interface Props {
-  activation?: T.RuleActivation;
+  activation?: RuleActivation;
   modalHeader: string;
   onClose: () => void;
-  onDone: (severity: string) => Promise<void>;
+  onDone?: (severity: string) => Promise<void> | void;
   profiles: Profile[];
-  rule: T.Rule | T.RuleDetails;
+  rule: Rule | RuleDetails;
 }
 
-interface State {
-  params: T.Dict<string>;
-  profile: string;
-  severity: string;
-  submitting: boolean;
+interface ProfileWithDepth extends Profile {
+  depth: number;
 }
 
-export default class ActivationFormModal extends React.PureComponent<Props, State> {
-  mounted = false;
+const MIN_PROFILES_TO_ENABLE_SELECT = 2;
+const FORM_ID = 'rule-activation-modal-form';
 
-  constructor(props: Props) {
-    super(props);
-    const profilesWithDepth = this.getQualityProfilesWithDepth(props);
-    this.state = {
-      params: this.getParams(props),
-      profile: profilesWithDepth.length > 0 ? profilesWithDepth[0].key : '',
-      severity: props.activation ? props.activation.severity : props.rule.severity,
-      submitting: false
+export default function ActivationFormModal(props: Readonly<Props>) {
+  const { activation, rule, profiles, modalHeader } = props;
+  const { mutate: activateRule, isLoading: submitting } = useActivateRuleMutation((data) => {
+    props.onDone?.(data.severity as string);
+    props.onClose();
+  });
+
+  const profilesWithDepth = getQualityProfilesWithDepth(profiles, rule.lang);
+  const [profile, setProfile] = React.useState(profilesWithDepth[0]);
+  const [params, setParams] = React.useState(getRuleParams({ activation, rule }));
+  const [severity, setSeverity] = React.useState(
+    (activation ? activation.severity : rule.severity) as IssueSeverity,
+  );
+
+  const profileOptions = profilesWithDepth.map((p) => ({ label: p.name, value: p }));
+  const isCustomRule = !!(rule as RuleDetails).templateKey;
+  const activeInAllProfiles = profilesWithDepth.length <= 0;
+  const isUpdateMode = !!activation;
+
+  const handleFormSubmit = (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = {
+      key: profile?.key ?? '',
+      params,
+      rule: rule.key,
+      severity,
     };
-  }
+    activateRule(data);
+  };
 
-  componentDidMount() {
-    this.mounted = true;
-  }
+  const handleParameterChange = (
+    event: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = event.currentTarget;
+    setParams({ ...params, [name]: value });
+  };
 
-  componentWillUnmount() {
-    this.mounted = false;
-  }
+  const makeScrollable = (rule.params?.length ?? 0) > 1;
 
-  getParams = ({ activation, rule } = this.props) => {
-    const params: T.Dict<string> = {};
-    if (rule && rule.params) {
-      for (const param of rule.params) {
-        params[param.key] = param.defaultValue || '';
+  return (
+    <Modal
+      headerTitle={modalHeader}
+      onClose={props.onClose}
+      loading={submitting}
+      isOverflowVisible={!makeScrollable}
+      isScrollable={makeScrollable}
+      primaryButton={
+        <ButtonPrimary disabled={submitting || activeInAllProfiles} form={FORM_ID} type="submit">
+          {isUpdateMode ? translate('save') : translate('coding_rules.activate')}
+        </ButtonPrimary>
       }
-      if (activation && activation.params) {
-        for (const param of activation.params) {
-          params[param.key] = param.value;
-        }
+      secondaryButtonLabel={translate('cancel')}
+      body={
+        <form className="sw-pb-10" id={FORM_ID} onSubmit={handleFormSubmit}>
+          {!isUpdateMode && activeInAllProfiles && (
+            <FlagMessage className="sw-mb-2" variant="info">
+              {translate('coding_rules.active_in_all_profiles')}
+            </FlagMessage>
+          )}
+
+          <FlagMessage className="sw-mb-4" variant="info">
+            {translate('coding_rules.severity_deprecated')}
+            <DocLink className="sw-ml-2 sw-whitespace-nowrap" to="/user-guide/clean-code/">
+              {translate('learn_more')}
+            </DocLink>
+          </FlagMessage>
+
+          <FormField
+            ariaLabel={translate('coding_rules.quality_profile')}
+            label={translate('coding_rules.quality_profile')}
+            htmlFor="coding-rules-quality-profile-select-input"
+          >
+            <InputSelect
+              id="coding-rules-quality-profile-select"
+              inputId="coding-rules-quality-profile-select-input"
+              isClearable={false}
+              isDisabled={submitting || profilesWithDepth.length < MIN_PROFILES_TO_ENABLE_SELECT}
+              onChange={({ value }: LabelValueSelectOption<ProfileWithDepth>) => {
+                setProfile(value);
+              }}
+              getOptionLabel={({ value }: LabelValueSelectOption<ProfileWithDepth>) =>
+                '   '.repeat(value.depth) + value.name
+              }
+              options={profileOptions}
+              value={profileOptions.find(({ value }) => value.key === profile?.key)}
+            />
+          </FormField>
+
+          <FormField
+            ariaLabel={translate('severity')}
+            label={translate('severity')}
+            htmlFor="coding-rules-severity-select"
+          >
+            <SeveritySelect
+              isDisabled={submitting}
+              onChange={({ value }: LabelValueSelectOption<IssueSeverity>) => {
+                setSeverity(value);
+              }}
+              severity={severity}
+            />
+          </FormField>
+
+          {isCustomRule ? (
+            <Note as="p" className="sw-my-4">
+              {translate('coding_rules.custom_rule.activation_notice')}
+            </Note>
+          ) : (
+            rule.params?.map((param) => (
+              <FormField label={param.key} key={param.key} htmlFor={param.key}>
+                {param.type === 'TEXT' ? (
+                  <InputTextArea
+                    id={param.key}
+                    disabled={submitting}
+                    name={param.key}
+                    onChange={handleParameterChange}
+                    placeholder={param.defaultValue}
+                    rows={3}
+                    size="full"
+                    value={params[param.key] ?? ''}
+                  />
+                ) : (
+                  <InputField
+                    id={param.key}
+                    disabled={submitting}
+                    name={param.key}
+                    onChange={handleParameterChange}
+                    placeholder={param.defaultValue}
+                    size="full"
+                    type="text"
+                    value={params[param.key] ?? ''}
+                  />
+                )}
+                {param.htmlDesc !== undefined && (
+                  <Note
+                    as="div"
+                    // eslint-disable-next-line react/no-danger
+                    dangerouslySetInnerHTML={{ __html: sanitizeString(param.htmlDesc) }}
+                  />
+                )}
+              </FormField>
+            ))
+          )}
+        </form>
+      }
+    />
+  );
+}
+
+function getQualityProfilesWithDepth(
+  profiles: Profile[] = [],
+  ruleLang?: string,
+): ProfileWithDepth[] {
+  return sortProfiles(
+    profiles.filter(
+      (profile) =>
+        !profile.isBuiltIn &&
+        profile.actions &&
+        profile.actions.edit &&
+        profile.language === ruleLang,
+    ),
+  ).map((profile) => ({
+    ...profile,
+    // Decrease depth by 1, so the top level starts at 0
+    depth: profile.depth - 1,
+  }));
+}
+
+function getRuleParams({
+  activation,
+  rule,
+}: {
+  activation?: RuleActivation;
+  rule: RuleDetails | Rule;
+}) {
+  const params: Dict<string> = {};
+  if (rule?.params) {
+    for (const param of rule.params) {
+      params[param.key] = param.defaultValue ?? '';
+    }
+    if (activation?.params) {
+      for (const param of activation.params) {
+        params[param.key] = param.value;
       }
     }
-    return params;
-  };
-
-  // Choose QP which a user can administrate, which are the same language and which are not built-in
-  getQualityProfilesWithDepth = ({ profiles } = this.props) => {
-    return sortProfiles(
-      profiles.filter(
-        profile =>
-          !profile.isBuiltIn &&
-          profile.actions &&
-          profile.actions.edit &&
-          profile.language === this.props.rule.lang
-      )
-    ).map(profile => ({
-      ...profile,
-      // Decrease depth by 1, so the top level starts at 0
-      depth: profile.depth - 1
-    }));
-  };
-
-  handleFormSubmit = (event: React.SyntheticEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    this.setState({ submitting: true });
-    const data = {
-      key: this.state.profile,
-      params: this.state.params,
-      rule: this.props.rule.key,
-      severity: this.state.severity
-    };
-    activateRule(data)
-      .then(() => this.props.onDone(data.severity))
-      .then(
-        () => {
-          if (this.mounted) {
-            this.setState({ submitting: false });
-            this.props.onClose();
-          }
-        },
-        () => {
-          if (this.mounted) {
-            this.setState({ submitting: false });
-          }
-        }
-      );
-  };
-
-  handleParameterChange = (event: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = event.currentTarget;
-    this.setState((state: State) => ({ params: { ...state.params, [name]: value } }));
-  };
-
-  handleProfileChange = ({ value }: { value: string }) => {
-    this.setState({ profile: value });
-  };
-
-  handleSeverityChange = ({ value }: { value: string }) => {
-    this.setState({ severity: value });
-  };
-
-  renderSeverityOption = ({ value }: { value: string }) => {
-    return <SeverityHelper severity={value} />;
-  };
-
-  render() {
-    const { activation, rule } = this.props;
-    const { profile, severity, submitting } = this.state;
-    const { params = [] } = rule;
-    const profilesWithDepth = this.getQualityProfilesWithDepth();
-    const isCustomRule = !!(rule as T.RuleDetails).templateKey;
-    const activeInAllProfiles = profilesWithDepth.length <= 0;
-    const isUpdateMode = !!activation;
-
-    return (
-      <Modal contentLabel={this.props.modalHeader} onRequestClose={this.props.onClose} size="small">
-        <form onSubmit={this.handleFormSubmit}>
-          <div className="modal-head">
-            <h2>{this.props.modalHeader}</h2>
-          </div>
-
-          <div className={classNames('modal-body', { 'modal-container': params.length > 0 })}>
-            {!isUpdateMode && activeInAllProfiles && (
-              <Alert variant="info">{translate('coding_rules.active_in_all_profiles')}</Alert>
-            )}
-
-            <div className="modal-field">
-              <label>{translate('coding_rules.quality_profile')}</label>
-              <Select
-                className="js-profile"
-                clearable={false}
-                disabled={submitting || profilesWithDepth.length === 1}
-                onChange={this.handleProfileChange}
-                options={profilesWithDepth.map(profile => ({
-                  label: '   '.repeat(profile.depth) + profile.name,
-                  value: profile.key
-                }))}
-                value={profile}
-              />
-            </div>
-            <div className="modal-field">
-              <label>{translate('severity')}</label>
-              <Select
-                className="js-severity"
-                clearable={false}
-                disabled={submitting}
-                onChange={this.handleSeverityChange}
-                optionRenderer={this.renderSeverityOption}
-                options={SEVERITIES.map(severity => ({
-                  label: translate('severity', severity),
-                  value: severity
-                }))}
-                searchable={false}
-                value={severity}
-                valueRenderer={this.renderSeverityOption}
-              />
-            </div>
-            {isCustomRule ? (
-              <div className="modal-field">
-                <p className="note">{translate('coding_rules.custom_rule.activation_notice')}</p>
-              </div>
-            ) : (
-              params.map(param => (
-                <div className="modal-field" key={param.key}>
-                  <label title={param.key}>{param.key}</label>
-                  {param.type === 'TEXT' ? (
-                    <textarea
-                      disabled={submitting}
-                      name={param.key}
-                      onChange={this.handleParameterChange}
-                      placeholder={param.defaultValue}
-                      rows={3}
-                      value={this.state.params[param.key] || ''}
-                    />
-                  ) : (
-                    <input
-                      disabled={submitting}
-                      name={param.key}
-                      onChange={this.handleParameterChange}
-                      placeholder={param.defaultValue}
-                      type="text"
-                      value={this.state.params[param.key] || ''}
-                    />
-                  )}
-                  <div
-                    className="note"
-                    // eslint-disable-next-line react/no-danger
-                    dangerouslySetInnerHTML={{ __html: sanitize(param.htmlDesc || '') }}
-                  />
-                </div>
-              ))
-            )}
-          </div>
-
-          <footer className="modal-foot">
-            {submitting && <i className="spinner spacer-right" />}
-            <SubmitButton disabled={submitting || activeInAllProfiles}>
-              {isUpdateMode ? translate('save') : translate('coding_rules.activate')}
-            </SubmitButton>
-            <ResetButtonLink disabled={submitting} onClick={this.props.onClose}>
-              {translate('cancel')}
-            </ResetButtonLink>
-          </footer>
-        </form>
-      </Modal>
-    );
   }
+  return params;
 }

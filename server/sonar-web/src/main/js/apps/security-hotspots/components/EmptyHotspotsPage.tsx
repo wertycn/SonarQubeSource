@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Note } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
+import DocLink from '../../../components/common/DocLink';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
 
 export interface EmptyHotspotsPageProps {
   filtered: boolean;
+  filterByFile: boolean;
   isStaticListOfHotspots: boolean;
 }
 
 export default function EmptyHotspotsPage(props: EmptyHotspotsPageProps) {
-  const { filtered, isStaticListOfHotspots } = props;
+  const { filtered, filterByFile, isStaticListOfHotspots } = props;
 
   let translationRoot;
-  if (isStaticListOfHotspots) {
+  if (filterByFile) {
+    translationRoot = 'no_hotspots_for_file';
+  } else if (isStaticListOfHotspots) {
     translationRoot = 'no_hotspots_for_keys';
   } else if (filtered) {
     translationRoot = 'no_hotspots_for_filters';
@@ -40,24 +44,25 @@ export default function EmptyHotspotsPage(props: EmptyHotspotsPageProps) {
   }
 
   return (
-    <div className="display-flex-column display-flex-center huge-spacer-top">
+    <div className="sw-items-center sw-justify-center sw-flex-col sw-flex sw-pt-16">
       <img
         alt={translate('hotspots.page')}
-        className="huge-spacer-top"
+        className="sw-mt-8"
         height={100}
-        src={`${getBaseUrl()}/images/${filtered ? 'filter-large' : 'hotspot-large'}.svg`}
+        src={`${getBaseUrl()}/images/${
+          filtered && !filterByFile ? 'filter-large' : 'hotspot-large'
+        }.svg`}
       />
-      <h1 className="huge-spacer-top">{translate(`hotspots.${translationRoot}.title`)}</h1>
-      <div className="abs-width-400 text-center big-spacer-top">
+      <h1 className="sw-mt-10 sw-body-sm-highlight">
+        {translate(`hotspots.${translationRoot}.title`)}
+      </h1>
+      <Note className="sw-w-abs-400 sw-text-center sw-mt-4">
         {translate(`hotspots.${translationRoot}.description`)}
-      </div>
+      </Note>
       {!(filtered || isStaticListOfHotspots) && (
-        <Link
-          className="big-spacer-top"
-          target="_blank"
-          to={{ pathname: '/documentation/user-guide/security-hotspots/' }}>
+        <DocLink className="big-spacer-top" to="/user-guide/security-hotspots/">
           {translate('hotspots.learn_more')}
-        </Link>
+        </DocLink>
       )}
     </div>
   );

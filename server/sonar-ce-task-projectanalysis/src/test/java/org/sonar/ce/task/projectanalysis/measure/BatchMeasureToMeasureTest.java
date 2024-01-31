@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ import org.sonar.scanner.protocol.output.ScannerReport.Measure.LongValue;
 import org.sonar.scanner.protocol.output.ScannerReport.Measure.StringValue;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @RunWith(DataProviderRunner.class)
 public class BatchMeasureToMeasureTest {
@@ -54,14 +55,16 @@ public class BatchMeasureToMeasureTest {
     assertThat(underTest.toMeasure(null, SOME_INT_METRIC)).isNotPresent();
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void toMeasure_throws_NPE_if_metric_argument_is_null() {
-    underTest.toMeasure(EMPTY_BATCH_MEASURE, null);
+    assertThatThrownBy(() -> underTest.toMeasure(EMPTY_BATCH_MEASURE, null))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void toMeasure_throws_NPE_if_both_arguments_are_null() {
-    underTest.toMeasure(null, null);
+    assertThatThrownBy(() -> underTest.toMeasure(null, null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -138,7 +141,7 @@ public class BatchMeasureToMeasureTest {
   public void toMeasure_returns_no_value_if_dto_has_no_value_for_Int_Metric() {
     Optional<Measure> measure = underTest.toMeasure(EMPTY_BATCH_MEASURE, SOME_INT_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
   }
 
@@ -150,7 +153,7 @@ public class BatchMeasureToMeasureTest {
 
     Optional<Measure> measure = underTest.toMeasure(batchMeasure, SOME_INT_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.INT);
     assertThat(measure.get().getIntValue()).isEqualTo(10);
     assertThat(measure.get().getData()).isEqualTo(SOME_DATA);
@@ -160,15 +163,15 @@ public class BatchMeasureToMeasureTest {
   public void toMeasure_returns_no_value_if_dto_has_no_value_for_Long_Metric() {
     Optional<Measure> measure = underTest.toMeasure(EMPTY_BATCH_MEASURE, SOME_LONG_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
   }
 
   @Test
   public void toMeasure_returns_long_part_of_value_in_dto_for_Long_Metric() {
-    Optional<Measure> measure = underTest.toMeasure(ScannerReport.Measure.newBuilder().setLongValue(LongValue.newBuilder().setValue(15l)).build(), SOME_LONG_METRIC);
+    Optional<Measure> measure = underTest.toMeasure(ScannerReport.Measure.newBuilder().setLongValue(LongValue.newBuilder().setValue(15L)).build(), SOME_LONG_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.LONG);
     assertThat(measure.get().getLongValue()).isEqualTo(15);
   }
@@ -176,12 +179,12 @@ public class BatchMeasureToMeasureTest {
   @Test
   public void toMeasure_maps_data_and_alert_properties_in_dto_for_Long_Metric() {
     ScannerReport.Measure batchMeasure = ScannerReport.Measure.newBuilder()
-      .setLongValue(LongValue.newBuilder().setValue(10l).setData(SOME_DATA))
+      .setLongValue(LongValue.newBuilder().setValue(10L).setData(SOME_DATA))
       .build();
 
     Optional<Measure> measure = underTest.toMeasure(batchMeasure, SOME_LONG_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.LONG);
     assertThat(measure.get().getLongValue()).isEqualTo(10);
     assertThat(measure.get().getData()).isEqualTo(SOME_DATA);
@@ -191,7 +194,7 @@ public class BatchMeasureToMeasureTest {
   public void toMeasure_returns_no_value_if_dto_has_no_value_for_Double_Metric() {
     Optional<Measure> measure = underTest.toMeasure(EMPTY_BATCH_MEASURE, SOME_DOUBLE_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
   }
 
@@ -203,7 +206,7 @@ public class BatchMeasureToMeasureTest {
 
     Optional<Measure> measure = underTest.toMeasure(batchMeasure, SOME_DOUBLE_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.DOUBLE);
     assertThat(measure.get().getDoubleValue()).isEqualTo(10.6395d);
     assertThat(measure.get().getData()).isEqualTo(SOME_DATA);
@@ -213,7 +216,7 @@ public class BatchMeasureToMeasureTest {
   public void toMeasure_returns_no_value_if_dto_has_no_value_for_Boolean_metric() {
     Optional<Measure> measure = underTest.toMeasure(EMPTY_BATCH_MEASURE, SOME_BOOLEAN_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
   }
 
@@ -226,7 +229,7 @@ public class BatchMeasureToMeasureTest {
   private void verify_toMeasure_returns_false_value_if_dto_has_invalid_value_for_Boolean_metric(boolean expected) {
     Optional<Measure> measure = underTest.toMeasure(ScannerReport.Measure.newBuilder().setBooleanValue(BoolValue.newBuilder().setValue(expected)).build(), SOME_BOOLEAN_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.BOOLEAN);
     assertThat(measure.get().getBooleanValue()).isEqualTo(expected);
   }
@@ -238,7 +241,7 @@ public class BatchMeasureToMeasureTest {
 
     Optional<Measure> measure = underTest.toMeasure(batchMeasure, SOME_BOOLEAN_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.BOOLEAN);
     assertThat(measure.get().getBooleanValue()).isTrue();
     assertThat(measure.get().getData()).isEqualTo(SOME_DATA);
@@ -248,7 +251,7 @@ public class BatchMeasureToMeasureTest {
   public void toMeasure_returns_no_value_if_dto_has_no_value_for_String_Metric() {
     Optional<Measure> measure = underTest.toMeasure(EMPTY_BATCH_MEASURE, SOME_STRING_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
   }
 
@@ -260,7 +263,7 @@ public class BatchMeasureToMeasureTest {
 
     Optional<Measure> measure = underTest.toMeasure(batchMeasure, SOME_STRING_METRIC);
 
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getValueType()).isEqualTo(Measure.ValueType.STRING);
     assertThat(measure.get().getStringValue()).isEqualTo(SOME_DATA);
     assertThat(measure.get().getData()).isEqualTo(SOME_DATA);

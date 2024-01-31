@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,27 +19,35 @@
  */
 package org.sonar.auth.gitlab;
 
+import com.google.common.base.Strings;
 import java.util.Arrays;
 import java.util.List;
-import org.sonar.api.CoreProperties;
+import java.util.Set;
 import org.sonar.api.PropertyType;
+import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.PropertyDefinition;
+import org.sonar.auth.DevOpsPlatformSettings;
+import org.sonar.db.alm.setting.ALM;
 
 import static java.lang.String.valueOf;
 import static org.sonar.api.PropertyType.BOOLEAN;
 import static org.sonar.api.PropertyType.PASSWORD;
 
-public class GitLabSettings {
+@ComputeEngineSide
+public class GitLabSettings implements DevOpsPlatformSettings {
 
-  static final String GITLAB_AUTH_ENABLED = "sonar.auth.gitlab.enabled";
-  static final String GITLAB_AUTH_URL = "sonar.auth.gitlab.url";
-  static final String GITLAB_AUTH_APPLICATION_ID = "sonar.auth.gitlab.applicationId.secured";
-  static final String GITLAB_AUTH_SECRET = "sonar.auth.gitlab.secret.secured";
-  static final String GITLAB_AUTH_ALLOW_USERS_TO_SIGNUP = "sonar.auth.gitlab.allowUsersToSignUp";
-  static final String GITLAB_AUTH_SYNC_USER_GROUPS = "sonar.auth.gitlab.groupsSync";
+  public static final String GITLAB_AUTH_ENABLED = "sonar.auth.gitlab.enabled";
+  public static final String GITLAB_AUTH_URL = "sonar.auth.gitlab.url";
+  public static final String GITLAB_AUTH_APPLICATION_ID = "sonar.auth.gitlab.applicationId.secured";
+  public static final String GITLAB_AUTH_SECRET = "sonar.auth.gitlab.secret.secured";
+  public static final String GITLAB_AUTH_ALLOW_USERS_TO_SIGNUP = "sonar.auth.gitlab.allowUsersToSignUp";
+  public static final String GITLAB_AUTH_ALLOWED_GROUPS = "sonar.auth.gitlab.allowedGroups";
+  public static final String GITLAB_AUTH_SYNC_USER_GROUPS = "sonar.auth.gitlab.groupsSync";
+  public static final String GITLAB_AUTH_PROVISIONING_TOKEN = "provisioning.gitlab.token.secured";
+  public static final String GITLAB_AUTH_PROVISIONING_ENABLED = "provisioning.gitlab.enabled";
 
-  private static final String CATEGORY = CoreProperties.CATEGORY_ALM_INTEGRATION;
+  private static final String CATEGORY = "authentication";
   private static final String SUBCATEGORY = "gitlab";
 
   private final Configuration configuration;
@@ -54,6 +62,10 @@ public class GitLabSettings {
       return url.substring(0, url.length() - 1);
     }
     return url;
+  }
+
+  public String apiUrl() {
+    return url() + "/api/v4";
   }
 
   public String applicationId() {
@@ -72,8 +84,31 @@ public class GitLabSettings {
     return configuration.getBoolean(GITLAB_AUTH_ALLOW_USERS_TO_SIGNUP).orElse(false);
   }
 
+  public Set<String> allowedGroups() {
+    return Set.of(configuration.getStringArray(GITLAB_AUTH_ALLOWED_GROUPS));
+  }
+
   public boolean syncUserGroups() {
     return configuration.getBoolean(GITLAB_AUTH_SYNC_USER_GROUPS).orElse(false);
+  }
+
+  public String provisioningToken() {
+    return configuration.get(GITLAB_AUTH_PROVISIONING_TOKEN).map(Strings::emptyToNull).orElse(null);
+  }
+
+  @Override
+  public String getDevOpsPlatform() {
+    return ALM.GITLAB.getId();
+  }
+
+  @Override
+  public boolean isProvisioningEnabled() {
+    return isEnabled() && configuration.getBoolean(GITLAB_AUTH_PROVISIONING_ENABLED).orElse(false);
+  }
+
+  @Override
+  public boolean isProjectVisibilitySynchronizationActivated() {
+    return false;
   }
 
   static List<PropertyDefinition> definitions() {
@@ -89,7 +124,7 @@ public class GitLabSettings {
         .build(),
       PropertyDefinition.builder(GITLAB_AUTH_URL)
         .name("GitLab URL")
-        .description("URL to access GitLab.")
+        .description("Base URL to access GitLab. https://gitlab.com for Gitlab SaaS")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .defaultValue("https://gitlab.com")
@@ -111,24 +146,53 @@ public class GitLabSettings {
         .index(4)
         .build(),
       PropertyDefinition.builder(GITLAB_AUTH_ALLOW_USERS_TO_SIGNUP)
-        .name("Allow users to sign-up")
-        .description("Allow new users to authenticate. When set to 'false', only existing users will be able to authenticate to the server.")
+        .name("Allow users to sign up")
+        .description("Allow new users to authenticate. When set to disabled, only existing users will be able to authenticate to the server.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .type(BOOLEAN)
         .defaultValue(valueOf(true))
         .index(5)
         .build(),
+      PropertyDefinition.builder(GITLAB_AUTH_ALLOWED_GROUPS)
+        .name("Allowed groups")
+        .description("Only members of these groups (and sub-groups) will be allowed to authenticate. " +
+          "Please enter the group slug as it appears in the GitLab URL, for instance `my-gitlab-group`. " +
+          "If you use Auto-provisioning, only members of these groups (and sub-groups) will be provisioned")
+        .multiValues(true)
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .index(6)
+        .build(),
       PropertyDefinition.builder(GITLAB_AUTH_SYNC_USER_GROUPS)
         .deprecatedKey("sonar.auth.gitlab.sync_user_groups")
         .name("Synchronize user groups")
         .description("For each GitLab group they belong to, the user will be associated to a group with the same name (if it exists) in SonarQube." +
-          " If enabled, the GitLab Oauth2 application will need to provide the api scope")
+          " If enabled, the GitLab OAuth 2 application will need to provide the api scope.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .type(PropertyType.BOOLEAN)
         .defaultValue(valueOf(false))
-        .index(6)
+        .index(7)
+        .build(),
+      PropertyDefinition.builder(GITLAB_AUTH_PROVISIONING_TOKEN)
+        .name("Provisioning token")
+        .description("Token used for user provisioning." +
+          " You can either use a group or a personal access token, as long as it has visibility on the groups that need to be imported.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(PASSWORD)
+        .index(8)
+        .build(),
+      PropertyDefinition.builder(GITLAB_AUTH_PROVISIONING_ENABLED)
+        .name("Provisioning enabled")
+        .description("Enable Gitlab provisioning for users.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(BOOLEAN)
+        .defaultValue(valueOf(false))
+        .index(9)
         .build());
+
   }
 }

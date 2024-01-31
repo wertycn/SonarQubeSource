@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.server.measure.index;
 
+import javax.inject.Inject;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.server.es.Index;
@@ -49,6 +50,7 @@ public class ProjectMeasuresIndexDefinition implements IndexDefinition {
   public static final String FIELD_NAME = "name";
   public static final String FIELD_QUALIFIER = "qualifier";
   public static final String FIELD_ANALYSED_AT = "analysedAt";
+  public static final String FIELD_CREATED_AT = "createdAt";
   public static final String FIELD_QUALITY_GATE_STATUS = "qualityGateStatus";
   public static final String FIELD_TAGS = "tags";
   public static final String FIELD_MEASURES = "measures";
@@ -71,6 +73,7 @@ public class ProjectMeasuresIndexDefinition implements IndexDefinition {
     this.enableSource = enableSource;
   }
 
+  @Inject
   public ProjectMeasuresIndexDefinition(Configuration config) {
     this(config, false);
   }
@@ -110,5 +113,6 @@ public class ProjectMeasuresIndexDefinition implements IndexDefinition {
       .addIntegerField(SUB_FIELD_DISTRIB_NCLOC)
       .build();
     mapping.createDateTimeField(FIELD_ANALYSED_AT);
+    mapping.createDateTimeField(FIELD_CREATED_AT);
   }
 }

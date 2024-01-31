@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,63 +17,60 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
-import * as React from 'react';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import { mockEvent } from '../../../helpers/testMocks';
+import { act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import React from 'react';
+import { renderComponent } from '../../../helpers/testReactTestingUtils';
+import { byRole } from '../../../helpers/testSelector';
 import KeyboardShortcutsModal from '../KeyboardShortcutsModal';
 
-let handle: void | (() => void);
-beforeEach(() => {
-  jest.spyOn(React, 'useEffect').mockImplementationOnce(f => {
-    handle = f();
-  });
+it('should render correctly', async () => {
+  const user = userEvent.setup();
+  renderKeyboardShortcutsModal();
+
+  expect(ui.modalTitle.query()).not.toBeInTheDocument();
+
+  await act(() => user.keyboard('?'));
+
+  expect(ui.modalTitle.get()).toBeInTheDocument();
+
+  await user.click(ui.closeButton.get());
+
+  expect(ui.modalTitle.query()).not.toBeInTheDocument();
 });
 
-afterEach(() => {
-  if (handle) {
-    handle();
-  }
+it('should ignore other keydownes', async () => {
+  const user = userEvent.setup();
+  renderKeyboardShortcutsModal();
+
+  await act(() => user.keyboard('!'));
+
+  expect(ui.modalTitle.query()).not.toBeInTheDocument();
 });
 
-it('should render correctly', () => {
-  const wrapper = shallowRender();
-  expect(wrapper).toMatchSnapshot('hidden');
+it('should ignore events in an input', async () => {
+  const user = userEvent.setup();
 
-  window.dispatchEvent(new KeyboardEvent('keypress', { key: '?' }));
+  renderKeyboardShortcutsModal();
 
-  expect(wrapper).toMatchSnapshot('visible');
+  await user.click(ui.textInput.get());
+  await act(() => user.keyboard('?'));
+
+  expect(ui.modalTitle.query()).not.toBeInTheDocument();
 });
 
-it('should close correctly', () => {
-  const wrapper = shallowRender();
-  window.dispatchEvent(new KeyboardEvent('keypress', { key: '?' }));
-
-  wrapper.find(Modal).props().onRequestClose!(mockEvent());
-
-  expect(wrapper.type()).toBeNull();
-});
-
-it('should ignore other keypresses', () => {
-  const wrapper = shallowRender();
-  window.dispatchEvent(new KeyboardEvent('keypress', { key: '!' }));
-  expect(wrapper.type()).toBeNull();
-});
-
-it.each([['input'], ['select'], ['textarea']])('should ignore events on a %s', type => {
-  const wrapper = shallowRender();
-
-  const fakeEvent = new KeyboardEvent('keypress', { key: '!' });
-
-  Object.defineProperty(fakeEvent, 'target', {
-    value: document.createElement(type)
-  });
-
-  window.dispatchEvent(fakeEvent);
-
-  expect(wrapper.type()).toBeNull();
-});
-
-function shallowRender() {
-  return shallow(<KeyboardShortcutsModal />);
+function renderKeyboardShortcutsModal() {
+  return renderComponent(
+    <>
+      <KeyboardShortcutsModal />
+      <input type="text" />
+    </>,
+  );
 }
+
+const ui = {
+  modalTitle: byRole('heading', { name: 'keyboard_shortcuts.title' }),
+  closeButton: byRole('button', { name: 'close' }),
+
+  textInput: byRole('textbox'),
+};

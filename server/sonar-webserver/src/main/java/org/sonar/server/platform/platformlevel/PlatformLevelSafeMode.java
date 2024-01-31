@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.server.platform.platformlevel;
 
 import org.sonar.server.authentication.SafeModeUserSession;
+import org.sonar.server.monitoring.ServerMonitoringMetrics;
 import org.sonar.server.platform.ServerImpl;
 import org.sonar.server.platform.db.migration.AutoDbMigration;
 import org.sonar.server.platform.db.migration.DatabaseMigrationImpl;
@@ -48,19 +49,22 @@ public class PlatformLevelSafeMode extends PlatformLevel {
       IndexAction.class,
 
       // Server WS
-      SafeModeHealthCheckerModule.class,
-      SafemodeSystemWsModule.class,
+      new SafeModeHealthCheckerModule(),
+      new SafemodeSystemWsModule(),
 
       // Listing WS
-      WebServicesWsModule.class,
+      new WebServicesWsModule(),
 
       // WS engine
       SafeModeUserSession.class,
       WebServiceEngine.class,
-      WebServiceFilter.class);
+      WebServiceFilter.class,
+
+      // Monitoring
+      ServerMonitoringMetrics.class);
     addIfStartupLeader(
       DatabaseMigrationImpl.class,
-      MigrationEngineModule.class,
+      new MigrationEngineModule(),
       AutoDbMigration.class)
         .otherwiseAdd(NoopDatabaseMigrationImpl.class);
   }

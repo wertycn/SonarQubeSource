@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { MultiSelector } from 'design-system';
 import { difference, uniq, without } from 'lodash';
 import * as React from 'react';
 import { getRuleTags } from '../../../api/rules';
-import TagsSelector from '../../../components/tags/TagsSelector';
+import { translate } from '../../../helpers/l10n';
 
 export interface Props {
   setTags: (tags: string[]) => void;
@@ -49,15 +50,14 @@ export default class RuleDetailsTagsPopup extends React.PureComponent<Props, Sta
   onSearch = (query: string) => {
     return getRuleTags({
       q: query,
-      ps: Math.min(this.props.tags.length + LIST_SIZE, 100)
+      ps: Math.min(this.props.tags.length + LIST_SIZE, 100),
     }).then(
-      tags => {
+      (searchResult) => {
         if (this.mounted) {
-          // systems tags can not be unset, don't display them in the results
-          this.setState({ searchResult: without(tags, ...this.props.sysTags) });
+          this.setState({ searchResult });
         }
       },
-      () => {}
+      () => {},
     );
   };
 
@@ -71,14 +71,20 @@ export default class RuleDetailsTagsPopup extends React.PureComponent<Props, Sta
 
   render() {
     const availableTags = difference(this.state.searchResult, this.props.tags);
+    const selectedTags = [...this.props.sysTags, ...this.props.tags];
     return (
-      <TagsSelector
-        listSize={LIST_SIZE}
+      <MultiSelector
+        createElementLabel={translate('coding_rules.create_tag')}
+        disableMessage={translate('coding_rules.system_tags_tooltip')}
+        headerLabel={translate('tags')}
+        searchInputAriaLabel={translate('search.search_for_tags')}
+        noResultsLabel={translate('no_results')}
         onSearch={this.onSearch}
         onSelect={this.onSelect}
         onUnselect={this.onUnselect}
-        selectedTags={this.props.tags}
-        tags={availableTags}
+        selectedElements={selectedTags}
+        selectedElementsDisabled={this.props.sysTags}
+        elements={availableTags}
       />
     );
   }

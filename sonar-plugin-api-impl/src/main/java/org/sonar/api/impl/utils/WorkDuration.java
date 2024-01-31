@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -110,7 +110,7 @@ public class WorkDuration implements Serializable {
    * For instance, 3 days and 4 hours will return 3.5 days (if hoursIndDay is 8).
    */
   public double toWorkingDays() {
-    return durationInMinutes / 60d / hoursInDay;
+    return durationInMinutes / 60D / hoursInDay;
   }
 
   /**

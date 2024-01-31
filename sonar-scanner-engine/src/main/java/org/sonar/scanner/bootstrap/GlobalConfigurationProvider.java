@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,22 +21,15 @@ package org.sonar.scanner.bootstrap;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.config.PropertyDefinitions;
+import org.springframework.context.annotation.Bean;
 
-public class GlobalConfigurationProvider extends ProviderAdapter {
-
-  private GlobalConfiguration globalConfig;
-
-  public GlobalConfiguration provide(GlobalServerSettings globalServerSettings, ScannerProperties scannerProps,
-    PropertyDefinitions propertyDefinitions) {
-    if (globalConfig == null) {
-      Map<String, String> mergedSettings = new LinkedHashMap<>();
-      mergedSettings.putAll(globalServerSettings.properties());
-      mergedSettings.putAll(scannerProps.properties());
-
-      globalConfig = new GlobalConfiguration(propertyDefinitions, scannerProps.getEncryption(), mergedSettings);
-    }
-    return globalConfig;
+public class GlobalConfigurationProvider {
+  @Bean("GlobalConfiguration")
+  public GlobalConfiguration provide(GlobalServerSettings globalServerSettings, ScannerProperties scannerProps, PropertyDefinitions propertyDefinitions) {
+    Map<String, String> mergedSettings = new LinkedHashMap<>();
+    mergedSettings.putAll(globalServerSettings.properties());
+    mergedSettings.putAll(scannerProps.properties());
+    return new GlobalConfiguration(propertyDefinitions, scannerProps.getEncryption(), mergedSettings);
   }
 }

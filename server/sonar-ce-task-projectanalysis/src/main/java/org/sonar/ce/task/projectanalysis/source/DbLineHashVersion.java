@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -74,7 +74,7 @@ public class DbLineHashVersion {
   @CheckForNull
   private String getReferenceComponentUuid(Component component) {
     if (analysisMetadataHolder.isPullRequest()) {
-      return referenceBranchComponentUuids.getComponentUuid(component.getDbKey());
+      return referenceBranchComponentUuids.getComponentUuid(component.getKey());
     } else {
       return component.getUuid();
     }

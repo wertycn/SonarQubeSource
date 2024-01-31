@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,37 +17,63 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { save } from 'sonar-ui-common/helpers/storage';
-import { click } from 'sonar-ui-common/helpers/testUtils';
-import FavoriteFilter from '../FavoriteFilter';
+import { save } from '../../../../helpers/storage';
+import {
+  mockCurrentUser,
+  mockLocation,
+  mockLoggedInUser,
+  mockRouter,
+} from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { ALL_PATHNAME, FavoriteFilter, FAVORITE_PATHNAME } from '../FavoriteFilter';
 
-jest.mock('sonar-ui-common/helpers/storage', () => ({
-  save: jest.fn()
+jest.mock('../../../../helpers/storage', () => ({
+  save: jest.fn(),
 }));
-
-const currentUser = { isLoggedIn: true };
-const query = { size: 1 };
 
 beforeEach(() => {
   (save as jest.Mock<any>).mockClear();
 });
 
 it('renders for logged in user', () => {
-  expect(shallow(<FavoriteFilter currentUser={currentUser} query={query} />)).toMatchSnapshot();
+  renderFavoriteFilter();
+  expect(screen.getByText('my_favorites')).toBeInTheDocument();
+  expect(screen.getByText('all')).toBeInTheDocument();
 });
 
-it('saves last selection', () => {
-  const wrapper = shallow(<FavoriteFilter currentUser={currentUser} query={query} />);
-  click(wrapper.find('#favorite-projects'));
-  expect(save).toBeCalledWith('sonarqube.projects.default', 'favorite');
-  click(wrapper.find('#all-projects'));
-  expect(save).toBeCalledWith('sonarqube.projects.default', 'all');
-});
+it.each([
+  ['my_favorites', 'favorite', ALL_PATHNAME],
+  ['all', 'all', FAVORITE_PATHNAME],
+])(
+  'saves last selection',
+  async (optionTranslationId: string, localStorageValue: string, initialPathName: string) => {
+    const user = userEvent.setup();
+
+    renderFavoriteFilter({ location: mockLocation({ pathname: initialPathName }) });
+
+    await user.click(screen.getByText(optionTranslationId));
+    expect(save).toHaveBeenLastCalledWith('sonarqube.projects.default', localStorageValue);
+  },
+);
 
 it('does not render for anonymous', () => {
-  expect(
-    shallow(<FavoriteFilter currentUser={{ isLoggedIn: false }} query={query} />).type()
-  ).toBeNull();
+  renderFavoriteFilter({ currentUser: mockCurrentUser() });
+  expect(screen.queryByText('my_favorites')).not.toBeInTheDocument();
 });
+
+function renderFavoriteFilter({
+  currentUser = mockLoggedInUser(),
+  location = mockLocation(),
+}: Partial<FavoriteFilter['props']> = {}) {
+  renderComponent(
+    <FavoriteFilter
+      currentUser={currentUser}
+      location={location}
+      router={mockRouter()}
+      params={{}}
+    />,
+  );
+}

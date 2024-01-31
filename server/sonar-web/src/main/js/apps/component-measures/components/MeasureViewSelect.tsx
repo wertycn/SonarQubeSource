@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,75 +17,61 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import ListIcon from 'sonar-ui-common/components/icons/ListIcon';
-import TreeIcon from 'sonar-ui-common/components/icons/TreeIcon';
-import TreemapIcon from 'sonar-ui-common/components/icons/TreemapIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { hasList, hasTree, hasTreemap, View } from '../utils';
+import { translate } from '../../../helpers/l10n';
+import { MeasurePageView } from '../../../types/measures';
+import { Metric } from '../../../types/types';
+import { hasList, hasTree, hasTreemap } from '../utils';
 
-interface Props {
+export interface MeasureViewSelectProps {
   className?: string;
-  metric: T.Metric;
-  handleViewChange: (view: View) => void;
-  view: View;
+  metric: Metric;
+  handleViewChange: (view: MeasurePageView) => void;
+  view: MeasurePageView;
 }
 
-export default class MeasureViewSelect extends React.PureComponent<Props> {
-  getOptions = () => {
-    const { metric } = this.props;
-    const options = [];
-    if (hasTree(metric.key)) {
-      options.push({
-        icon: <TreeIcon />,
-        label: translate('component_measures.tab.tree'),
-        value: 'tree'
-      });
-    }
-    if (hasList(metric.key)) {
-      options.push({
-        icon: <ListIcon />,
-        label: translate('component_measures.tab.list'),
-        value: 'list'
-      });
-    }
-    if (hasTreemap(metric.key, metric.type)) {
-      options.push({
-        icon: <TreemapIcon />,
-        label: translate('component_measures.tab.treemap'),
-        value: 'treemap'
-      });
-    }
-    return options;
-  };
+interface ViewOption {
+  label: string;
+  value: MeasurePageView;
+}
 
-  handleChange = (option: { value: string }) => {
-    return this.props.handleViewChange(option.value as View);
-  };
-
-  renderOption = (option: { icon: JSX.Element; label: string }) => {
-    return (
-      <>
-        {option.icon}
-        <span className="little-spacer-left">{option.label}</span>
-      </>
-    );
-  };
-
-  render() {
-    return (
-      <Select
-        autoBlur={true}
-        className={this.props.className}
-        clearable={false}
-        onChange={this.handleChange}
-        optionRenderer={this.renderOption}
-        options={this.getOptions()}
-        searchable={false}
-        value={this.props.view}
-        valueRenderer={this.renderOption}
-      />
-    );
+export default function MeasureViewSelect(props: MeasureViewSelectProps) {
+  const { metric, view, className } = props;
+  const options = [];
+  if (hasTree(metric.key)) {
+    options.push({
+      label: translate('component_measures.tab.tree'),
+      value: MeasurePageView.tree,
+    });
   }
+  if (hasList(metric.key)) {
+    options.push({
+      label: translate('component_measures.tab.list'),
+      value: MeasurePageView.list,
+    });
+  }
+  if (hasTreemap(metric.key, metric.type)) {
+    options.push({
+      label: translate('component_measures.tab.treemap'),
+      value: MeasurePageView.treemap,
+    });
+  }
+
+  const handleChange = (option: ViewOption) => {
+    return props.handleViewChange(option.value);
+  };
+
+  return (
+    <InputSelect
+      size="small"
+      aria-labelledby="measures-view-selection-label"
+      blurInputOnSelect
+      className={className}
+      onChange={handleChange}
+      options={options}
+      isSearchable={false}
+      value={options.find((o) => o.value === view)}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,8 +30,8 @@ import org.sonar.api.batch.sensor.SensorContext;
 import org.sonar.api.batch.sensor.SensorDescriptor;
 import org.sonar.api.batch.sensor.highlighting.NewHighlighting;
 import org.sonar.api.batch.sensor.highlighting.TypeOfText;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.xoo.Xoo;
 
 import static java.lang.Integer.parseInt;
@@ -41,7 +41,7 @@ import static java.lang.Integer.parseInt;
  */
 public class SyntaxHighlightingSensor implements Sensor {
 
-  private static final Logger LOG = Loggers.get(SyntaxHighlightingSensor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SyntaxHighlightingSensor.class);
   private static final String HIGHLIGHTING_EXTENSION = ".highlighting";
 
   private void processFileHighlighting(InputFile inputFile, SensorContext context) {
@@ -71,11 +71,7 @@ public class SyntaxHighlightingSensor implements Sensor {
   private static void processLine(File highlightingFile, int lineNumber, NewHighlighting highlighting, String line) {
     try {
       String[] split = line.split(":");
-      if (split.length == 3) {
-        int startOffset = parseInt(split[0]);
-        int endOffset = parseInt(split[1]);
-        highlighting.highlight(startOffset, endOffset, TypeOfText.forCssClass(split[2]));
-      } else if (split.length == 5) {
+      if (split.length == 5) {
         int startLine = parseInt(split[0]);
         int startLineOffset = parseInt(split[1]);
         int endLine = parseInt(split[2]);
@@ -83,7 +79,7 @@ public class SyntaxHighlightingSensor implements Sensor {
         highlighting.highlight(startLine, startLineOffset, endLine, endLineOffset, TypeOfText.forCssClass(split[4]));
       } else {
         throw new IllegalStateException("Illegal number of elements separated by ':'. " +
-          "Must either be startOffset:endOffset:class (offset in whole file) or startLine:startLineOffset:endLine:endLineOffset:class");
+          "Must be startLine:startLineOffset:endLine:endLineOffset:class");
       }
     } catch (Exception e) {
       throw new IllegalStateException("Error processing line " + lineNumber + " of file " + highlightingFile.getAbsolutePath(), e);

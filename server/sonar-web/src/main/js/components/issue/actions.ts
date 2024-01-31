@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,38 +17,39 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import throwGlobalError from '../../app/utils/throwGlobalError';
+import { throwGlobalError } from '../../helpers/error';
 import { parseIssueFromResponse } from '../../helpers/issues';
 import { IssueResponse } from '../../types/issues';
+import { Issue } from '../../types/types';
 
 export const updateIssue = (
-  onChange: (issue: T.Issue) => void,
+  onChange: (issue: Issue) => void,
   resultPromise: Promise<IssueResponse>,
-  oldIssue?: T.Issue,
-  newIssue?: T.Issue
-) => {
+  oldIssue?: Issue,
+  newIssue?: Issue,
+): Promise<void> => {
   const optimisticUpdate = oldIssue !== undefined && newIssue !== undefined;
   if (optimisticUpdate) {
-    onChange(newIssue!);
+    onChange(newIssue);
   }
 
-  resultPromise.then(
-    response => {
+  return resultPromise.then(
+    (response) => {
       if (!optimisticUpdate) {
         const issue = parseIssueFromResponse(
           response.issue,
           response.components,
           response.users,
-          response.rules
+          response.rules,
         );
         onChange(issue);
       }
     },
-    param => {
+    (param) => {
       if (optimisticUpdate) {
-        onChange(oldIssue!);
+        onChange(oldIssue);
       }
       throwGlobalError(param);
-    }
+    },
   );
 };

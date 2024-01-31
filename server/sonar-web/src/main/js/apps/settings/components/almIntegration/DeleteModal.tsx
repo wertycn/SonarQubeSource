@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import ConfirmModal from 'sonar-ui-common/components/controls/ConfirmModal';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import ConfirmModal from '../../../../components/controls/ConfirmModal';
+import { translate, translateWithParameters } from '../../../../helpers/l10n';
 
 export interface DeleteModalProps {
   id: string;
@@ -45,9 +45,10 @@ export default function DeleteModal({ id, onDelete, onCancel, projectCount }: De
       confirmButtonText={translate('delete')}
       confirmData={id}
       header={translate('settings.almintegration.delete.header')}
-      isDestructive={true}
+      isDestructive
       onClose={onCancel}
-      onConfirm={onDelete}>
+      onConfirm={onDelete}
+    >
       <>
         <p className="spacer-bottom">
           <FormattedMessage

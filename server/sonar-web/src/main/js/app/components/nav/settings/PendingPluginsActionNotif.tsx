@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary, FlagMessage } from 'design-system/lib';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { cancelPendingPlugins } from '../../../../api/plugins';
 import InstanceMessage from '../../../../components/common/InstanceMessage';
 import RestartButton from '../../../../components/common/RestartButton';
+import { translate } from '../../../../helpers/l10n';
 import { PendingPluginResult } from '../../../../types/plugins';
+import { SysStatus } from '../../../../types/types';
 
 interface Props {
   fetchSystemStatus: () => void;
   pending: PendingPluginResult;
   refreshPending: () => void;
-  systemStatus: T.SysStatus;
+  systemStatus: SysStatus;
 }
 
 export default class PendingPluginsActionNotif extends React.PureComponent<Props> {
@@ -47,15 +47,15 @@ export default class PendingPluginsActionNotif extends React.PureComponent<Props
     }
 
     return (
-      <Alert className="js-pending" display="banner" variant="info">
-        <div className="display-flex-center">
-          <span className="little-spacer-right">
+      <FlagMessage className="sw-w-full" variant="info">
+        <div className="sw-flex sw-items-center">
+          <span className="sw-mr-1">
             <InstanceMessage message={translate('marketplace.instance_needs_to_be_restarted_to')} />
           </span>
           {[
             { length: installing.length, msg: 'marketplace.install_x_plugins' },
             { length: updating.length, msg: 'marketplace.update_x_plugins' },
-            { length: removing.length, msg: 'marketplace.uninstall_x_plugins' }
+            { length: removing.length, msg: 'marketplace.uninstall_x_plugins' },
           ]
             .filter(({ length }) => length > 0)
             .map(({ length, msg }, idx) => (
@@ -70,15 +70,15 @@ export default class PendingPluginsActionNotif extends React.PureComponent<Props
             ))}
 
           <RestartButton
-            className="spacer-left"
+            className="sw-ml-2"
             fetchSystemStatus={this.props.fetchSystemStatus}
             systemStatus={this.props.systemStatus}
           />
-          <Button className="spacer-left js-cancel-all" onClick={this.handleRevert}>
+          <ButtonSecondary className="sw-ml-2" onClick={this.handleRevert}>
             {translate('marketplace.revert')}
-          </Button>
+          </ButtonSecondary>
         </div>
-      </Alert>
+      </FlagMessage>
     );
   }
 }

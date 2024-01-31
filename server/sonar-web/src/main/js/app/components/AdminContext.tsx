@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,13 @@
  */
 import * as React from 'react';
 import { PendingPluginResult } from '../../types/plugins';
+import { SysStatus } from '../../types/types';
 
 export interface AdminContextInterface {
   fetchSystemStatus: () => void;
   fetchPendingPlugins: () => void;
   pendingPlugins: PendingPluginResult;
-  systemStatus: T.SysStatus;
+  systemStatus: SysStatus;
 }
 
 export const defaultPendingPlugins = { installing: [], removing: [], updating: [] };
@@ -34,6 +35,6 @@ const AdminContext = React.createContext<AdminContextInterface>({
   fetchSystemStatus: () => {},
   fetchPendingPlugins: () => {},
   pendingPlugins: defaultPendingPlugins,
-  systemStatus: defaultSystemStatus
+  systemStatus: defaultSystemStatus,
 });
 export default AdminContext;

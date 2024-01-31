@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,139 +18,115 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { scrollToElement } from 'sonar-ui-common/helpers/scrolling';
-import SourceViewer from '../../../components/SourceViewer/SourceViewer';
 import { BranchLike } from '../../../types/branch-like';
+import { Issue } from '../../../types/types';
 import CrossComponentSourceViewer from '../crossComponentSourceViewer/CrossComponentSourceViewer';
 import { getLocations, getSelectedLocation } from '../utils';
+import { IssueSourceViewerScrollContext } from './IssueSourceViewerScrollContext';
 
-interface Props {
+export interface IssuesSourceViewerProps {
   branchLike: BranchLike | undefined;
-  issues: T.Issue[];
-  loadIssues: (component: string, from: number, to: number) => Promise<T.Issue[]>;
+  issues: Issue[];
   locationsNavigator: boolean;
-  onIssueChange: (issue: T.Issue) => void;
   onIssueSelect: (issueKey: string) => void;
   onLocationSelect: (index: number) => void;
-  openIssue: T.Issue;
+  openIssue: Issue;
   selectedFlowIndex: number | undefined;
   selectedLocationIndex: number | undefined;
 }
 
-export default class IssuesSourceViewer extends React.PureComponent<Props> {
-  node?: HTMLElement | null;
+export default class IssuesSourceViewer extends React.PureComponent<IssuesSourceViewerProps> {
+  primaryLocationRef?: HTMLElement;
+  selectedSecondaryLocationRef?: HTMLElement;
 
-  componentDidUpdate(prevProps: Props) {
-    const { openIssue, selectedLocationIndex } = this.props;
-
-    // Scroll back to the issue when the selected location is set to -1
-    const shouldScrollBackToIssue =
-      selectedLocationIndex === -1 && selectedLocationIndex !== prevProps.selectedLocationIndex;
-    if (
-      prevProps.openIssue.component === openIssue.component &&
-      (prevProps.openIssue !== openIssue || shouldScrollBackToIssue)
-    ) {
-      this.scrollToIssue();
+  componentDidUpdate() {
+    if (this.props.selectedLocationIndex === -1) {
+      this.refreshScroll();
     }
   }
 
-  scrollToIssue = (smooth = true) => {
-    if (this.node) {
-      const element = this.node.querySelector(`[data-issue="${this.props.openIssue.key}"]`);
-      if (element) {
-        this.handleScroll(element, undefined, smooth);
-      }
+  registerPrimaryLocationRef = (ref: HTMLElement) => {
+    this.primaryLocationRef = ref;
+
+    if (ref) {
+      this.refreshScroll();
     }
   };
 
-  handleScroll = (element: Element, offset = window.innerHeight / 2, smooth = true) => {
-    scrollToElement(element, { topOffset: offset - 100, bottomOffset: offset, smooth });
+  registerSelectedSecondaryLocationRef = (ref: HTMLElement) => {
+    this.selectedSecondaryLocationRef = ref;
+
+    if (ref) {
+      this.refreshScroll();
+    }
   };
 
-  handleLoaded = () => {
-    this.scrollToIssue(false);
-  };
+  refreshScroll() {
+    const { selectedLocationIndex } = this.props;
+
+    if (
+      selectedLocationIndex !== undefined &&
+      selectedLocationIndex !== -1 &&
+      this.selectedSecondaryLocationRef
+    ) {
+      this.selectedSecondaryLocationRef.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    } else if (this.primaryLocationRef) {
+      this.primaryLocationRef.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+    }
+  }
 
   render() {
-    const { openIssue, selectedFlowIndex, selectedLocationIndex } = this.props;
+    const {
+      openIssue,
+      selectedFlowIndex,
+      selectedLocationIndex,
+      locationsNavigator,
+      branchLike,
+      issues,
+    } = this.props;
 
     const locations = getLocations(openIssue, selectedFlowIndex).map((loc, index) => {
       loc.index = index;
       return loc;
     });
+
     const selectedLocation = getSelectedLocation(
       openIssue,
       selectedFlowIndex,
-      selectedLocationIndex
+      selectedLocationIndex,
     );
 
     const highlightedLocationMessage =
-      this.props.locationsNavigator && selectedLocationIndex !== undefined
+      locationsNavigator && selectedLocationIndex !== undefined
         ? selectedLocation && { index: selectedLocationIndex, text: selectedLocation.msg }
         : undefined;
 
-    const startLines = locations.map(l => l.textRange.startLine);
-    const showCrossComponentSourceViewer =
-      startLines.length > 0 ? Math.max(...startLines) !== Math.min(...startLines) : false;
-
-    if (showCrossComponentSourceViewer) {
-      return (
-        <div ref={node => (this.node = node)}>
-          <CrossComponentSourceViewer
-            branchLike={this.props.branchLike}
-            highlightedLocationMessage={highlightedLocationMessage}
-            issue={openIssue}
-            issues={this.props.issues}
-            locations={locations}
-            onIssueChange={this.props.onIssueChange}
-            onLoaded={this.handleLoaded}
-            onLocationSelect={this.props.onLocationSelect}
-            scroll={this.handleScroll}
-            selectedFlowIndex={selectedFlowIndex}
-          />
-        </div>
-      );
-    } else {
-      // if location is selected, show (and load) code around it
-      // otherwise show code around the open issue
-      const aroundLine = selectedLocation
-        ? selectedLocation.textRange.startLine
-        : openIssue.textRange && openIssue.textRange.endLine;
-
-      const component = selectedLocation ? selectedLocation.component : openIssue.component;
-      const allMessagesEmpty =
-        locations !== undefined && locations.every(location => !location.msg);
-
-      const highlightedLocations = locations.filter(location => location.component === component);
-
-      // do not load issues when open another file for a location
-      const loadIssues =
-        component === openIssue.component ? this.props.loadIssues : () => Promise.resolve([]);
-      const selectedIssue = component === openIssue.component ? openIssue.key : undefined;
-
-      return (
-        <div ref={node => (this.node = node)}>
-          <SourceViewer
-            aroundLine={aroundLine}
-            branchLike={this.props.branchLike}
-            component={component}
-            displayAllIssues={true}
-            displayIssueLocationsCount={true}
-            displayIssueLocationsLink={false}
-            displayLocationMarkers={!allMessagesEmpty}
-            highlightedLocationMessage={highlightedLocationMessage}
-            highlightedLocations={highlightedLocations}
-            loadIssues={loadIssues}
-            onIssueChange={this.props.onIssueChange}
-            onIssueSelect={this.props.onIssueSelect}
-            onLoaded={this.handleLoaded}
-            onLocationSelect={this.props.onLocationSelect}
-            scroll={this.handleScroll}
-            selectedIssue={selectedIssue}
-            slimHeader={true}
-          />
-        </div>
-      );
-    }
+    return (
+      <IssueSourceViewerScrollContext.Provider
+        value={{
+          registerPrimaryLocationRef: this.registerPrimaryLocationRef,
+          registerSelectedSecondaryLocationRef: this.registerSelectedSecondaryLocationRef,
+        }}
+      >
+        <CrossComponentSourceViewer
+          branchLike={branchLike}
+          highlightedLocationMessage={highlightedLocationMessage}
+          issue={openIssue}
+          issues={issues}
+          locations={locations}
+          onIssueSelect={this.props.onIssueSelect}
+          onLocationSelect={this.props.onLocationSelect}
+          selectedFlowIndex={selectedFlowIndex}
+        />
+      </IssueSourceViewerScrollContext.Provider>
+    );
   }
 }

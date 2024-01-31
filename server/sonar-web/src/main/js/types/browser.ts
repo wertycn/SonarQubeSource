@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,25 @@
  */
 import { ExtensionStartMethod } from './extension';
 import { InstanceType } from './system';
+import { SysStatus } from './types';
 
 export interface EnhancedWindow extends Window {
   baseUrl: string;
-  serverStatus: T.SysStatus;
+  serverStatus: SysStatus;
   instance: InstanceType;
   official: boolean;
 
-  registerExtension: (key: string, start: ExtensionStartMethod) => void;
+  registerExtension: (key: string, start: ExtensionStartMethod, providesCSSFile?: boolean) => void;
   setWebAnalyticsPageChangeHandler: (pageHandler: (pathname: string) => void) => void;
+  t: (...keys: string[]) => string;
+  tp: (messageKey: string, ...parameters: Array<string | number>) => string;
+}
+
+export interface AppVariablesElement extends HTMLElement {
+  dataset: {
+    baseUrl: string;
+    serverStatus: SysStatus;
+    instance: InstanceType;
+    official: string;
+  };
 }

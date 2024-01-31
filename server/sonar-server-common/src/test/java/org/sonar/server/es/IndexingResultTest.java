@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -74,7 +74,7 @@ public class IndexingResultTest {
     underTest.incrementSuccess();
 
     assertThat(underTest.getFailures()).isEqualTo(3);
-    assertThat(underTest.getSuccess()).isEqualTo(1);
+    assertThat(underTest.getSuccess()).isOne();
     assertThat(underTest.getTotal()).isEqualTo(4);
     assertThat(underTest.getSuccessRatio()).isEqualTo(0.25, DOUBLE_OFFSET);
     assertThat(underTest.isSuccess()).isFalse();

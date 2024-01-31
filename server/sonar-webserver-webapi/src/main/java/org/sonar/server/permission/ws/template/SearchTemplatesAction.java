@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.resources.Qualifiers;
@@ -78,7 +77,7 @@ public class SearchTemplatesAction implements PermissionsWsAction {
     context.createAction("search_templates")
       .setDescription("List permission templates.<br />" +
         "Requires the following permission: 'Administer System'.")
-      .setResponseExample(getClass().getResource("search_templates-example.json"))
+      .setResponseExample(getClass().getResource("search_templates-example-without-views.json"))
       .setSince("5.2")
       .addSearchQuery("defau", "permission template names")
       .setHandler(this);
@@ -177,7 +176,7 @@ public class SearchTemplatesAction implements PermissionsWsAction {
   private SearchTemplatesData load(DbSession dbSession, SearchTemplatesRequest request) {
     SearchTemplatesData.Builder data = builder();
     List<PermissionTemplateDto> templates = searchTemplates(dbSession, request);
-    List<String> templateUuids = templates.stream().map(PermissionTemplateDto::getUuid).collect(Collectors.toList());
+    List<String> templateUuids = templates.stream().map(PermissionTemplateDto::getUuid).toList();
 
     ResolvedDefaultTemplates resolvedDefaultTemplates = defaultTemplatesResolver.resolve(dbSession);
     data.templates(templates)

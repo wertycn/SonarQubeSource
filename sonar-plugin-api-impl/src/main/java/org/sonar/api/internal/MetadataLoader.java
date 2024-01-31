@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.api.internal;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Scanner;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.utils.System2;
@@ -36,21 +37,29 @@ import static org.apache.commons.lang.StringUtils.trimToEmpty;
  */
 public class MetadataLoader {
 
-  private static final String VERSION_FILE_PATH = "/sonar-api-version.txt";
+  private static final String SQ_VERSION_FILE_PATH = "/sq-version.txt";
+  private static final String SONAR_API_VERSION_FILE_PATH = "/sonar-api-version.txt";
   private static final String EDITION_FILE_PATH = "/sonar-edition.txt";
 
   private MetadataLoader() {
     // only static methods
   }
 
-  public static Version loadVersion(System2 system) {
-    URL url = system.getResource(VERSION_FILE_PATH);
+  public static Version loadApiVersion(System2 system) {
+    return getVersion(system, SONAR_API_VERSION_FILE_PATH);
+  }
+  public static Version loadSQVersion(System2 system) {
+    return getVersion(system, SQ_VERSION_FILE_PATH);
+  }
+
+  private static Version getVersion(System2 system, String versionFilePath) {
+    URL url = system.getResource(versionFilePath);
 
     try (Scanner scanner = new Scanner(url.openStream(), StandardCharsets.UTF_8.name())) {
       String versionInFile = scanner.nextLine();
       return Version.parse(versionInFile);
     } catch (IOException e) {
-      throw new IllegalStateException("Can not load " + VERSION_FILE_PATH + " from classpath ", e);
+      throw new IllegalStateException("Can not load " + versionFilePath + " from classpath ", e);
     }
   }
 
@@ -68,7 +77,7 @@ public class MetadataLoader {
   }
 
   static SonarEdition parseEdition(String edition) {
-    String str = trimToEmpty(edition.toUpperCase());
+    String str = trimToEmpty(edition.toUpperCase(Locale.ENGLISH));
     try {
       return SonarEdition.valueOf(str);
     } catch (IllegalArgumentException e) {

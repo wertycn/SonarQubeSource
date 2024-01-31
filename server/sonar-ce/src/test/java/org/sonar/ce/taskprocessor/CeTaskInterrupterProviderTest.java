@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,24 +21,21 @@ package org.sonar.ce.taskprocessor;
 
 import java.lang.reflect.Field;
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.System2;
 import org.sonar.ce.task.CeTaskInterrupter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class CeTaskInterrupterProviderTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
-  private MapSettings settings = new MapSettings();
-  private CeWorkerController ceWorkerController = mock(CeWorkerController.class);
-  private System2 system2 = mock(System2.class);
-  private CeTaskInterrupterProvider underTest = new CeTaskInterrupterProvider();
+  private final MapSettings settings = new MapSettings();
+  private final CeWorkerController ceWorkerController = mock(CeWorkerController.class);
+  private final System2 system2 = mock(System2.class);
+  private final CeTaskInterrupterProvider underTest = new CeTaskInterrupterProvider();
 
   @Test
   public void provide_returns_a_SimpleCeTaskInterrupter_instance_if_configuration_is_empty() {
@@ -46,15 +43,6 @@ public class CeTaskInterrupterProviderTest {
 
     assertThat(instance)
       .isInstanceOf(SimpleCeTaskInterrupter.class);
-  }
-
-  @Test
-  public void provide_always_return_the_same_SimpleCeTaskInterrupter_instance() {
-    CeTaskInterrupter instance = underTest.provide(settings.asConfig(), ceWorkerController, system2);
-
-    assertThat(instance)
-      .isSameAs(underTest.provide(settings.asConfig(), ceWorkerController, system2))
-      .isSameAs(underTest.provide(new MapSettings().asConfig(), ceWorkerController, system2));
   }
 
   @Test
@@ -79,20 +67,18 @@ public class CeTaskInterrupterProviderTest {
   public void provide_fails_with_ISE_if_property_is_not_a_long() {
     settings.setProperty("sonar.ce.task.timeoutSeconds", "foo");
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("The property 'sonar.ce.task.timeoutSeconds' is not an long value: For input string: \"foo\"");
-
-    underTest.provide(settings.asConfig(), ceWorkerController, system2);
+    assertThatThrownBy(() -> underTest.provide(settings.asConfig(), ceWorkerController, system2))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("The property 'sonar.ce.task.timeoutSeconds' is not an long value: For input string: \"foo\"");
   }
 
   @Test
   public void provide_fails_with_ISE_if_property_is_zero() {
     settings.setProperty("sonar.ce.task.timeoutSeconds", "0");
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("The property 'sonar.ce.task.timeoutSeconds' must be a long value >= 1. Got '0'");
-
-    underTest.provide(settings.asConfig(), ceWorkerController, system2);
+    assertThatThrownBy(() -> underTest.provide(settings.asConfig(), ceWorkerController, system2))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("The property 'sonar.ce.task.timeoutSeconds' must be a long value >= 1. Got '0'");
   }
 
   @Test
@@ -100,22 +86,9 @@ public class CeTaskInterrupterProviderTest {
     int negativeValue = -(1 + new Random().nextInt(1_212));
     settings.setProperty("sonar.ce.task.timeoutSeconds", negativeValue);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("The property 'sonar.ce.task.timeoutSeconds' must be a long value >= 1. Got '" + negativeValue + "'");
-
-    underTest.provide(settings.asConfig(), ceWorkerController, system2);
-  }
-
-  @Test
-  public void provide_always_return_the_same_TimeoutCeTaskInterrupter_instance() {
-    int timeout = 1 + new Random().nextInt(2222);
-    settings.setProperty("sonar.ce.task.timeoutSeconds", timeout);
-
-    CeTaskInterrupter instance = underTest.provide(settings.asConfig(), ceWorkerController, system2);
-
-    assertThat(instance)
-      .isSameAs(underTest.provide(settings.asConfig(), ceWorkerController, system2))
-      .isSameAs(underTest.provide(new MapSettings().setProperty("sonar.ce.task.timeoutSeconds", 999).asConfig(), ceWorkerController, system2));
+    assertThatThrownBy(() -> underTest.provide(settings.asConfig(), ceWorkerController, system2))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("The property 'sonar.ce.task.timeoutSeconds' must be a long value >= 1. Got '" + negativeValue + "'");
   }
 
   private static Object readField(CeTaskInterrupter instance, String fieldName) throws NoSuchFieldException, IllegalAccessException {

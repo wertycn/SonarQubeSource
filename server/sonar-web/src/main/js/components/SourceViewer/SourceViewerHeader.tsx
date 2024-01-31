@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,91 +17,106 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { stringify } from 'querystring';
+import styled from '@emotion/styled';
+import {
+  ClipboardIconButton,
+  DrilldownLink,
+  Dropdown,
+  InteractiveIcon,
+  ItemButton,
+  ItemLink,
+  Link,
+  MenuIcon,
+  Note,
+  PopupPlacement,
+  PopupZLevel,
+  ProjectIcon,
+  QualifierIcon,
+  themeBorder,
+  themeColor,
+} from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { ButtonIcon } from 'sonar-ui-common/components/controls/buttons';
-import { ClipboardIconButton } from 'sonar-ui-common/components/controls/clipboard';
-import Dropdown from 'sonar-ui-common/components/controls/Dropdown';
-import ListIcon from 'sonar-ui-common/components/icons/ListIcon';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { PopupPlacement } from 'sonar-ui-common/components/ui/popups';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { collapsedDirFromPath, fileFromPath } from 'sonar-ui-common/helpers/path';
-import { omitNil } from 'sonar-ui-common/helpers/request';
-import { getBaseUrl, getPathUrlAsString } from 'sonar-ui-common/helpers/urls';
 import { getBranchLikeQuery } from '../../helpers/branch-like';
 import { ISSUE_TYPES } from '../../helpers/constants';
 import { ISSUETYPE_METRIC_KEYS_MAP } from '../../helpers/issues';
-import { getBranchLikeUrl, getCodeUrl, getComponentIssuesUrl } from '../../helpers/urls';
-import { BranchLike } from '../../types/branch-like';
+import { translate } from '../../helpers/l10n';
+import { formatMeasure } from '../../helpers/measures';
+import { collapsedDirFromPath, fileFromPath } from '../../helpers/path';
+import { omitNil } from '../../helpers/request';
+import { getBaseUrl } from '../../helpers/system';
+import {
+  getBranchLikeUrl,
+  getCodeUrl,
+  getComponentIssuesUrl,
+  getComponentSecurityHotspotsUrl,
+} from '../../helpers/urls';
+import { DEFAULT_ISSUES_QUERY } from '../shared/utils';
+
 import { ComponentQualifier } from '../../types/component';
-import { WorkspaceContextShape } from '../workspace/context';
-import MeasuresOverlay from './components/MeasuresOverlay';
+import { IssueType } from '../../types/issues';
+import { MetricKey, MetricType } from '../../types/metrics';
+
+import type { BranchLike } from '../../types/branch-like';
+import type { Measure, SourceViewerFile } from '../../types/types';
+import type { WorkspaceContextShape } from '../workspace/context';
 
 interface Props {
   branchLike: BranchLike | undefined;
-  componentMeasures?: T.Measure[];
+  componentMeasures?: Measure[];
+  hidePinOption?: boolean;
   openComponent: WorkspaceContextShape['openComponent'];
   showMeasures?: boolean;
-  sourceViewerFile: T.SourceViewerFile;
+  sourceViewerFile: SourceViewerFile;
 }
 
-interface State {
-  measuresOverlay: boolean;
-}
-
-export default class SourceViewerHeader extends React.PureComponent<Props, State> {
-  state: State = { measuresOverlay: false };
-
-  handleShowMeasuresClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    this.setState({ measuresOverlay: true });
-  };
-
-  handleMeasuresOverlayClose = () => {
-    this.setState({ measuresOverlay: false });
-  };
-
-  openInWorkspace = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
+export default class SourceViewerHeader extends React.PureComponent<Props> {
+  openInWorkspace = () => {
     const { key } = this.props.sourceViewerFile;
     this.props.openComponent({ branchLike: this.props.branchLike, key });
   };
 
   renderIssueMeasures = () => {
     const { branchLike, componentMeasures, sourceViewerFile } = this.props;
+
     return (
       componentMeasures &&
       componentMeasures.length > 0 && (
         <>
-          <div className="source-viewer-header-measure-separator" />
+          <StyledVerticalSeparator className="sw-h-8 sw-mx-6" />
 
-          {ISSUE_TYPES.map((type: T.IssueType) => {
-            const params = {
-              ...getBranchLikeQuery(branchLike),
-              files: sourceViewerFile.path,
-              resolved: 'false',
-              types: type
-            };
+          <div className="sw-flex sw-gap-6">
+            {ISSUE_TYPES.map((type: IssueType) => {
+              const params = {
+                ...getBranchLikeQuery(branchLike),
+                files: sourceViewerFile.path,
+                ...DEFAULT_ISSUES_QUERY,
+                types: type,
+              };
 
-            const measure = componentMeasures.find(
-              m => m.metric === ISSUETYPE_METRIC_KEYS_MAP[type].metric
-            );
-            return (
-              <div className="source-viewer-header-measure" key={type}>
-                <span className="source-viewer-header-measure-label">
-                  {translate('issue.type', type)}
-                </span>
-                <span className="source-viewer-header-measure-value">
-                  <Link to={getComponentIssuesUrl(sourceViewerFile.project, params)}>
-                    {formatMeasure((measure && measure.value) || 0, 'INT')}
-                  </Link>
-                </span>
-              </div>
-            );
-          })}
+              const measure = componentMeasures.find(
+                (m) => m.metric === ISSUETYPE_METRIC_KEYS_MAP[type].metric,
+              );
+
+              const linkUrl =
+                type === IssueType.SecurityHotspot
+                  ? getComponentSecurityHotspotsUrl(sourceViewerFile.project, params)
+                  : getComponentIssuesUrl(sourceViewerFile.project, params);
+
+              return (
+                <div className="sw-flex sw-flex-col sw-gap-1" key={type}>
+                  <Note className="it__source-viewer-header-measure-label sw-body-lg">
+                    {translate('issue.type', type)}
+                  </Note>
+
+                  <span>
+                    <StyledDrilldownLink className="sw-body-md" to={linkUrl}>
+                      {formatMeasure(measure?.value ?? 0, MetricType.Integer)}
+                    </StyledDrilldownLink>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </>
       )
     );
@@ -109,95 +124,79 @@ export default class SourceViewerHeader extends React.PureComponent<Props, State
 
   render() {
     const { showMeasures } = this.props;
-    const {
-      key,
-      measures,
-      path,
-      project,
-      projectName,
-      q,
-      subProject,
-      subProjectName
-    } = this.props.sourceViewerFile;
-    const unitTestsOrLines = q === ComponentQualifier.TestFile ? 'tests' : 'lines';
-    const workspace = false;
-    const rawSourcesLink =
-      getBaseUrl() +
-      '/api/sources/raw?' +
-      stringify(omitNil({ key, ...getBranchLikeQuery(this.props.branchLike) }));
+    const { key, measures, path, project, projectName, q } = this.props.sourceViewerFile;
+    const unitTestsOrLines = q === ComponentQualifier.TestFile ? MetricKey.tests : MetricKey.lines;
 
-    // TODO favorite
+    const query = new URLSearchParams(
+      omitNil({ key, ...getBranchLikeQuery(this.props.branchLike) }),
+    ).toString();
+
+    const rawSourcesLink = `${getBaseUrl()}/api/sources/raw?${query}`;
+
     return (
-      <div className="source-viewer-header display-flex-center">
-        <div className="flex-1 little-spacer-top">
-          <div className="component-name">
-            <div className="component-name-parent">
-              <a
-                className="link-with-icon"
-                href={getPathUrlAsString(getBranchLikeUrl(project, this.props.branchLike))}>
-                <QualifierIcon qualifier="TRK" /> <span>{projectName}</span>
-              </a>
-            </div>
+      <StyledHeaderContainer
+        className={
+          'it__source-viewer-header sw-body-sm sw-flex sw-items-center sw-px-4 sw-py-3 ' +
+          'sw-relative'
+        }
+      >
+        <div className="sw-flex sw-flex-1 sw-flex-col sw-gap-1 sw-mr-5 sw-my-1">
+          <div className="sw-flex sw-gap-1 sw-items-center">
+            <Link icon={<ProjectIcon />} to={getBranchLikeUrl(project, this.props.branchLike)}>
+              {projectName}
+            </Link>
+          </div>
 
-            {subProject !== undefined && (
-              <div className="component-name-parent">
-                <QualifierIcon qualifier="BRC" /> <span>{subProjectName}</span>
-              </div>
-            )}
+          <div className="sw-flex sw-gap-1 sw-items-center">
+            <QualifierIcon qualifier={q} />
 
-            <div className="component-name-path">
-              <QualifierIcon qualifier={q} /> <span>{collapsedDirFromPath(path)}</span>
-              <span className="component-name-file">{fileFromPath(path)}</span>
-              <span className="nudged-up spacer-left">
-                <ClipboardIconButton
-                  aria-label={translate('component_viewer.copy_path_to_clipboard')}
-                  className="button-link link-no-underline"
-                  copyValue={path}
-                />
-              </span>
-            </div>
+            {collapsedDirFromPath(path)}
+
+            {fileFromPath(path)}
+
+            <span className="sw-ml-1">
+              <ClipboardIconButton
+                aria-label={translate('component_viewer.copy_path_to_clipboard')}
+                copyValue={path}
+              />
+            </span>
           </div>
         </div>
 
-        {this.state.measuresOverlay && (
-          <MeasuresOverlay
-            branchLike={this.props.branchLike}
-            onClose={this.handleMeasuresOverlayClose}
-            sourceViewerFile={this.props.sourceViewerFile}
-          />
-        )}
-
         {showMeasures && (
-          <div className="display-flex-center">
+          <div className="sw-flex sw-gap-6 sw-items-center">
             {measures[unitTestsOrLines] && (
-              <div className="source-viewer-header-measure">
-                <span className="source-viewer-header-measure-label">
+              <div className="sw-flex sw-flex-col sw-gap-1">
+                <Note className="it__source-viewer-header-measure-label sw-body-lg">
                   {translate(`metric.${unitTestsOrLines}.name`)}
-                </span>
-                <span className="source-viewer-header-measure-value">
-                  {formatMeasure(measures[unitTestsOrLines], 'SHORT_INT')}
+                </Note>
+
+                <span className="sw-body-lg">
+                  {formatMeasure(measures[unitTestsOrLines], MetricType.ShortInteger)}
                 </span>
               </div>
             )}
 
             {measures.coverage !== undefined && (
-              <div className="source-viewer-header-measure">
-                <span className="source-viewer-header-measure-label">
+              <div className="sw-flex sw-flex-col sw-gap-1">
+                <Note className="it__source-viewer-header-measure-label sw-body-lg">
                   {translate('metric.coverage.name')}
-                </span>
-                <span className="source-viewer-header-measure-value">
-                  {formatMeasure(measures.coverage, 'PERCENT')}
+                </Note>
+
+                <span className="sw-body-lg">
+                  {formatMeasure(measures.coverage, MetricType.Percent)}
                 </span>
               </div>
             )}
 
             {measures.duplicationDensity !== undefined && (
-              <div className="source-viewer-header-measure">
-                <span className="source-viewer-header-measure-label">
+              <div className="sw-flex sw-flex-col sw-gap-1">
+                <Note className="it__source-viewer-header-measure-label sw-body-lg">
                   {translate('duplications')}
-                </span>
-                <span className="source-viewer-header-measure-value">
-                  {formatMeasure(measures.duplicationDensity, 'PERCENT')}
+                </Note>
+
+                <span className="sw-body-lg">
+                  {formatMeasure(measures.duplicationDensity, MetricType.Percent)}
                 </span>
               </div>
             )}
@@ -207,47 +206,60 @@ export default class SourceViewerHeader extends React.PureComponent<Props, State
         )}
 
         <Dropdown
-          className="source-viewer-header-actions flex-0"
+          id="source-viewer-header-actions"
           overlay={
-            <ul className="menu">
-              <li>
-                <a className="js-measures" href="#" onClick={this.handleShowMeasuresClick}>
-                  {translate('component_viewer.show_details')}
-                </a>
-              </li>
-              <li>
-                <Link
-                  className="js-new-window"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                  to={getCodeUrl(this.props.sourceViewerFile.project, this.props.branchLike, key)}>
-                  {translate('component_viewer.new_window')}
-                </Link>
-              </li>
-              {!workspace && (
-                <li>
-                  <a className="js-workspace" href="#" onClick={this.openInWorkspace}>
-                    {translate('component_viewer.open_in_workspace')}
-                  </a>
-                </li>
+            <>
+              <ItemLink
+                isExternal
+                to={getCodeUrl(this.props.sourceViewerFile.project, this.props.branchLike, key)}
+              >
+                {translate('component_viewer.new_window')}
+              </ItemLink>
+
+              {!this.props.hidePinOption && (
+                <ItemButton className="it__js-workspace" onClick={this.openInWorkspace}>
+                  {translate('component_viewer.open_in_workspace')}
+                </ItemButton>
               )}
-              <li>
-                <a
-                  className="js-raw-source"
-                  href={rawSourcesLink}
-                  rel="noopener noreferrer"
-                  target="_blank">
-                  {translate('component_viewer.show_raw_source')}
-                </a>
-              </li>
-            </ul>
+
+              <ItemLink isExternal to={rawSourcesLink}>
+                {translate('component_viewer.show_raw_source')}
+              </ItemLink>
+            </>
           }
-          overlayPlacement={PopupPlacement.BottomRight}>
-          <ButtonIcon className="js-actions">
-            <ListIcon />
-          </ButtonIcon>
+          placement={PopupPlacement.BottomRight}
+          zLevel={PopupZLevel.Global}
+        >
+          <InteractiveIcon
+            aria-label={translate('component_viewer.action_menu')}
+            className="it__js-actions sw-flex-0 sw-ml-4 sw-px-3 sw-py-2"
+            Icon={MenuIcon}
+          />
         </Dropdown>
-      </div>
+      </StyledHeaderContainer>
     );
   }
 }
+
+const StyledDrilldownLink = styled(DrilldownLink)`
+  color: ${themeColor('linkDefault')};
+
+  &:visited {
+    color: ${themeColor('linkDefault')};
+  }
+
+  &:active,
+  &:focus,
+  &:hover {
+    color: ${themeColor('linkActive')};
+  }
+`;
+
+const StyledHeaderContainer = styled.div`
+  background-color: ${themeColor('backgroundSecondary')};
+  border-bottom: ${themeBorder('default', 'codeLineBorder')};
+`;
+
+const StyledVerticalSeparator = styled.div`
+  border-right: ${themeBorder('default', 'codeLineBorder')};
+`;

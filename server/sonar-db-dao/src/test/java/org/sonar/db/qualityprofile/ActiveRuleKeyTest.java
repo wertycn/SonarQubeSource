@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,17 +35,17 @@ public class ActiveRuleKeyTest {
     ActiveRuleKey key = ActiveRuleKey.of(profile, ruleKey);
     assertThat(key.getRuleProfileUuid()).isEqualTo(profile.getRulesProfileUuid());
     assertThat(key.getRuleKey()).isSameAs(ruleKey);
-    assertThat(key.toString()).isEqualTo(profile.getRulesProfileUuid() + ":xoo:R1");
+    assertThat(key).hasToString(profile.getRulesProfileUuid() + ":xoo:R1");
   }
 
   @Test
   public void rule_key_can_contain_colons() {
-    RuleKey ruleKey = RuleKey.of("squid", "Key:With:Some::Colons");
+    RuleKey ruleKey = RuleKey.of("java", "Key:With:Some::Colons");
     QProfileDto profile = newQualityProfileDto();
     ActiveRuleKey key = ActiveRuleKey.of(profile, ruleKey);
     assertThat(key.getRuleProfileUuid()).isEqualTo(profile.getRulesProfileUuid());
     assertThat(key.getRuleKey()).isSameAs(ruleKey);
-    assertThat(key.toString()).isEqualTo(profile.getRulesProfileUuid() + ":squid:Key:With:Some::Colons");
+    assertThat(key).hasToString(profile.getRulesProfileUuid() + ":java:Key:With:Some::Colons");
   }
 
   @Test
@@ -79,6 +79,6 @@ public class ActiveRuleKeyTest {
     assertThat(key1.equals(key2)).isFalse();
     assertThat(key1.equals(key3)).isFalse();
 
-    assertThat(key1.hashCode()).isEqualTo(key1.hashCode());
+    assertThat(key1).hasSameHashCodeAs(key1);
   }
 }

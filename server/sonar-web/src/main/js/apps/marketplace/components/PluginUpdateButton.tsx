@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { Update } from '../../../types/plugins';
 
 interface Props {
@@ -29,25 +29,21 @@ interface Props {
   update: Update;
 }
 
-export default class PluginUpdateButton extends React.PureComponent<Props> {
-  handleClick = () => {
-    this.props.onClick(this.props.update);
-  };
+export default function PluginUpdateButton(props: Readonly<Props>) {
+  const { disabled, onClick, update } = props;
 
-  render() {
-    const { disabled, update } = this.props;
-    if (update.status !== 'COMPATIBLE' || !update.release) {
-      return null;
-    }
-    return (
-      <Tooltip overlay={translate('marketplace.requires_restart')}>
-        <Button
-          className="js-update little-spacer-bottom"
-          disabled={disabled}
-          onClick={this.handleClick}>
-          {translateWithParameters('marketplace.update_to_x', update.release.version)}
-        </Button>
-      </Tooltip>
-    );
+  const handleClick = React.useCallback(() => {
+    onClick(update);
+  }, [onClick, update]);
+
+  if (update.status !== 'COMPATIBLE' || !update.release) {
+    return null;
   }
+  return (
+    <Tooltip overlay={translate('marketplace.requires_restart')}>
+      <ButtonSecondary disabled={disabled} onClick={handleClick}>
+        {translateWithParameters('marketplace.update_to_x', update.release.version)}
+      </ButtonSecondary>
+    </Tooltip>
+  );
 }

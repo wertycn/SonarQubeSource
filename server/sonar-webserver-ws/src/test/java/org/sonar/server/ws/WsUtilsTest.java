@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,20 +21,16 @@ package org.sonar.server.ws;
 
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonarqube.ws.Issues;
 import org.sonarqube.ws.MediaTypes;
 import org.sonarqube.ws.Permissions;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.sonar.test.ExceptionCauseMatcher.hasType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class WsUtilsTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Rule
   public LogTester logger = new LogTester();
@@ -47,7 +43,7 @@ public class WsUtilsTest {
     Issues.Issue msg = Issues.Issue.newBuilder().setKey("I1").build();
     WsUtils.writeProtobuf(msg, request, response);
 
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
     assertThat(response.outputAsString())
       .startsWith("{")
       .contains("\"key\":\"I1\"")
@@ -63,7 +59,7 @@ public class WsUtilsTest {
     Issues.Issue msg = Issues.Issue.newBuilder().setKey("I1").build();
     WsUtils.writeProtobuf(msg, request, response);
 
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.PROTOBUF);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.PROTOBUF);
     assertThat(Issues.Issue.parseFrom(response.getFlushedOutput()).getKey()).isEqualTo("I1");
   }
 
@@ -74,11 +70,11 @@ public class WsUtilsTest {
 
     Permissions.Permission message = Permissions.Permission.newBuilder().setName("permission-name").build();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectCause(hasType(NullPointerException.class));
-    expectedException.expectMessage("Error while writing protobuf message");
     // provoke NullPointerException
-    WsUtils.writeProtobuf(message, null, new DumbResponse());
+    assertThatThrownBy(() -> WsUtils.writeProtobuf(message, null, new DumbResponse()))
+      .isInstanceOf(IllegalStateException.class)
+      .hasCauseInstanceOf(NullPointerException.class)
+      .hasMessageContaining("Error while writing protobuf message");
   }
 
   @Test
@@ -88,11 +84,16 @@ public class WsUtilsTest {
   }
 
   @Test
-  public void checkRequest_ko() {
-    expectedException.expect(BadRequestException.class);
-    expectedException.expectMessage("Missing param: foo");
+  public void create_safe_external_link_tag() {
+    assertThat(WsUtils.createHtmlExternalLink("http://google.com", "Google"))
+      .isEqualTo("<a href=\"http://google.com\" target=\"_blank\" rel=\"noopener noreferrer\">Google</a>");
+  }
 
-    BadRequestException.checkRequest(false, "Missing param: %s", "foo");
+  @Test
+  public void checkRequest_ko() {
+    assertThatThrownBy(() -> BadRequestException.checkRequest(false, "Missing param: %s", "foo"))
+      .isInstanceOf(BadRequestException.class)
+      .hasMessageContaining("Missing param: foo");
   }
 
 }

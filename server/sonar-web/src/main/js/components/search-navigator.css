@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -59,7 +59,6 @@
 
 .search-navigator-facet-box-forbidden {
   background-color: transparent;
-  opacity: 0.5;
 }
 
 .search-navigator-facet-box-forbidden .search-navigator-facet-list,
@@ -69,29 +68,19 @@
 }
 
 .search-navigator-facet-box-forbidden .search-navigator-facet-header {
-  color: var(--secondFontColor);
-}
-
-.search-navigator-facet-box-forbidden .search-navigator-facet-header:hover {
-  color: var(--blue);
-}
-
-.search-navigator-facet-box-forbidden .search-navigator-facet-header {
   cursor: default;
+  color: var(--gray60);
 }
 
-.search-navigator-facet-box-forbidden .search-navigator-facet-header:hover {
-  color: var(--secondFontColor);
-}
-
-.search-navigator-facet {
+.search-navigator-facet,
+button.search-navigator-facet {
   position: relative;
   display: inline-flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  height: var(--controlHeight);
-  margin: 0 0 1px 0;
+  height: calc(3.5 * var(--gridSize));
+  margin-bottom: 1px;
   padding: 0 calc(0.75 * var(--gridSize));
   border: 1px solid transparent;
   border-radius: 2px;
@@ -102,17 +91,17 @@
   transition: none;
 }
 
-a.search-navigator-facet {
+button.search-navigator-facet {
   opacity: 1;
   cursor: pointer;
 }
 
-a.search-navigator-facet .facet-name {
+button.search-navigator-facet .facet-name {
   color: var(--baseFontColor);
 }
 
-a.search-navigator-facet:hover,
-a.search-navigator-facet:focus,
+button.search-navigator-facet:hover,
+button.search-navigator-facet:focus,
 .search-navigator-facet.active {
   border-color: var(--blue);
 }
@@ -185,7 +174,7 @@ a.search-navigator-facet:focus,
 }
 
 .search-navigator-facet.active {
-  background-color: var(--lightBlue);
+  background-color: var(--veryLightBlue);
   text-decoration: none;
 }
 
@@ -209,6 +198,7 @@ a.search-navigator-facet:focus,
 }
 
 .search-navigator-facet-half {
+  display: inline-flex;
   width: 45%;
 }
 
@@ -216,114 +206,26 @@ a.search-navigator-facet:focus,
   margin-right: 10%;
 }
 
-.search-navigator-facet-highlight-under-container {
-  margin-bottom: 1px;
-}
-
-.search-navigator-facet-highlight-under-container .search-navigator-facet {
-  margin-bottom: 0;
-}
-
-.search-navigator-facet-highlight-under-container .search-navigator-facet:hover,
-.search-navigator-facet-highlight-under-container .search-navigator-facet.active {
-  border-bottom: none;
-  padding-bottom: 1px;
-  border-radius: 2px 2px 0 0;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet:hover
-  ~ .search-navigator-facet,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet {
-  border-top: none;
-  border-bottom: none;
-  border-left-color: var(--blue);
-  border-right-color: var(--blue);
-  border-radius: 0;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet:hover
-  ~ .search-navigator-facet:last-of-type,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:last-of-type {
-  border-bottom: 1px solid var(--blue);
-  border-radius: 0 0 2px 2px;
-}
-
-.search-navigator-facet-highlight-under-container .search-navigator-facet:hover:last-of-type,
-.search-navigator-facet-highlight-under-container .search-navigator-facet.active:last-of-type {
-  border-bottom: 1px solid var(--blue);
-  border-radius: 2px;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet {
-  background-color: var(--lightBlue);
-  text-decoration: none;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet
-  .facet-toggle {
-  display: inline;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:hover,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet:hover
-  ~ .search-navigator-facet.active {
-  border-top: 1px solid var(--blue);
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:hover,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:hover
-  ~ .search-navigator-facet {
-  background-color: #a1cde8;
-  text-decoration: none;
-}
-
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:hover
-  .facet-toggle,
-.search-navigator-facet-highlight-under-container
-  .search-navigator-facet.active
-  ~ .search-navigator-facet:hover
-  ~ .search-navigator-facet
-  .facet-toggle {
-  display: inline;
-}
-
 .search-navigator-facet-header {
   display: block;
   flex-shrink: 0;
-  padding: 8px 0;
+  padding: 8px 1px;
   color: var(--baseFontColor);
   font-weight: 600;
   overflow: hidden;
   white-space: nowrap;
 }
 
-.search-navigator-facet-header > a {
+.search-navigator-facet-header > button {
   border-bottom: none;
   color: var(--baseFontColor);
+  cursor: pointer;
+  font-weight: inherit;
 }
 
-.search-navigator-facet-header > a:focus,
-.search-navigator-facet-header > a:hover {
-  color: var(--blue);
+.search-navigator-facet-header > button:focus,
+.search-navigator-facet-header > button:hover {
+  color: var(--darkBlue);
 }
 
 .search-navigator-facet-header > .note {
@@ -355,6 +257,10 @@ a.search-navigator-facet:focus,
   align-items: center;
 }
 
+.search-navigator-facet-header-wrapper:not(.expandable-header) .search-navigator-facet-header {
+  padding-left: 21px;
+}
+
 .search-navigator-facet-list {
   padding-bottom: var(--gridSize);
   font-size: 0;
@@ -376,7 +282,6 @@ a.search-navigator-facet:focus,
   padding: 0 10px 10px;
   color: var(--baseFontColor);
   font-size: var(--smallFontSize);
-  white-space: nowrap;
 }
 
 .search-navigator-facet-footer {
@@ -388,58 +293,6 @@ a.search-navigator-facet:focus,
 .search-navigator-facet-container {
   margin-top: 6px;
   padding: 0 10px 16px;
-}
-
-.search-navigator-date-facet-selection {
-  position: relative;
-  padding-left: var(--gridSize);
-  font-size: var(--smallFontSize);
-}
-
-.search-navigator-date-facet-selection:before,
-.search-navigator-date-facet-selection:after {
-  display: table;
-  content: '';
-  line-height: 0;
-}
-
-.search-navigator-date-facet-selection:after {
-  clear: both;
-}
-
-.search-navigator-date-facet-selection .date-input-control-input {
-  width: 115px !important;
-}
-
-.search-navigator-date-facet-selection-dropdown-left {
-  float: left;
-  border-bottom: none;
-}
-
-.search-navigator-date-facet-selection-dropdown-right {
-  float: right;
-  border-bottom: none;
-}
-
-.search-navigator-date-facet-selection-input-left {
-  position: absolute;
-  left: 0;
-  width: 100px;
-  visibility: hidden;
-}
-
-.search-navigator-date-facet-selection-input-right {
-  position: absolute;
-  right: 0;
-  width: 100px;
-  visibility: hidden;
-}
-
-.search-navigator-date-facet-selection
-  .date-input-control:not(:nth-of-type(1))
-  .date-input-calendar {
-  left: auto;
-  right: 0;
 }
 
 .search-navigator-filters {

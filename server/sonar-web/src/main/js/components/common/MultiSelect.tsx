@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,16 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
-import { difference } from 'lodash';
+import classNames from 'classnames';
+import { isEmpty, remove, xor } from 'lodash';
 import * as React from 'react';
-import SearchBox from 'sonar-ui-common/components/controls/SearchBox';
-import { translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import MultiSelectOption from './MultiSelectOption';
+import SearchBox from '../../components/controls/SearchBox';
+import { translateWithParameters } from '../../helpers/l10n';
+import MultiSelectOption, { Element } from './MultiSelectOption';
 
-interface Props {
+export interface MultiSelectProps {
   allowNewElements?: boolean;
   allowSelection?: boolean;
+  legend: string;
   elements: string[];
   filterSelected?: (query: string, selectedElements: string[]) => string[];
   footerNode?: React.ReactNode;
@@ -41,85 +42,110 @@ interface Props {
 }
 
 interface State {
-  activeIdx: number;
   loading: boolean;
   query: string;
-  selectedElements: string[];
-  unselectedElements: string[];
+  elements: Element[];
 }
 
 interface DefaultProps {
+  // eslint-disable-next-line react/no-unused-prop-types
   filterSelected: (query: string, selectedElements: string[]) => string[];
   listSize: number;
   renderLabel: (element: string) => React.ReactNode;
   validateSearchInput: (value: string) => string;
 }
 
-type PropsWithDefault = Props & DefaultProps;
+type PropsWithDefault = MultiSelectProps & DefaultProps;
 
-export default class MultiSelect extends React.PureComponent<Props, State> {
-  container?: HTMLDivElement | null;
-  searchInput?: HTMLInputElement | null;
+export default class MultiSelect extends React.PureComponent<PropsWithDefault, State> {
   mounted = false;
 
   static defaultProps: DefaultProps = {
     filterSelected: (query: string, selectedElements: string[]) =>
-      selectedElements.filter(elem => elem.includes(query)),
+      selectedElements.filter((elem) => elem.includes(query)),
     listSize: 0,
     renderLabel: (element: string) => element,
-    validateSearchInput: (value: string) => value
+    validateSearchInput: (value: string) => value,
   };
 
-  constructor(props: Props) {
+  constructor(props: PropsWithDefault) {
     super(props);
     this.state = {
-      activeIdx: 0,
-      loading: true,
+      loading: false,
       query: '',
-      selectedElements: [],
-      unselectedElements: []
+      elements: [],
     };
   }
 
   componentDidMount() {
     this.mounted = true;
     this.onSearchQuery('');
-    this.updateSelectedElements(this.props as PropsWithDefault);
-    this.updateUnselectedElements(this.props as PropsWithDefault);
-    if (this.container) {
-      this.container.addEventListener('keydown', this.handleKeyboard, true);
-    }
+    this.computeElements();
   }
 
-  componentWillReceiveProps(nextProps: PropsWithDefault) {
+  componentDidUpdate(prevProps: PropsWithDefault, prevState: State) {
     if (
-      this.props.elements !== nextProps.elements ||
-      this.props.selectedElements !== nextProps.selectedElements
+      !isEmpty(
+        xor(
+          [...prevProps.selectedElements, ...prevProps.elements],
+          [...this.props.selectedElements, ...this.props.elements],
+        ),
+      )
     ) {
-      this.updateSelectedElements(nextProps);
-      this.updateUnselectedElements(nextProps);
-
-      const totalElements = this.getAllElements(nextProps, this.state).length;
-      if (this.state.activeIdx >= totalElements) {
-        this.setState({ activeIdx: totalElements - 1 });
-      }
+      this.computeElements();
     }
-  }
 
-  componentDidUpdate() {
-    if (this.searchInput) {
-      this.searchInput.focus();
+    if (prevState.query !== this.state.query) {
+      this.setState(({ query, elements }, props) => {
+        const newElements = [...elements];
+        this.appendCreateElelement(newElements, query, props);
+        return { elements: newElements };
+      });
     }
   }
 
   componentWillUnmount() {
     this.mounted = false;
-    if (this.container) {
-      this.container.removeEventListener('keydown', this.handleKeyboard);
+  }
+
+  computeElements() {
+    this.setState(({ query }, props) => {
+      const newStateElement: Element[] = [
+        ...this.props
+          .filterSelected(query, this.props.selectedElements)
+          .map((e) => ({ value: e, selected: true })),
+        ...this.props.elements.map((e) => ({
+          value: e,
+          selected: false,
+        })),
+      ];
+
+      this.appendCreateElelement(newStateElement, query, props);
+      return { elements: newStateElement };
+    });
+  }
+
+  appendCreateElelement(elements: Element[], query: string, props: PropsWithDefault) {
+    const { allowNewElements = true } = props;
+    if (this.isNewElement(query, props) && allowNewElements) {
+      const create = elements.find((e) => e.custom);
+      if (create) {
+        create.value = query;
+      } else {
+        elements.push({ value: query, selected: false, custom: true });
+      }
+    } else if (!this.isNewElement(query, props) && allowNewElements) {
+      remove(elements, (e) => e.custom);
     }
   }
 
   handleSelectChange = (selected: boolean, item: string) => {
+    this.setState(({ elements }) => {
+      const newElements = elements.map((e) =>
+        e.value === item ? { value: e.value, selected } : e,
+      );
+      return { elements: newElements };
+    });
     if (selected) {
       this.onSelectItem(item);
     } else {
@@ -131,39 +157,16 @@ export default class MultiSelect extends React.PureComponent<Props, State> {
     this.onSearchQuery((this.props as PropsWithDefault).validateSearchInput(value));
   };
 
-  handleElementHover = (element: string) => {
-    this.setState((prevState, props) => {
-      return { activeIdx: this.getAllElements(props, prevState).indexOf(element) };
-    });
-  };
-
-  handleKeyboard = (evt: KeyboardEvent) => {
-    switch (evt.keyCode) {
-      case 40: // down
-        evt.stopPropagation();
-        evt.preventDefault();
-        this.setState(this.selectNextElement);
-        break;
-      case 38: // up
-        evt.stopPropagation();
-        evt.preventDefault();
-        this.setState(this.selectPreviousElement);
-        break;
-      case 37: // left
-      case 39: // right
-        evt.stopPropagation();
-        break;
-      case 13: // enter
-        if (this.state.activeIdx >= 0) {
-          this.toggleSelect(this.getAllElements(this.props, this.state)[this.state.activeIdx]);
-        }
-        break;
-    }
-  };
-
   onSearchQuery = (query: string) => {
-    this.setState({ activeIdx: 0, loading: true, query });
+    const { allowNewElements = true } = this.props;
+
     this.props.onSearch(query).then(this.stopLoading, this.stopLoading);
+    if (allowNewElements) {
+      this.setState({
+        loading: true,
+        query,
+      });
+    }
   };
 
   onSelectItem = (item: string) => {
@@ -175,68 +178,8 @@ export default class MultiSelect extends React.PureComponent<Props, State> {
 
   onUnselectItem = (item: string) => this.props.onUnselect(item);
 
-  isNewElement = (elem: string, { selectedElements, elements }: Props) =>
-    elem.length > 0 && selectedElements.indexOf(elem) === -1 && elements.indexOf(elem) === -1;
-
-  updateSelectedElements = (props: PropsWithDefault) => {
-    this.setState((state: State) => {
-      if (state.query) {
-        return {
-          selectedElements: props.filterSelected(state.query, props.selectedElements)
-        };
-      } else {
-        return { selectedElements: [...props.selectedElements] };
-      }
-    });
-  };
-
-  updateUnselectedElements = (props: PropsWithDefault) => {
-    this.setState((state: State) => {
-      if (props.listSize === 0) {
-        return { unselectedElements: difference(props.elements, props.selectedElements) };
-      } else if (props.listSize < state.selectedElements.length) {
-        return { unselectedElements: [] };
-      } else {
-        return {
-          unselectedElements: difference(props.elements, props.selectedElements).slice(
-            0,
-            props.listSize - state.selectedElements.length
-          )
-        };
-      }
-    });
-  };
-
-  getAllElements = (props: Props, state: State) => {
-    if (this.isNewElement(state.query, props)) {
-      return [...state.selectedElements, ...state.unselectedElements, state.query];
-    } else {
-      return [...state.selectedElements, ...state.unselectedElements];
-    }
-  };
-
-  setElementActive = (idx: number) => this.setState({ activeIdx: idx });
-
-  selectNextElement = (state: State, props: Props) => {
-    const { activeIdx } = state;
-    const allElements = this.getAllElements(props, state);
-    if (activeIdx < 0 || activeIdx >= allElements.length - 1) {
-      return { activeIdx: 0 };
-    } else {
-      return { activeIdx: activeIdx + 1 };
-    }
-  };
-
-  selectPreviousElement = (state: State, props: Props) => {
-    const { activeIdx } = state;
-    const allElements = this.getAllElements(props, state);
-    if (activeIdx <= 0) {
-      const lastIdx = allElements.length - 1;
-      return { activeIdx: lastIdx };
-    } else {
-      return { activeIdx: activeIdx - 1 };
-    }
-  };
+  isNewElement = (elem: string, { selectedElements, elements }: PropsWithDefault) =>
+    !isEmpty(elem) && selectedElements.indexOf(elem) === -1 && elements.indexOf(elem) === -1;
 
   stopLoading = () => {
     if (this.mounted) {
@@ -244,33 +187,23 @@ export default class MultiSelect extends React.PureComponent<Props, State> {
     }
   };
 
-  toggleSelect = (item: string) => {
-    if (this.props.selectedElements.indexOf(item) === -1) {
-      this.onSelectItem(item);
-    } else {
-      this.onUnselectItem(item);
-    }
-  };
-
   render() {
-    const { allowSelection = true, allowNewElements = true, footerNode = '' } = this.props;
+    const { legend, allowSelection = true, footerNode = '' } = this.props;
     const { renderLabel } = this.props as PropsWithDefault;
-    const { query, activeIdx, selectedElements, unselectedElements } = this.state;
-    const activeElement = this.getAllElements(this.props, this.state)[activeIdx];
-    const showNewElement = allowNewElements && this.isNewElement(query, this.props);
+    const { query, elements } = this.state;
     const infiniteList = this.props.listSize === 0;
     const listClasses = classNames('menu', {
       'menu-vertically-limited': infiniteList,
       'spacer-top': infiniteList,
       'with-top-separator': infiniteList,
-      'with-bottom-separator': Boolean(footerNode)
+      'with-bottom-separator': Boolean(footerNode),
     });
 
     return (
-      <div className="multi-select" ref={div => (this.container = div)}>
+      <div className="multi-select">
         <div className="menu-search">
           <SearchBox
-            autoFocus={true}
+            autoFocus
             className="little-spacer-top"
             loading={this.state.loading}
             onChange={this.handleSearchChange}
@@ -278,46 +211,22 @@ export default class MultiSelect extends React.PureComponent<Props, State> {
             value={query}
           />
         </div>
-        <ul className={listClasses}>
-          {selectedElements.length > 0 &&
-            selectedElements.map(element => (
+        <fieldset aria-label={legend}>
+          <ul className={listClasses}>
+            {elements.map((e) => (
               <MultiSelectOption
-                active={activeElement === element}
-                element={element}
-                key={element}
-                onHover={this.handleElementHover}
-                onSelectChange={this.handleSelectChange}
-                renderLabel={renderLabel}
-                selected={true}
-              />
-            ))}
-          {unselectedElements.length > 0 &&
-            unselectedElements.map(element => (
-              <MultiSelectOption
-                active={activeElement === element}
-                disabled={!allowSelection}
-                element={element}
-                key={element}
-                onHover={this.handleElementHover}
+                element={e}
+                disabled={!allowSelection && !e.selected}
+                key={e.value}
                 onSelectChange={this.handleSelectChange}
                 renderLabel={renderLabel}
               />
             ))}
-          {showNewElement && (
-            <MultiSelectOption
-              active={activeElement === query}
-              custom={true}
-              element={query}
-              key={query}
-              onHover={this.handleElementHover}
-              onSelectChange={this.handleSelectChange}
-              renderLabel={renderLabel}
-            />
-          )}
-          {!showNewElement && selectedElements.length < 1 && unselectedElements.length < 1 && (
-            <li className="spacer-left">{translateWithParameters('no_results_for_x', query)}</li>
-          )}
-        </ul>
+            {isEmpty(elements) && (
+              <li className="spacer-left">{translateWithParameters('no_results_for_x', query)}</li>
+            )}
+          </ul>
+        </fieldset>
         {footerNode}
       </div>
     );

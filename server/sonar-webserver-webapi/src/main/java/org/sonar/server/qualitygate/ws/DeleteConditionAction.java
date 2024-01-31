@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,7 +63,7 @@ public class DeleteConditionAction implements QualityGatesWsAction {
       QualityGateConditionDto condition = wsSupport.getCondition(dbSession, conditionUuid);
       QualityGateDto qualityGateDto = dbClient.qualityGateDao().selectByUuid(dbSession, condition.getQualityGateUuid());
       checkState(qualityGateDto != null, "Condition '%s' is linked to an unknown quality gate '%s'", conditionUuid, condition.getQualityGateUuid());
-      wsSupport.checkCanEdit(qualityGateDto);
+      wsSupport.checkCanLimitedEdit(dbSession, qualityGateDto);
 
       dbClient.gateConditionDao().delete(condition, dbSession);
       dbSession.commit();

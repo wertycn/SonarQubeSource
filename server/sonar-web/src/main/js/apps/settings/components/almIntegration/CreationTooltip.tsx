@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,17 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { withAppState } from '../../../../components/hoc/withAppState';
+import withAppStateContext from '../../../../app/components/app-state/withAppStateContext';
+import Tooltip from '../../../../components/controls/Tooltip';
 import { getEdition, getEditionUrl } from '../../../../helpers/editions';
+import { translate } from '../../../../helpers/l10n';
 import { AlmKeys } from '../../../../types/alm-settings';
+import { AppState } from '../../../../types/appstate';
 import { EditionKey } from '../../../../types/editions';
 
 export interface CreationTooltipProps {
   alm: AlmKeys;
-  appState: T.AppState;
+  appState: AppState;
   children: React.ReactElement<{}>;
   preventCreation: boolean;
 }
@@ -38,7 +39,7 @@ export function CreationTooltip(props: CreationTooltipProps) {
     alm,
     appState: { edition },
     children,
-    preventCreation
+    preventCreation,
   } = props;
 
   const sourceEdition = edition ? EditionKey[edition] : undefined;
@@ -54,22 +55,24 @@ export function CreationTooltip(props: CreationTooltipProps) {
               link: (
                 <a
                   href={getEditionUrl(getEdition(EditionKey.enterprise), {
-                    sourceEdition
+                    sourceEdition,
                   })}
                   rel="noopener noreferrer"
-                  target="_blank">
+                  target="_blank"
+                >
                   {translate('settings.almintegration.create.tooltip.link')}
                 </a>
               ),
-              alm: translate('alm', alm)
+              alm: translate('alm', alm),
             }}
           />
         ) : null
       }
-      mouseLeaveDelay={0.25}>
+      mouseLeaveDelay={0.25}
+    >
       {children}
     </Tooltip>
   );
 }
 
-export default withAppState(CreationTooltip);
+export default withAppStateContext(CreationTooltip);

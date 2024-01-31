@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.db.alm.setting;
 
 import java.util.List;
+import java.util.Set;
 import javax.annotation.CheckForNull;
 import org.apache.ibatis.annotations.Param;
 
@@ -34,10 +35,16 @@ public interface ProjectAlmSettingMapper {
 
   int update(@Param("dto") ProjectAlmSettingDto projectAlmSettingDto, @Param("now") long now);
 
-  void deleteByProjectUuid(@Param("projectUuid") String projectUuid);
+  int deleteByProjectUuid(@Param("projectUuid") String projectUuid);
   void deleteByAlmSettingUuid(@Param("almSettingUuid") String almSettingUuid);
 
   List<ProjectAlmSettingDto> selectByAlmSettingAndSlugs(@Param("almSettingUuid") String almSettingUuid, @Param("slugs") List<String> slugs);
 
   List<ProjectAlmSettingDto> selectByAlmSettingAndRepos(@Param("almSettingUuid") String almSettingUuid, @Param("repos") List<String> repos);
+
+  List<ProjectAlmSettingDto> selectByAlm(@Param("alm") String alm);
+
+  List<ProjectAlmSettingDto> selectByProjectUuidsAndAlm(@Param("projectUuids") Set<String> projectUuids, @Param("alm") String alm);
+
+  List<ProjectAlmKeyAndProject> selectAlmTypeAndUrlByProject();
 }

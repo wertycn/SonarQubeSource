@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,16 +21,13 @@ package org.sonar.process;
 
 import java.util.HashSet;
 import java.util.Set;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ProcessIdTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void test_constants() {
@@ -42,12 +39,15 @@ public class ProcessIdTest {
   public void all_values_are_unique() {
     Set<Integer> ipcIndices = new HashSet<>();
     Set<String> keys = new HashSet<>();
+    Set<String> humanReadableNames = new HashSet<>();
     for (ProcessId processId : ProcessId.values()) {
       ipcIndices.add(processId.getIpcIndex());
       keys.add(processId.getKey());
+      humanReadableNames.add(processId.getHumanReadableName());
     }
     assertThat(ipcIndices).hasSize(ProcessId.values().length);
     assertThat(keys).hasSize(ProcessId.values().length);
+    assertThat(humanReadableNames).hasSize(ProcessId.values().length);
   }
 
   @Test
@@ -60,17 +60,16 @@ public class ProcessIdTest {
 
   @Test
   public void fromKey_throws_IAE_if_key_is_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Process [null] does not exist");
-
-    ProcessId.fromKey(null);
+    assertThatThrownBy(() -> ProcessId.fromKey(null))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Process [null] does not exist");
   }
 
   @Test
   public void fromKey_throws_IAE_if_key_does_not_exist() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Process [foo] does not exist");
-
-    ProcessId.fromKey("foo");
+    assertThatThrownBy(() -> ProcessId.fromKey("foo"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Process [foo] does not exist");
   }
+
 }

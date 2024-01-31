@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,30 +19,26 @@
  */
 package org.sonar.ce.task.projectanalysis.component;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.Component.ComponentType;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.sonar.db.component.BranchDto.DEFAULT_MAIN_BRANCH_NAME;
 
 public class DefaultBranchImplTest {
   private static final String PROJECT_KEY = "P";
   private static final ScannerReport.Component FILE = ScannerReport.Component.newBuilder().setType(ComponentType.FILE).setProjectRelativePath("src/Foo.js").build();
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void default_branch_represents_the_project() {
-    DefaultBranchImpl branch = new DefaultBranchImpl();
+    DefaultBranchImpl branch = new DefaultBranchImpl(DEFAULT_MAIN_BRANCH_NAME);
 
     assertThat(branch.isMain()).isTrue();
     assertThat(branch.getType()).isEqualTo(BranchType.BRANCH);
-    assertThat(branch.getName()).isEqualTo(BranchDto.DEFAULT_MAIN_BRANCH_NAME);
+    assertThat(branch.getName()).isEqualTo(DEFAULT_MAIN_BRANCH_NAME);
     assertThat(branch.supportsCrossProjectCpd()).isTrue();
 
     assertThat(branch.generateKey(PROJECT_KEY, null)).isEqualTo("P");

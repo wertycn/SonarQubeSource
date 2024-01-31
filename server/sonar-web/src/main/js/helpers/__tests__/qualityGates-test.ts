@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,11 @@
  */
 import {
   mockQualityGateApplicationStatus,
-  mockQualityGateProjectStatus
+  mockQualityGateProjectStatus,
 } from '../mocks/quality-gates';
 import {
   extractStatusConditionsFromApplicationStatusChildProject,
-  extractStatusConditionsFromProjectStatus
+  extractStatusConditionsFromProjectStatus,
 } from '../qualityGates';
 
 describe('extractStatusConditionsFromProjectStatus', () => {
@@ -35,8 +35,8 @@ describe('extractStatusConditionsFromProjectStatus', () => {
         level: 'OK',
         metric: 'new_bugs',
         op: 'GT',
-        period: 1
-      }
+        period: 1,
+      },
     ]);
   });
 });
@@ -45,8 +45,8 @@ describe('extractStatusConditionsFromApplicationStatusChildProject', () => {
   it('should correclty extract the conditions for the application child project status', () => {
     expect(
       extractStatusConditionsFromApplicationStatusChildProject(
-        mockQualityGateApplicationStatus().projects[0]
-      )
+        mockQualityGateApplicationStatus().projects[0],
+      ),
     ).toEqual([
       {
         actual: '10',
@@ -54,7 +54,7 @@ describe('extractStatusConditionsFromApplicationStatusChildProject', () => {
         level: 'ERROR',
         metric: 'coverage',
         op: 'GT',
-        period: undefined
+        period: undefined,
       },
       {
         actual: '5',
@@ -62,8 +62,8 @@ describe('extractStatusConditionsFromApplicationStatusChildProject', () => {
         level: 'ERROR',
         metric: 'new_bugs',
         op: 'GT',
-        period: 1
-      }
+        period: 1,
+      },
     ]);
   });
 });

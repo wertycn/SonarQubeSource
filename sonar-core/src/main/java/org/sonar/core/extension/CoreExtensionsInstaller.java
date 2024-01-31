@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,29 +20,32 @@
 package org.sonar.core.extension;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
-import org.sonar.api.ExtensionProvider;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.AnnotationUtils;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
-import org.sonar.core.platform.ComponentContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.core.platform.ExtensionContainer;
 
 import static java.util.Objects.requireNonNull;
 
 public abstract class CoreExtensionsInstaller {
-  private static final Logger LOG = Loggers.get(CoreExtensionsInstaller.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CoreExtensionsInstaller.class);
 
   private final SonarRuntime sonarRuntime;
   private final CoreExtensionRepository coreExtensionRepository;
   private final Class<? extends Annotation> supportedAnnotationType;
+
+  protected CoreExtensionsInstaller(SonarRuntime sonarRuntime, CoreExtensionRepository coreExtensionRepository, Class<? extends Annotation> supportedAnnotationType) {
+    this.sonarRuntime = sonarRuntime;
+    this.coreExtensionRepository = coreExtensionRepository;
+    this.supportedAnnotationType = supportedAnnotationType;
+  }
 
   public static Predicate<Object> noExtensionFilter() {
     return t -> true;
@@ -52,13 +55,6 @@ public abstract class CoreExtensionsInstaller {
     return t -> true;
   }
 
-  protected CoreExtensionsInstaller(SonarRuntime sonarRuntime, CoreExtensionRepository coreExtensionRepository,
-    Class<? extends Annotation> supportedAnnotationType) {
-    this.sonarRuntime = sonarRuntime;
-    this.coreExtensionRepository = coreExtensionRepository;
-    this.supportedAnnotationType = supportedAnnotationType;
-  }
-
   /**
    * @param container            the container into which extensions will be installed
    * @param extensionFilter      filters extensions added to {@link CoreExtension.Context}. When it returns false, the
@@ -66,16 +62,15 @@ public abstract class CoreExtensionsInstaller {
    * @param additionalSideFilter applied on top of filtering on {@link #supportedAnnotationType} to decide whether
    *                             extension should be added to container as an object or only as a PropertyDefinition.
    */
-  public void install(ComponentContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter) {
+  public void install(ExtensionContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter) {
     coreExtensionRepository.loadedCoreExtensions()
       .forEach(coreExtension -> install(container, extensionFilter, additionalSideFilter, coreExtension));
   }
 
-  private void install(ComponentContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter, CoreExtension coreExtension) {
+  private void install(ExtensionContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter, CoreExtension coreExtension) {
     String coreExtensionName = coreExtension.getName();
     try {
-      List<Object> providerKeys = addDeclaredExtensions(container, extensionFilter, additionalSideFilter, coreExtension);
-      addProvidedExtensions(container, additionalSideFilter, coreExtensionName, providerKeys);
+      addDeclaredExtensions(container, extensionFilter, additionalSideFilter, coreExtension);
 
       LOG.debug("Installed core extension: " + coreExtensionName);
       coreExtensionRepository.installed(coreExtension);
@@ -84,56 +79,18 @@ public abstract class CoreExtensionsInstaller {
     }
   }
 
-  private List<Object> addDeclaredExtensions(ComponentContainer container, Predicate<Object> extensionFilter,
-    Predicate<Object> additionalSideFilter, CoreExtension coreExtension) {
+  private void addDeclaredExtensions(ExtensionContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter, CoreExtension coreExtension) {
     ContextImpl context = new ContextImpl(container, extensionFilter, additionalSideFilter, coreExtension.getName());
     coreExtension.load(context);
-    return context.getProviders();
-  }
-
-  private void addProvidedExtensions(ComponentContainer container, Predicate<Object> additionalSideFilter,
-    String extensionCategory, List<Object> providerKeys) {
-    providerKeys.stream()
-      .map(providerKey -> (ExtensionProvider) container.getComponentByKey(providerKey))
-      .forEach(provider -> addFromProvider(container, additionalSideFilter, extensionCategory, provider));
-  }
-
-  private void addFromProvider(ComponentContainer container, Predicate<Object> additionalSideFilter,
-    String extensionCategory, ExtensionProvider provider) {
-    Object obj = provider.provide();
-    if (obj != null) {
-      if (obj instanceof Iterable) {
-        for (Object ext : (Iterable) obj) {
-          addSupportedExtension(container, additionalSideFilter, extensionCategory, ext);
-        }
-      } else {
-        addSupportedExtension(container, additionalSideFilter, extensionCategory, obj);
-      }
-    }
-  }
-
-  private <T> boolean addSupportedExtension(ComponentContainer container, Predicate<Object> additionalSideFilter,
-    String extensionCategory, T component) {
-    if (hasSupportedAnnotation(component) && additionalSideFilter.test(component)) {
-      container.addExtension(extensionCategory, component);
-      return true;
-    }
-    return false;
-  }
-
-  private <T> boolean hasSupportedAnnotation(T component) {
-    return AnnotationUtils.getAnnotation(component, supportedAnnotationType) != null;
   }
 
   private class ContextImpl implements CoreExtension.Context {
-    private final ComponentContainer container;
+    private final ExtensionContainer container;
     private final Predicate<Object> extensionFilter;
     private final Predicate<Object> additionalSideFilter;
     private final String extensionCategory;
-    private final List<Object> providers = new ArrayList<>();
 
-    public ContextImpl(ComponentContainer container, Predicate<Object> extensionFilter,
-      Predicate<Object> additionalSideFilter, String extensionCategory) {
+    public ContextImpl(ExtensionContainer container, Predicate<Object> extensionFilter, Predicate<Object> additionalSideFilter, String extensionCategory) {
       this.container = container;
       this.extensionFilter = extensionFilter;
       this.additionalSideFilter = additionalSideFilter;
@@ -160,8 +117,6 @@ public abstract class CoreExtensionsInstaller {
 
       if (!addSupportedExtension(container, additionalSideFilter, extensionCategory, component)) {
         container.declareExtension(extensionCategory, component);
-      } else if (ExtensionProviderSupport.isExtensionProvider(component)) {
-        providers.add(component);
       }
       return this;
     }
@@ -174,14 +129,28 @@ public abstract class CoreExtensionsInstaller {
     }
 
     @Override
+    public void addWebApiV2ConfigurationClass(Class<?> clazz) {
+      container.addWebApiV2ConfigurationClass(clazz);
+    }
+
+    @Override
     public <T> CoreExtension.Context addExtensions(Collection<T> components) {
       requireNonNull(components, "components can't be null");
       components.forEach(this::addExtension);
       return this;
     }
 
-    public List<Object> getProviders() {
-      return providers;
+    private <T> boolean addSupportedExtension(ExtensionContainer container, Predicate<Object> additionalSideFilter,
+      String extensionCategory, T component) {
+      if (hasSupportedAnnotation(component) && additionalSideFilter.test(component)) {
+        container.addExtension(extensionCategory, component);
+        return true;
+      }
+      return false;
+    }
+
+    private <T> boolean hasSupportedAnnotation(T component) {
+      return AnnotationUtils.getAnnotation(component, supportedAnnotationType) != null;
     }
   }
 }

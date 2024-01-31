@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,7 +48,7 @@ public class AnalysisMetadataHolderImpl implements MutableAnalysisMetadataHolder
   private final InitializedProperty<Map<String, QualityProfile>> qProfilesPerLanguage = new InitializedProperty<>();
   private final InitializedProperty<Map<String, ScannerPlugin>> pluginsByKey = new InitializedProperty<>();
   private final InitializedProperty<String> scmRevision = new InitializedProperty<>();
-  private final InitializedProperty<Long> forkDate = new InitializedProperty<>();
+  private final InitializedProperty<String> newCodeReferenceBranch = new InitializedProperty<>();
 
   private final PlatformEditionProvider editionProvider;
 
@@ -86,20 +86,6 @@ public class AnalysisMetadataHolderImpl implements MutableAnalysisMetadataHolder
   @Override
   public boolean hasAnalysisDateBeenSet() {
     return analysisDate.isInitialized();
-  }
-
-  @Override
-  public MutableAnalysisMetadataHolder setForkDate(@Nullable Long date) {
-    checkState(!forkDate.isInitialized(), "Fork date has already been set");
-    this.forkDate.setProperty(date);
-    return this;
-  }
-
-  @Override
-  @CheckForNull
-  public Long getForkDate() {
-    checkState(forkDate.isInitialized(), "Fork date has not been set");
-    return this.forkDate.getProperty();
   }
 
   @Override
@@ -225,11 +211,27 @@ public class AnalysisMetadataHolderImpl implements MutableAnalysisMetadataHolder
   }
 
   @Override
+  public MutableAnalysisMetadataHolder setNewCodeReferenceBranch(String newCodeReferenceBranch) {
+    checkState(!this.newCodeReferenceBranch.isInitialized(), "newCodeReferenceBranch has already been set");
+    requireNonNull(newCodeReferenceBranch, "newCodeReferenceBranch can't be null");
+    this.newCodeReferenceBranch.setProperty(newCodeReferenceBranch);
+    return this;
+  }
+
+  @Override
   public Optional<String> getScmRevision() {
     if (!scmRevision.isInitialized()) {
       return Optional.empty();
     }
     return Optional.ofNullable(scmRevision.getProperty());
+  }
+
+  @Override
+  public Optional<String> getNewCodeReferenceBranch() {
+    if (!newCodeReferenceBranch.isInitialized()) {
+      return Optional.empty();
+    }
+    return Optional.of(newCodeReferenceBranch.getProperty());
   }
 
   @Override

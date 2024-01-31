@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,5 +25,11 @@ import org.sonar.core.issue.DefaultIssue;
 
 public interface QGChangeEventListeners {
 
-  void broadcastOnIssueChange(List<DefaultIssue> changedIssues, Collection<QGChangeEvent> qgChangeEvents);
+  /**
+   * Broadcast events after issues were updated
+   *
+   * @param fromAlm: true if issues changes were initiated by an ALM.
+   */
+  void broadcastOnIssueChange(List<DefaultIssue> changedIssues, Collection<QGChangeEvent> qgChangeEvents, boolean fromAlm);
+
 }

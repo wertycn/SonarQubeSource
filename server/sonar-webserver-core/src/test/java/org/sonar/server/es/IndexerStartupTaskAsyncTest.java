@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,9 +28,7 @@ import org.sonar.server.es.metadata.MetadataIndex;
 import org.sonar.server.es.metadata.MetadataIndexImpl;
 import org.sonar.server.es.newindex.FakeIndexDefinition;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -70,7 +68,7 @@ public class IndexerStartupTaskAsyncTest {
 
     underTest.execute();
 
-    verify(metadataIndex).setInitialized(eq(TYPE_FAKE), eq(true));
+    verify(metadataIndex).setInitialized(TYPE_FAKE, true);
   }
 
   @Test

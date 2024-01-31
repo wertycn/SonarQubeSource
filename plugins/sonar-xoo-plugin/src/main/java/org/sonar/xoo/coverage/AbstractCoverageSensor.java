@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,14 +30,13 @@ import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.sensor.Sensor;
 import org.sonar.api.batch.sensor.SensorContext;
 import org.sonar.api.batch.sensor.SensorDescriptor;
-import org.sonar.api.batch.sensor.coverage.CoverageType;
 import org.sonar.api.batch.sensor.coverage.NewCoverage;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.xoo.Xoo;
 
 public abstract class AbstractCoverageSensor implements Sensor {
-  private static final Logger LOG = Loggers.get(AbstractCoverageSensor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractCoverageSensor.class);
 
   private void processCoverage(InputFile inputFile, SensorContext context) {
     File coverageFile = new File(inputFile.file().getParentFile(), inputFile.file().getName() + getCoverageExtension());
@@ -46,8 +45,7 @@ public abstract class AbstractCoverageSensor implements Sensor {
       try {
         List<String> lines = FileUtils.readLines(coverageFile, context.fileSystem().encoding().name());
         NewCoverage coverageBuilder = context.newCoverage()
-          .onFile(inputFile)
-          .ofType(getCoverageType());
+          .onFile(inputFile);
         int lineNumber = 0;
         for (String line : lines) {
           lineNumber++;
@@ -79,8 +77,6 @@ public abstract class AbstractCoverageSensor implements Sensor {
   }
 
   protected abstract String getCoverageExtension();
-
-  protected abstract CoverageType getCoverageType();
 
   @Override
   public void describe(SensorDescriptor descriptor) {

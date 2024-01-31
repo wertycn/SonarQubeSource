@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -136,7 +136,7 @@ public class HotspotsService extends BaseService {
         .setParam("ps", request.getPs())
         .setParam("pullRequest", request.getPullRequest())
         .setParam("resolution", request.getResolution())
-        .setParam("sinceLeakPeriod", request.getSinceLeakPeriod())
+        .setParam("inNewCodePeriod", request.getInNewCodePeriod())
         .setParam("status", request.getStatus())
         .setMediaType(MediaTypes.JSON),
       Hotspots.SearchWsResponse.parser());

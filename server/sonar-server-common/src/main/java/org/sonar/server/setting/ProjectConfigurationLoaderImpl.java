@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,18 +20,13 @@
 package org.sonar.server.setting;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.Settings;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.property.PropertyDto;
-
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 public class ProjectConfigurationLoaderImpl implements ProjectConfigurationLoader {
   private final Settings globalSettings;
@@ -43,31 +38,34 @@ public class ProjectConfigurationLoaderImpl implements ProjectConfigurationLoade
   }
 
   @Override
-  public Map<String, Configuration> loadProjectConfigurations(DbSession dbSession, Set<ComponentDto> projects) {
-    Set<String> mainBranchDbKeys = projects.stream().map(ComponentDto::getKey).collect(Collectors.toSet());
-    Map<String, ChildSettings> mainBranchSettingsByDbKey = loadMainBranchConfigurations(dbSession, mainBranchDbKeys);
-    return projects.stream()
-      .collect(uniqueIndex(ComponentDto::uuid, component -> {
-        if (component.getDbKey().equals(component.getKey())) {
-          return mainBranchSettingsByDbKey.get(component.getKey()).asConfiguration();
-        }
-
-        ChildSettings settings = new ChildSettings(mainBranchSettingsByDbKey.get(component.getKey()));
-        dbClient.propertiesDao()
-            .selectProjectProperties(dbSession, component.getDbKey())
-          .forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
-        return settings.asConfiguration();
-      }));
+  public Configuration loadBranchConfiguration(DbSession dbSession, BranchDto branch) {
+    return loadProjectAndBranchConfiguration(dbSession, branch.getProjectUuid(), branch.getUuid());
   }
 
-  private Map<String, ChildSettings> loadMainBranchConfigurations(DbSession dbSession, Set<String> dbKeys) {
-    return dbKeys.stream().collect(uniqueIndex(Function.identity(), dbKey -> {
-      ChildSettings settings = new ChildSettings(globalSettings);
-      List<PropertyDto> propertyDtos = dbClient.propertiesDao()
-          .selectProjectProperties(dbSession, dbKey);
-      propertyDtos
-        .forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
-      return settings;
-    }));
+  @Override
+  public Configuration loadProjectConfiguration(DbSession dbSession, String projectUuid) {
+    return loadProjectAndBranchConfiguration(dbSession, projectUuid, null);
   }
+
+  private Configuration loadProjectAndBranchConfiguration(DbSession dbSession, String projectUuid, @Nullable String branchUuid) {
+    ChildSettings projectSettings = internalLoadProjectConfiguration(dbSession, projectUuid);
+
+    if (branchUuid == null) {
+      return projectSettings.asConfiguration();
+    }
+
+    ChildSettings settings = new ChildSettings(projectSettings);
+    dbClient.propertiesDao()
+      .selectEntityProperties(dbSession, branchUuid)
+      .forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
+    return settings.asConfiguration();
+  }
+
+  private ChildSettings internalLoadProjectConfiguration(DbSession dbSession, String uuid) {
+    ChildSettings settings = new ChildSettings(globalSettings);
+    List<PropertyDto> propertyDtos = dbClient.propertiesDao().selectEntityProperties(dbSession, uuid);
+    propertyDtos.forEach(property -> settings.setProperty(property.getKey(), property.getValue()));
+    return settings;
+  }
+
 }

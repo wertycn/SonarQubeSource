@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,48 +19,53 @@
  */
 import { omit } from 'lodash';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { searchRules } from '../../../api/rules';
-import ListStyleFacet from '../../../components/facet/ListStyleFacet';
-import { Facet, ReferencedRule } from '../../../types/issues';
+import { ISSUE_TYPES } from '../../../helpers/constants';
+import { translate } from '../../../helpers/l10n';
+import { Facet, IssueType, ReferencedRule } from '../../../types/issues';
+import { Dict, Rule } from '../../../types/types';
 import { Query } from '../utils';
+import { ListStyleFacet } from './ListStyleFacet';
 
 interface Props {
   fetching: boolean;
-  languages: string[];
   loadSearchResultCount: (property: string, changes: Partial<Query>) => Promise<Facet>;
   onChange: (changes: Partial<Query>) => void;
   onToggle: (property: string) => void;
   open: boolean;
   query: Query;
-  referencedRules: T.Dict<ReferencedRule>;
-  rules: string[];
-  stats: T.Dict<number> | undefined;
+  referencedRules: Dict<ReferencedRule>;
+  stats: Dict<number> | undefined;
 }
 
-export default class RuleFacet extends React.PureComponent<Props> {
+export class RuleFacet extends React.PureComponent<Props> {
   handleSearch = (query: string, page = 1) => {
-    const { languages } = this.props;
+    const { languages, types } = this.props.query;
+
     return searchRules({
       f: 'name,langName',
       languages: languages.length ? languages.join() : undefined,
       q: query,
       p: page,
       ps: 30,
+      types: types.length
+        ? types.join()
+        : ISSUE_TYPES.filter((type) => type !== IssueType.SecurityHotspot).join(),
       s: 'name',
-      include_external: true
-    }).then(response => ({
-      paging: { pageIndex: response.p, pageSize: response.ps, total: response.total },
-      results: response.rules
+      include_external: true,
+    }).then(({ rules, paging }) => ({
+      results: rules,
+      paging,
     }));
   };
 
-  loadSearchResultCount = (rules: T.Rule[]) => {
-    return this.props.loadSearchResultCount('rules', { rules: rules.map(rule => rule.key) });
+  loadSearchResultCount = (rules: Rule[]) => {
+    return this.props.loadSearchResultCount('rules', { rules: rules.map((rule) => rule.key) });
   };
 
   getRuleName = (ruleKey: string) => {
     const rule = this.props.referencedRules[ruleKey];
+
     return rule ? this.formatRuleName(rule.name, rule.langName) : ruleKey;
   };
 
@@ -70,30 +75,32 @@ export default class RuleFacet extends React.PureComponent<Props> {
     return langName ? `(${langName}) ${name}` : name;
   };
 
-  renderSearchResult = (rule: T.Rule) => {
+  renderSearchResult = (rule: Rule) => {
     return this.formatRuleName(rule.name, rule.langName);
   };
 
   render() {
+    const { fetching, open, query, stats } = this.props;
+
     return (
-      <ListStyleFacet<T.Rule>
+      <ListStyleFacet<Rule>
         facetHeader={translate('issues.facet.rules')}
-        fetching={this.props.fetching}
+        fetching={fetching}
         getFacetItemText={this.getRuleName}
-        getSearchResultKey={rule => rule.key}
-        getSearchResultText={rule => rule.name}
+        getSearchResultKey={(rule) => rule.key}
+        getSearchResultText={(rule) => rule.name}
         loadSearchResultCount={this.loadSearchResultCount}
         onChange={this.props.onChange}
         onSearch={this.handleSearch}
         onToggle={this.props.onToggle}
-        open={this.props.open}
+        open={open}
         property="rules"
-        query={omit(this.props.query, 'rules')}
+        query={omit(query, 'rules')}
         renderFacetItem={this.getRuleName}
         renderSearchResult={this.renderSearchResult}
         searchPlaceholder={translate('search.search_for_rules')}
-        stats={this.props.stats}
-        values={this.props.rules}
+        stats={stats}
+        values={query.rules}
       />
     );
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,11 +28,11 @@ public class EventTesting {
 
   public static EventDto newEvent(SnapshotDto analysis) {
     requireNonNull(analysis.getUuid());
-    requireNonNull(analysis.getComponentUuid());
+    requireNonNull(analysis.getRootComponentUuid());
 
     return new EventDto()
       .setAnalysisUuid(analysis.getUuid())
-      .setComponentUuid(analysis.getComponentUuid())
+      .setComponentUuid(analysis.getRootComponentUuid())
       .setUuid(randomAlphanumeric(40))
       .setName(randomAlphanumeric(400))
       .setDescription(null)

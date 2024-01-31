@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,7 @@ public class Token {
 
   @Override
   public boolean equals(Object object) {
-    if (object instanceof Token) {
+    if (object != null && getClass() == object.getClass()) {
       Token anotherToken = (Token) object;
       return anotherToken.line == line && anotherToken.column == column && anotherToken.value.equals(value);
     }

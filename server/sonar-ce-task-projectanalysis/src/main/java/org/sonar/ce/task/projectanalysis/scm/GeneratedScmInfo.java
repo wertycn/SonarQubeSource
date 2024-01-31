@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -51,7 +51,8 @@ public class GeneratedScmInfo {
     Changeset[] changesets = new Changeset[matches.length];
 
     for (int i = 0; i < matches.length; i++) {
-      if (matches[i] > 0) {
+      // db changeset can be null if it contains no date
+      if (matches[i] > 0 && dbChangesets[matches[i] - 1] != null) {
         changesets[i] = dbChangesets[matches[i] - 1];
       } else {
         changesets[i] = changeset;

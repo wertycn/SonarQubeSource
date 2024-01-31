@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,17 +22,14 @@ package org.sonar.db.ce;
 import java.io.IOException;
 import java.util.Arrays;
 import org.apache.commons.io.IOUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.core.util.CloseableIterator;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class LogsIteratorInputStreamTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void read_from_ClosableIterator_with_several_lines() throws IOException {
@@ -46,7 +43,7 @@ public class LogsIteratorInputStreamTest {
 
   @Test
   public void read_from_ClosableIterator_with_single_empty_line() throws IOException {
-    assertThat(read(create(""))).isEqualTo("");
+    assertThat(read(create(""))).isEmpty();
   }
 
   @Test
@@ -57,10 +54,9 @@ public class LogsIteratorInputStreamTest {
 
   @Test
   public void constructor_throws_IAE_when_ClosableIterator_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("LogsIterator can't be empty or already read");
-
-    create();
+    assertThatThrownBy(LogsIteratorInputStreamTest::create)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("LogsIterator can't be empty or already read");
   }
 
   @Test
@@ -70,10 +66,9 @@ public class LogsIteratorInputStreamTest {
     // read iterator to the end
     iterator.next();
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("LogsIterator can't be empty or already read");
-
-    new LogsIteratorInputStream(iterator, UTF_8);
+    assertThatThrownBy(() -> new LogsIteratorInputStream(iterator, UTF_8))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("LogsIterator can't be empty or already read");
   }
 
   private static LogsIteratorInputStream create(String... lines) {

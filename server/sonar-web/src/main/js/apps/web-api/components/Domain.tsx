@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,18 +18,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { WebApi } from '../../../types/types';
 import { actionsFilter, getActionKey, Query } from '../utils';
 import Action from './Action';
 import DeprecatedBadge from './DeprecatedBadge';
 import InternalBadge from './InternalBadge';
 
 interface Props {
-  domain: T.WebApi.Domain;
+  domain: WebApi.Domain;
   query: Query;
 }
 
 export default function Domain({ domain, query }: Props) {
-  const filteredActions = domain.actions.filter(action => actionsFilter(query, domain, action));
+  const filteredActions = domain.actions.filter((action) => actionsFilter(query, domain, action));
 
   return (
     <div className="web-api-domain">
@@ -58,7 +59,7 @@ export default function Domain({ domain, query }: Props) {
       )}
 
       <div className="web-api-domain-actions">
-        {filteredActions.map(action => (
+        {filteredActions.map((action) => (
           <Action
             action={action}
             domain={domain}

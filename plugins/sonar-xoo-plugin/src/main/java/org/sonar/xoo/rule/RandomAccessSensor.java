@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,7 +44,7 @@ public class RandomAccessSensor implements Sensor {
       .name("One Issue Per File with Random Access")
       .onlyOnLanguages(Xoo.KEY)
       .createIssuesForRuleRepositories(XooRulesDefinition.XOO_REPOSITORY)
-      .requireProperty(SONAR_XOO_RANDOM_ACCESS_ISSUE_PATHS);
+      .onlyWhenConfiguration(c -> c.get(SONAR_XOO_RANDOM_ACCESS_ISSUE_PATHS).isPresent());
   }
 
   @Override

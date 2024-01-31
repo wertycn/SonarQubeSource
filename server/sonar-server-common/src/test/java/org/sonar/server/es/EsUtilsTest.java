@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,7 +63,7 @@ public class EsUtilsTest {
 
   @Test
   public void test_escapeSpecialRegexChars() {
-    assertThat(escapeSpecialRegexChars("")).isEqualTo("");
+    assertThat(escapeSpecialRegexChars("")).isEmpty();
     assertThat(escapeSpecialRegexChars("foo")).isEqualTo("foo");
     assertThat(escapeSpecialRegexChars("FOO")).isEqualTo("FOO");
     assertThat(escapeSpecialRegexChars("foo++")).isEqualTo("foo\\+\\+");

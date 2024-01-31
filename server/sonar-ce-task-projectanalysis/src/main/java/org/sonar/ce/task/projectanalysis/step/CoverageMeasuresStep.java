@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,9 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
+import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.sonar.ce.task.projectanalysis.batch.BatchReportReader;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.CrawlerDepthLimit;
@@ -55,14 +57,15 @@ import static org.sonar.ce.task.projectanalysis.formula.SumFormula.createIntSumF
  * Computes coverage measures on files and then aggregates them on higher components.
  */
 public class CoverageMeasuresStep implements ComputationStep {
-  private static final ImmutableList<Formula> COVERAGE_FORMULAS = ImmutableList.of(
+  private static final List<Formula<?>> COVERAGE_FORMULAS = List.of(
     createIntSumFormula(LINES_TO_COVER_KEY),
     createIntSumFormula(UNCOVERED_LINES_KEY),
     createIntSumFormula(CONDITIONS_TO_COVER_KEY),
     createIntSumFormula(UNCOVERED_CONDITIONS_KEY),
     new CodeCoverageFormula(),
     new BranchCoverageFormula(),
-    new LineCoverageFormula());
+    new LineCoverageFormula()
+  );
 
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
@@ -76,7 +79,8 @@ public class CoverageMeasuresStep implements ComputationStep {
   /**
    * Constructor used when processing a Report (ie. a {@link BatchReportReader} instance is available in the container)
    */
-  public CoverageMeasuresStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository, BatchReportReader reportReader) {
+  @Inject
+  public CoverageMeasuresStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository, @Nullable BatchReportReader reportReader) {
     this.treeRootHolder = treeRootHolder;
     this.metricRepository = metricRepository;
     this.measureRepository = measureRepository;
@@ -87,20 +91,6 @@ public class CoverageMeasuresStep implements ComputationStep {
     this.uncoveredConditionsMetric = metricRepository.getByKey(UNCOVERED_CONDITIONS_KEY);
   }
 
-  /**
-   * Constructor used when processing Views (ie. no {@link BatchReportReader} instance is available in the container)
-   */
-  public CoverageMeasuresStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository) {
-    this.treeRootHolder = treeRootHolder;
-    this.metricRepository = metricRepository;
-    this.measureRepository = measureRepository;
-    this.linesToCoverMetric = metricRepository.getByKey(LINES_TO_COVER_KEY);
-    this.uncoveredLinesMetric = metricRepository.getByKey(UNCOVERED_LINES_KEY);
-    this.conditionsToCoverMetric = metricRepository.getByKey(CONDITIONS_TO_COVER_KEY);
-    this.uncoveredConditionsMetric = metricRepository.getByKey(UNCOVERED_CONDITIONS_KEY);
-    this.reportReader = null;
-  }
-
   @Override
   public void execute(ComputationStep.Context context) {
     if (reportReader != null) {
@@ -108,7 +98,7 @@ public class CoverageMeasuresStep implements ComputationStep {
     }
     new PathAwareCrawler<>(
       FormulaExecutorComponentVisitor.newBuilder(metricRepository, measureRepository).buildFor(COVERAGE_FORMULAS))
-        .visit(treeRootHolder.getReportTreeRoot());
+      .visit(treeRootHolder.getReportTreeRoot());
   }
 
   private class FileCoverageVisitor extends TypeAwareVisitorAdapter {
@@ -122,6 +112,9 @@ public class CoverageMeasuresStep implements ComputationStep {
 
     @Override
     public void visitFile(Component file) {
+      if (file.getFileAttributes().isUnitTest()) {
+        return;
+      }
       try (CloseableIterator<ScannerReport.LineCoverage> lineCoverage = reportReader.readComponentCoverage(file.getReportAttributes().getRef())) {
         int linesToCover = 0;
         int coveredLines = 0;

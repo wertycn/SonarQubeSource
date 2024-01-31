@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,118 +19,274 @@
  */
 package org.sonar.server.telemetry;
 
+import com.google.common.annotations.VisibleForTesting;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.jetbrains.annotations.NotNull;
+import org.sonar.api.utils.System2;
 import org.sonar.api.utils.text.JsonWriter;
+import org.sonar.core.telemetry.TelemetryExtension;
 
-import static org.sonar.api.measures.CoreMetrics.NCLOC_KEY;
+import static org.sonar.api.utils.DateUtils.DATETIME_FORMAT;
 
 public class TelemetryDataJsonWriter {
 
-  public static final String COUNT = "count";
+  @VisibleForTesting
+  static final String MANAGED_INSTANCE_PROPERTY = "managedInstanceInformation";
+  @VisibleForTesting
+  static final String CLOUD_USAGE_PROPERTY = "cloudUsage";
 
-  public void writeTelemetryData(JsonWriter json, TelemetryData statistics) {
+  private static final String LANGUAGE_PROPERTY = "language";
+  private static final String VERSION = "version";
+  private static final String NCD_ID = "ncdId";
+  private static final String PROJECT_ID = "projectUuid";
+
+  private final List<TelemetryExtension> extensions;
+
+  private final System2 system2;
+
+  public TelemetryDataJsonWriter(List<TelemetryExtension> extensions, System2 system2) {
+    this.extensions = extensions;
+    this.system2 = system2;
+  }
+
+  public void writeTelemetryData(JsonWriter json, TelemetryData telemetryData) {
     json.beginObject();
-    json.prop("id", statistics.getServerId());
-    json.prop("version", statistics.getVersion());
-    statistics.getEdition().ifPresent(e -> json.prop("edition", e.name().toLowerCase(Locale.ENGLISH)));
-    statistics.getLicenseType().ifPresent(e -> json.prop("licenseType", e));
+    json.prop("id", telemetryData.getServerId());
+    json.prop(VERSION, telemetryData.getVersion());
+    json.prop("messageSequenceNumber", telemetryData.getMessageSequenceNumber());
+    json.prop("localTimestamp", toUtc(system2.now()));
+    json.prop(NCD_ID, telemetryData.getNcdId());
+    telemetryData.getEdition().ifPresent(e -> json.prop("edition", e.name().toLowerCase(Locale.ENGLISH)));
+    json.prop("defaultQualityGate", telemetryData.getDefaultQualityGate());
+    json.prop("sonarway_quality_gate_uuid", telemetryData.getSonarWayQualityGate());
     json.name("database");
     json.beginObject();
-    json.prop("name", statistics.getDatabase().getName());
-    json.prop("version", statistics.getDatabase().getVersion());
+    json.prop("name", telemetryData.getDatabase().name());
+    json.prop(VERSION, telemetryData.getDatabase().version());
     json.endObject();
     json.name("plugins");
     json.beginArray();
-    statistics.getPlugins().forEach((plugin, version) -> {
+    telemetryData.getPlugins().forEach((plugin, version) -> {
       json.beginObject();
       json.prop("name", plugin);
-      json.prop("version", version);
-      json.endObject();
-    });
-    json.endArray();
-    json.prop("userCount", statistics.getUserCount());
-    json.prop("projectCount", statistics.getProjectCount());
-    json.prop("usingBranches", statistics.isUsingBranches());
-    json.prop(NCLOC_KEY, statistics.getNcloc());
-    json.name("projectCountByLanguage");
-    json.beginArray();
-    statistics.getProjectCountByLanguage().forEach((language, count) -> {
-      json.beginObject();
-      json.prop("language", language);
-      json.prop(COUNT, count);
-      json.endObject();
-    });
-    json.endArray();
-    json.name("nclocByLanguage");
-    json.beginArray();
-    statistics.getNclocByLanguage().forEach((language, ncloc) -> {
-      json.beginObject();
-      json.prop("language", language);
-      json.prop("ncloc", ncloc);
-      json.endObject();
-    });
-    json.endArray();
-    json.name("almIntegrationCount");
-    json.beginArray();
-    statistics.getAlmIntegrationCountByAlm().forEach((alm, count) -> {
-      json.beginObject();
-      json.prop("alm", alm);
-      json.prop(COUNT, count);
+      json.prop(VERSION, version);
       json.endObject();
     });
     json.endArray();
 
-    if (!statistics.getCustomSecurityConfigs().isEmpty()) {
+    if (!telemetryData.getCustomSecurityConfigs().isEmpty()) {
       json.name("customSecurityConfig");
       json.beginArray();
-      json.values(statistics.getCustomSecurityConfigs());
+      json.values(telemetryData.getCustomSecurityConfigs());
       json.endArray();
     }
 
-    statistics.hasUnanalyzedC().ifPresent(hasUnanalyzedC -> json.prop("hasUnanalyzedC", hasUnanalyzedC));
-    statistics.hasUnanalyzedCpp().ifPresent(hasUnanalyzedCpp -> json.prop("hasUnanalyzedCpp", hasUnanalyzedCpp));
+    telemetryData.hasUnanalyzedC().ifPresent(hasUnanalyzedC -> json.prop("hasUnanalyzedC", hasUnanalyzedC));
+    telemetryData.hasUnanalyzedCpp().ifPresent(hasUnanalyzedCpp -> json.prop("hasUnanalyzedCpp", hasUnanalyzedCpp));
 
-    json.name("externalAuthProviders");
-    json.beginArray();
-    statistics.getExternalAuthenticationProviders().forEach(json::value);
-    json.endArray();
-
-    addScmInfo(json, statistics);
-    addCiInfo(json, statistics);
-
-    json.prop("sonarlintWeeklyUsers", statistics.sonarlintWeeklyUsers());
-
-    if (statistics.getInstallationDate() != null) {
-      json.prop("installationDate", statistics.getInstallationDate());
+    if (telemetryData.getInstallationDate() != null) {
+      json.prop("installationDate", toUtc(telemetryData.getInstallationDate()));
     }
-    if (statistics.getInstallationVersion() != null) {
-      json.prop("installationVersion", statistics.getInstallationVersion());
+    if (telemetryData.getInstallationVersion() != null) {
+      json.prop("installationVersion", telemetryData.getInstallationVersion());
     }
-    json.prop("docker", statistics.isInDocker());
+    json.prop("container", telemetryData.isInContainer());
+
+    writeUserData(json, telemetryData);
+    writeProjectData(json, telemetryData);
+    writeProjectStatsData(json, telemetryData);
+    writeBranches(json, telemetryData);
+    writeNewCodeDefinitions(json, telemetryData);
+    writeQualityGates(json, telemetryData);
+    writeQualityProfiles(json, telemetryData);
+    writeManagedInstanceInformation(json, telemetryData.getManagedInstanceInformation());
+    writeCloudUsage(json, telemetryData.getCloudUsage());
+    extensions.forEach(e -> e.write(json));
+
     json.endObject();
   }
 
-  private static void addScmInfo(JsonWriter json, TelemetryData statistics) {
-    json.name("projectCountByScm");
-    json.beginArray();
-    statistics.getProjectCountByScm().forEach((scm, count) -> {
-      json.beginObject();
-      json.prop("scm", scm);
-      json.prop(COUNT, count);
-      json.endObject();
-    });
-    json.endArray();
+  private static void writeUserData(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getUserTelemetries() != null) {
+      json.name("users");
+      json.beginArray();
+      telemetryData.getUserTelemetries().forEach(user -> {
+        json.beginObject();
+        json.prop("userUuid", DigestUtils.sha3_224Hex(user.getUuid()));
+        json.prop("status", user.isActive() ? "active" : "inactive");
+        json.prop("identityProvider", user.getExternalIdentityProvider());
+
+        if (user.getLastConnectionDate() != null) {
+          json.prop("lastActivity", toUtc(user.getLastConnectionDate()));
+        }
+        if (user.getLastSonarlintConnectionDate() != null) {
+          json.prop("lastSonarlintActivity", toUtc(user.getLastSonarlintConnectionDate()));
+        }
+        json.prop("managed", user.getScimUuid() != null);
+
+        json.endObject();
+      });
+      json.endArray();
+    }
   }
 
-  private static void addCiInfo(JsonWriter json, TelemetryData statistics) {
-    json.name("projectCountByCI");
-    json.beginArray();
-    statistics.getProjectCountByCi().forEach((ci, count) -> {
-      json.beginObject();
-      json.prop("ci", ci);
-      json.prop(COUNT, count);
-      json.endObject();
-    });
-    json.endArray();
+  private static void writeProjectData(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getProjects() != null) {
+      json.name("projects");
+      json.beginArray();
+      telemetryData.getProjects().forEach(project -> {
+        json.beginObject();
+        json.prop(PROJECT_ID, project.projectUuid());
+        if (project.lastAnalysis() != null) {
+          json.prop("lastAnalysis", toUtc(project.lastAnalysis()));
+        }
+        json.prop(LANGUAGE_PROPERTY, project.language());
+        json.prop("loc", project.loc());
+        json.prop("qualityProfile", project.qualityProfile());
+        json.endObject();
+      });
+      json.endArray();
+    }
   }
+
+  private static void writeBranches(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getBranches() != null) {
+      json.name("branches");
+      json.beginArray();
+      telemetryData.getBranches().forEach(branch -> {
+        json.beginObject();
+        json.prop(PROJECT_ID, branch.projectUuid());
+        json.prop("branchUuid", branch.branchUuid());
+        json.prop(NCD_ID, branch.ncdId());
+        json.prop("greenQualityGateCount", branch.greenQualityGateCount());
+        json.prop("analysisCount", branch.analysisCount());
+        json.prop("excludeFromPurge", branch.excludeFromPurge());
+        json.endObject();
+      });
+      json.endArray();
+    }
+  }
+
+  private static void writeNewCodeDefinitions(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getNewCodeDefinitions() != null) {
+      json.name("new-code-definitions");
+      json.beginArray();
+      telemetryData.getNewCodeDefinitions().forEach(ncd -> {
+        json.beginObject();
+        json.prop(NCD_ID, ncd.hashCode());
+        json.prop("type", ncd.type());
+        json.prop("value", ncd.value());
+        json.prop("scope", ncd.scope());
+        json.endObject();
+      });
+      json.endArray();
+    }
+  }
+
+  private static void writeProjectStatsData(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getProjectStatistics() != null) {
+      json.name("projects-general-stats");
+      json.beginArray();
+      telemetryData.getProjectStatistics().forEach(project -> {
+        json.beginObject();
+        json.prop(PROJECT_ID, project.getProjectUuid());
+        json.prop("branchCount", project.getBranchCount());
+        json.prop("pullRequestCount", project.getPullRequestCount());
+        json.prop("qualityGate", project.getQualityGate());
+        json.prop("scm", project.getScm());
+        json.prop("ci", project.getCi());
+        json.prop("devopsPlatform", project.getDevopsPlatform());
+        json.prop(NCD_ID, project.getNcdId());
+        json.prop("project_creation_method", project.getCreationMethod().name());
+        project.getBugs().ifPresent(bugs -> json.prop("bugs", bugs));
+        project.getVulnerabilities().ifPresent(vulnerabilities -> json.prop("vulnerabilities", vulnerabilities));
+        project.getSecurityHotspots().ifPresent(securityHotspots -> json.prop("securityHotspots", securityHotspots));
+        project.getTechnicalDebt().ifPresent(technicalDebt -> json.prop("technicalDebt", technicalDebt));
+        project.getDevelopmentCost().ifPresent(developmentCost -> json.prop("developmentCost", developmentCost));
+        project.getExternalSecurityReportExportedAt().ifPresent(exportedAt -> json.prop("externalSecurityReportExportedAt", exportedAt));
+        json.endObject();
+      });
+      json.endArray();
+    }
+  }
+
+  private static void writeQualityGates(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getQualityGates() != null) {
+      json.name("quality-gates");
+      json.beginArray();
+      telemetryData.getQualityGates().forEach(qualityGate -> {
+        json.beginObject();
+        json.prop("uuid", qualityGate.uuid());
+        json.prop("caycStatus", qualityGate.caycStatus());
+        json.name("conditions");
+        json.beginArray();
+        qualityGate.conditions().forEach(condition -> {
+          json.beginObject();
+          json.prop("metric", condition.getMetricKey());
+          json.prop("comparison_operator", condition.getOperator().getDbValue());
+          json.prop("error_value", condition.getErrorThreshold());
+          json.endObject();
+        });
+        json.endArray();
+        json.endObject();
+      });
+      json.endArray();
+    }
+  }
+
+  private static void writeQualityProfiles(JsonWriter json, TelemetryData telemetryData) {
+    if (telemetryData.getQualityProfiles() != null) {
+      json.name("quality-profiles");
+      json.beginArray();
+      telemetryData.getQualityProfiles().forEach(qualityProfile -> {
+        json.beginObject();
+        json.prop("uuid", qualityProfile.uuid());
+        json.prop("parentUuid", qualityProfile.parentUuid());
+        json.prop(LANGUAGE_PROPERTY, qualityProfile.language());
+        json.prop("default", qualityProfile.isDefault());
+        json.prop("builtIn", qualityProfile.isBuiltIn());
+        if (qualityProfile.builtInParent() != null) {
+          json.prop("builtInParent", qualityProfile.builtInParent());
+        }
+        json.prop("rulesOverriddenCount", qualityProfile.rulesOverriddenCount());
+        json.prop("rulesActivatedCount", qualityProfile.rulesActivatedCount());
+        json.prop("rulesDeactivatedCount", qualityProfile.rulesDeactivatedCount());
+        json.endObject();
+      });
+      json.endArray();
+    }
+  }
+  private static void writeManagedInstanceInformation(JsonWriter json, TelemetryData.ManagedInstanceInformation provider) {
+    json.name(MANAGED_INSTANCE_PROPERTY);
+    json.beginObject();
+    json.prop("isManaged", provider.isManaged());
+    json.prop("provider", provider.isManaged() ? provider.provider() : null);
+    json.endObject();
+  }
+
+  private static void writeCloudUsage(JsonWriter json, TelemetryData.CloudUsage cloudUsage) {
+    json.name(CLOUD_USAGE_PROPERTY);
+    json.beginObject();
+    json.prop("kubernetes", cloudUsage.kubernetes());
+    json.prop("kubernetesVersion", cloudUsage.kubernetesVersion());
+    json.prop("kubernetesPlatform", cloudUsage.kubernetesPlatform());
+    json.prop("kubernetesProvider", cloudUsage.kubernetesProvider());
+    json.prop("officialHelmChart", cloudUsage.officialHelmChart());
+    json.prop("containerRuntime", cloudUsage.containerRuntime());
+    json.prop("officialImage", cloudUsage.officialImage());
+    json.endObject();
+  }
+
+  @NotNull
+  private static String toUtc(long date) {
+    return DateTimeFormatter.ofPattern(DATETIME_FORMAT)
+      .withZone(ZoneOffset.UTC)
+      .format(Instant.ofEpochMilli(date));
+  }
+
 }

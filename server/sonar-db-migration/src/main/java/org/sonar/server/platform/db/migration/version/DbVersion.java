@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,21 +19,8 @@
  */
 package org.sonar.server.platform.db.migration.version;
 
-import java.util.stream.Stream;
 import org.sonar.server.platform.db.migration.step.MigrationStepRegistry;
 
 public interface DbVersion {
-  /**
-   * Components (if any) supporting the {@link org.sonar.server.platform.db.migration.step.MigrationStep} classes
-   * added to the registry in {@link #addSteps(MigrationStepRegistry)}.
-   * <p>
-   * These components will be added to the {@link org.sonar.server.platform.db.migration.engine.MigrationContainer} in
-   * which the {@link org.sonar.server.platform.db.migration.step.MigrationStep} classes will be instantiated and run.
-   * </p>
-   */
-  default Stream<Object> getSupportComponents() {
-    return Stream.empty();
-  }
-
   void addSteps(MigrationStepRegistry registry);
 }

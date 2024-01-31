@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,69 +17,63 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Accordion, FlagMessage, SubHeadingHighlight } from 'design-system';
 import { map } from 'lodash';
 import * as React from 'react';
-import BoxedGroupAccordion from 'sonar-ui-common/components/controls/BoxedGroupAccordion';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getLogsLevel, groupSections, LOGS_LEVELS } from '../../utils';
+import { translate } from '../../../../helpers/l10n';
+import { HealthTypes, SysInfoValueObject } from '../../../../types/types';
+import { LogsLevels, getLogsLevel, groupSections } from '../../utils';
 import HealthItem from './HealthItem';
 import Section from './Section';
 
 interface Props {
-  biggerHealth?: boolean;
-  health?: T.HealthType;
+  health?: HealthTypes;
   healthCauses?: string[];
   onClick: (toggledCard: string) => void;
   open: boolean;
   name: string;
-  sysInfoData: T.SysInfoValueObject;
+  sysInfoData: SysInfoValueObject;
 }
 
 export default function HealthCard({
-  biggerHealth,
   health,
   healthCauses,
   onClick,
   open,
   name,
-  sysInfoData
-}: Props) {
+  sysInfoData,
+}: Readonly<Props>) {
   const { mainSection, sections } = groupSections(sysInfoData);
   const showFields = open && mainSection && Object.keys(mainSection).length > 0;
   const showSections = open && sections;
   const logLevel = getLogsLevel(sysInfoData);
-  const showLogLevelWarning = logLevel && logLevel !== LOGS_LEVELS[0];
+  const showLogLevelWarning = logLevel && logLevel !== LogsLevels.INFO;
+
   return (
-    <BoxedGroupAccordion
+    <Accordion
       data={name}
       onClick={onClick}
       open={open}
-      renderHeader={() => (
+      header={
         <>
-          {showLogLevelWarning && (
-            <Alert
-              className="boxed-group-accordion-alert spacer-left"
-              display="inline"
-              variant="warning">
-              {translate('system.log_level.warning.short')}
-            </Alert>
-          )}
-          {health && (
-            <HealthItem
-              biggerHealth={biggerHealth}
-              className="pull-right"
-              health={health}
-              healthCauses={healthCauses}
-              name={name}
-            />
-          )}
+          <div className="sw-flex-1 sw-flex sw-items-center">
+            <SubHeadingHighlight as="h2" className="sw-mb-0">
+              {name}
+            </SubHeadingHighlight>
+            {showLogLevelWarning && (
+              <FlagMessage className="sw-ml-4" variant="warning">
+                {translate('system.log_level.warning.short')}
+              </FlagMessage>
+            )}
+          </div>
+          {health && <HealthItem health={health} healthCauses={healthCauses} name={name} />}
         </>
-      )}
-      title={name}>
+      }
+      ariaLabel={name}
+    >
       {showFields && <Section items={mainSection} />}
       {showSections &&
         map(sections, (section, name) => <Section items={section} key={name} name={name} />)}
-    </BoxedGroupAccordion>
+    </Accordion>
   );
 }

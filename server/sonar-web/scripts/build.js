@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,33 +20,38 @@
 /* eslint-disable no-console*/
 process.env.NODE_ENV = 'production';
 
+const fs = require('fs-extra');
+const esbuild = require('esbuild');
 const chalk = require('chalk');
-const webpack = require('webpack');
-const reportBuildStats = require('./utils/reportBuildStats');
-const getConfigs = require('../config/webpack.config');
+const { performance } = require('perf_hooks');
+const paths = require('../config/paths');
 
-const release = process.argv.findIndex(val => val === 'release') >= 0;
-const configs = getConfigs({ production: true, release }).filter(
-  config => release || config.name === 'modern'
-);
+const getConfig = require('../config/esbuild-config');
 
-function build() {
+const release = process.argv.findIndex((val) => val === 'release') >= 0;
+
+function clean() {
+  fs.emptyDirSync(paths.appBuild);
+}
+
+async function build() {
+  const start = performance.now();
   console.log(chalk.cyan.bold(`Creating ${release ? 'optimized' : 'fast'} production build...`));
   console.log();
 
-  webpack(configs, (err, stats) => {
-    if (err) {
-      console.log(chalk.red.bold('Failed to create a production build!'));
-      console.log(chalk.red(err.message || err));
-      process.exit(1);
-    }
-    reportBuildStats(stats.stats[0], 'modern');
-    if (release) {
-      console.log();
-      reportBuildStats(stats.stats[1], 'legacy');
-    }
-    console.log(chalk.green.bold('Compiled successfully!'));
-  });
+  await esbuild.build(getConfig(release)).catch(() => process.exit(1));
+
+  console.log(chalk.green.bold('Compiled successfully!'));
+  console.log(chalk.cyan(Math.round(performance.now() - start), 'ms'));
+  console.log();
 }
 
-build();
+function copyAssets() {
+  fs.copySync(paths.appPublic, paths.appBuild);
+}
+
+(async () => {
+  clean();
+  await build();
+  copyAssets();
+})();

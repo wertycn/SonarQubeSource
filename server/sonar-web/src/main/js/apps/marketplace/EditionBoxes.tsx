@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Card, Link } from 'design-system';
 import * as React from 'react';
-import { getMarketplaceNavigation } from '../../api/nav';
-import { getAllEditionsAbove } from '../../helpers/editions';
+import { getMarketplaceNavigation } from '../../api/navigation';
+import { getAllEditionsAbove, getEditionUrl } from '../../helpers/editions';
+import { translate } from '../../helpers/l10n';
 import { EditionKey } from '../../types/editions';
 import EditionBox from './components/EditionBox';
 
@@ -47,12 +49,12 @@ export default class EditionBoxes extends React.PureComponent<Props, State> {
 
   fetchData = () => {
     getMarketplaceNavigation().then(
-      formData => {
+      (formData) => {
         if (this.mounted) {
           this.setState({ ...formData });
         }
       },
-      () => {}
+      () => {},
     );
   };
 
@@ -66,15 +68,20 @@ export default class EditionBoxes extends React.PureComponent<Props, State> {
     }
 
     return (
-      <div className="spacer-bottom marketplace-editions">
-        {visibleEditions.map(edition => (
-          <EditionBox
-            currentEdition={currentEdition}
-            edition={edition}
+      <div className="sw-mt-4 sw-flex sw-gap-4">
+        {visibleEditions.map((edition) => (
+          <Card
             key={edition.key}
-            ncloc={ncloc}
-            serverId={serverId}
-          />
+            className="sw-max-w-1/2 sw-flex-1 sw-flex sw-flex-col sw-justify-between"
+          >
+            <EditionBox edition={edition} />
+
+            <div className="sw-mt-4">
+              <Link to={getEditionUrl(edition, { ncloc, serverId, sourceEdition: currentEdition })}>
+                {translate('marketplace.request_free_trial')}
+              </Link>
+            </div>
+          </Card>
         ))}
       </div>
     );

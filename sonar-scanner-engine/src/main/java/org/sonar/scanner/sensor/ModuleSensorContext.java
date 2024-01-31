@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,18 +25,23 @@ import org.sonar.api.batch.fs.FileSystem;
 import org.sonar.api.batch.fs.InputModule;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.batch.rule.ActiveRules;
-import org.sonar.api.batch.sensor.internal.SensorStorage;
+import org.sonar.api.batch.sensor.cache.ReadCache;
+import org.sonar.api.batch.sensor.cache.WriteCache;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.Settings;
+import org.sonar.scanner.cache.AnalysisCacheEnabled;
+import org.sonar.scanner.scan.branch.BranchConfiguration;
 
 @ThreadSafe
 public class ModuleSensorContext extends ProjectSensorContext {
 
   private final InputModule module;
 
-  public ModuleSensorContext(DefaultInputProject project, InputModule module, Configuration config, Settings mutableSettings, FileSystem fs, ActiveRules activeRules,
-    SensorStorage sensorStorage, SonarRuntime sonarRuntime) {
-    super(project, config, mutableSettings, fs, activeRules, sensorStorage, sonarRuntime);
+  public ModuleSensorContext(DefaultInputProject project, InputModule module, Configuration config, Settings mutableModuleSettings, FileSystem fs, ActiveRules activeRules,
+    DefaultSensorStorage sensorStorage, SonarRuntime sonarRuntime, BranchConfiguration branchConfiguration,
+    WriteCache writeCache, ReadCache readCache, AnalysisCacheEnabled analysisCacheEnabled, UnchangedFilesHandler unchangedFilesHandler) {
+    super(project, config, mutableModuleSettings, fs, activeRules, sensorStorage, sonarRuntime, branchConfiguration, writeCache, readCache, analysisCacheEnabled,
+      unchangedFilesHandler);
     this.module = module;
   }
 

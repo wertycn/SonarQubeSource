@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,7 +35,6 @@ import org.sonar.api.utils.DateUtils;
 import org.sonarqube.ws.Qualityprofiles.SearchWsResponse.QualityProfile;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -55,9 +54,9 @@ public class ActiveRulesProviderTest {
     List<LoadedActiveRule> qp2Rules = ImmutableList.of(r2, r3);
     List<LoadedActiveRule> qp3Rules = ImmutableList.of(r1, r3);
 
-    when(loader.load(eq("qp1"))).thenReturn(qp1Rules);
-    when(loader.load(eq("qp2"))).thenReturn(qp2Rules);
-    when(loader.load(eq("qp3"))).thenReturn(qp3Rules);
+    when(loader.load("qp1")).thenReturn(qp1Rules);
+    when(loader.load("qp2")).thenReturn(qp2Rules);
+    when(loader.load("qp3")).thenReturn(qp3Rules);
 
     QualityProfiles profiles = mockProfiles("qp1", "qp2", "qp3");
     DefaultActiveRules activeRules = provider.provide(loader, profiles);
@@ -66,9 +65,9 @@ public class ActiveRulesProviderTest {
     assertThat(activeRules.findAll()).extracting("ruleKey").containsOnly(
       RuleKey.of("rule1", "rule1"), RuleKey.of("rule2", "rule2"), RuleKey.of("rule3", "rule3"));
 
-    verify(loader).load(eq("qp1"));
-    verify(loader).load(eq("qp2"));
-    verify(loader).load(eq("qp3"));
+    verify(loader).load("qp1");
+    verify(loader).load("qp2");
+    verify(loader).load("qp3");
 
     assertThat(activeRules.getDeprecatedRuleKeys(RuleKey.of("rule1", "rule1"))).containsOnly("rule1old:rule1old");
     verifyNoMoreInteractions(loader);
@@ -81,7 +80,7 @@ public class ActiveRulesProviderTest {
     r2.setParams(ImmutableMap.of("foo1", "bar1", "foo2", "bar2"));
 
     List<LoadedActiveRule> qpRules = ImmutableList.of(r1, r2);
-    when(loader.load(eq("qp"))).thenReturn(qpRules);
+    when(loader.load("qp")).thenReturn(qpRules);
 
     QualityProfiles profiles = mockProfiles("qp");
     ActiveRules activeRules = provider.provide(loader, profiles);
@@ -91,7 +90,7 @@ public class ActiveRulesProviderTest {
       Tuple.tuple(RuleKey.of("rule1", "rule1"), ImmutableMap.of()),
       Tuple.tuple(RuleKey.of("rule2", "rule2"), ImmutableMap.of("foo1", "bar1", "foo2", "bar2")));
 
-    verify(loader).load(eq("qp"));
+    verify(loader).load("qp");
     verifyNoMoreInteractions(loader);
   }
 

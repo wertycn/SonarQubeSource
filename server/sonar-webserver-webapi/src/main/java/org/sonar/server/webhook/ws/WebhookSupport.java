@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,12 +24,13 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import okhttp3.HttpUrl;
 import org.sonar.api.config.Configuration;
+import org.sonar.api.web.UserRole;
+import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.server.user.UserSession;
 
-import static org.sonar.api.web.UserRole.ADMIN;
-import static org.sonar.db.permission.GlobalPermission.ADMINISTER;
-import static org.sonar.process.ProcessProperties.Property.SONAR_VALIDATE_WEBHOOKS;
+import static org.sonar.api.CoreProperties.SONAR_VALIDATE_WEBHOOKS_DEFAULT_VALUE;
+import static org.sonar.api.CoreProperties.SONAR_VALIDATE_WEBHOOKS_PROPERTY;
 
 public class WebhookSupport {
 
@@ -44,11 +45,11 @@ public class WebhookSupport {
   }
 
   void checkPermission(ProjectDto projectDto) {
-    userSession.checkProjectPermission(ADMIN, projectDto);
+    userSession.checkEntityPermission(UserRole.ADMIN, projectDto);
   }
 
   void checkPermission() {
-    userSession.checkPermission(ADMINISTER);
+    userSession.checkPermission(GlobalPermission.ADMINISTER);
   }
 
   void checkUrlPattern(String url, String message, Object... messageArguments) {
@@ -59,7 +60,8 @@ public class WebhookSupport {
       }
       InetAddress address = InetAddress.getByName(okUrl.host());
 
-      if (configuration.getBoolean(SONAR_VALIDATE_WEBHOOKS.getKey()).orElse(true)
+      if (configuration.getBoolean(SONAR_VALIDATE_WEBHOOKS_PROPERTY)
+        .orElse(SONAR_VALIDATE_WEBHOOKS_DEFAULT_VALUE)
         && (address.isLoopbackAddress() || address.isAnyLocalAddress() || isLocalAddress(address))) {
         throw new IllegalArgumentException("Invalid URL: loopback and wildcard addresses are not allowed for webhooks.");
       }

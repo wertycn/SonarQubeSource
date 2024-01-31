@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,53 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { Avatar as BaseAvatar } from 'design-system';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import GenericAvatar from 'sonar-ui-common/components/ui/GenericAvatar';
-import { getGlobalSettingValue, Store } from '../../store/rootReducer';
+import { AppStateContext } from '../../app/components/app-state/AppStateContext';
+import { FCProps } from '../../types/misc';
+import { GlobalSettingKeys } from '../../types/settings';
 
-interface Props {
-  className?: string;
-  enableGravatar: boolean;
-  gravatarServerUrl: string;
-  hash?: string;
-  name?: string;
-  size: number;
-}
+type ExcludedProps =
+  | 'enableGravatar'
+  | 'gravatarServerUrl'
+  | 'organizationAvatar'
+  | 'organizationName';
 
-function Avatar(props: Props) {
-  if (!props.enableGravatar || !props.hash) {
-    if (!props.name) {
-      return null;
-    }
-    return <GenericAvatar className={props.className} name={props.name} size={props.size} />;
-  }
+type Props = Omit<FCProps<typeof BaseAvatar>, ExcludedProps>;
 
-  const url = props.gravatarServerUrl
-    .replace('{EMAIL_MD5}', props.hash)
-    .replace('{SIZE}', String(props.size * 2));
+export default function Avatar(props: Props) {
+  const { settings } = React.useContext(AppStateContext);
+
+  const enableGravatar = settings[GlobalSettingKeys.EnableGravatar] === 'true';
+  const gravatarServerUrl = settings[GlobalSettingKeys.GravatarServerUrl] ?? '';
 
   return (
-    <img
-      alt={props.name}
-      className={classNames(props.className, 'rounded')}
-      height={props.size}
-      src={url}
-      width={props.size}
-    />
+    <BaseAvatar enableGravatar={enableGravatar} gravatarServerUrl={gravatarServerUrl} {...props} />
   );
 }
-
-const mapStateToProps = (state: Store) => {
-  const enableGravatar = getGlobalSettingValue(state, 'sonar.lf.enableGravatar');
-  const gravatarServerUrl = getGlobalSettingValue(state, 'sonar.lf.gravatarServerUrl');
-  return {
-    enableGravatar: Boolean(enableGravatar && enableGravatar.value === 'true'),
-    gravatarServerUrl: (gravatarServerUrl && gravatarServerUrl.value) || ''
-  };
-};
-
-export default connect(mapStateToProps)(Avatar);
-
-export const unconnectedAvatar = Avatar;

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,8 @@
  */
 package org.sonar.server.authentication;
 
-import org.picocontainer.Startable;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.user.UserDto;
@@ -35,9 +34,9 @@ import static org.sonar.server.property.InternalProperties.DEFAULT_ADMIN_CREDENT
 /**
  * Detect usage of an active admin account with default credential in order to ask this account to reset its password during authentication.
  */
-public class DefaultAdminCredentialsVerifierImpl implements Startable, DefaultAdminCredentialsVerifier {
+public class DefaultAdminCredentialsVerifierImpl implements DefaultAdminCredentialsVerifier {
 
-  private static final Logger LOGGER = Loggers.get(STARTUP_LOGGER_NAME);
+  private static final Logger LOGGER = LoggerFactory.getLogger(STARTUP_LOGGER_NAME);
 
   private final DbClient dbClient;
   private final CredentialsLocalAuthentication localAuthentication;
@@ -49,8 +48,7 @@ public class DefaultAdminCredentialsVerifierImpl implements Startable, DefaultAd
     this.notificationManager = notificationManager;
   }
 
-  @Override
-  public void start() {
+  public void runAtStart() {
     try (DbSession session = dbClient.openSession(false)) {
       UserDto admin = getAdminUser(session);
       if (admin == null || !isDefaultCredentialUser(session, admin)) {
@@ -63,6 +61,7 @@ public class DefaultAdminCredentialsVerifierImpl implements Startable, DefaultAd
     }
   }
 
+  @Override
   public boolean hasDefaultCredentialUser() {
     try (DbSession session = dbClient.openSession(false)) {
       UserDto admin = getAdminUser(session);
@@ -104,10 +103,5 @@ public class DefaultAdminCredentialsVerifierImpl implements Startable, DefaultAd
     }
     notificationManager.scheduleForSending(new DefaultAdminCredentialsVerifierNotification());
     dbClient.internalPropertiesDao().save(session, DEFAULT_ADMIN_CREDENTIAL_USAGE_EMAIL, Boolean.TRUE.toString());
-  }
-
-  @Override
-  public void stop() {
-    // Nothing to do
   }
 }

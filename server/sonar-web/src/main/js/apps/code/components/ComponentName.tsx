@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,119 +17,181 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Badge, BranchIcon, HoverLink, LightLabel, Note, QualifierIcon } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import BranchIcon from 'sonar-ui-common/components/icons/BranchIcon';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { colors } from '../../../app/theme';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { getProjectUrl } from '../../../helpers/urls';
+import { translate } from '../../../helpers/l10n';
+import { CodeScope, getComponentOverviewUrl, queryToSearch } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
+import {
+  ComponentQualifier,
+  isApplication,
+  isPortfolioLike,
+  isProject,
+} from '../../../types/component';
+import { ComponentMeasure } from '../../../types/types';
+import { mostCommonPrefix } from '../utils';
 
-export function getTooltip(component: T.ComponentMeasure) {
-  const isFile = component.qualifier === 'FIL' || component.qualifier === 'UTS';
+export function getTooltip(component: ComponentMeasure) {
+  const isFile =
+    component.qualifier === ComponentQualifier.File ||
+    component.qualifier === ComponentQualifier.TestFile;
+
   if (isFile && component.path) {
     return component.path + '\n\n' + component.key;
-  } else {
-    return component.name + '\n\n' + component.key;
   }
-}
 
-export function mostCommonPrefix(strings: string[]) {
-  const sortedStrings = strings.slice(0).sort();
-  const firstString = sortedStrings[0];
-  const firstStringLength = firstString.length;
-  const lastString = sortedStrings[sortedStrings.length - 1];
-  let i = 0;
-  while (i < firstStringLength && firstString.charAt(i) === lastString.charAt(i)) {
-    i++;
-  }
-  const prefix = firstString.substr(0, i);
-  const prefixTokens = prefix.split(/[\s\\/]/);
-  const lastPrefixPart = prefixTokens[prefixTokens.length - 1];
-  return prefix.substr(0, prefix.length - lastPrefixPart.length);
+  return [component.name, component.key, component.branch].filter((s) => !!s).join('\n\n');
 }
 
 export interface Props {
   branchLike?: BranchLike;
   canBrowse?: boolean;
-  component: T.ComponentMeasure;
-  previous?: T.ComponentMeasure;
-  rootComponent: T.ComponentMeasure;
+  component: ComponentMeasure;
+  previous?: ComponentMeasure;
+  rootComponent: ComponentMeasure;
+  unclickable?: boolean;
+  newCodeSelected?: boolean;
+  showIcon?: boolean;
 }
 
 export default function ComponentName({
   branchLike,
   component,
+  unclickable = false,
   rootComponent,
   previous,
-  canBrowse = false
+  canBrowse = false,
+  newCodeSelected,
+  showIcon = true,
 }: Props) {
-  const areBothDirs = component.qualifier === 'DIR' && previous && previous.qualifier === 'DIR';
-  const prefix =
-    areBothDirs && previous !== undefined
-      ? mostCommonPrefix([component.name + '/', previous.name + '/'])
-      : '';
-  const name = prefix ? (
-    <span>
-      <span style={{ color: colors.secondFontColor }}>{prefix}</span>
-      <span>{component.name.substr(prefix.length)}</span>
+  const ariaLabel = unclickable ? translate('code.parent_folder') : undefined;
+
+  if (
+    [ComponentQualifier.Application, ComponentQualifier.Portfolio].includes(
+      rootComponent.qualifier as ComponentQualifier,
+    ) &&
+    [ComponentQualifier.Application, ComponentQualifier.Project].includes(
+      component.qualifier as ComponentQualifier,
+    )
+  ) {
+    return (
+      <span className="sw-flex sw-items-center sw-overflow-hidden">
+        <div className="sw-truncate" title={getTooltip(component)} aria-label={ariaLabel}>
+          {renderNameWithIcon(
+            branchLike,
+            component,
+            previous,
+            rootComponent,
+            showIcon,
+            unclickable,
+            canBrowse,
+            newCodeSelected,
+          )}
+        </div>
+        {component.branch ? (
+          <div className="sw-truncate sw-ml-2">
+            <BranchIcon className="sw-mr-1" />
+            <Note>{component.branch}</Note>
+          </div>
+        ) : (
+          <Badge className="sw-ml-1" variant="default">
+            {translate('branches.main_branch')}
+          </Badge>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span title={getTooltip(component)} aria-label={ariaLabel}>
+      {renderNameWithIcon(
+        branchLike,
+        component,
+        previous,
+        rootComponent,
+        showIcon,
+        unclickable,
+        canBrowse,
+      )}
     </span>
-  ) : (
-    component.name
   );
+}
 
-  let inner = null;
-
-  if (component.refKey && component.qualifier !== 'SVW') {
-    const branch = rootComponent.qualifier === 'APP' ? component.branch : undefined;
-    inner = (
-      <Link className="link-with-icon" to={getProjectUrl(component.refKey, branch)}>
-        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
-      </Link>
+function renderNameWithIcon(
+  branchLike: BranchLike | undefined,
+  component: ComponentMeasure,
+  previous: ComponentMeasure | undefined,
+  rootComponent: ComponentMeasure,
+  showIcon: boolean,
+  unclickable = false,
+  canBrowse = false,
+  newCodeSelected = true,
+) {
+  const name = renderName(component, previous);
+  const codeType = newCodeSelected ? CodeScope.New : CodeScope.Overall;
+  if (
+    !unclickable &&
+    (isPortfolioLike(component.qualifier) ||
+      isApplication(component.qualifier) ||
+      isProject(component.qualifier))
+  ) {
+    const branch = [ComponentQualifier.Application, ComponentQualifier.Portfolio].includes(
+      rootComponent.qualifier as ComponentQualifier,
+    )
+      ? component.branch
+      : undefined;
+    return (
+      <HoverLink
+        icon={showIcon && <QualifierIcon className="sw-mr-1" qualifier={component.qualifier} />}
+        to={getComponentOverviewUrl(
+          component.refKey ?? component.key,
+          component.qualifier,
+          { branch },
+          codeType,
+        )}
+      >
+        {name}
+      </HoverLink>
     );
   } else if (canBrowse) {
     const query = { id: rootComponent.key, ...getBranchLikeQuery(branchLike) };
     if (component.key !== rootComponent.key) {
       Object.assign(query, { selected: component.key });
     }
-    inner = (
-      <Link className="link-with-icon" to={{ pathname: '/code', query }}>
-        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
-      </Link>
-    );
-  } else {
-    inner = (
-      <span>
-        <QualifierIcon qualifier={component.qualifier} /> {name}
-      </span>
+    return (
+      <HoverLink
+        icon={showIcon && <QualifierIcon qualifier={component.qualifier} />}
+        to={{ pathname: '/code', search: queryToSearch(query) }}
+      >
+        {name}
+      </HoverLink>
     );
   }
+  return (
+    <span>
+      {showIcon && (
+        <QualifierIcon className="sw-mr-1 sw-align-text-bottom" qualifier={component.qualifier} />
+      )}
+      {name}
+    </span>
+  );
+}
 
-  if (rootComponent.qualifier === 'APP') {
-    return (
-      <span className="max-width-100 display-inline-flex-center">
-        <span className="text-ellipsis" title={getTooltip(component)}>
-          {inner}
-        </span>
-        {component.branch ? (
-          <span className="text-ellipsis spacer-left">
-            <BranchIcon className="little-spacer-right" />
-            <span className="note">{component.branch}</span>
-          </span>
-        ) : (
-          <span className="spacer-left badge flex-1">{translate('branches.main_branch')}</span>
-        )}
-      </span>
-    );
-  } else {
-    return (
-      <span
-        className="max-width-100 display-inline-block text-ellipsis"
-        title={getTooltip(component)}>
-        {inner}
-      </span>
-    );
-  }
+function renderName(component: ComponentMeasure, previous: ComponentMeasure | undefined) {
+  const areBothDirs =
+    component.qualifier === ComponentQualifier.Directory &&
+    previous &&
+    previous.qualifier === ComponentQualifier.Directory;
+  const prefix =
+    areBothDirs && previous !== undefined
+      ? mostCommonPrefix([component.name + '/', previous.name + '/'])
+      : '';
+  return prefix ? (
+    <span>
+      <LightLabel>{prefix}</LightLabel>
+      <span>{component.name.slice(prefix.length)}</span>
+    </span>
+  ) : (
+    component.name
+  );
 }

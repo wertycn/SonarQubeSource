@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.server.issue.ws;
 
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ListMultimap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,10 +30,12 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueChangeDto;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.project.ProjectDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.workflow.Transition;
 
@@ -44,21 +45,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * All the data required to write response of api/issues/search
  */
 public class SearchResponseData {
-
   private final List<IssueDto> issues;
 
   private Long effortTotal = null;
   private final Map<String, UserDto> usersByUuid = new HashMap<>();
-  private final List<RuleDefinitionDto> rules = new ArrayList<>();
+  private final List<RuleDto> rules = new ArrayList<>();
   private final Map<String, ComponentDto> componentsByUuid = new HashMap<>();
   private final ListMultimap<String, IssueChangeDto> commentsByIssueKey = ArrayListMultimap.create();
   private final ListMultimap<String, String> actionsByIssueKey = ArrayListMultimap.create();
   private final ListMultimap<String, Transition> transitionsByIssueKey = ArrayListMultimap.create();
   private final Set<String> updatableComments = new HashSet<>();
+  private final Map<String, BranchDto> branchesByUuid = new HashMap<>();
+  private final Map<String, ProjectDto> projectsByUuid = new HashMap<>();
+
+  public SearchResponseData() {
+    this.issues = List.of();
+  }
 
   public SearchResponseData(IssueDto issue) {
     checkNotNull(issue);
-    this.issues = ImmutableList.of(issue);
+    this.issues = List.of(issue);
   }
 
   public SearchResponseData(List<IssueDto> issues) {
@@ -87,7 +93,7 @@ public class SearchResponseData {
     return new ArrayList<>(usersByUuid.values());
   }
 
-  public List<RuleDefinitionDto> getRules() {
+  public List<RuleDto> getRules() {
     return rules;
   }
 
@@ -121,7 +127,7 @@ public class SearchResponseData {
     }
   }
 
-  public void addRules(@Nullable List<RuleDefinitionDto> rules) {
+  public void addRules(@Nullable List<RuleDto> rules) {
     if (rules != null) {
       this.rules.addAll(rules);
     }
@@ -139,6 +145,26 @@ public class SearchResponseData {
         componentsByUuid.put(dto.uuid(), dto);
       }
     }
+  }
+
+  public void addBranches(List<BranchDto> branchDtos) {
+    for (BranchDto branch : branchDtos) {
+      branchesByUuid.put(branch.getUuid(), branch);
+    }
+  }
+
+  public BranchDto getBranch(String branchUuid) {
+    return branchesByUuid.get(branchUuid);
+  }
+
+  public void addProjects(List<ProjectDto> projectDtos) {
+    for (ProjectDto projectDto : projectDtos) {
+      projectsByUuid.put(projectDto.getUuid(), projectDto);
+    }
+  }
+
+  public ProjectDto getProject(String projectUuid) {
+    return projectsByUuid.get(projectUuid);
   }
 
   void addActions(String issueKey, Iterable<String> actions) {

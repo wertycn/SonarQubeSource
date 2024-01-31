@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,15 +25,20 @@ import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
+import org.sonar.db.audit.AuditPersister;
+import org.sonar.db.audit.model.DevOpsPlatformSettingNewValue;
+import org.sonar.db.audit.model.SecretNewValue;
 
 public class AlmSettingDao implements Dao {
 
   private final System2 system2;
   private final UuidFactory uuidFactory;
+  private final AuditPersister auditPersister;
 
-  public AlmSettingDao(System2 system2, UuidFactory uuidFactory) {
+  public AlmSettingDao(System2 system2, UuidFactory uuidFactory, AuditPersister auditPersister) {
     this.system2 = system2;
     this.uuidFactory = uuidFactory;
+    this.auditPersister = auditPersister;
   }
 
   private static AlmSettingMapper getMapper(DbSession dbSession) {
@@ -47,6 +52,8 @@ public class AlmSettingDao implements Dao {
     almSettingDto.setCreatedAt(now);
     almSettingDto.setUpdatedAt(now);
     getMapper(dbSession).insert(almSettingDto);
+
+    auditPersister.addDevOpsPlatformSetting(dbSession, new DevOpsPlatformSettingNewValue(almSettingDto));
   }
 
   public Optional<AlmSettingDto> selectByUuid(DbSession dbSession, String uuid) {
@@ -55,6 +62,13 @@ public class AlmSettingDao implements Dao {
 
   public Optional<AlmSettingDto> selectByKey(DbSession dbSession, String key) {
     return Optional.ofNullable(getMapper(dbSession).selectByKey(key));
+  }
+
+  public Optional<AlmSettingDto> selectByAlmAndAppId(DbSession dbSession, ALM alm, String appId) {
+    return selectByAlm(dbSession, alm)
+      .stream()
+      .filter(almSettingDto -> appId.equals(almSettingDto.getAppId()))
+      .findAny();
   }
 
   public List<AlmSettingDto> selectByAlm(DbSession dbSession, ALM alm) {
@@ -66,12 +80,20 @@ public class AlmSettingDao implements Dao {
   }
 
   public void delete(DbSession dbSession, AlmSettingDto almSettingDto) {
-    getMapper(dbSession).deleteByKey(almSettingDto.getKey());
+    int deletedRows = getMapper(dbSession).deleteByKey(almSettingDto.getKey());
+
+    if (deletedRows > 0) {
+      auditPersister.deleteDevOpsPlatformSetting(dbSession, new DevOpsPlatformSettingNewValue(almSettingDto.getUuid(), almSettingDto.getKey()));
+    }
   }
 
-  public void update(DbSession dbSession, AlmSettingDto almSettingDto) {
+  public void update(DbSession dbSession, AlmSettingDto almSettingDto, boolean updateSecret) {
     long now = system2.now();
     almSettingDto.setUpdatedAt(now);
     getMapper(dbSession).update(almSettingDto);
+    if (updateSecret) {
+      auditPersister.updateDevOpsPlatformSecret(dbSession, new SecretNewValue("DevOpsPlatform", almSettingDto.getRawAlm()));
+    }
+    auditPersister.updateDevOpsPlatformSetting(dbSession, new DevOpsPlatformSettingNewValue(almSettingDto));
   }
 }

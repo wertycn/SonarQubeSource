@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,30 +17,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Switch } from 'design-system';
 import * as React from 'react';
-import Checkbox from 'sonar-ui-common/components/controls/Checkbox';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 import { CURRENTS } from '../constants';
 
-interface Props {
+interface CurrentsFilterProps {
   value?: string;
   onChange: (value: string) => void;
 }
 
-export default class CurrentsFilter extends React.PureComponent<Props> {
-  handleChange = (value: boolean) => {
-    const newValue = value ? CURRENTS.ONLY_CURRENTS : CURRENTS.ALL;
-    this.props.onChange(newValue);
-  };
+export default function CurrentsFilter(props: Readonly<CurrentsFilterProps>) {
+  const { value, onChange } = props;
+  const checked = value === CURRENTS.ONLY_CURRENTS;
 
-  render() {
-    const checked = this.props.value === CURRENTS.ONLY_CURRENTS;
-    return (
-      <div className="bt-search-form-field">
-        <Checkbox checked={checked} onCheck={this.handleChange}>
-          <span className="little-spacer-left">{translate('yes')}</span>
-        </Checkbox>
-      </div>
-    );
-  }
+  const handleChange = React.useCallback(
+    (value: boolean) => {
+      const newValue = value ? CURRENTS.ONLY_CURRENTS : CURRENTS.ALL;
+      onChange(newValue);
+    },
+    [onChange],
+  );
+
+  return (
+    <Switch
+      value={checked}
+      onChange={handleChange}
+      labels={{
+        on: translate('background_tasks.currents_filter.ONLY_CURRENTS'),
+        off: translate('background_tasks.currents_filter.ALL'),
+      }}
+    />
+  );
 }

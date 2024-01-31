@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,6 @@ package org.sonar.server.qualitygate.notification;
 
 import javax.annotation.CheckForNull;
 import org.sonar.api.notifications.Notification;
-
 public class QGChangeNotification extends Notification {
   public QGChangeNotification() {
     super("alerts");

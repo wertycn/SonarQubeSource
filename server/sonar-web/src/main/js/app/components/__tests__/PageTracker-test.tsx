@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,69 +17,70 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { gtm } from '../../../helpers/analytics';
+import { Link } from 'react-router-dom';
 import { installScript } from '../../../helpers/extensions';
 import { getWebAnalyticsPageHandlerFromCache } from '../../../helpers/extensionsHandler';
-import { mockLocation } from '../../../helpers/testMocks';
-import { PageTracker } from '../PageTracker';
+import { mockAppState } from '../../../helpers/testMocks';
+import { renderComponent } from '../../../helpers/testReactTestingUtils';
+import { byRole } from '../../../helpers/testSelector';
+import PageTracker from '../PageTracker';
 
 jest.mock('../../../helpers/extensions', () => ({
-  installScript: jest.fn().mockResolvedValue({})
+  installScript: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('../../../helpers/extensionsHandler', () => ({
-  getWebAnalyticsPageHandlerFromCache: jest.fn().mockReturnValue(undefined)
+  getWebAnalyticsPageHandlerFromCache: jest.fn().mockReturnValue(undefined),
 }));
 
-jest.mock('../../../helpers/analytics', () => ({ gtm: jest.fn() }));
-
-jest.useFakeTimers();
-
 beforeEach(() => {
-  jest.clearAllTimers();
   jest.clearAllMocks();
+  jest.useFakeTimers();
+});
+
+afterEach(() => {
+  jest.runOnlyPendingTimers();
+  jest.useRealTimers();
 });
 
 it('should not trigger if no analytics system is given', () => {
-  const wrapper = shallowRender();
-  expect(wrapper).toMatchSnapshot();
+  renderPageTracker();
+
   expect(installScript).not.toHaveBeenCalled();
-  expect(gtm).not.toHaveBeenCalled();
 });
 
-it('should work for WebAnalytics plugin', () => {
+it('should work for WebAnalytics plugin', async () => {
+  const user = userEvent.setup({ delay: null });
   const pageChange = jest.fn();
-  const webAnalytics = '/static/pluginKey/web_analytics.js';
-  const wrapper = shallowRender({ webAnalytics });
+  const webAnalyticsJsPath = '/static/pluginKey/web_analytics.js';
+  renderPageTracker(mockAppState({ webAnalyticsJsPath }));
 
-  expect(wrapper).toMatchSnapshot();
-  expect(wrapper.find('Helmet').prop('onChangeClientState')).toBe(wrapper.instance().trackPage);
-  expect(installScript).toBeCalledWith(webAnalytics, 'head');
-  (getWebAnalyticsPageHandlerFromCache as jest.Mock).mockReturnValueOnce(pageChange);
+  expect(installScript).toHaveBeenCalledWith(webAnalyticsJsPath, 'head');
 
-  wrapper.instance().trackPage();
+  jest.mocked(getWebAnalyticsPageHandlerFromCache).mockClear().mockReturnValueOnce(pageChange);
+
+  // trigger trackPage
+  await user.click(byRole('link').get());
+
   jest.runAllTimers();
-  expect(pageChange).toHaveBeenCalledWith('/path');
+  expect(pageChange).toHaveBeenCalledWith('/newpath');
 });
 
-it('should work for Google Tag Manager', () => {
-  (window as any).dataLayer = [];
-  const { dataLayer } = window as any;
-  const push = jest.spyOn(dataLayer, 'push');
-  const wrapper = shallowRender({ trackingIdGTM: '123' });
+function renderPageTracker(appState = mockAppState()) {
+  return renderComponent(<WrappingComponent />, '', { appState });
+}
 
-  expect(wrapper.find('Helmet').prop('onChangeClientState')).toBe(wrapper.instance().trackPage);
-  expect(gtm).toBeCalled();
-  expect(dataLayer).toHaveLength(0);
+function WrappingComponent() {
+  const [metatag, setmetatag] = React.useState<React.ReactNode>(null);
 
-  wrapper.instance().trackPage();
-  jest.runAllTimers();
-  expect(push).toBeCalledWith({ event: 'render-end' });
-  expect(dataLayer).toHaveLength(1);
-});
-
-function shallowRender(props: Partial<PageTracker['props']> = {}) {
-  return shallow<PageTracker>(<PageTracker location={mockLocation()} {...props} />);
+  return (
+    <>
+      <PageTracker>{metatag}</PageTracker>
+      <Link to="newpath" onClick={() => setmetatag(<meta name="toto" />)}>
+        trigger change
+      </Link>
+    </>
+  );
 }

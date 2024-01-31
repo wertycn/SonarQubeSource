@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,17 +19,23 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
+import DocLink from '../../../components/common/DocLink';
+import Link from '../../../components/common/Link';
+import { getTabPanelId } from '../../../components/controls/BoxedTabs';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
+import { queryToSearch } from '../../../helpers/urls';
 import { Branch } from '../../../types/branch-like';
 import { ComponentQualifier } from '../../../types/component';
+import { NewCodeDefinitionType } from '../../../types/new-code-definition';
+import { Component, Period } from '../../../types/types';
+import { MeasuresTabs } from '../utils';
 
 export interface MeasuresPanelNoNewCodeProps {
   branch?: Branch;
-  component: T.Component;
-  period?: T.Period;
+  component: Component;
+  period?: Period;
 }
 
 export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProps) {
@@ -38,7 +44,7 @@ export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProp
   const isApp = component.qualifier === ComponentQualifier.Application;
 
   const hasBadReferenceBranch =
-    !isApp && !!period && !period.date && period.mode === 'REFERENCE_BRANCH';
+    !isApp && !!period && !period.date && period.mode === NewCodeDefinitionType.ReferenceBranch;
   /*
    * If the period is "reference branch"-based, and if there's no date, it means
    * that we're not lacking a second analysis, but that we'll never have new code because the
@@ -56,7 +62,11 @@ export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProp
   const showSettingsLink = !!(component.configuration && component.configuration.showSettings);
 
   return (
-    <div className="display-flex-center display-flex-justify-center" style={{ height: 500 }}>
+    <div
+      className="display-flex-center display-flex-justify-center"
+      id={getTabPanelId(MeasuresTabs.New)}
+      style={{ height: 500 }}
+    >
       <img
         alt="" /* Make screen readers ignore this image; it's purely eye candy. */
         className="spacer-right"
@@ -76,11 +86,12 @@ export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProp
                     <Link
                       to={{
                         pathname: '/project/baseline',
-                        query: { id: component.key, ...getBranchLikeQuery(branch) }
-                      }}>
+                        search: queryToSearch({ id: component.key, ...getBranchLikeQuery(branch) }),
+                      }}
+                    >
                       {translate('settings.new_code_period.category')}
                     </Link>
-                  )
+                  ),
                 }}
               />
             </p>
@@ -92,10 +103,8 @@ export default function MeasuresPanelNoNewCode(props: MeasuresPanelNoNewCodeProp
               id="overview.measures.empty_link"
               values={{
                 learn_more_link: (
-                  <Link to="/documentation/user-guide/clean-as-you-code/">
-                    {translate('learn_more')}
-                  </Link>
-                )
+                  <DocLink to="/user-guide/clean-as-you-code/">{translate('learn_more')}</DocLink>
+                ),
               }}
             />
           </p>

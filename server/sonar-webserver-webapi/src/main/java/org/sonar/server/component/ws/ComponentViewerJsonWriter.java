@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,14 +31,13 @@ import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.property.PropertyDto;
 import org.sonar.db.property.PropertyQuery;
 import org.sonar.server.user.UserSession;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.unmodifiableList;
 import static org.sonar.api.measures.CoreMetrics.COVERAGE;
 import static org.sonar.api.measures.CoreMetrics.COVERAGE_KEY;
 import static org.sonar.api.measures.CoreMetrics.DUPLICATED_LINES_DENSITY;
@@ -51,12 +50,12 @@ import static org.sonar.api.measures.CoreMetrics.VIOLATIONS;
 import static org.sonar.api.measures.CoreMetrics.VIOLATIONS_KEY;
 
 public class ComponentViewerJsonWriter {
-  private static final List<String> METRIC_KEYS = unmodifiableList(asList(
+  private static final List<String> METRIC_KEYS = List.of(
     LINES_KEY,
     VIOLATIONS_KEY,
     COVERAGE_KEY,
     DUPLICATED_LINES_DENSITY_KEY,
-    TESTS_KEY));
+    TESTS_KEY);
 
   private final DbClient dbClient;
 
@@ -64,7 +63,7 @@ public class ComponentViewerJsonWriter {
     this.dbClient = dbClient;
   }
 
-  public void writeComponentWithoutFav(JsonWriter json, ComponentDto component, DbSession session, boolean includeSubProject) {
+  public void writeComponentWithoutFav(JsonWriter json, EntityDto entity, ComponentDto component, @Nullable String branch, @Nullable String pullRequest) {
     json.prop("key", component.getKey());
     json.prop("uuid", component.uuid());
     json.prop("path", component.path());
@@ -72,36 +71,25 @@ public class ComponentViewerJsonWriter {
     json.prop("longName", component.longName());
     json.prop("q", component.qualifier());
 
-    ComponentDto project = dbClient.componentDao().selectOrFailByUuid(session, component.projectUuid());
-
-    if (includeSubProject) {
-      ComponentDto parentModule = retrieveParentModuleIfNotCurrentComponent(component, session);
-
-      // Do not display parent module if parent module and project are the same
-      boolean displayParentModule = parentModule != null && !parentModule.uuid().equals(project.uuid());
-      json.prop("subProject", displayParentModule ? parentModule.getKey() : null);
-      json.prop("subProjectName", displayParentModule ? parentModule.longName() : null);
-    }
-    json.prop("project", project.getKey());
-    json.prop("projectName", project.longName());
-    String branch = project.getBranch();
+    json.prop("project", entity.getKey());
+    json.prop("projectName", entity.getName());
     if (branch != null) {
       json.prop("branch", branch);
     }
-    String pullRequest = project.getPullRequest();
     if (pullRequest != null) {
       json.prop("pullRequest", pullRequest);
     }
   }
 
-  public void writeComponent(JsonWriter json, ComponentDto component, UserSession userSession, DbSession session) {
-    writeComponentWithoutFav(json, component, session, true);
+  public void writeComponent(JsonWriter json, EntityDto entity, ComponentDto component, UserSession userSession, DbSession session, @Nullable String branch,
+    @Nullable String pullRequest) {
+    writeComponentWithoutFav(json, entity, component, branch, pullRequest);
 
     List<PropertyDto> propertyDtos = dbClient.propertiesDao().selectByQuery(PropertyQuery.builder()
-      .setKey("favourite")
-      .setComponentUuid(component.uuid())
-      .setUserUuid(userSession.getUuid())
-      .build(),
+        .setKey("favourite")
+        .setEntityUuid(entity.getUuid())
+        .setUserUuid(userSession.getUuid())
+        .build(),
       session);
     boolean isFavourite = propertyDtos.size() == 1;
     json.prop("fav", isFavourite);
@@ -153,12 +141,4 @@ public class ComponentViewerJsonWriter {
     return value;
   }
 
-  @CheckForNull
-  private ComponentDto retrieveParentModuleIfNotCurrentComponent(ComponentDto componentDto, DbSession session) {
-    final String moduleUuid = componentDto.moduleUuid();
-    if (moduleUuid == null || componentDto.uuid().equals(moduleUuid)) {
-      return null;
-    }
-    return dbClient.componentDao().selectOrFailByUuid(session, moduleUuid);
-  }
 }

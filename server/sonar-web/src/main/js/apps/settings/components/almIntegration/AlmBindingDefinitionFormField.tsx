@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,17 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ButtonSecondary,
+  FlagMessage,
+  FormField,
+  InputField,
+  InputTextArea,
+  Link,
+} from 'design-system';
 import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { AlmBindingDefinition } from '../../../../types/alm-settings';
+import { FormattedMessage } from 'react-intl';
+import { useDocUrl } from '../../../../helpers/docs';
+import { translate, translateWithParameters } from '../../../../helpers/l10n';
+import { AlmBindingDefinitionBase } from '../../../../types/alm-settings';
+import '../../styles.css';
 
-export interface AlmBindingDefinitionFormFieldProps<B extends AlmBindingDefinition> {
+export interface AlmBindingDefinitionFormFieldProps<B extends AlmBindingDefinitionBase> {
   autoFocus?: boolean;
   help?: React.ReactNode;
   id: string;
+  isInvalid?: boolean;
   isTextArea?: boolean;
   maxLength?: number;
   onFieldChange: (id: keyof B, value: string) => void;
@@ -35,70 +44,92 @@ export interface AlmBindingDefinitionFormFieldProps<B extends AlmBindingDefiniti
   overwriteOnly?: boolean;
   propKey: keyof B;
   value: string;
+  isSecret?: boolean;
 }
 
-export function AlmBindingDefinitionFormField<B extends AlmBindingDefinition>(
-  props: AlmBindingDefinitionFormFieldProps<B>
+export function AlmBindingDefinitionFormField<B extends AlmBindingDefinitionBase>(
+  props: Readonly<AlmBindingDefinitionFormFieldProps<B>>,
 ) {
   const {
     autoFocus,
     help,
     id,
+    isInvalid = false,
     isTextArea,
     maxLength,
     optional,
     overwriteOnly = false,
     propKey,
-    value
+    value,
+    isSecret,
   } = props;
   const [showField, setShowField] = React.useState(!overwriteOnly);
 
-  return (
-    <div className="modal-field">
-      <label className="display-flex-center" htmlFor={id}>
-        {translate('settings.almintegration.form', id)}
-        {!optional && <MandatoryFieldMarker />}
-        {help && <HelpTooltip className="spacer-left" overlay={help} placement="right" />}
-      </label>
+  const toStatic = useDocUrl('/instance-administration/security/#settings-encryption');
 
+  return (
+    <FormField
+      htmlFor={id}
+      label={translate('settings.almintegration.form', id)}
+      description={help}
+      required={!optional}
+      className="sw-mb-8"
+    >
       {!showField && overwriteOnly && (
-        <div>
-          <p>{translate('settings.almintegration.form.secret_field')}</p>
-          <ButtonLink
+        <div className="sw-flex sw-items-center">
+          <p className="sw-mr-2">{translate('settings.almintegration.form.secret.field')}</p>
+          <ButtonSecondary
+            aria-label={translateWithParameters(
+              'settings.almintegration.form.secret.update_field_x',
+              translate('settings.almintegration.form', id),
+            )}
             onClick={() => {
               props.onFieldChange(propKey, '');
               setShowField(true);
-            }}>
-            {translate('settings.almintegration.form.update_secret_field')}
-          </ButtonLink>
+            }}
+          >
+            {translate('settings.almintegration.form.secret.update_field')}
+          </ButtonSecondary>
         </div>
       )}
-
-      {showField && isTextArea && (
-        <textarea
-          className="settings-large-input"
-          id={id}
-          maxLength={maxLength || 2000}
-          onChange={e => props.onFieldChange(propKey, e.currentTarget.value)}
-          required={!optional}
-          rows={5}
-          value={value}
-        />
+      {showField &&
+        (isTextArea ? (
+          <InputTextArea
+            id={id}
+            maxLength={maxLength || 2000}
+            onChange={(e) => props.onFieldChange(propKey, e.currentTarget.value)}
+            required={!optional}
+            rows={5}
+            size="full"
+            value={value}
+            isInvalid={isInvalid}
+          />
+        ) : (
+          <InputField
+            autoFocus={autoFocus}
+            id={id}
+            maxLength={maxLength || 100}
+            name={id}
+            onChange={(e) => props.onFieldChange(propKey, e.currentTarget.value)}
+            type="text"
+            size="full"
+            value={value}
+            isInvalid={isInvalid}
+          />
+        ))}
+      {showField && isSecret && (
+        <FlagMessage variant="info" className="sw-mt-2">
+          <span>
+            <FormattedMessage
+              id="settings.almintegration.form.secret.can_encrypt"
+              defaultMessage={translate('settings.almintegration.form.secret.can_encrypt')}
+              values={{
+                learn_more: <Link to={toStatic}>{translate('learn_more')}</Link>,
+              }}
+            />
+          </span>
+        </FlagMessage>
       )}
-
-      {showField && !isTextArea && (
-        <input
-          autoFocus={autoFocus}
-          className="input-super-large"
-          id={id}
-          maxLength={maxLength || 100}
-          name={id}
-          onChange={e => props.onFieldChange(propKey, e.currentTarget.value)}
-          size={50}
-          type="text"
-          value={value}
-        />
-      )}
-    </div>
+    </FormField>
   );
 }

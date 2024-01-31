@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,10 +20,11 @@
 package org.sonar.server.startup;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.FluentIterable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.picocontainer.Startable;
+import org.sonar.api.Startable;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.measures.Metrics;
@@ -35,10 +36,11 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.server.metric.MetricToDto;
+import org.springframework.beans.factory.annotation.Autowired;
 
-import static com.google.common.collect.FluentIterable.from;
-import static com.google.common.collect.Iterables.concat;
+import static com.google.common.collect.FluentIterable.concat;
 import static com.google.common.collect.Lists.newArrayList;
+import static org.sonar.db.metric.RemovedMetricConverter.REMOVED_METRIC;
 
 public class RegisterMetrics implements Startable {
 
@@ -48,6 +50,7 @@ public class RegisterMetrics implements Startable {
   private final UuidFactory uuidFactory;
   private final Metrics[] metricsRepositories;
 
+  @Autowired(required = false)
   public RegisterMetrics(DbClient dbClient, UuidFactory uuidFactory, Metrics[] metricsRepositories) {
     this.dbClient = dbClient;
     this.uuidFactory = uuidFactory;
@@ -57,13 +60,16 @@ public class RegisterMetrics implements Startable {
   /**
    * Used when no plugin is defining Metrics
    */
+  @Autowired(required = false)
   public RegisterMetrics(DbClient dbClient, UuidFactory uuidFactory) {
     this(dbClient, uuidFactory, new Metrics[] {});
   }
 
   @Override
   public void start() {
-    register(concat(CoreMetrics.getMetrics(), getPluginMetrics()));
+    FluentIterable<Metric> metricsToRegister = concat(CoreMetrics.getMetrics(), getPluginMetrics())
+      .filter(m -> !REMOVED_METRIC.equals(m.getKey()));
+    register(metricsToRegister);
   }
 
   @Override
@@ -73,7 +79,7 @@ public class RegisterMetrics implements Startable {
 
   void register(Iterable<Metric> metrics) {
     Profiler profiler = Profiler.create(LOG).startInfo("Register metrics");
-    try (DbSession session = dbClient.openSession(false)) {
+    try (DbSession session = dbClient.openSession(true)) {
       save(session, metrics);
       sanitizeQualityGates(session);
       session.commit();
@@ -87,7 +93,8 @@ public class RegisterMetrics implements Startable {
 
   private void save(DbSession session, Iterable<Metric> metrics) {
     Map<String, MetricDto> basesByKey = new HashMap<>();
-    for (MetricDto base : from(dbClient.metricDao().selectAll(session)).toList()) {
+    var allMetrics = dbClient.metricDao().selectAll(session);
+    for (MetricDto base : allMetrics) {
       basesByKey.put(base.getKey(), base);
     }
 
@@ -98,8 +105,7 @@ public class RegisterMetrics implements Startable {
         // new metric, never installed
         dto.setUuid(uuidFactory.create());
         dbClient.metricDao().insert(session, dto);
-      } else if (!base.isUserManaged()) {
-        // existing metric, update changes. Existing custom metrics are kept without applying changes.
+      } else {
         dto.setUuid(base.getUuid());
         dbClient.metricDao().update(session, dto);
       }
@@ -107,7 +113,7 @@ public class RegisterMetrics implements Startable {
     }
 
     for (MetricDto nonUpdatedBase : basesByKey.values()) {
-      if (!nonUpdatedBase.isUserManaged() && dbClient.metricDao().disableCustomByKey(session, nonUpdatedBase.getKey())) {
+      if (dbClient.metricDao().disableByKey(session, nonUpdatedBase.getKey())) {
         LOG.info("Disable metric {} [{}]", nonUpdatedBase.getShortName(), nonUpdatedBase.getKey());
       }
     }
@@ -125,7 +131,7 @@ public class RegisterMetrics implements Startable {
     return metricsToRegister;
   }
 
-  private void checkMetrics(Map<String, Metrics> metricsByRepository, Metrics metrics) {
+  private static void checkMetrics(Map<String, Metrics> metricsByRepository, Metrics metrics) {
     for (Metric metric : metrics.getMetrics()) {
       String metricKey = metric.getKey();
       if (CoreMetrics.getMetrics().contains(metric)) {

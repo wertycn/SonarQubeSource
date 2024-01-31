@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,24 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { getAppState, Store } from '../../../store/rootReducer';
+import { useOutletContext, useParams } from 'react-router-dom';
+import { AdminPagesContext } from '../../../types/admin';
 import NotFound from '../NotFound';
 import Extension from './Extension';
 
-interface Props {
-  adminPages: T.Extension[] | undefined;
-  params: { extensionKey: string; pluginKey: string };
+export default function GlobalAdminPageExtension() {
+  const { pluginKey, extensionKey } = useParams();
+  const { adminPages } = useOutletContext<AdminPagesContext>();
+
+  const extension = adminPages?.find((p) => p.key === `${pluginKey}/${extensionKey}`);
+  return extension ? <Extension extension={extension} /> : <NotFound />;
 }
-
-function GlobalAdminPageExtension(props: Props) {
-  const { extensionKey, pluginKey } = props.params;
-  const extension = (props.adminPages || []).find(p => p.key === `${pluginKey}/${extensionKey}`);
-  return extension ? <Extension extension={extension} /> : <NotFound withContainer={false} />;
-}
-
-const mapStateToProps = (state: Store) => ({
-  adminPages: getAppState(state).adminPages
-});
-
-export default connect(mapStateToProps)(GlobalAdminPageExtension);

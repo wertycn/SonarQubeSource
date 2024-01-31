@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,18 +39,17 @@ import org.sonar.scanner.protocol.output.ScannerReport.ComponentLink.ComponentLi
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class PersistProjectLinksStep implements ComputationStep {
+  private static final Map<ComponentLinkType, String> typesConverter = Map.of(
+    ComponentLinkType.HOME, ProjectLinkDto.TYPE_HOME_PAGE,
+    ComponentLinkType.SCM, ProjectLinkDto.TYPE_SOURCES,
+    ComponentLinkType.CI, ProjectLinkDto.TYPE_CI,
+    ComponentLinkType.ISSUE, ProjectLinkDto.TYPE_ISSUE_TRACKER);
 
   private final AnalysisMetadataHolder analysisMetadataHolder;
   private final DbClient dbClient;
   private final TreeRootHolder treeRootHolder;
   private final BatchReportReader reportReader;
   private final UuidFactory uuidFactory;
-
-  private static final Map<ComponentLinkType, String> typesConverter = ImmutableMap.of(
-    ComponentLinkType.HOME, ProjectLinkDto.TYPE_HOME_PAGE,
-    ComponentLinkType.SCM, ProjectLinkDto.TYPE_SOURCES,
-    ComponentLinkType.CI, ProjectLinkDto.TYPE_CI,
-    ComponentLinkType.ISSUE, ProjectLinkDto.TYPE_ISSUE_TRACKER);
 
   public PersistProjectLinksStep(AnalysisMetadataHolder analysisMetadataHolder, DbClient dbClient, TreeRootHolder treeRootHolder,
     BatchReportReader reportReader, UuidFactory uuidFactory) {
@@ -67,22 +65,21 @@ public class PersistProjectLinksStep implements ComputationStep {
     if (!analysisMetadataHolder.getBranch().isMain()) {
       return;
     }
-
     try (DbSession session = dbClient.openSession(false)) {
-      Component project = treeRootHolder.getRoot();
-      ScannerReport.Component batchComponent = reportReader.readComponent(project.getReportAttributes().getRef());
-      List<ProjectLinkDto> previousLinks = dbClient.projectLinkDao().selectByProjectUuid(session, project.getUuid());
-      mergeLinks(session, project.getUuid(), batchComponent.getLinkList(), previousLinks);
+      Component rootComponent = treeRootHolder.getRoot();
+      ScannerReport.Component batchComponent = reportReader.readComponent(rootComponent.getReportAttributes().getRef());
+      List<ProjectLinkDto> previousLinks = dbClient.projectLinkDao().selectByProjectUuid(session, analysisMetadataHolder.getProject().getUuid());
+      mergeLinks(session, analysisMetadataHolder.getProject().getUuid(), batchComponent.getLinkList(), previousLinks);
       session.commit();
     }
   }
 
-  private void mergeLinks(DbSession session, String componentUuid, List<ScannerReport.ComponentLink> links, List<ProjectLinkDto> previousLinks) {
+  private void mergeLinks(DbSession session, String projectUuid, List<ScannerReport.ComponentLink> links, List<ProjectLinkDto> previousLinks) {
     Set<String> linkType = new HashSet<>();
     links.forEach(
       link -> {
         String type = convertType(link.getType());
-        checkArgument(!linkType.contains(type), "Link of type '%s' has already been declared on component '%s'", type, componentUuid);
+        checkArgument(!linkType.contains(type), "Link of type '%s' has already been declared on component '%s'", type, projectUuid);
         linkType.add(type);
 
         Optional<ProjectLinkDto> previousLink = previousLinks.stream()
@@ -95,7 +92,7 @@ public class PersistProjectLinksStep implements ComputationStep {
           dbClient.projectLinkDao().insert(session,
             new ProjectLinkDto()
               .setUuid(uuidFactory.create())
-              .setProjectUuid(componentUuid)
+              .setProjectUuid(projectUuid)
               .setType(type)
               .setHref(link.getHref()));
         }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,26 +20,22 @@
 package org.sonar.server.platform.db.migration.step;
 
 import java.sql.Connection;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.mockito.Mockito.mock;
 
 public class UpsertImplTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void setBatchSize_throws_IAE_if_value_is_negative() throws Exception {
     UpsertImpl underTest = create();
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("size must be positive. Got -1");
-
-    underTest.setBatchSize(-1);
+    assertThatThrownBy(() -> underTest.setBatchSize(-1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("size must be positive. Got -1");
   }
 
   @Test

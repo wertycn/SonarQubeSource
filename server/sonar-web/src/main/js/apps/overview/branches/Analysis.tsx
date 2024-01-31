@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,51 +17,95 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { QualityGateIndicator } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import DateTimeFormatter from 'sonar-ui-common/components/intl/DateTimeFormatter';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { FormattedMessage } from 'react-intl';
+import DateTimeFormatter from '../../../components/intl/DateTimeFormatter';
 import { ComponentQualifier } from '../../../types/component';
+import {
+  AnalysisMeasuresVariations,
+  ProjectAnalysisEventCategory,
+  Analysis as TypeAnalysis,
+} from '../../../types/project-activity';
+import { Status } from '../../../types/types';
+import { AnalysisVariations } from './AnalysisVariations';
 import Event from './Event';
 
 export interface AnalysisProps {
-  analysis: T.Analysis;
+  analysis: TypeAnalysis;
+  isFirstAnalysis?: boolean;
   qualifier: string;
+  qualityGateStatus?: string;
+  variations?: AnalysisMeasuresVariations;
 }
 
-export function Analysis({ analysis, ...props }: AnalysisProps) {
+export function Analysis(props: Readonly<AnalysisProps>) {
+  const { analysis, isFirstAnalysis, qualifier, qualityGateStatus, variations } = props;
+
   const sortedEvents = sortBy(
-    analysis.events,
-    // versions first
-    event => (event.category === 'VERSION' ? 0 : 1),
-    // then the rest sorted by category
-    'category'
+    analysis.events.filter((event) => {
+      switch (event.category) {
+        case ProjectAnalysisEventCategory.QualityGate:
+          return false;
+        case ProjectAnalysisEventCategory.SqUpgrade:
+          return !isFirstAnalysis;
+        default:
+          return true;
+      }
+    }),
+    (event) => {
+      switch (event.category) {
+        case ProjectAnalysisEventCategory.Version:
+          // versions first
+          return 0;
+        case ProjectAnalysisEventCategory.SqUpgrade:
+          // SQ Upgrade second
+          return 1;
+        default:
+          // then the rest sorted by category
+          return 2;
+      }
+    },
+    'category',
+    'name',
   );
 
-  // use `TRK` for all components but applications
-  const qualifier =
-    props.qualifier === ComponentQualifier.Application
-      ? ComponentQualifier.Application
-      : ComponentQualifier.Project;
-
   return (
-    <li className="overview-analysis">
-      <div className="small little-spacer-bottom">
-        <strong>
+    <div className="sw-body-sm">
+      <div className="sw-flex sw-justify-between sw-mb-1">
+        <div className="sw-body-sm-highlight">
           <DateTimeFormatter date={analysis.date} />
-        </strong>
+        </div>
+        {qualityGateStatus !== undefined && (
+          <div className="sw-flex sw-items-center">
+            <FormattedMessage
+              id="overview.quality_gate_x"
+              values={{
+                0: (
+                  <QualityGateIndicator
+                    className="sw-mx-2"
+                    size="sm"
+                    status={qualityGateStatus as Status}
+                  />
+                ),
+              }}
+            />
+            <span className="sw-body-sm-highlight">
+              <FormattedMessage id={`metric.level.${qualityGateStatus}`} />
+            </span>
+          </div>
+        )}
       </div>
 
-      {sortedEvents.length > 0 ? (
-        <div className="overview-activity-events">
-          {sortedEvents.map(event => (
-            <Event event={event} key={event.key} />
-          ))}
-        </div>
-      ) : (
-        <span className="note">{translate('project_activity.analyzed', qualifier)}</span>
+      {sortedEvents.map((event) => (
+        <Event event={event} key={event.key} />
+      ))}
+
+      {qualifier === ComponentQualifier.Project && variations !== undefined && (
+        <AnalysisVariations isFirstAnalysis={isFirstAnalysis} variations={variations} />
       )}
-    </li>
+    </div>
   );
 }
 

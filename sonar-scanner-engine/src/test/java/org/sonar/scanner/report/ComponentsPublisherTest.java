@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,11 +31,11 @@ import org.sonar.api.SonarRuntime;
 import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.InputFile.Type;
-import org.sonar.api.utils.DateUtils;
-import org.sonar.scanner.ProjectInfo;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
+import org.sonar.api.utils.DateUtils;
+import org.sonar.scanner.ProjectInfo;
 import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.ScannerReport.Component;
 import org.sonar.scanner.protocol.output.ScannerReport.Component.FileStatus;
@@ -56,15 +56,16 @@ public class ComponentsPublisherTest {
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
 
-  private File outputDir;
+  private FileStructure fileStructure;
   private ScannerReportWriter writer;
   private BranchConfiguration branchConfiguration;
 
   @Before
   public void setUp() throws IOException {
     branchConfiguration = mock(BranchConfiguration.class);
-    outputDir = temp.newFolder();
-    writer = new ScannerReportWriter(outputDir);
+    File outputDir = temp.newFolder();
+    fileStructure = new FileStructure(outputDir);
+    writer = new ScannerReportWriter(fileStructure);
   }
 
   @Test
@@ -107,6 +108,9 @@ public class ComponentsPublisherTest {
     DefaultInputFile testFile = new TestInputFileBuilder("foo", "module1/test/FooTest.java", 7).setType(Type.TEST).setStatus(InputFile.Status.ADDED).setLines(4).build();
     store.put("module1", testFile);
 
+    DefaultInputFile movedFile = new TestInputFileBuilder("foo", "module1/src/MovedFile.java", "module0/src/MovedFile.java", 9).setStatus(InputFile.Status.CHANGED).setLines(4).build();
+    store.put("module1", movedFile);
+
     ComponentsPublisher publisher = new ComponentsPublisher(project, store);
     publisher.publish(writer);
 
@@ -114,17 +118,21 @@ public class ComponentsPublisherTest {
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 4)).isTrue();
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 6)).isTrue();
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 7)).isTrue();
+    assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 9)).isTrue();
 
     // not marked for publishing
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 5)).isFalse();
     // no such reference
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 8)).isFalse();
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
+    ScannerReportReader reader = new ScannerReportReader(fileStructure);
     Component rootProtobuf = reader.readComponent(1);
     assertThat(rootProtobuf.getKey()).isEqualTo("foo");
     assertThat(rootProtobuf.getDescription()).isEqualTo("Root description");
     assertThat(rootProtobuf.getLinkCount()).isZero();
+
+    Component movedFileProtobuf = reader.readComponent(9);
+    assertThat(movedFileProtobuf.getOldRelativeFilePath()).isEqualTo("module0/src/MovedFile.java");
 
     assertThat(reader.readComponent(4).getStatus()).isEqualTo(FileStatus.SAME);
     assertThat(reader.readComponent(6).getStatus()).isEqualTo(FileStatus.CHANGED);
@@ -190,10 +198,10 @@ public class ComponentsPublisherTest {
 
     assertThat(writer.hasComponentData(FileStructure.Domain.COMPONENT, 1)).isTrue();
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
+    ScannerReportReader reader = new ScannerReportReader(fileStructure);
     Component rootProtobuf = reader.readComponent(1);
     assertThat(rootProtobuf.getKey()).isEqualTo("foo");
-    assertThat(rootProtobuf.getName()).isEqualTo("");
+    assertThat(rootProtobuf.getName()).isEmpty();
     assertThat(rootProtobuf.getDescription()).isEqualTo("Root description");
     assertThat(rootProtobuf.getLinkCount()).isZero();
   }
@@ -218,7 +226,7 @@ public class ComponentsPublisherTest {
     ComponentsPublisher publisher = new ComponentsPublisher(project, store);
     publisher.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
+    ScannerReportReader reader = new ScannerReportReader(fileStructure);
     Component rootProtobuf = reader.readComponent(1);
     assertThat(rootProtobuf.getLinkCount()).isEqualTo(2);
     assertThat(rootProtobuf.getLink(0).getType()).isEqualTo(ComponentLinkType.HOME);

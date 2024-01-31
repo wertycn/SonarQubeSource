@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,9 +37,8 @@ import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mockito;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
-import org.sonar.core.util.stream.MoreCollectors;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 
 import static java.lang.Math.abs;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
@@ -76,7 +75,7 @@ public class DBSessionsImplTest {
       .thenReturn(expected[3])
       .thenThrow(oneCallTooMuch());
 
-    assertThat(Arrays.stream(expected).map(ignored -> underTest.openSession(false)).collect(MoreCollectors.toList()))
+    assertThat(Arrays.stream(expected).map(ignored -> underTest.openSession(false)).toList())
       .containsExactly(expected);
   }
 
@@ -90,7 +89,7 @@ public class DBSessionsImplTest {
       .thenReturn(expected[3])
       .thenThrow(oneCallTooMuch());
 
-    assertThat(Arrays.stream(expected).map(ignored -> underTest.openSession(true)).collect(MoreCollectors.toList()))
+    assertThat(Arrays.stream(expected).map(ignored -> underTest.openSession(true)).toList())
       .containsExactly(expected);
   }
 
@@ -103,7 +102,7 @@ public class DBSessionsImplTest {
     underTest.enableCaching();
 
     int size = 1 + abs(random.nextInt(10));
-    Set<DbSession> dbSessions = IntStream.range(0, size).mapToObj(ignored -> underTest.openSession(false)).collect(MoreCollectors.toSet());
+    Set<DbSession> dbSessions = IntStream.range(0, size).mapToObj(ignored -> underTest.openSession(false)).collect(Collectors.toSet());
     assertThat(dbSessions).hasSize(size);
     assertThat(getWrappedDbSessions(dbSessions))
       .hasSize(1)
@@ -119,7 +118,7 @@ public class DBSessionsImplTest {
     underTest.enableCaching();
 
     int size = 1 + abs(random.nextInt(10));
-    Set<DbSession> dbSessions = IntStream.range(0, size).mapToObj(ignored -> underTest.openSession(true)).collect(MoreCollectors.toSet());
+    Set<DbSession> dbSessions = IntStream.range(0, size).mapToObj(ignored -> underTest.openSession(true)).collect(Collectors.toSet());
     assertThat(dbSessions).hasSize(size);
     assertThat(getWrappedDbSessions(dbSessions))
       .hasSize(1)
@@ -484,7 +483,7 @@ public class DBSessionsImplTest {
 
     underTest.disableCaching();
 
-    List<String> errorLogs = logTester.logs(LoggerLevel.ERROR);
+    List<String> errorLogs = logTester.logs(Level.ERROR);
     assertThat(errorLogs)
       .hasSize(1)
       .containsOnly("Failed to close " + (batchOrRegular ? "batch" : "regular") + " connection in " + Thread.currentThread());

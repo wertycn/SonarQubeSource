@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,15 +21,12 @@ package org.sonar.scanner.report;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.LinkedList;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
 import org.sonar.api.batch.fs.internal.AbstractProjectOrModule;
-import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.api.batch.scm.ScmProvider;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.ProjectInfo;
 import org.sonar.scanner.bootstrap.ScannerPlugin;
 import org.sonar.scanner.bootstrap.ScannerPluginRepository;
@@ -38,7 +35,7 @@ import org.sonar.scanner.fs.InputModuleHierarchy;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.Metadata.BranchType;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
-import org.sonar.scanner.repository.ForkDateSupplier;
+import org.sonar.scanner.repository.ReferenceBranchSupplier;
 import org.sonar.scanner.rule.QProfile;
 import org.sonar.scanner.rule.QualityProfiles;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
@@ -48,7 +45,7 @@ import org.sonar.scanner.scm.ScmRevision;
 
 public class MetadataPublisher implements ReportPublisherStep {
 
-  private static final Logger LOG = Loggers.get(MetadataPublisher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataPublisher.class);
 
   private final QualityProfiles qProfiles;
   private final ProjectInfo projectInfo;
@@ -57,13 +54,13 @@ public class MetadataPublisher implements ReportPublisherStep {
   private final ScannerPluginRepository pluginRepository;
   private final BranchConfiguration branchConfiguration;
   private final ScmRevision scmRevision;
-  private final ForkDateSupplier forkDateSupplier;
   private final InputComponentStore componentStore;
   private final ScmConfiguration scmConfiguration;
+  private final ReferenceBranchSupplier referenceBranchSupplier;
 
   public MetadataPublisher(ProjectInfo projectInfo, InputModuleHierarchy moduleHierarchy, QualityProfiles qProfiles,
     CpdSettings cpdSettings, ScannerPluginRepository pluginRepository, BranchConfiguration branchConfiguration,
-    ScmRevision scmRevision, ForkDateSupplier forkDateSupplier, InputComponentStore componentStore, ScmConfiguration scmConfiguration) {
+    ScmRevision scmRevision, InputComponentStore componentStore, ScmConfiguration scmConfiguration, ReferenceBranchSupplier referenceBranchSupplier) {
     this.projectInfo = projectInfo;
     this.moduleHierarchy = moduleHierarchy;
     this.qProfiles = qProfiles;
@@ -71,9 +68,9 @@ public class MetadataPublisher implements ReportPublisherStep {
     this.pluginRepository = pluginRepository;
     this.branchConfiguration = branchConfiguration;
     this.scmRevision = scmRevision;
-    this.forkDateSupplier = forkDateSupplier;
     this.componentStore = componentStore;
     this.scmConfiguration = scmConfiguration;
+    this.referenceBranchSupplier = referenceBranchSupplier;
   }
 
   @Override
@@ -92,8 +89,12 @@ public class MetadataPublisher implements ReportPublisherStep {
       addBranchInformation(builder);
     }
 
+    String newCodeReferenceBranch = referenceBranchSupplier.getFromProperties();
+    if (newCodeReferenceBranch != null) {
+      builder.setNewCodeReferenceBranch(newCodeReferenceBranch);
+    }
+
     addScmInformation(builder);
-    addForkPoint(builder);
     addNotAnalyzedFileCountsByLanguage(builder);
 
     for (QProfile qp : qProfiles.findAll()) {
@@ -109,31 +110,12 @@ public class MetadataPublisher implements ReportPublisherStep {
         .setUpdatedAt(pluginEntry.getValue().getUpdatedAt()).build());
     }
 
-    addModulesRelativePaths(builder);
+    addRelativePathFromScmRoot(builder);
 
     writer.writeMetadata(builder.build());
   }
 
-  private void addForkPoint(ScannerReport.Metadata.Builder builder) {
-    Instant date = forkDateSupplier.get();
-    if (date != null) {
-      builder.setForkDate(date.toEpochMilli());
-    }
-  }
-
-  private void addModulesRelativePaths(ScannerReport.Metadata.Builder builder) {
-    LinkedList<DefaultInputModule> queue = new LinkedList<>();
-    queue.add(moduleHierarchy.root());
-
-    while (!queue.isEmpty()) {
-      DefaultInputModule module = queue.removeFirst();
-      queue.addAll(moduleHierarchy.children(module));
-      String relativePath = moduleHierarchy.relativePathToRoot(module);
-      if (relativePath != null) {
-        builder.putModulesProjectRelativePathByKey(module.key(), relativePath);
-      }
-    }
-
+  private void addRelativePathFromScmRoot(ScannerReport.Metadata.Builder builder) {
     ScmProvider scmProvider = scmConfiguration.provider();
     if (scmProvider == null) {
       return;

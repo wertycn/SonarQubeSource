@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,115 +17,87 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ContentCell, HoverLink, Note, QualifierIcon } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import BranchIcon from 'sonar-ui-common/components/icons/BranchIcon';
-import LinkIcon from 'sonar-ui-common/components/icons/LinkIcon';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { splitPath } from 'sonar-ui-common/helpers/path';
-import { getPathUrlAsString } from 'sonar-ui-common/helpers/urls';
-import {
-  getBranchLikeUrl,
-  getComponentDrilldownUrlWithSelection,
-  getProjectUrl
-} from '../../../helpers/urls';
+import { To } from 'react-router-dom';
+import { fillBranchLike } from '../../../helpers/branch-like';
+import { limitComponentName, splitPath } from '../../../helpers/path';
+import { getComponentDrilldownUrlWithSelection, getProjectUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
-import { View } from '../utils';
+import { ComponentQualifier, isApplication, isProject } from '../../../types/component';
+import { MeasurePageView } from '../../../types/measures';
+import { MetricKey } from '../../../types/metrics';
+import { ComponentMeasure, ComponentMeasureEnhanced, Metric } from '../../../types/types';
 
-interface Props {
+export interface ComponentCellProps {
   branchLike?: BranchLike;
-  component: T.ComponentMeasureEnhanced;
-  onClick: (component: string) => void;
-  metric: T.Metric;
-  rootComponent: T.ComponentMeasure;
-  view: View;
+  component: ComponentMeasureEnhanced;
+  metric: Metric;
+  rootComponent: ComponentMeasure;
+  view: MeasurePageView;
 }
 
-export default class ComponentCell extends React.PureComponent<Props> {
-  handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    const isLeftClickEvent = event.button === 0;
-    const isModifiedEvent = !!(event.metaKey || event.altKey || event.ctrlKey || event.shiftKey);
+const COMPONENT_PATH_MAX_CHARS = 50;
 
-    if (isLeftClickEvent && !isModifiedEvent) {
-      event.preventDefault();
-      this.props.onClick(this.props.component.key);
-    }
-  };
+export default function ComponentCell(props: ComponentCellProps) {
+  const { branchLike, component, metric, rootComponent, view } = props;
 
-  renderInner(componentKey: string) {
-    const { component } = this.props;
-    let head = '';
-    let tail = component.name;
+  let head = '';
+  let tail = component.name;
 
-    if (
-      this.props.view === 'list' &&
-      ['FIL', 'UTS', 'DIR'].includes(component.qualifier) &&
-      component.path
-    ) {
-      ({ head, tail } = splitPath(component.path));
-    }
-
-    const isApp = this.props.rootComponent.qualifier === 'APP';
-
-    return (
-      <span title={componentKey}>
-        <QualifierIcon className="little-spacer-right" qualifier={component.qualifier} />
-        {head.length > 0 && <span className="note">{head}/</span>}
-        <span>{tail}</span>
-        {isApp && (
-          <>
-            {component.branch ? (
-              <>
-                <BranchIcon className="spacer-left little-spacer-right" />
-                <span className="note">{component.branch}</span>
-              </>
-            ) : (
-              <span className="spacer-left badge">{translate('branches.main_branch')}</span>
-            )}
-          </>
-        )}
-      </span>
-    );
+  if (
+    view === MeasurePageView.list &&
+    (
+      [
+        ComponentQualifier.File,
+        ComponentQualifier.TestFile,
+        ComponentQualifier.Directory,
+      ] as string[]
+    ).includes(component.qualifier) &&
+    component.path
+  ) {
+    ({ head, tail } = splitPath(component.path));
   }
 
-  render() {
-    const { branchLike, component, metric, rootComponent } = this.props;
-    return (
-      <td className="measure-details-component-cell">
-        <div className="text-ellipsis">
-          {!component.refKey ? (
-            <a
-              className="link-no-underline"
-              href={getPathUrlAsString(
-                getComponentDrilldownUrlWithSelection(
-                  rootComponent.key,
-                  component.key,
-                  metric.key,
-                  branchLike
-                )
-              )}
-              id={'component-measures-component-link-' + component.key}
-              onClick={this.handleClick}>
-              {this.renderInner(component.key)}
-            </a>
-          ) : (
-            <Link
-              className="link-no-underline"
-              id={'component-measures-component-link-' + component.refKey}
-              to={
-                this.props.rootComponent.qualifier === 'APP'
-                  ? getProjectUrl(component.refKey, component.branch)
-                  : getBranchLikeUrl(component.refKey, branchLike)
-              }>
-              <span className="big-spacer-right">
-                <LinkIcon />
-              </span>
-              {this.renderInner(component.refKey)}
-            </Link>
-          )}
-        </div>
-      </td>
-    );
+  let path: To;
+  const targetKey = component.refKey || rootComponent.key;
+  const selectionKey = component.refKey ? '' : component.key;
+
+  // drilldown by default
+  path = getComponentDrilldownUrlWithSelection(
+    targetKey,
+    selectionKey,
+    metric.key,
+    component.branch ? fillBranchLike(component.branch) : branchLike,
+    view,
+  );
+
+  // This metric doesn't exist for project
+  if (metric.key === MetricKey.projects && isProject(component.qualifier)) {
+    path = getProjectUrl(targetKey, component.branch);
   }
+
+  // Those metric doesn't exist for application and project
+  if (
+    ([MetricKey.releasability_rating, MetricKey.alert_status] as string[]).includes(metric.key) &&
+    (isApplication(component.qualifier) || isProject(component.qualifier))
+  ) {
+    path = getProjectUrl(targetKey, component.branch);
+  }
+
+  return (
+    <ContentCell className="sw-py-3">
+      <HoverLink
+        aria-hidden
+        tabIndex={-1}
+        icon={<QualifierIcon qualifier={component.qualifier} />}
+        to={path}
+        title={component.path}
+      />
+      <HoverLink to={path} title={component.path} className="sw-flex sw-flex-wrap">
+        {head.length > 0 && <Note>{limitComponentName(head, COMPONENT_PATH_MAX_CHARS)}/</Note>}
+        <strong>{tail}</strong>
+      </HoverLink>
+    </ContentCell>
+  );
 }

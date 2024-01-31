@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,310 +17,610 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
-import * as React from 'react';
-import { waitAndUpdate } from 'sonar-ui-common/helpers/testUtils';
-import { getProjectAlmBinding } from '../../../api/alm-settings';
-import { getBranches, getPullRequests } from '../../../api/branches';
-import { getAnalysisStatus, getTasksForComponent } from '../../../api/ce';
+import { act, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import React, { useContext } from 'react';
+import { Route } from 'react-router-dom';
+import { validateProjectAlmBinding } from '../../../api/alm-settings';
+import { getTasksForComponent } from '../../../api/ce';
 import { getComponentData } from '../../../api/components';
-import { getComponentNavigation } from '../../../api/nav';
-import { mockBranch, mockMainBranch, mockPullRequest } from '../../../helpers/mocks/branch-like';
+import { getComponentNavigation } from '../../../api/navigation';
+import * as withRouter from '../../../components/hoc/withRouter';
+import { mockProjectAlmBindingConfigurationErrors } from '../../../helpers/mocks/alm-settings';
+import { mockBranch, mockPullRequest } from '../../../helpers/mocks/branch-like';
+import { mockComponent } from '../../../helpers/mocks/component';
 import { mockTask } from '../../../helpers/mocks/tasks';
-import { mockComponent, mockLocation, mockRouter } from '../../../helpers/testMocks';
-import { AlmKeys } from '../../../types/alm-settings';
-import { ComponentQualifier } from '../../../types/component';
-import { TaskStatuses } from '../../../types/tasks';
-import { ComponentContainer } from '../ComponentContainer';
-import PageUnavailableDueToIndexation from '../indexation/PageUnavailableDueToIndexation';
-
-jest.mock('../../../api/branches', () => {
-  const { mockMainBranch, mockPullRequest } = jest.requireActual(
-    '../../../helpers/mocks/branch-like'
-  );
-  return {
-    getBranches: jest
-      .fn()
-      .mockResolvedValue([mockMainBranch({ status: { qualityGateStatus: 'OK' } })]),
-    getPullRequests: jest
-      .fn()
-      .mockResolvedValue([
-        mockPullRequest({ key: 'pr-89', status: { qualityGateStatus: 'ERROR' } }),
-        mockPullRequest({ key: 'pr-90', title: 'PR Feature 2' })
-      ])
-  };
-});
+import { HttpStatus } from '../../../helpers/request';
+import { renderAppRoutes, renderComponent } from '../../../helpers/testReactTestingUtils';
+import { byRole, byText } from '../../../helpers/testSelector';
+import { getProjectUrl, getPullRequestUrl } from '../../../helpers/urls';
+import { ComponentQualifier, Visibility } from '../../../types/component';
+import { TaskStatuses, TaskTypes } from '../../../types/tasks';
+import handleRequiredAuthorization from '../../utils/handleRequiredAuthorization';
+import ComponentContainer, { isSameBranch } from '../ComponentContainer';
+import { WithAvailableFeaturesProps } from '../available-features/withAvailableFeatures';
+import { ComponentContext } from '../componentContext/ComponentContext';
 
 jest.mock('../../../api/ce', () => ({
-  getAnalysisStatus: jest.fn().mockResolvedValue({ component: { warnings: [] } }),
-  getTasksForComponent: jest.fn().mockResolvedValue({ queue: [] })
+  getTasksForComponent: jest.fn().mockResolvedValue({ queue: [] }),
 }));
 
 jest.mock('../../../api/components', () => ({
-  getComponentData: jest.fn().mockResolvedValue({ component: { analysisDate: '2018-07-30' } })
+  getComponentData: jest
+    .fn()
+    .mockResolvedValue({ component: { name: 'component name', analysisDate: '2018-07-30' } }),
 }));
 
-jest.mock('../../../api/nav', () => ({
+jest.mock('../../../api/navigation', () => ({
   getComponentNavigation: jest.fn().mockResolvedValue({
     breadcrumbs: [{ key: 'portfolioKey', name: 'portfolio', qualifier: 'VW' }],
-    key: 'portfolioKey'
-  })
+    key: 'portfolioKey',
+  }),
+}));
+
+jest.mock('../../../api/branches', () => ({
+  getBranches: jest.fn().mockResolvedValue([mockBranch()]),
+  getPullRequests: jest.fn().mockResolvedValue([mockPullRequest({ target: 'dropped-branch' })]),
 }));
 
 jest.mock('../../../api/alm-settings', () => ({
-  getProjectAlmBinding: jest.fn().mockResolvedValue(undefined)
+  validateProjectAlmBinding: jest.fn().mockResolvedValue(undefined),
 }));
 
-// mock this, because some of its children are using redux store
-jest.mock('../nav/component/ComponentNav', () => ({
-  default: () => null
+jest.mock('../../utils/handleRequiredAuthorization', () => ({
+  __esModule: true,
+  default: jest.fn(),
 }));
 
-const Inner = () => <div />;
+jest.mock('../../../components/hoc/withRouter', () => ({
+  __esModule: true,
+  ...jest.requireActual('../../../components/hoc/withRouter'),
+}));
 
-beforeEach(() => {
+const ui = {
+  projectTitle: byRole('link', { name: 'Project' }),
+  projectText: byText('project'),
+  portfolioTitle: byRole('link', { name: 'portfolio' }),
+  portfolioText: byText('portfolio'),
+  overviewPageLink: byRole('link', { name: 'overview.page' }),
+  issuesPageLink: byRole('link', { name: 'issues.page' }),
+  hotspotsPageLink: byRole('link', { name: 'layout.security_hotspots' }),
+  measuresPageLink: byRole('link', { name: 'layout.measures' }),
+  codePageLink: byRole('link', { name: 'code.page' }),
+  activityPageLink: byRole('link', { name: 'project_activity.page' }),
+  projectInfoLink: byRole('link', { name: 'project.info.title' }),
+  dashboardNotFound: byText('dashboard.project.not_found'),
+  goBackToHomePageLink: byRole('link', { name: 'go_back_to_homepage' }),
+};
+
+afterEach(() => {
   jest.clearAllMocks();
 });
 
-it('changes component', () => {
-  const wrapper = shallowRender();
-  wrapper.setState({
-    branchLikes: [mockMainBranch()],
-    component: { qualifier: 'TRK', visibility: 'public' } as T.Component,
-    loading: false
+it('should render the component nav correctly for portfolio', async () => {
+  renderComponentContainerAsComponent();
+  expect(await ui.portfolioTitle.find()).toHaveAttribute('href', '/portfolio?id=portfolioKey');
+  expect(ui.issuesPageLink.get()).toHaveAttribute(
+    'href',
+    '/project/issues?id=portfolioKey&issueStatuses=OPEN%2CCONFIRMED',
+  );
+  expect(ui.measuresPageLink.get()).toHaveAttribute('href', '/component_measures?id=portfolioKey');
+  expect(ui.activityPageLink.get()).toHaveAttribute('href', '/project/activity?id=portfolioKey');
+
+  await waitFor(() => {
+    expect(getTasksForComponent).toHaveBeenCalledWith('portfolioKey');
+  });
+});
+
+it('should render the component nav correctly for projects', async () => {
+  const component = mockComponent({
+    breadcrumbs: [{ key: 'project', name: 'Project', qualifier: ComponentQualifier.Project }],
+    key: 'project-key',
+    analysisDate: '2018-07-30',
   });
 
-  (wrapper.find(Inner).prop('onComponentChange') as Function)({ visibility: 'private' });
-  expect(wrapper.state().component).toEqual({ qualifier: 'TRK', visibility: 'private' });
+  jest
+    .mocked(getComponentNavigation)
+    .mockResolvedValueOnce({} as unknown as Awaited<ReturnType<typeof getComponentNavigation>>);
+
+  jest
+    .mocked(getComponentData)
+    .mockResolvedValueOnce({ component } as unknown as Awaited<
+      ReturnType<typeof getComponentData>
+    >);
+
+  renderComponentContainerAsComponent();
+  expect(await ui.projectTitle.find()).toHaveAttribute('href', '/dashboard?id=project');
+  expect(ui.overviewPageLink.get()).toHaveAttribute('href', '/dashboard?id=project-key');
+  expect(ui.issuesPageLink.get()).toHaveAttribute(
+    'href',
+    '/project/issues?id=project-key&issueStatuses=OPEN%2CCONFIRMED',
+  );
+  expect(ui.hotspotsPageLink.get()).toHaveAttribute('href', '/security_hotspots?id=project-key');
+  expect(ui.measuresPageLink.get()).toHaveAttribute('href', '/component_measures?id=project-key');
+  expect(ui.codePageLink.get()).toHaveAttribute('href', '/code?id=project-key');
+  expect(ui.activityPageLink.get()).toHaveAttribute('href', '/project/activity?id=project-key');
+  expect(ui.projectInfoLink.get()).toHaveAttribute('href', '/project/information?id=project-key');
 });
 
-it('loads the project binding, if any', async () => {
-  (getProjectAlmBinding as jest.Mock).mockResolvedValueOnce(undefined).mockResolvedValueOnce({
-    alm: AlmKeys.GitHub,
-    key: 'foo'
-  });
-
-  const wrapper = shallowRender();
-  await waitAndUpdate(wrapper);
-  expect(getProjectAlmBinding).toBeCalled();
-  expect(wrapper.state().projectBinding).toBeUndefined();
-
-  wrapper.setProps({ location: mockLocation({ query: { id: 'bar' } }) });
-  await waitAndUpdate(wrapper);
-  expect(wrapper.state().projectBinding).toEqual({ alm: AlmKeys.GitHub, key: 'foo' });
-});
-
-it("doesn't load branches portfolio", async () => {
-  const wrapper = shallowRender({ location: mockLocation({ query: { id: 'portfolioKey' } }) });
-  await new Promise(setImmediate);
-  expect(getBranches).not.toBeCalled();
-  expect(getPullRequests).not.toBeCalled();
-  expect(getComponentData).toBeCalledWith({ component: 'portfolioKey', branch: undefined });
-  expect(getComponentNavigation).toBeCalledWith({ component: 'portfolioKey', branch: undefined });
-  wrapper.update();
-  expect(wrapper.find(Inner).exists()).toBe(true);
-});
-
-it('updates branches on change', async () => {
-  const registerBranchStatus = jest.fn();
-  const wrapper = shallowRender({
-    location: mockLocation({ query: { id: 'portfolioKey' } }),
-    registerBranchStatus
-  });
-  wrapper.setState({
-    branchLikes: [mockMainBranch()],
-    component: mockComponent({
-      breadcrumbs: [{ key: 'projectKey', name: 'project', qualifier: 'TRK' }]
-    }),
-    loading: false
-  });
-  wrapper.find(Inner).prop<Function>('onBranchesChange')();
-  expect(getBranches).toBeCalledWith('projectKey');
-  expect(getPullRequests).toBeCalledWith('projectKey');
-  await waitAndUpdate(wrapper);
-  expect(registerBranchStatus).toBeCalledTimes(2);
-});
-
-it('fetches status', async () => {
-  (getComponentData as jest.Mock<any>).mockResolvedValueOnce({
-    component: {}
-  });
-
-  shallowRender();
-  await new Promise(setImmediate);
-  expect(getTasksForComponent).toBeCalledWith('portfolioKey');
-});
-
-it('filters correctly the pending tasks for a main branch', () => {
-  const wrapper = shallowRender();
-  const component = wrapper.instance();
-  const mainBranch = mockMainBranch();
-  const branch3 = mockBranch({ name: 'branch-3' });
-  const branch2 = mockBranch({ name: 'branch-2' });
-  const pullRequest = mockPullRequest();
-
-  expect(component.isSameBranch({} /*, undefined*/)).toBe(true);
-  expect(component.isSameBranch({}, mainBranch)).toBe(true);
-  expect(component.isSameBranch({ branch: mainBranch.name }, mainBranch)).toBe(true);
-  expect(component.isSameBranch({}, branch3)).toBe(false);
-  expect(component.isSameBranch({ branch: branch3.name }, branch3)).toBe(true);
-  expect(component.isSameBranch({ branch: 'feature' }, branch2)).toBe(false);
-  expect(component.isSameBranch({ branch: 'branch-6.6' }, branch2)).toBe(false);
-  expect(component.isSameBranch({ branch: branch2.name }, branch2)).toBe(true);
-  expect(component.isSameBranch({ branch: 'branch-6.7' }, pullRequest)).toBe(false);
-  expect(component.isSameBranch({ pullRequest: pullRequest.key }, pullRequest)).toBe(true);
-
-  const currentTask = mockTask({ pullRequest: pullRequest.key, status: TaskStatuses.InProgress });
-  const failedTask = { ...currentTask, status: TaskStatuses.Failed };
-  const pendingTasks = [currentTask, mockTask({ branch: branch3.name }), mockTask()];
-  expect(component.getCurrentTask(currentTask, undefined)).toBeUndefined();
-  expect(component.getCurrentTask(failedTask, mainBranch)).toBe(failedTask);
-  expect(component.getCurrentTask(currentTask, mainBranch)).toBeUndefined();
-  expect(component.getCurrentTask(currentTask, pullRequest)).toMatchObject(currentTask);
-  expect(component.getPendingTasks(pendingTasks, mainBranch)).toMatchObject([{}]);
-  expect(component.getPendingTasks(pendingTasks, pullRequest)).toMatchObject([currentTask]);
-});
-
-it('reload component after task progress finished', async () => {
-  jest.useFakeTimers();
-  (getTasksForComponent as jest.Mock<any>)
-    .mockResolvedValueOnce({
-      queue: [{ id: 'foo', status: TaskStatuses.InProgress }]
-    })
-    .mockResolvedValueOnce({
-      queue: []
-    });
-  const wrapper = shallowRender();
-
-  // First round, there's something in the queue, and component navigation was
-  // not called again (it's called once at mount, hence the 1 times assertion
-  // here).
-  await waitAndUpdate(wrapper);
-  expect(getComponentNavigation).toHaveBeenCalledTimes(1);
-  expect(getTasksForComponent).toHaveBeenCalledTimes(1);
-
-  jest.runOnlyPendingTimers();
-
-  // Second round, the queue is now empty, hence we assume the previous task
-  // was done. We immediately load the component again.
-  expect(getTasksForComponent).toHaveBeenCalledTimes(2);
-
-  // Trigger the update.
-  await waitAndUpdate(wrapper);
-  // The component was correctly re-loaded.
-  expect(getComponentNavigation).toHaveBeenCalledTimes(2);
-  // The status API call will be called 1 final time after the component is
-  // fully loaded, so the total will be 3.
-  expect(getTasksForComponent).toHaveBeenCalledTimes(3);
-
-  // Make sure the timeout was cleared. It should not be called again.
-  jest.runAllTimers();
-  await waitAndUpdate(wrapper);
-  // The number of calls haven't changed.
-  expect(getComponentNavigation).toHaveBeenCalledTimes(2);
-  expect(getTasksForComponent).toHaveBeenCalledTimes(3);
-});
-
-it('reloads component after task progress finished, and moves straight to current', async () => {
-  jest.useFakeTimers();
-  (getComponentData as jest.Mock<any>).mockResolvedValueOnce({
-    component: { key: 'bar' }
-  });
-  (getTasksForComponent as jest.Mock<any>)
-    .mockResolvedValueOnce({ queue: [] })
-    .mockResolvedValueOnce({ queue: [], current: { id: 'foo', status: TaskStatuses.Success } });
-  const wrapper = shallowRender();
-
-  // First round, nothing in the queue, and component navigation was not called
-  // again (it's called once at mount, hence the 1 times assertion here).
-  await waitAndUpdate(wrapper);
-  expect(getComponentNavigation).toHaveBeenCalledTimes(1);
-  expect(getTasksForComponent).toHaveBeenCalledTimes(1);
-
-  jest.runOnlyPendingTimers();
-
-  // Second round, nothing in the queue, BUT a success task is current. This
-  // means the queue was processed too quick for us to see, and we didn't see
-  // any pending tasks in the queue. So we immediately load the component again.
-  expect(getTasksForComponent).toHaveBeenCalledTimes(2);
-
-  // Trigger the update.
-  await waitAndUpdate(wrapper);
-  // The component was correctly re-loaded.
-  expect(getComponentNavigation).toHaveBeenCalledTimes(2);
-  // The status API call will be called 1 final time after the component is
-  // fully loaded, so the total will be 3.
-  expect(getTasksForComponent).toHaveBeenCalledTimes(3);
+it('should be able to change component', async () => {
+  const user = userEvent.setup();
+  renderComponentContainer();
+  expect(await screen.findByText('This is a test component')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'change component' })).toBeInTheDocument();
+  expect(screen.getByText('component name')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'change component' }));
+  expect(screen.getByText('new component name')).toBeInTheDocument();
 });
 
 it('should show component not found if it does not exist', async () => {
-  (getComponentNavigation as jest.Mock).mockRejectedValueOnce({ status: 404 });
-  const wrapper = shallowRender();
-  await waitAndUpdate(wrapper);
-  expect(wrapper).toMatchSnapshot();
+  jest
+    .mocked(getComponentNavigation)
+    .mockRejectedValueOnce(new Response(null, { status: HttpStatus.NotFound }));
+
+  renderComponentContainer();
+
+  expect(await ui.dashboardNotFound.find()).toBeInTheDocument();
+  expect(ui.goBackToHomePageLink.get()).toBeInTheDocument();
 });
 
-it('should redirect if the user has no access', async () => {
-  (getComponentNavigation as jest.Mock).mockRejectedValueOnce({ status: 403 });
-  const requireAuthorization = jest.fn();
-  const wrapper = shallowRender({ requireAuthorization });
-  await waitAndUpdate(wrapper);
-  expect(requireAuthorization).toBeCalled();
+it('should show component not found if target branch is not found for fixing pull request', async () => {
+  renderComponentContainer(
+    { hasFeature: jest.fn().mockReturnValue(true) },
+    '?id=foo&fixedInPullRequest=1001',
+  );
+
+  expect(await ui.dashboardNotFound.find()).toBeInTheDocument();
 });
 
-it('should redirect if the component is a portfolio', async () => {
-  const componentKey = 'comp-key';
-  (getComponentData as jest.Mock<any>).mockResolvedValueOnce({
-    component: { key: componentKey, breadcrumbs: [{ qualifier: ComponentQualifier.Portfolio }] }
+describe('getTasksForComponent', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
   });
 
-  const replace = jest.fn();
-
-  const wrapper = shallowRender({
-    location: mockLocation({ pathname: '/dashboard' }),
-    router: mockRouter({ replace })
-  });
-  await waitAndUpdate(wrapper);
-  expect(replace).toBeCalledWith({ pathname: '/portfolio', query: { id: componentKey } });
-});
-
-it('should display display the unavailable page if the component needs issue sync', async () => {
-  (getComponentData as jest.Mock).mockResolvedValueOnce({
-    component: { key: 'test', qualifier: ComponentQualifier.Project, needIssueSync: true }
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
-  const wrapper = shallowRender();
+  it('reload component after task progress finished', async () => {
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({
+        queue: [{ id: 'foo', status: TaskStatuses.InProgress, type: TaskTypes.ViewRefresh }],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>)
+      .mockResolvedValueOnce({
+        queue: [],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
 
-  await waitAndUpdate(wrapper);
+    renderComponentContainer();
 
-  expect(wrapper.find(PageUnavailableDueToIndexation).exists()).toBe(true);
-});
+    // First round, there's something in the queue, and component navigation was
+    // not called again (it's called once at mount, hence the 1 times assertion
+    // here).
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
 
-it('should correctly reload last task warnings if anything got dismissed', async () => {
-  (getComponentData as jest.Mock<any>).mockResolvedValueOnce({
-    component: mockComponent({
-      breadcrumbs: [{ key: 'foo', name: 'Foo', qualifier: ComponentQualifier.Project }]
-    })
+    act(() => jest.runOnlyPendingTimers());
+
+    // Second round, the queue is now empty, hence we assume the previous task
+    // was done. We immediately load the component again.
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+
+    // Trigger the update.
+    // The component was correctly re-loaded.
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(2);
+    });
+    // The status API call will be called 1 final time after the component is
+    // fully loaded, so the total will be 3.
+    expect(getTasksForComponent).toHaveBeenCalledTimes(3);
+
+    // Make sure the timeout was cleared. It should not be called again.
+    act(() => jest.runAllTimers());
+
+    // The number of calls haven't changed.
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(2);
+    });
+    expect(getTasksForComponent).toHaveBeenCalledTimes(3);
   });
-  (getComponentNavigation as jest.Mock).mockResolvedValueOnce({});
 
-  const wrapper = shallowRender();
-  await waitAndUpdate(wrapper);
-  (getAnalysisStatus as jest.Mock).mockClear();
+  it('reloads component after task progress finished, and moves straight to current', async () => {
+    jest.mocked(getComponentData).mockResolvedValueOnce({
+      component: { key: 'bar' },
+    } as unknown as Awaited<ReturnType<typeof getComponentData>>);
 
-  wrapper.instance().handleWarningDismiss();
-  expect(getAnalysisStatus).toBeCalledTimes(1);
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({ queue: [] } as unknown as Awaited<
+        ReturnType<typeof getTasksForComponent>
+      >)
+      .mockResolvedValueOnce({
+        queue: [],
+        current: { id: 'foo', status: TaskStatuses.Success, type: TaskTypes.AppRefresh },
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    renderComponentContainer();
+
+    // First round, nothing in the queue, and component navigation was not called
+    // again (it's called once at mount, hence the 1 times assertion here).
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+
+    act(() => jest.runOnlyPendingTimers());
+
+    // Second round, nothing in the queue, BUT a success task is current. This
+    // means the queue was processed too quick for us to see, and we didn't see
+    // any pending tasks in the queue. So we immediately load the component again.
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+
+    // Trigger the update.
+    // The component was correctly re-loaded.
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(2);
+    });
+    // The status API call will be called 1 final time after the component is
+    // fully loaded, so the total will be 3.
+    expect(getTasksForComponent).toHaveBeenCalledTimes(3);
+  });
+
+  it('only fully loads a non-empty component once', async () => {
+    jest.mocked(getComponentData).mockResolvedValueOnce({
+      component: { key: 'bar', analysisDate: '2019-01-01' },
+    } as unknown as Awaited<ReturnType<typeof getComponentData>>);
+
+    jest.mocked(getTasksForComponent).mockResolvedValueOnce({
+      queue: [],
+      current: { id: 'foo', status: TaskStatuses.Success, type: TaskTypes.Report },
+    } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    renderComponentContainer();
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+  });
+
+  it('only fully reloads a non-empty component if there was previously some task in progress', async () => {
+    jest.mocked(getComponentData).mockResolvedValueOnce({
+      component: { key: 'bar', analysisDate: '2019-01-01' },
+    } as unknown as Awaited<ReturnType<typeof getComponentData>>);
+
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({
+        queue: [{ id: 'foo', status: TaskStatuses.InProgress, type: TaskTypes.AppRefresh }],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>)
+      .mockResolvedValueOnce({
+        queue: [],
+        current: { id: 'foo', status: TaskStatuses.Success, type: TaskTypes.AppRefresh },
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    renderComponentContainer();
+
+    // First round, a pending task in the queue. This should trigger a reload of the
+    // status endpoint.
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+
+    act(() => jest.runOnlyPendingTimers());
+
+    // Second round, nothing in the queue, and a success task is current. This
+    // implies the current task was updated, and previously we displayed some information
+    // about a pending task. This new information must prompt the component to reload
+    // all data.
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+
+    // The component was correctly re-loaded.
+    await waitFor(() => {
+      expect(getComponentNavigation).toHaveBeenCalledTimes(2);
+    });
+    // The status API call will be called 1 final time after the component is
+    // fully loaded, so the total will be 3.
+    expect(getTasksForComponent).toHaveBeenCalledTimes(3);
+  });
 });
 
-function shallowRender(props: Partial<ComponentContainer['props']> = {}) {
-  return shallow<ComponentContainer>(
-    <ComponentContainer
-      location={mockLocation({ query: { id: 'foo' } })}
-      registerBranchStatus={jest.fn()}
-      requireAuthorization={jest.fn()}
-      router={mockRouter()}
-      {...props}>
-      <Inner />
-    </ComponentContainer>
+describe('should correctly validate the project binding depending on the context', () => {
+  const COMPONENT = mockComponent({
+    breadcrumbs: [{ key: 'foo', name: 'Foo', qualifier: ComponentQualifier.Project }],
+  });
+  const PROJECT_BINDING_ERRORS = mockProjectAlmBindingConfigurationErrors();
+
+  it.each([
+    ["has an analysis; won't perform any check", { ...COMPONENT, analysisDate: '2020-01' }],
+    ['has a project binding; check is OK', COMPONENT, undefined, 1],
+    ['has a project binding; check is not OK', COMPONENT, PROJECT_BINDING_ERRORS, 1],
+  ])('%s', async (_, component, projectBindingErrors = undefined, n = 0) => {
+    jest
+      .mocked(getComponentNavigation)
+      .mockResolvedValueOnce({} as unknown as Awaited<ReturnType<typeof getComponentNavigation>>);
+
+    jest
+      .mocked(getComponentData)
+      .mockResolvedValueOnce({ component } as unknown as Awaited<
+        ReturnType<typeof getComponentData>
+      >);
+
+    if (n > 0) {
+      jest.mocked(validateProjectAlmBinding).mockResolvedValueOnce(projectBindingErrors);
+    }
+
+    renderComponentContainer({ hasFeature: jest.fn().mockReturnValue(true) });
+    await waitFor(() => {
+      expect(validateProjectAlmBinding).toHaveBeenCalledTimes(n);
+    });
+  });
+
+  it('should show error message when check is not OK', async () => {
+    jest
+      .mocked(getComponentNavigation)
+      .mockResolvedValueOnce({} as unknown as Awaited<ReturnType<typeof getComponentNavigation>>);
+
+    jest
+      .mocked(getComponentData)
+      .mockResolvedValueOnce({ component: COMPONENT } as unknown as Awaited<
+        ReturnType<typeof getComponentData>
+      >);
+
+    jest.mocked(validateProjectAlmBinding).mockResolvedValueOnce(PROJECT_BINDING_ERRORS);
+
+    renderComponentContainerAsComponent({ hasFeature: jest.fn().mockReturnValue(true) });
+    expect(
+      await screen.findByText('component_navigation.pr_deco.error_detected_X', { exact: false }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('redirects', () => {
+  it('should redirect if the user has no access', async () => {
+    jest
+      .mocked(getComponentNavigation)
+      .mockRejectedValueOnce(new Response(null, { status: HttpStatus.Forbidden }));
+
+    renderComponentContainer();
+    await waitFor(() => {
+      expect(handleRequiredAuthorization).toHaveBeenCalled();
+    });
+  });
+
+  it('should redirect to portfolio when using dashboard path', async () => {
+    renderComponentContainer(
+      { hasFeature: jest.fn().mockReturnValue(true) },
+      'dashboard?id=foo',
+      '/dashboard',
+    );
+
+    expect(await ui.portfolioText.find()).toBeInTheDocument();
+  });
+});
+
+it.each([
+  [ComponentQualifier.Application],
+  [ComponentQualifier.Portfolio],
+  [ComponentQualifier.SubPortfolio],
+])(
+  'should not care about PR decoration settings for %s',
+  async (componentQualifier: ComponentQualifier) => {
+    const component = mockComponent({
+      breadcrumbs: [{ key: 'foo', name: 'Foo', qualifier: componentQualifier }],
+    });
+
+    jest
+      .mocked(getComponentNavigation)
+      .mockResolvedValueOnce({} as unknown as Awaited<ReturnType<typeof getComponentNavigation>>);
+
+    jest
+      .mocked(getComponentData)
+      .mockResolvedValueOnce({ component } as unknown as Awaited<
+        ReturnType<typeof getComponentData>
+      >);
+
+    renderComponentContainer({ hasFeature: jest.fn().mockReturnValue(true) });
+    await waitFor(() => {
+      expect(validateProjectAlmBinding).not.toHaveBeenCalled();
+    });
+  },
+);
+
+it('isSameBranch util returns expected result', () => {
+  expect(isSameBranch(mockTask())).toBe(true);
+  expect(isSameBranch(mockTask({ branch: 'branch' }), 'branch')).toBe(true);
+  expect(isSameBranch(mockTask({ pullRequest: 'pr' }), undefined, 'pr')).toBe(true);
+});
+
+describe('tutorials', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  it('should redirect to project main branch dashboard from tutorials when receiving new related scan report', async () => {
+    const componentKey = 'foo-component';
+    jest.mocked(getComponentData).mockResolvedValue({
+      ancestors: [],
+      component: {
+        key: componentKey,
+        name: 'component name',
+        qualifier: ComponentQualifier.Project,
+        visibility: Visibility.Public,
+      },
+    });
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({ queue: [] })
+      .mockResolvedValue({
+        queue: [{ status: TaskStatuses.InProgress, type: TaskTypes.Report }],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    const mockedReplace = jest.fn();
+    jest.spyOn(withRouter, 'useRouter').mockReturnValue({
+      replace: mockedReplace,
+      push: jest.fn(),
+    });
+
+    renderComponentContainer(
+      { hasFeature: jest.fn().mockReturnValue(true) },
+      `tutorials?id=${componentKey}`,
+      '/',
+    );
+
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(mockedReplace).not.toHaveBeenCalled();
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockedReplace).toHaveBeenCalledWith(getProjectUrl(componentKey)));
+  });
+
+  it('should redirect to project branch dashboard from tutorials when receiving new related scan report', async () => {
+    const componentKey = 'foo-component';
+    const branchName = 'fooBranch';
+    jest.mocked(getComponentData).mockResolvedValue({
+      ancestors: [],
+      component: {
+        key: componentKey,
+        name: 'component name',
+        qualifier: ComponentQualifier.Project,
+        visibility: Visibility.Public,
+      },
+    });
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({ queue: [] })
+      .mockResolvedValue({
+        queue: [{ branch: branchName, status: TaskStatuses.InProgress, type: TaskTypes.Report }],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    const mockedReplace = jest.fn();
+    jest.spyOn(withRouter, 'useRouter').mockReturnValue({
+      replace: mockedReplace,
+      push: jest.fn(),
+    });
+
+    renderComponentContainer(
+      { hasFeature: jest.fn().mockReturnValue(true) },
+      `tutorials?id=${componentKey}`,
+      '/',
+    );
+
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(mockedReplace).not.toHaveBeenCalled();
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mockedReplace).toHaveBeenCalledWith(getProjectUrl(componentKey, branchName)),
+    );
+  });
+
+  it('should redirect to project pull request dashboard from tutorials when receiving new related scan report', async () => {
+    const componentKey = 'foo-component';
+    const pullRequestKey = 'fooPR';
+    jest.mocked(getComponentData).mockResolvedValue({
+      ancestors: [],
+      component: {
+        key: componentKey,
+        name: 'component name',
+        qualifier: ComponentQualifier.Project,
+        visibility: Visibility.Public,
+      },
+    });
+    jest
+      .mocked(getTasksForComponent)
+      .mockResolvedValueOnce({ queue: [] })
+      .mockResolvedValue({
+        queue: [
+          { pullRequest: pullRequestKey, status: TaskStatuses.InProgress, type: TaskTypes.Report },
+        ],
+      } as unknown as Awaited<ReturnType<typeof getTasksForComponent>>);
+
+    const mockedReplace = jest.fn();
+    jest.spyOn(withRouter, 'useRouter').mockReturnValue({
+      replace: mockedReplace,
+      push: jest.fn(),
+    });
+
+    renderComponentContainer(
+      { hasFeature: jest.fn().mockReturnValue(true) },
+      `tutorials?id=${componentKey}`,
+      '/',
+    );
+
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(1));
+
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(mockedReplace).not.toHaveBeenCalled();
+    await waitFor(() => expect(getTasksForComponent).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mockedReplace).toHaveBeenCalledWith(getPullRequestUrl(componentKey, pullRequestKey)),
+    );
+  });
+});
+
+function renderComponentContainerAsComponent(props: Partial<WithAvailableFeaturesProps> = {}) {
+  return renderComponent(
+    <>
+      <div id="component-nav-portal" />
+      <ComponentContainer {...props} />
+    </>,
+    '/?id=foo',
+  );
+}
+
+function renderComponentContainer(
+  props: Partial<WithAvailableFeaturesProps> = {},
+  navigateTo = '?id=foo',
+  path = '/',
+) {
+  renderAppRoutes(
+    path,
+    () => (
+      <Route element={<ComponentContainer {...props} />}>
+        <Route path="*" element={<TestComponent />} />
+        <Route path="portfolio" element={<div>portfolio</div>} />
+        <Route path="dashboard" element={<div>project</div>} />
+      </Route>
+    ),
+    {
+      navigateTo,
+    },
+  );
+}
+
+function TestComponent() {
+  const { component, onComponentChange } = useContext(ComponentContext);
+
+  return (
+    <div>
+      This is a test component
+      <span>{component?.name}</span>
+      <button
+        onClick={() =>
+          onComponentChange(
+            mockComponent({
+              name: 'new component name',
+              breadcrumbs: [
+                { key: 'portfolioKey', name: 'portfolio', qualifier: ComponentQualifier.Portfolio },
+              ],
+            }),
+          )
+        }
+        type="button"
+      >
+        change component
+      </button>
+    </div>
   );
 }

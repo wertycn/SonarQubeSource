@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,34 +18,17 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import VulnerabilityIcon from 'sonar-ui-common/components/icons/VulnerabilityIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { RawQuery } from '../../../types/types';
 import { Facet } from '../types';
-import IssuesFilter from './IssuesFilter';
+import RatingFacet from './RatingFacet';
 
 interface Props {
-  className?: string;
   facet?: Facet;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
+  onQueryChange: (change: RawQuery) => void;
   value?: any;
 }
 
 export default function NewSecurityFilter(props: Props) {
-  return (
-    <IssuesFilter
-      {...props}
-      className="leak-facet-box"
-      headerDetail={
-        <span className="note little-spacer-left">
-          {'( '}
-          <VulnerabilityIcon className="little-spacer-right" />
-          {translate('metric.vulnerabilities.name')}
-          {' )'}
-        </span>
-      }
-      name="Security"
-      property="new_security"
-    />
-  );
+  return <RatingFacet {...props} name="Security" property="new_security" />;
 }

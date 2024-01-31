@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,24 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import { ButtonSecondary } from 'design-system';
 import * as React from 'react';
 import { AutoSizer } from 'react-virtualized/dist/commonjs/AutoSizer';
-import AdvancedTimeline from 'sonar-ui-common/components/charts/AdvancedTimeline';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { getShortType } from '../../helpers/measures';
-import { MeasureHistory, Serie } from '../../types/project-activity';
+import { AdvancedTimeline } from '../../components/charts/AdvancedTimeline';
+import { translate } from '../../helpers/l10n';
+import { formatMeasure, getShortType } from '../../helpers/measures';
+import { MeasureHistory, ParsedAnalysis, Serie } from '../../types/project-activity';
+import ModalButton from '../controls/ModalButton';
+import DataTableModal from './DataTableModal';
 import GraphsLegendCustom from './GraphsLegendCustom';
 import GraphsLegendStatic from './GraphsLegendStatic';
-import GraphsTooltips from './GraphsTooltips';
+import { GraphsTooltips } from './GraphsTooltips';
+import { getAnalysisEventsForDate } from './utils';
 
 interface Props {
-  events: T.AnalysisEvent[];
+  analyses: ParsedAnalysis[];
+  canShowDataAsTable?: boolean;
   graph: string;
   graphEndDate?: Date;
   graphStartDate?: Date;
@@ -40,6 +46,7 @@ interface Props {
   showAreas: boolean;
   series: Serie[];
   selectedDate?: Date;
+  graphDescription: string;
   updateGraphZoom?: (from?: Date, to?: Date) => void;
   updateSelectedDate?: (selectedDate?: Date) => void;
   updateTooltip: (selectedDate?: Date) => void;
@@ -68,7 +75,8 @@ export default class GraphHistory extends React.PureComponent<Props, State> {
 
   render() {
     const {
-      events,
+      analyses,
+      canShowDataAsTable = true,
       graph,
       graphEndDate,
       graphStartDate,
@@ -78,24 +86,40 @@ export default class GraphHistory extends React.PureComponent<Props, State> {
       metricsType,
       selectedDate,
       series,
-      showAreas
+      showAreas,
+      graphDescription,
     } = this.props;
+
+    const modalProp = ({ onClose }: { onClose: () => void }) => (
+      <DataTableModal
+        analyses={analyses}
+        graphEndDate={graphEndDate}
+        graphStartDate={graphStartDate}
+        series={series}
+        onClose={onClose}
+      />
+    );
+
     const { tooltipIdx, tooltipXPos } = this.state;
+    const events = getAnalysisEventsForDate(analyses, selectedDate);
 
     return (
-      <div className="activity-graph-container flex-grow display-flex-column display-flex-stretch display-flex-justify-center">
+      <StyledGraphContainer className="sw-flex sw-flex-col sw-justify-center sw-items-stretch sw-grow sw-py-2">
         {isCustom && this.props.removeCustomMetric ? (
-          <GraphsLegendCustom removeMetric={this.props.removeCustomMetric} series={series} />
+          <GraphsLegendCustom
+            leakPeriodDate={leakPeriodDate}
+            removeMetric={this.props.removeCustomMetric}
+            series={series}
+          />
         ) : (
-          <GraphsLegendStatic series={series} />
+          <GraphsLegendStatic leakPeriodDate={leakPeriodDate} series={series} />
         )}
 
-        <div className="flex-1">
+        <div className="sw-flex-1">
           <AutoSizer>
             {({ height, width }) => (
               <div>
                 <AdvancedTimeline
-                  displayNewCodeLegend={true}
                   endDate={graphEndDate}
                   formatYTick={this.formatValue}
                   height={height}
@@ -105,6 +129,7 @@ export default class GraphHistory extends React.PureComponent<Props, State> {
                   series={series}
                   showAreas={showAreas}
                   startDate={graphStartDate}
+                  graphDescription={graphDescription}
                   updateSelectedDate={this.props.updateSelectedDate}
                   updateTooltip={this.updateTooltip}
                   updateZoom={this.props.updateGraphZoom}
@@ -129,7 +154,20 @@ export default class GraphHistory extends React.PureComponent<Props, State> {
             )}
           </AutoSizer>
         </div>
-      </div>
+        {canShowDataAsTable && (
+          <ModalButton modal={modalProp}>
+            {({ onClick }) => (
+              <ButtonSecondary className="sw-sr-only" onClick={onClick}>
+                {translate('project_activity.graphs.open_in_table')}
+              </ButtonSecondary>
+            )}
+          </ModalButton>
+        )}
+      </StyledGraphContainer>
     );
   }
 }
+
+const StyledGraphContainer = styled.div`
+  height: 300px;
+`;

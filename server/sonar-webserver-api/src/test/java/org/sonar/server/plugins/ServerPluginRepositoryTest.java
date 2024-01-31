@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,19 +22,19 @@ package org.sonar.server.plugins;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.stream.Collectors;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.sonar.api.Plugin;
 import org.sonar.core.platform.PluginInfo;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.server.plugins.PluginFilesAndMd5.FileAndMd5;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.server.plugins.PluginType.BUNDLED;
-import static org.sonar.server.plugins.PluginType.EXTERNAL;
+import static org.sonar.core.plugin.PluginType.BUNDLED;
+import static org.sonar.core.plugin.PluginType.EXTERNAL;
 
 public class ServerPluginRepositoryTest {
   private ServerPluginRepository repository = new ServerPluginRepository();
@@ -133,6 +133,6 @@ public class ServerPluginRepositoryTest {
   }
 
   private ServerPlugin newPlugin(String key, PluginType type) {
-    return new ServerPlugin(newPluginInfo(key), type, mock(Plugin.class), mock(FileAndMd5.class), mock(FileAndMd5.class), mock(ClassLoader.class));
+    return new ServerPlugin(newPluginInfo(key), type, mock(Plugin.class), mock(FileAndMd5.class), mock(ClassLoader.class));
   }
 }

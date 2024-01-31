@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DrilldownLink } from 'design-system';
 import * as React from 'react';
-import { getLocalizedMetricName } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import DrilldownLink from '../../../components/shared/DrilldownLink';
-import { findMeasure } from '../../../helpers/measures';
+import { translateWithParameters } from '../../../helpers/l10n';
+import { findMeasure, formatMeasure, localizeMetric } from '../../../helpers/measures';
+import { getComponentDrilldownUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
-import { MetricKey } from '../../../types/metrics';
+import { MetricKey, MetricType } from '../../../types/metrics';
+import { Component, MeasureEnhanced } from '../../../types/types';
 
 export interface DrilldownMeasureValueProps {
   branchLike?: BranchLike;
-  component: T.Component;
-  measures: T.MeasureEnhanced[];
+  component: Component;
+  measures: MeasureEnhanced[];
   metric: MetricKey;
 }
 
@@ -36,28 +37,29 @@ export function DrilldownMeasureValue(props: DrilldownMeasureValueProps) {
   const { branchLike, component, measures, metric } = props;
   const measure = findMeasure(measures, metric);
 
-  let content;
-  if (!measure) {
-    content = <span className="overview-measures-value text-light">-</span>;
-  } else {
-    content = (
-      <span>
-        <DrilldownLink
-          branchLike={branchLike}
-          className="overview-measures-value text-light"
-          component={component.key}
-          metric={metric}>
-          {formatMeasure(measure.value, 'SHORT_INT')}
-        </DrilldownLink>
-      </span>
-    );
+  if (!measure || measure.value === undefined) {
+    return <span>–</span>;
   }
 
+  const url = getComponentDrilldownUrl({
+    branchLike,
+    componentKey: component.key,
+    metric,
+  });
+
   return (
-    <div className="display-flex-column display-flex-center">
-      {content}
-      <span className="spacer-top">{getLocalizedMetricName({ key: metric })}</span>
-    </div>
+    <span>
+      <DrilldownLink
+        aria-label={translateWithParameters(
+          'overview.see_more_details_on_x_y',
+          measure.value,
+          localizeMetric(metric),
+        )}
+        to={url}
+      >
+        {formatMeasure(measure.value, MetricType.ShortInteger)}
+      </DrilldownLink>
+    </span>
   );
 }
 

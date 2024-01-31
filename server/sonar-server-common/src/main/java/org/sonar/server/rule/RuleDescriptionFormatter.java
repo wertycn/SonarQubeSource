@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,30 +19,42 @@
  */
 package org.sonar.server.rule;
 
-import org.sonar.db.rule.RuleDefinitionDto;
+import com.google.common.collect.MoreCollectors;
+import java.util.Collection;
+import java.util.Objects;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.markdown.Markdown;
 
-import static java.lang.String.format;
+import static org.sonar.db.rule.RuleDto.Format.MARKDOWN;
 
 public class RuleDescriptionFormatter {
 
-  private RuleDescriptionFormatter() { /* static helpers */ }
-
-  public static String getDescriptionAsHtml(RuleDefinitionDto ruleDto) {
-    String description = ruleDto.getDescription();
-    RuleDto.Format descriptionFormat = ruleDto.getDescriptionFormat();
-    if (description != null && descriptionFormat != null) {
-      switch (descriptionFormat) {
-        case MARKDOWN:
-          return Markdown.convertToHtml(description);
-        case HTML:
-          return description;
-        default:
-          throw new IllegalStateException(format("Rule description format '%s' is unknown for key '%s'", descriptionFormat, ruleDto.getKey().toString()));
-      }
+  @CheckForNull
+  public String getDescriptionAsHtml(RuleDto ruleDto) {
+    if (ruleDto.getDescriptionFormat() == null) {
+      return null;
     }
-    return null;
+    Collection<RuleDescriptionSectionDto> ruleDescriptionSectionDtos = ruleDto.getRuleDescriptionSectionDtos();
+    return retrieveDescription(ruleDescriptionSectionDtos, Objects.requireNonNull(ruleDto.getDescriptionFormat()));
+  }
+
+  @CheckForNull
+  private String retrieveDescription(Collection<RuleDescriptionSectionDto> ruleDescriptionSectionDtos, RuleDto.Format descriptionFormat) {
+    return ruleDescriptionSectionDtos.stream()
+      .filter(RuleDescriptionSectionDto::isDefault)
+      .collect(MoreCollectors.toOptional())
+      .map(section -> toHtml(descriptionFormat, section))
+      .orElse(null);
+  }
+
+  public String toHtml(@Nullable RuleDto.Format descriptionFormat, RuleDescriptionSectionDto ruleDescriptionSectionDto) {
+    if (MARKDOWN.equals(descriptionFormat)) {
+      return Markdown.convertToHtml(ruleDescriptionSectionDto.getContent());
+    }
+    return ruleDescriptionSectionDto.getContent();
   }
 
 }

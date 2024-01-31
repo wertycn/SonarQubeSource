@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,7 @@ import org.sonar.api.web.UserRole;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.Pagination;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.webhook.WebhookDeliveryLiteDto;
 import org.sonar.server.component.ComponentFinder;
@@ -46,7 +47,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 import static org.sonar.api.server.ws.WebService.Param.PAGE;
 import static org.sonar.api.server.ws.WebService.Param.PAGE_SIZE;
-import static org.sonar.api.utils.Paging.offset;
 import static org.sonar.core.util.Uuids.UUID_EXAMPLE_02;
 import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
 import static org.sonar.server.webhook.ws.WebhookWsSupport.copyDtoToProtobuf;
@@ -121,17 +121,17 @@ public class WebhookDeliveriesAction implements WebhooksWsAction {
     try (DbSession dbSession = dbClient.openSession(false)) {
       if (isNotBlank(webhookUuid)) {
         totalElements = dbClient.webhookDeliveryDao().countDeliveriesByWebhookUuid(dbSession, webhookUuid);
-        deliveries = dbClient.webhookDeliveryDao().selectByWebhookUuid(dbSession, webhookUuid, offset(page, pageSize), pageSize);
+        deliveries = dbClient.webhookDeliveryDao().selectByWebhookUuid(dbSession, webhookUuid, Pagination.forPage(page).andSize(pageSize));
         projectUuidMap = getProjectsDto(dbSession, deliveries);
       } else if (projectKey != null) {
         ProjectDto project = componentFinder.getProjectByKey(dbSession, projectKey);
         projectUuidMap = new HashMap<>();
         projectUuidMap.put(project.getUuid(), project);
-        totalElements = dbClient.webhookDeliveryDao().countDeliveriesByComponentUuid(dbSession, project.getUuid());
-        deliveries = dbClient.webhookDeliveryDao().selectOrderedByComponentUuid(dbSession, project.getUuid(), offset(page, pageSize), pageSize);
+        totalElements = dbClient.webhookDeliveryDao().countDeliveriesByProjectUuid(dbSession, project.getUuid());
+        deliveries = dbClient.webhookDeliveryDao().selectOrderedByProjectUuid(dbSession, project.getUuid(), Pagination.forPage(page).andSize(pageSize));
       } else {
         totalElements = dbClient.webhookDeliveryDao().countDeliveriesByCeTaskUuid(dbSession, ceTaskId);
-        deliveries = dbClient.webhookDeliveryDao().selectOrderedByCeTaskUuid(dbSession, ceTaskId, offset(page, pageSize), pageSize);
+        deliveries = dbClient.webhookDeliveryDao().selectOrderedByCeTaskUuid(dbSession, ceTaskId, Pagination.forPage(page).andSize(pageSize));
         projectUuidMap = getProjectsDto(dbSession, deliveries);
       }
     }
@@ -141,7 +141,7 @@ public class WebhookDeliveriesAction implements WebhooksWsAction {
   private Map<String, ProjectDto> getProjectsDto(DbSession dbSession, List<WebhookDeliveryLiteDto> deliveries) {
     Map<String, String> deliveredComponentUuid = deliveries
       .stream()
-      .collect(Collectors.toMap(WebhookDeliveryLiteDto::getUuid, WebhookDeliveryLiteDto::getComponentUuid));
+      .collect(Collectors.toMap(WebhookDeliveryLiteDto::getUuid, WebhookDeliveryLiteDto::getProjectUuid));
 
     if (!deliveredComponentUuid.isEmpty()) {
       return dbClient.projectDao().selectByUuids(dbSession, new HashSet<>(deliveredComponentUuid.values()))
@@ -172,7 +172,7 @@ public class WebhookDeliveriesAction implements WebhooksWsAction {
 
     void ensureAdminPermission(UserSession userSession) {
       if (!projectUuidMap.isEmpty()) {
-        List<ProjectDto> projectsUserHasAccessTo = userSession.keepAuthorizedProjects(UserRole.ADMIN, projectUuidMap.values());
+        List<ProjectDto> projectsUserHasAccessTo = userSession.keepAuthorizedEntities(UserRole.ADMIN, projectUuidMap.values());
         if (projectsUserHasAccessTo.size() != projectUuidMap.size()) {
           throw new ForbiddenException("Insufficient privileges");
         }
@@ -183,7 +183,7 @@ public class WebhookDeliveriesAction implements WebhooksWsAction {
       Webhooks.DeliveriesWsResponse.Builder responseBuilder = Webhooks.DeliveriesWsResponse.newBuilder();
       Webhooks.Delivery.Builder deliveryBuilder = Webhooks.Delivery.newBuilder();
       for (WebhookDeliveryLiteDto dto : deliveryDtos) {
-        ProjectDto project = projectUuidMap.get(dto.getComponentUuid());
+        ProjectDto project = projectUuidMap.get(dto.getProjectUuid());
         copyDtoToProtobuf(project, dto, deliveryBuilder);
         responseBuilder.addDeliveries(deliveryBuilder);
       }

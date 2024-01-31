@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
-import * as React from 'react';
-import PrivacyBadgeContainer from '../../../../../components/common/PrivacyBadgeContainer';
-import TagsList from '../../../../../components/tags/TagsList';
+import { screen } from '@testing-library/react';
+import React from 'react';
 import { mockCurrentUser, mockLoggedInUser } from '../../../../../helpers/testMocks';
-import { ComponentQualifier } from '../../../../../types/component';
+import { renderComponent } from '../../../../../helpers/testReactTestingUtils';
+import { ComponentQualifier, Visibility } from '../../../../../types/component';
+import { CurrentUser } from '../../../../../types/users';
 import { Project } from '../../../types';
 import ProjectCard from '../ProjectCard';
-import ProjectCardQualityGate from '../ProjectCardQualityGate';
 
 const MEASURES = {
   alert_status: 'OK',
   reliability_rating: '1.0',
   sqale_rating: '1.0',
-  new_bugs: '12'
+  new_bugs: '12',
 };
 
 const PROJECT: Project = {
@@ -41,81 +40,58 @@ const PROJECT: Project = {
   name: 'Foo',
   qualifier: ComponentQualifier.Project,
   tags: [],
-  visibility: 'public'
+  visibility: Visibility.Public,
+  isScannable: false,
 };
 
 const USER_LOGGED_OUT = mockCurrentUser();
 const USER_LOGGED_IN = mockLoggedInUser();
 
-it('should display correclty when project need issue synch', () => {
-  expect(shallowRender({ ...PROJECT, needIssueSync: true })).toMatchSnapshot();
-});
-
 it('should not display the quality gate', () => {
   const project = { ...PROJECT, analysisDate: undefined };
-  expect(
-    shallowRender(project)
-      .find(ProjectCardQualityGate)
-      .exists()
-  ).toBe(false);
+  renderProjectCard(project);
+  expect(screen.getByText('projects.not_analyzed.TRK')).toBeInTheDocument();
 });
 
-it('should display tags', () => {
+it('should display tags', async () => {
   const project = { ...PROJECT, tags: ['foo', 'bar'] };
-  expect(
-    shallowRender(project)
-      .find(TagsList)
-      .exists()
-  ).toBe(true);
+  renderProjectCard(project);
+  await expect(screen.getByText('foo')).toHaveATooltipWithContent('foo, bar');
 });
 
 it('should display private badge', () => {
-  const project: Project = { ...PROJECT, visibility: 'private' };
-  expect(
-    shallowRender(project)
-      .find(PrivacyBadgeContainer)
-      .exists()
-  ).toBe(true);
+  const project: Project = { ...PROJECT, visibility: Visibility.Private };
+  renderProjectCard(project);
+  expect(screen.getByLabelText('visibility.private')).toBeInTheDocument();
 });
 
-it('should display the overall measures and quality gate', () => {
-  expect(shallowRender(PROJECT)).toMatchSnapshot();
+it('should display configure analysis button for logged in user and scan rights', () => {
+  const user = mockLoggedInUser();
+  renderProjectCard({ ...PROJECT, isScannable: true, analysisDate: undefined }, user);
+  expect(screen.getByText('projects.configure_analysis')).toBeInTheDocument();
 });
 
-it('should display not analyzed yet', () => {
-  expect(shallowRender({ ...PROJECT, analysisDate: undefined })).toMatchSnapshot();
-});
-
-it('should display configure analysis button for logged in user', () => {
-  expect(shallowRender({ ...PROJECT, analysisDate: undefined }, USER_LOGGED_IN)).toMatchSnapshot(
-    'default'
-  );
-  expect(
-    shallowRender({ ...PROJECT, analysisDate: undefined, needIssueSync: true }, USER_LOGGED_IN)
-  ).toMatchSnapshot('hidden if sync in place');
+it('should not display configure analysis button for logged in user and without scan rights', () => {
+  renderProjectCard({ ...PROJECT, analysisDate: undefined }, USER_LOGGED_IN);
+  expect(screen.queryByText('projects.configure_analysis')).not.toBeInTheDocument();
 });
 
 it('should display applications', () => {
-  expect(
-    shallowRender({ ...PROJECT, qualifier: ComponentQualifier.Application })
-  ).toMatchSnapshot();
-  expect(
-    shallowRender({
-      ...PROJECT,
-      qualifier: ComponentQualifier.Application,
-      measures: { ...MEASURES, projects: '3' }
-    })
-  ).toMatchSnapshot('with project count');
+  renderProjectCard({ ...PROJECT, qualifier: ComponentQualifier.Application });
+  expect(screen.getByLabelText('qualifier.APP')).toBeInTheDocument();
 });
 
-function shallowRender(project: Project, user: T.CurrentUser = USER_LOGGED_OUT, type?: string) {
-  return shallow(
-    <ProjectCard
-      currentUser={user}
-      handleFavorite={jest.fn()}
-      height={100}
-      project={project}
-      type={type}
-    />
+it('should display 3 aplication', () => {
+  renderProjectCard({
+    ...PROJECT,
+    qualifier: ComponentQualifier.Application,
+    measures: { ...MEASURES, projects: '3' },
+  });
+  expect(screen.getByText(/x_projects_.3/)).toBeInTheDocument();
+});
+
+function renderProjectCard(project: Project, user: CurrentUser = USER_LOGGED_OUT, type?: string) {
+  renderComponent(
+    <ProjectCard currentUser={user} handleFavorite={jest.fn()} project={project} type={type} />,
   );
 }

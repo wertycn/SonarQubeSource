@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -93,8 +93,8 @@ public class CharsetValidation {
       }
     }
 
-    double beAsciiPerc = beAscii * 2.0 / (double) buffer.length;
-    double leAsciiPerc = leAscii * 2.0 / (double) buffer.length;
+    double beAsciiPerc = beAscii * 2.0D / buffer.length;
+    double leAsciiPerc = leAscii * 2.0D / buffer.length;
 
     if (leLines == 0) {
       // could be BE

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,9 +37,9 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.web.UserRole;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.measure.LiveMeasureDto;
@@ -55,10 +55,10 @@ import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.sonar.db.metric.RemovedMetricConverter.withRemovedMetricAlias;
 import static org.sonar.server.component.ws.MeasuresWsParameters.ACTION_COMPONENT;
 import static org.sonar.server.component.ws.MeasuresWsParameters.ADDITIONAL_METRICS;
 import static org.sonar.server.component.ws.MeasuresWsParameters.ADDITIONAL_PERIOD;
-import static org.sonar.server.component.ws.MeasuresWsParameters.DEPRECATED_ADDITIONAL_PERIODS;
 import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_ADDITIONAL_FIELDS;
 import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_BRANCH;
 import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_COMPONENT;
@@ -66,9 +66,9 @@ import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_METRIC_KE
 import static org.sonar.server.component.ws.MeasuresWsParameters.PARAM_PULL_REQUEST;
 import static org.sonar.server.exceptions.BadRequestException.checkRequest;
 import static org.sonar.server.measure.ws.ComponentDtoToWsComponent.componentDtoToWsComponent;
+import static org.sonar.server.measure.ws.ComponentResponseCommon.addMetricToResponseIncludingRenamedMetric;
 import static org.sonar.server.measure.ws.MeasuresWsParametersBuilder.createAdditionalFieldsParameter;
 import static org.sonar.server.measure.ws.MeasuresWsParametersBuilder.createMetricKeysParameter;
-import static org.sonar.server.measure.ws.MetricDtoToWsMetric.metricDtoToWsMetric;
 import static org.sonar.server.measure.ws.SnapshotDtoToWsPeriod.snapshotToWsPeriods;
 import static org.sonar.server.ws.KeyExamples.KEY_BRANCH_EXAMPLE_001;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
@@ -92,10 +92,23 @@ public class ComponentAction implements MeasuresWsAction {
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction(ACTION_COMPONENT)
       .setDescription("Return component with specified measures.<br>" +
-        "Requires the following permission: 'Browse' on the project of specified component.")
+                      "Requires the following permission: 'Browse' on the project of specified component.")
       .setResponseExample(getClass().getResource("component-example.json"))
       .setSince("5.4")
       .setChangelog(
+        new Change("10.4", "The metrics 'open_issues', 'reopened_issues' and 'confirmed_issues' are now deprecated in the response. Consume 'violations' instead."),
+        new Change("10.4", "The use of 'open_issues', 'reopened_issues' and 'confirmed_issues' values in 'metricKeys' param are now deprecated. Use 'violations' instead."),
+        new Change("10.4", "The metric 'wont_fix_issues' is now deprecated in the response. Consume 'accepted_issues' instead."),
+        new Change("10.4", "The use of 'wont_fix_issues' value in 'metricKeys' param is now deprecated. Use 'accepted_issues' instead."),
+        new Change("10.4", "Added new accepted value for the 'metricKeys' param: 'accepted_issues'."),
+        new Change("10.1", String.format("The use of module keys in parameter '%s' is removed", PARAM_COMPONENT)),
+        new Change("10.0", format("The use of the following metrics in 'metricKeys' parameter is not deprecated anymore: %s",
+          MeasuresWsModule.getDeprecatedMetricsInSonarQube93())),
+        new Change("10.0", "the response field periods under measures field is removed."),
+        new Change("10.0", "the option `periods` of 'additionalFields' request field is removed."),
+        new Change("9.3", "When the new code period is set to 'reference branch', the response field 'date' under the 'period' field has been removed"),
+        new Change("9.3", format("The use of the following metrics in 'metricKeys' parameter is deprecated: %s",
+          MeasuresWsModule.getDeprecatedMetricsInSonarQube93())),
         new Change("8.8", "deprecated response field 'id' has been removed"),
         new Change("8.8", "deprecated response field 'refId' has been removed."),
         new Change("8.1", "the response field periods under measures field is deprecated. Use period instead."),
@@ -136,33 +149,18 @@ public class ComponentAction implements MeasuresWsAction {
       String pullRequest = request.getPullRequest();
       ComponentDto component = loadComponent(dbSession, request, branch, pullRequest);
       checkPermissions(component);
-      SnapshotDto analysis = dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, component.projectUuid()).orElse(null);
+      SnapshotDto analysis = dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, component.branchUuid()).orElse(null);
 
-      boolean isPR = isPR(pullRequest);
-
-      Set<String> metricKeysToRequest = new HashSet<>(request.metricKeys);
-
-      if (isPR) {
-        PrMeasureFix.addReplacementMetricKeys(metricKeysToRequest);
-      }
-
-      List<MetricDto> metrics = searchMetrics(dbSession, metricKeysToRequest);
+      List<MetricDto> metrics = searchMetrics(dbSession, new HashSet<>(withRemovedMetricAlias(request.getMetricKeys())));
       List<LiveMeasureDto> measures = searchMeasures(dbSession, component, metrics);
       Map<MetricDto, LiveMeasureDto> measuresByMetric = getMeasuresByMetric(measures, metrics);
 
-      if (isPR) {
-        Set<String> originalMetricKeys = new HashSet<>(request.metricKeys);
-        PrMeasureFix.createReplacementMeasures(metrics, measuresByMetric, originalMetricKeys);
-        PrMeasureFix.removeMetricsNotRequested(metrics, originalMetricKeys);
-      }
-
-      Optional<Measures.Period> period = snapshotToWsPeriods(analysis);
-      Optional<ComponentDto> refComponent = getReferenceComponent(dbSession, component);
-      return buildResponse(request, component, refComponent, measuresByMetric, metrics, period);
+      Measures.Period period = snapshotToWsPeriods(analysis).orElse(null);
+      return buildResponse(dbSession, request, component, measuresByMetric, metrics, period, request.getMetricKeys());
     }
   }
 
-  public List<MetricDto> searchMetrics(DbSession dbSession, Collection<String> metricKeys) {
+  public List<MetricDto> searchMetrics(DbSession dbSession, Set<String> metricKeys) {
     List<MetricDto> metrics = dbClient.metricDao().selectByKeys(dbSession, metricKeys);
     if (metrics.size() < metricKeys.size()) {
       Set<String> foundMetricKeys = metrics.stream().map(MetricDto::getKey).collect(Collectors.toSet());
@@ -205,7 +203,7 @@ public class ComponentAction implements MeasuresWsAction {
     List<MetricDtoWithBestValue> metricWithBestValueList = metrics.stream()
       .filter(MetricDtoFunctions.isOptimizedForBestValue())
       .map(MetricDtoWithBestValue::new)
-      .collect(MoreCollectors.toList(metrics.size()));
+      .toList();
     Map<String, LiveMeasureDto> measuresByMetricUuid = Maps.uniqueIndex(measures, LiveMeasureDto::getMetricUuid);
 
     for (MetricDtoWithBestValue metricWithBestValue : metricWithBestValueList) {
@@ -215,58 +213,63 @@ public class ComponentAction implements MeasuresWsAction {
     }
   }
 
-  private boolean isPR(@Nullable String pullRequest) {
-    return pullRequest != null;
-  }
-
   private ComponentDto loadComponent(DbSession dbSession, ComponentRequest request, @Nullable String branch, @Nullable String pullRequest) {
     String componentKey = request.getComponent();
-
-    if (branch == null && pullRequest == null) {
-      return componentFinder.getByKey(dbSession, componentKey);
-    }
-
     checkRequest(componentKey != null, "The '%s' parameter is missing", PARAM_COMPONENT);
     return componentFinder.getByKeyAndOptionalBranchOrPullRequest(dbSession, componentKey, branch, pullRequest);
   }
 
-  private Optional<ComponentDto> getReferenceComponent(DbSession dbSession, ComponentDto component) {
-    if (component.getCopyResourceUuid() == null) {
+  private Optional<RefComponent> getReference(DbSession dbSession, ComponentDto component) {
+    String copyComponentUuid = component.getCopyComponentUuid();
+    if (copyComponentUuid == null) {
       return Optional.empty();
     }
 
-    return dbClient.componentDao().selectByUuid(dbSession, component.getCopyResourceUuid());
+    Optional<ComponentDto> refComponent = dbClient.componentDao().selectByUuid(dbSession, copyComponentUuid);
+    if (refComponent.isEmpty()) {
+      return Optional.empty();
+    }
+    Optional<BranchDto> refBranch = dbClient.branchDao().selectByUuid(dbSession, refComponent.get().branchUuid());
+    return refBranch.map(rb -> new RefComponent(rb, refComponent.get()));
   }
 
-  private static ComponentWsResponse buildResponse(ComponentRequest request, ComponentDto component, Optional<ComponentDto> refComponent,
-                                                   Map<MetricDto, LiveMeasureDto> measuresByMetric, Collection<MetricDto> metrics, Optional<Measures.Period> period) {
+  private ComponentWsResponse buildResponse(DbSession dbSession, ComponentRequest request, ComponentDto component,
+    Map<MetricDto, LiveMeasureDto> measuresByMetric, Collection<MetricDto> metrics, @Nullable Measures.Period period,
+    Collection<String> requestedMetrics) {
+
     ComponentWsResponse.Builder response = ComponentWsResponse.newBuilder();
 
-    if (refComponent.isPresent()) {
-      response.setComponent(componentDtoToWsComponent(component, measuresByMetric, singletonMap(refComponent.get().uuid(), refComponent.get())));
+    RefComponent reference = getReference(dbSession, component).orElse(null);
+    if (reference != null) {
+      BranchDto refBranch = reference.getRefBranch();
+      ComponentDto refComponent = reference.getComponent();
+      response.setComponent(componentDtoToWsComponent(component, measuresByMetric, singletonMap(refComponent.uuid(), refComponent),
+        refBranch.isMain() ? null : refBranch.getBranchKey(), null, requestedMetrics));
     } else {
-      response.setComponent(componentDtoToWsComponent(component, measuresByMetric, emptyMap()));
+      boolean isMainBranch = dbClient.branchDao().selectByUuid(dbSession, component.branchUuid()).map(BranchDto::isMain).orElse(true);
+      response.setComponent(componentDtoToWsComponent(component, measuresByMetric, emptyMap(), isMainBranch ? null : request.getBranch(),
+        request.getPullRequest(), requestedMetrics));
     }
 
+    setAdditionalFields(request, metrics, period, response, requestedMetrics);
+
+    return response.build();
+  }
+
+  private static void setAdditionalFields(ComponentRequest request, Collection<MetricDto> metrics, @Nullable Measures.Period period,
+    ComponentWsResponse.Builder response, Collection<String> requestedMetrics) {
     List<String> additionalFields = request.getAdditionalFields();
     if (additionalFields != null) {
       if (additionalFields.contains(ADDITIONAL_METRICS)) {
-        for (MetricDto metric : metrics) {
-          response.getMetricsBuilder().addMetrics(metricDtoToWsMetric(metric));
+        for (MetricDto metricDto : metrics) {
+          addMetricToResponseIncludingRenamedMetric(metric -> response.getMetricsBuilder().addMetrics(metric), requestedMetrics, metricDto);
         }
       }
 
-      // backward compatibility
-      if (additionalFields.contains(DEPRECATED_ADDITIONAL_PERIODS) && period.isPresent()) {
-        response.getPeriodsBuilder().addPeriods(period.get());
-      }
-
-      if (additionalFields.contains(ADDITIONAL_PERIOD) && period.isPresent()) {
-        response.setPeriod(period.get());
+      if (additionalFields.contains(ADDITIONAL_PERIOD) && period != null) {
+        response.setPeriod(period);
       }
     }
-
-    return response.build();
   }
 
   private static ComponentRequest toComponentWsRequest(Request request) {
@@ -285,11 +288,11 @@ public class ComponentAction implements MeasuresWsAction {
   }
 
   private static class ComponentRequest {
-    private String component;
-    private String branch;
-    private String pullRequest;
-    private List<String> metricKeys;
-    private List<String> additionalFields;
+    private String component = null;
+    private String branch = null;
+    private String pullRequest = null;
+    private List<String> metricKeys = null;
+    private List<String> additionalFields = null;
 
     private String getComponent() {
       return component;
@@ -337,6 +340,25 @@ public class ComponentAction implements MeasuresWsAction {
     private ComponentRequest setAdditionalFields(@Nullable List<String> additionalFields) {
       this.additionalFields = additionalFields;
       return this;
+    }
+  }
+
+  private static class RefComponent {
+
+    private final BranchDto refBranch;
+    private final ComponentDto component;
+
+    public RefComponent(BranchDto refBranch, ComponentDto component) {
+      this.refBranch = refBranch;
+      this.component = component;
+    }
+
+    public BranchDto getRefBranch() {
+      return refBranch;
+    }
+
+    public ComponentDto getComponent() {
+      return component;
     }
   }
 }

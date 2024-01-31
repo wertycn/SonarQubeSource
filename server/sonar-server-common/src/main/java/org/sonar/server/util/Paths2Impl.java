@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,8 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import static java.nio.file.Path.of;
+
 public final class Paths2Impl implements Paths2 {
   private static final Paths2 INSTANCE = new Paths2Impl();
 
@@ -42,5 +44,10 @@ public final class Paths2Impl implements Paths2 {
   @Override
   public Path get(URI uri) {
     return Paths.get(uri);
+  }
+
+  @Override
+  public boolean exists(String first, String... more){
+    return of(first, more).toFile().exists();
   }
 }

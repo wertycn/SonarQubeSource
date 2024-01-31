@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,7 +52,7 @@ public class WebhookDeliveryDto extends WebhookDeliveryLiteDto<WebhookDeliveryDt
   public String toString() {
     return new ToStringBuilder(this)
       .append("uuid", uuid)
-      .append("componentUuid", componentUuid)
+      .append("projectUuid", projectUuid)
       .append("name", name)
       .append("success", success)
       .append("httpStatus", httpStatus)

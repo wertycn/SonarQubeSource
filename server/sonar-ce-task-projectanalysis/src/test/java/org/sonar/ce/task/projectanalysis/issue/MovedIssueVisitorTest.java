@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,23 +23,19 @@ import java.util.Date;
 import java.util.Optional;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.mockito.ArgumentCaptor;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.ReportComponent;
 import org.sonar.ce.task.projectanalysis.filemove.MovedFilesRepository;
 import org.sonar.core.issue.DefaultIssue;
-import org.sonar.core.issue.IssueChangeContext;
 import org.sonar.server.issue.IssueFieldsSetter;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 public class MovedIssueVisitorTest {
@@ -47,17 +43,14 @@ public class MovedIssueVisitorTest {
   private static final String FILE_UUID = "file uuid";
   private static final Component FILE = ReportComponent.builder(Component.Type.FILE, 1)
     .setKey("key_1")
-    .setPublicKey("public_key_1")
     .setUuid(FILE_UUID)
     .build();
 
   @org.junit.Rule
-  public ExpectedException expectedException = ExpectedException.none();
-  @org.junit.Rule
   public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule();
 
-  private MovedFilesRepository movedFilesRepository = mock(MovedFilesRepository.class);
-  private MovedIssueVisitor underTest = new MovedIssueVisitor(analysisMetadataHolder, movedFilesRepository, new IssueFieldsSetter());
+  private final MovedFilesRepository movedFilesRepository = mock(MovedFilesRepository.class);
+  private final MovedIssueVisitor underTest = new MovedIssueVisitor(analysisMetadataHolder, movedFilesRepository, new IssueFieldsSetter());
 
   @Before
   public void setUp() {
@@ -71,7 +64,7 @@ public class MovedIssueVisitorTest {
     DefaultIssue issue = mock(DefaultIssue.class);
     underTest.onIssue(ReportComponent.builder(Component.Type.DIRECTORY, 1).build(), issue);
 
-    verifyZeroInteractions(issue);
+    verifyNoInteractions(issue);
   }
 
   @Test
@@ -88,11 +81,10 @@ public class MovedIssueVisitorTest {
     DefaultIssue issue = mockIssue("other component uuid");
     when(issue.toString()).thenReturn("[bad issue, bad!]");
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Issue [bad issue, bad!] for component ReportComponent{ref=1, key='key_1', type=FILE} " +
-      "has a different component key but no original file exist in MovedFilesRepository");
-
-    underTest.onIssue(FILE, issue);
+    assertThatThrownBy(() -> underTest.onIssue(FILE, issue))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Issue [bad issue, bad!] for component ReportComponent{ref=1, key='key_1', type=FILE} " +
+        "has a different component key but no original file exist in MovedFilesRepository");
   }
 
   @Test
@@ -102,17 +94,16 @@ public class MovedIssueVisitorTest {
     when(movedFilesRepository.getOriginalFile(FILE))
       .thenReturn(Optional.of(new MovedFilesRepository.OriginalFile("original uuid", "original key")));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Issue [bad issue, bad!] doesn't belong to file original uuid registered as original " +
-      "file of current file ReportComponent{ref=1, key='key_1', type=FILE}");
-
-    underTest.onIssue(FILE, issue);
+    assertThatThrownBy(() -> underTest.onIssue(FILE, issue))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Issue [bad issue, bad!] doesn't belong to file original uuid registered as original " +
+        "file of current file ReportComponent{ref=1, key='key_1', type=FILE}");
   }
 
   @Test
   public void onIssue_update_component_and_module_fields_to_component_and_flag_issue_has_changed() {
     MovedFilesRepository.OriginalFile originalFile = new MovedFilesRepository.OriginalFile("original uuid", "original key");
-    DefaultIssue issue = mockIssue(originalFile.getUuid());
+    DefaultIssue issue = mockIssue(originalFile.uuid());
     when(movedFilesRepository.getOriginalFile(FILE))
       .thenReturn(Optional.of(originalFile));
 
@@ -120,14 +111,8 @@ public class MovedIssueVisitorTest {
 
     verify(issue).setComponentUuid(FILE.getUuid());
     verify(issue).setComponentKey(FILE.getKey());
-    verify(issue).setModuleUuid(null);
-    verify(issue).setModuleUuidPath(null);
+    verify(issue).setUpdateDate(new Date(ANALYSIS_DATE));
     verify(issue).setChanged(true);
-    ArgumentCaptor<IssueChangeContext> issueChangeContextCaptor = ArgumentCaptor.forClass(IssueChangeContext.class);
-    verify(issue).setFieldChange(issueChangeContextCaptor.capture(), eq("file"), eq(originalFile.getUuid()), eq(FILE.getUuid()));
-    assertThat(issueChangeContextCaptor.getValue().date()).isEqualTo(new Date(ANALYSIS_DATE));
-    assertThat(issueChangeContextCaptor.getValue().userUuid()).isNull();
-    assertThat(issueChangeContextCaptor.getValue().scan()).isFalse();
   }
 
   private DefaultIssue mockIssue(String fileUuid) {

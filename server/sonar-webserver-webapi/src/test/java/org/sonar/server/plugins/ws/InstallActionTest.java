@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -95,7 +95,6 @@ public class InstallActionTest {
     assertThatThrownBy(request::execute)
       .isInstanceOf(ForbiddenException.class)
       .hasMessage("Insufficient privileges");
-    ;
   }
 
   @Test

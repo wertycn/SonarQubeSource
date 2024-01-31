@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,112 +18,56 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Link } from 'react-router';
 import { getBranchLikeQuery } from '../../helpers/branch-like';
 import { getComponentDrilldownUrl, getComponentIssuesUrl } from '../../helpers/urls';
 import { BranchLike } from '../../types/branch-like';
-
-const ISSUE_MEASURES = [
-  'violations',
-  'new_violations',
-  'blocker_violations',
-  'critical_violations',
-  'major_violations',
-  'minor_violations',
-  'info_violations',
-  'new_blocker_violations',
-  'new_critical_violations',
-  'new_major_violations',
-  'new_minor_violations',
-  'new_info_violations',
-  'open_issues',
-  'reopened_issues',
-  'confirmed_issues',
-  'false_positive_issues',
-  'code_smells',
-  'new_code_smells',
-  'bugs',
-  'new_bugs',
-  'vulnerabilities',
-  'new_vulnerabilities'
-];
-
-const issueParamsPerMetric: T.Dict<T.Dict<string>> = {
-  blocker_violations: { resolved: 'false', severities: 'BLOCKER' },
-  new_blocker_violations: { resolved: 'false', severities: 'BLOCKER' },
-  critical_violations: { resolved: 'false', severities: 'CRITICAL' },
-  new_critical_violations: { resolved: 'false', severities: 'CRITICAL' },
-  major_violations: { resolved: 'false', severities: 'MAJOR' },
-  new_major_violations: { resolved: 'false', severities: 'MAJOR' },
-  minor_violations: { resolved: 'false', severities: 'MINOR' },
-  new_minor_violations: { resolved: 'false', severities: 'MINOR' },
-  info_violations: { resolved: 'false', severities: 'INFO' },
-  new_info_violations: { resolved: 'false', severities: 'INFO' },
-  open_issues: { resolved: 'false', statuses: 'OPEN' },
-  reopened_issues: { resolved: 'false', statuses: 'REOPENED' },
-  confirmed_issues: { resolved: 'false', statuses: 'CONFIRMED' },
-  false_positive_issues: { resolutions: 'FALSE-POSITIVE' },
-  code_smells: { resolved: 'false', types: 'CODE_SMELL' },
-  new_code_smells: { resolved: 'false', types: 'CODE_SMELL' },
-  bugs: { resolved: 'false', types: 'BUG' },
-  new_bugs: { resolved: 'false', types: 'BUG' },
-  vulnerabilities: { resolved: 'false', types: 'VULNERABILITY' },
-  new_vulnerabilities: { resolved: 'false', types: 'VULNERABILITY' }
-};
+import Link from '../common/Link';
+import { isIssueMeasure, propsToIssueParams } from './utils';
 
 interface Props {
+  ariaLabel?: string;
   branchLike?: BranchLike;
   children?: React.ReactNode;
   className?: string;
   component: string;
   metric: string;
-  sinceLeakPeriod?: boolean;
+  inNewCodePeriod?: boolean;
 }
 
 export default class DrilldownLink extends React.PureComponent<Props> {
-  isIssueMeasure = () => {
-    return ISSUE_MEASURES.indexOf(this.props.metric) !== -1;
-  };
-
-  propsToIssueParams = () => {
-    const params: T.Dict<string | boolean> = {
-      ...(issueParamsPerMetric[this.props.metric] || { resolved: 'false' })
-    };
-
-    if (this.props.sinceLeakPeriod) {
-      params.sinceLeakPeriod = true;
-    }
-
-    return params;
-  };
-
   renderIssuesLink = () => {
-    const url = getComponentIssuesUrl(this.props.component, {
-      ...this.propsToIssueParams(),
-      ...getBranchLikeQuery(this.props.branchLike)
+    const { ariaLabel, className, component, children, branchLike, metric, inNewCodePeriod } =
+      this.props;
+
+    const url = getComponentIssuesUrl(component, {
+      ...propsToIssueParams(metric, inNewCodePeriod),
+      ...getBranchLikeQuery(branchLike),
     });
 
     return (
-      <Link className={this.props.className} to={url}>
-        {this.props.children}
+      <Link aria-label={ariaLabel} className={className} to={url}>
+        {children}
       </Link>
     );
   };
 
   render() {
-    if (this.isIssueMeasure()) {
+    const { ariaLabel, className, metric, component, children, branchLike } = this.props;
+
+    if (isIssueMeasure(metric)) {
       return this.renderIssuesLink();
     }
 
     const url = getComponentDrilldownUrl({
-      componentKey: this.props.component,
-      metric: this.props.metric,
-      branchLike: this.props.branchLike,
-      listView: true
+      componentKey: component,
+      metric,
+      branchLike,
+      listView: true,
     });
+
     return (
-      <Link className={this.props.className} to={url}>
-        {this.props.children}
+      <Link aria-label={ariaLabel} className={className} to={url}>
+        {children}
       </Link>
     );
   }

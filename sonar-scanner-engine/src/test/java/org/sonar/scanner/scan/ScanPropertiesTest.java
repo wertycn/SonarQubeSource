@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,13 +25,13 @@ import java.util.Optional;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.MessageException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -42,9 +42,6 @@ public class ScanPropertiesTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException exception = ExpectedException.none();
 
   @Before
   public void setUp() throws IOException {
@@ -65,6 +62,14 @@ public class ScanPropertiesTest {
   public void should_define_branch_name() {
     settings.setProperty("sonar.branch.name", "name");
     assertThat(underTest.branch()).isEqualTo(Optional.of("name"));
+  }
+
+  @Test
+  public void should_define_report_publish_timeout() {
+    assertThat(underTest.reportPublishTimeout()).isEqualTo(60);
+
+    settings.setProperty("sonar.ws.report.timeout", "10");
+    assertThat(underTest.reportPublishTimeout()).isEqualTo(10);
   }
 
   @Test
@@ -90,9 +95,8 @@ public class ScanPropertiesTest {
   public void validate_fails_if_metadata_file_location_is_not_absolute() {
     settings.setProperty("sonar.scanner.metadataFilePath", "relative");
 
-    exception.expect(MessageException.class);
-    exception.expectMessage("Property 'sonar.scanner.metadataFilePath' must point to an absolute path: relative");
-    underTest.validate();
-
+    assertThatThrownBy(() -> underTest.validate())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Property 'sonar.scanner.metadataFilePath' must point to an absolute path: relative");
   }
 }

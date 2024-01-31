@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,20 +25,22 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.encoder.Encoder;
-import com.google.common.collect.ImmutableSet;
 import java.util.Set;
+import javax.annotation.CheckForNull;
 import org.sonar.process.ProcessId;
 import org.sonar.process.Props;
 import org.sonar.process.logging.LogLevelConfig;
 import org.sonar.process.logging.LogbackHelper;
 import org.sonar.process.logging.RootLoggerConfig;
 
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_NAME;
 import static org.sonar.process.logging.RootLoggerConfig.newRootLoggerConfigBuilder;
 
 public abstract class ServerProcessLogging {
 
   public static final String STARTUP_LOGGER_NAME = "startup";
-  protected static final Set<String> JMX_RMI_LOGGER_NAMES = ImmutableSet.of(
+  protected static final Set<String> JMX_RMI_LOGGER_NAMES = Set.of(
     "javax.management.remote.timeout",
     "javax.management.remote.misc",
     "javax.management.remote.rmi",
@@ -48,7 +50,7 @@ public abstract class ServerProcessLogging {
     "sun.rmi.transport.misc",
     "sun.rmi.server.call",
     "sun.rmi.dgc");
-  protected static final Set<String> LOGGER_NAMES_TO_TURN_OFF = ImmutableSet.of(
+  protected static final Set<String> LOGGER_NAMES_TO_TURN_OFF = Set.of(
     // mssql driver
     "com.microsoft.sqlserver.jdbc.internals",
     "com.microsoft.sqlserver.jdbc.ResultSet",
@@ -57,7 +59,7 @@ public abstract class ServerProcessLogging {
 
   private final ProcessId processId;
   private final String threadIdFieldPattern;
-  private final LogbackHelper helper = new LogbackHelper();
+  protected final LogbackHelper helper = new LogbackHelper();
   private final LogLevelConfig logLevelConfig;
 
   protected ServerProcessLogging(ProcessId processId, String threadIdFieldPattern) {
@@ -75,11 +77,6 @@ public abstract class ServerProcessLogging {
     builder.immutableLevel("org.elasticsearch", Level.INFO);
     builder.immutableLevel("org.elasticsearch.node", Level.INFO);
     builder.immutableLevel("org.elasticsearch.http", Level.INFO);
-
-    // turn off ES type deprecation logging to not flood logs
-    builder.immutableLevel("DEPRECATION", Level.ERROR);
-    builder.immutableLevel("org.elasticsearch.deprecation", Level.ERROR);
-    builder.immutableLevel("org.elasticsearch.client.RestClient", Level.ERROR);
 
     builder.immutableLevel("ch.qos.logback", Level.WARN);
     builder.immutableLevel("org.apache.catalina", Level.INFO);
@@ -101,6 +98,17 @@ public abstract class ServerProcessLogging {
     builder.immutableLevel("com.hazelcast.replicatedmap.impl.operation.SyncReplicatedMapDataOperation", Level.INFO);
     // Netty (used by Elasticsearch)
     builder.immutableLevel("io.netty.buffer.PoolThreadCache", Level.INFO);
+    // Spring related
+    builder.immutableLevel("org.springframework", Level.WARN);
+    builder.immutableLevel("org.sonar.core.platform.PriorityBeanFactory", Level.WARN);
+    // Network-communication related
+    builder.immutableLevel("org.apache.http", Level.WARN);
+    builder.immutableLevel("okhttp3", Level.WARN);
+    builder.immutableLevel("sun.net", Level.WARN);
+    // JDK security
+    builder.immutableLevel("jdk.event.security", Level.WARN);
+    // GitHub library
+    builder.immutableLevel("org.kohsuke", Level.WARN);
 
     extendLogLevelConfiguration(builder);
 
@@ -114,7 +122,7 @@ public abstract class ServerProcessLogging {
     configureRootLogger(props);
     helper.apply(logLevelConfig, props);
     configureDirectToConsoleLoggers(props, ctx, STARTUP_LOGGER_NAME);
-    extendConfigure();
+    extendConfigure(props);
 
     helper.enableJulChangePropagation(ctx);
 
@@ -127,16 +135,28 @@ public abstract class ServerProcessLogging {
 
   protected abstract void extendLogLevelConfiguration(LogLevelConfig.Builder logLevelConfigBuilder);
 
-  protected abstract void extendConfigure();
+  protected abstract void extendConfigure(Props props);
 
   private void configureRootLogger(Props props) {
-    RootLoggerConfig config = newRootLoggerConfigBuilder()
-      .setProcessId(processId)
-      .setThreadIdFieldPattern(threadIdFieldPattern)
-      .build();
+    RootLoggerConfig config = buildRootLoggerConfig(props);
     Encoder<ILoggingEvent> encoder = helper.createEncoder(props, config, helper.getRootContext());
     helper.configureGlobalFileLog(props, config, encoder);
     helper.configureForSubprocessGobbler(props, encoder);
+  }
+
+  protected RootLoggerConfig buildRootLoggerConfig(Props props) {
+    return newRootLoggerConfigBuilder()
+      .setProcessId(processId)
+      .setNodeNameField(getNodeNameWhenCluster(props))
+      .setThreadIdFieldPattern(threadIdFieldPattern)
+      .build();
+  }
+
+  @CheckForNull
+  protected static String getNodeNameWhenCluster(Props props) {
+    boolean clusterEnabled = props.valueAsBoolean(CLUSTER_ENABLED.getKey(),
+      Boolean.parseBoolean(CLUSTER_ENABLED.getDefaultValue()));
+    return clusterEnabled ? props.value(CLUSTER_NODE_NAME.getKey(), CLUSTER_NODE_NAME.getDefaultValue()) : null;
   }
 
   /**
@@ -145,6 +165,7 @@ public abstract class ServerProcessLogging {
    */
   private void configureDirectToConsoleLoggers(Props props, LoggerContext context, String... loggerNames) {
     RootLoggerConfig config = newRootLoggerConfigBuilder()
+      .setNodeNameField(getNodeNameWhenCluster(props))
       .setProcessId(ProcessId.APP)
       .setThreadIdFieldPattern("")
       .build();

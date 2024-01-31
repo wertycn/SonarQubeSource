@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.plugin.PluginDto;
-import org.sonar.server.plugins.PluginType;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.server.plugins.ServerPlugin;
 import org.sonar.server.plugins.ServerPluginRepository;
 
@@ -75,33 +75,69 @@ public class RegisterPlugins implements Startable {
     try (DbSession dbSession = dbClient.openSession(false)) {
       Map<String, PluginDto> allPreviousPluginsByKey = dbClient.pluginDao().selectAll(dbSession).stream()
         .collect(Collectors.toMap(PluginDto::getKee, identity()));
+
       for (ServerPlugin installed : serverPluginRepository.getPlugins()) {
         PluginInfo info = installed.getPluginInfo();
         PluginDto previousDto = allPreviousPluginsByKey.get(info.getKey());
         if (previousDto == null) {
           LOG.debug("Register new plugin {}", info.getKey());
-          PluginDto pluginDto = new PluginDto()
-            .setUuid(uuidFactory.create())
-            .setKee(info.getKey())
-            .setBasePluginKey(info.getBasePlugin())
-            .setFileHash(installed.getJar().getMd5())
-            .setType(toTypeDto(installed.getType()))
-            .setCreatedAt(now)
-            .setUpdatedAt(now);
-          dbClient.pluginDao().insert(dbSession, pluginDto);
-        } else if (!previousDto.getFileHash().equals(installed.getJar().getMd5()) || !previousDto.getType().equals(toTypeDto(installed.getType()))) {
-          LOG.debug("Update plugin {}", info.getKey());
-          previousDto
-            .setBasePluginKey(info.getBasePlugin())
-            .setFileHash(installed.getJar().getMd5())
-            .setType(toTypeDto(installed.getType()))
-            .setUpdatedAt(now);
-          dbClient.pluginDao().update(dbSession, previousDto);
+          insertNewPluginDto(dbSession, installed, info);
+          continue;
         }
-        // Don't remove uninstalled plugins, because corresponding rules and active rules are also not deleted
+        if (pluginTypeOrJarHashChanged(installed, previousDto)) {
+          LOG.debug("Update plugin {}", info.getKey());
+          updatePluginDto(dbSession, installed, info, previousDto);
+        }
+        if (previousDto.isRemoved()) {
+          LOG.debug("Previously removed plugin {} was re-installed", info.getKey());
+          previousDto.setRemoved(false);
+          updatePluginDto(dbSession, installed, info, previousDto);
+        }
       }
+
+      // keep uninstalled plugins with a 'removed' flag, because corresponding rules and active rules are also not deleted
+      for (PluginDto dto : allPreviousPluginsByKey.values()) {
+        if (dto.isRemoved()) {
+          continue;
+        }
+
+        if (serverPluginRepository.findPlugin(dto.getKee()).isEmpty()) {
+          dto
+            .setRemoved(true)
+            .setUpdatedAt(now);
+          dbClient.pluginDao().update(dbSession, dto);
+        }
+      }
+
       dbSession.commit();
     }
+  }
+
+  private void insertNewPluginDto(DbSession dbSession, ServerPlugin installed, PluginInfo info) {
+    long now = system.now();
+    PluginDto pluginDto = new PluginDto()
+      .setUuid(uuidFactory.create())
+      .setKee(info.getKey())
+      .setBasePluginKey(info.getBasePlugin())
+      .setFileHash(installed.getJar().getMd5())
+      .setType(toTypeDto(installed.getType()))
+      .setCreatedAt(now)
+      .setUpdatedAt(now);
+    dbClient.pluginDao().insert(dbSession, pluginDto);
+  }
+
+  private void updatePluginDto(DbSession dbSession, ServerPlugin installed, PluginInfo info, PluginDto previousDto) {
+    long now = system.now();
+    previousDto
+      .setBasePluginKey(info.getBasePlugin())
+      .setFileHash(installed.getJar().getMd5())
+      .setType(toTypeDto(installed.getType()))
+      .setUpdatedAt(now);
+    dbClient.pluginDao().update(dbSession, previousDto);
+  }
+
+  private static boolean pluginTypeOrJarHashChanged(ServerPlugin installed, PluginDto previousDto) {
+    return !previousDto.getFileHash().equals(installed.getJar().getMd5()) || !previousDto.getType().equals(toTypeDto(installed.getType()));
   }
 
   private static PluginDto.Type toTypeDto(PluginType type) {

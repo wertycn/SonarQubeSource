@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,6 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Dict } from './types';
+
 export interface AzureProject {
   name: string;
   description: string;
@@ -43,7 +45,16 @@ export interface BitbucketRepository {
   slug: string;
 }
 
-export type BitbucketProjectRepositories = T.Dict<{
+export interface BitbucketCloudRepository {
+  uuid: number;
+  name: string;
+  projectKey: string;
+  sqProjectKey?: string;
+  slug: string;
+  workspace: string;
+}
+
+export type BitbucketProjectRepositories = Dict<{
   allShown: boolean;
   repositories: BitbucketRepository[];
 }>;
@@ -58,7 +69,7 @@ export interface GithubRepository {
   key: string;
   name: string;
   url: string;
-  sqProjectKey: string;
+  sqProjectKey?: string;
 }
 
 export interface GitlabProject {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,43 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { RadioButton } from 'design-system';
 import * as React from 'react';
-import Radio from 'sonar-ui-common/components/controls/Radio';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../helpers/l10n';
+import { Visibility } from '../../types/component';
 
-interface Props {
+export interface VisibilitySelectorProps {
   canTurnToPrivate?: boolean;
   className?: string;
-  onChange: (visibility: T.Visibility) => void;
+  onChange: (visibility: Visibility) => void;
   showDetails?: boolean;
-  visibility?: T.Visibility;
+  visibility?: Visibility;
+  disabled?: boolean;
+  loading?: boolean;
 }
 
-export default class VisibilitySelector extends React.PureComponent<Props> {
-  render() {
-    return (
-      <div className={classNames(this.props.className)}>
-        {['public', 'private'].map(visibility => (
-          <Radio
-            className={`huge-spacer-right visibility-${visibility}`}
-            key={visibility}
-            value={visibility}
-            checked={this.props.visibility === visibility}
-            onCheck={this.props.onChange}
-            disabled={visibility === 'private' && !this.props.canTurnToPrivate}>
-            <div>
-              {translate('visibility', visibility)}
-              {this.props.showDetails && (
-                <p className="note">{translate('visibility', visibility, 'description.long')}</p>
-              )}
-            </div>
-          </Radio>
-        ))}
-      </div>
-    );
-  }
+export default function VisibilitySelector(props: VisibilitySelectorProps) {
+  const { className, canTurnToPrivate, visibility, showDetails, disabled, loading = false } = props;
+  return (
+    <div className={classNames(className)}>
+      {Object.values(Visibility).map((v) => (
+        <RadioButton
+          className={`huge-spacer-right visibility-${v}`}
+          key={v}
+          value={v}
+          checked={v === visibility}
+          onCheck={props.onChange}
+          disabled={disabled || (v === Visibility.Private && !canTurnToPrivate) || loading}
+        >
+          <div>
+            {translate('visibility', v)}
+            {showDetails && (
+              <p className="note">{translate('visibility', v, 'description.long')}</p>
+            )}
+          </div>
+        </RadioButton>
+      ))}
+    </div>
+  );
 }

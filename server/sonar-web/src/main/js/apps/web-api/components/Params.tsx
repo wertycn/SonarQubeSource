@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,18 +18,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { WebApi } from '../../../types/types';
 import DeprecatedBadge from './DeprecatedBadge';
 import InternalBadge from './InternalBadge';
 
 interface Props {
-  params: T.WebApi.Param[];
+  params: WebApi.Param[];
   showDeprecated: boolean;
   showInternal: boolean;
 }
 
 export default class Params extends React.PureComponent<Props> {
-  renderKey(param: T.WebApi.Param) {
+  renderKey(param: WebApi.Param) {
     return (
       <td className="markdown" style={{ width: 180 }}>
         <code>{param.key}</code>
@@ -46,18 +47,6 @@ export default class Params extends React.PureComponent<Props> {
           </div>
         )}
 
-        {this.props.showDeprecated && param.deprecatedKey && (
-          <div className="little-spacer-top">
-            <code>{param.deprecatedKey}</code>
-          </div>
-        )}
-
-        {this.props.showDeprecated && param.deprecatedKey && param.deprecatedKeySince && (
-          <div className="little-spacer-top">
-            <DeprecatedBadge since={param.deprecatedKeySince} />
-          </div>
-        )}
-
         <div className="note little-spacer-top">{param.required ? 'required' : 'optional'}</div>
 
         {param.since && (
@@ -65,11 +54,23 @@ export default class Params extends React.PureComponent<Props> {
             {translateWithParameters('since_x', param.since)}
           </div>
         )}
+
+        {this.props.showDeprecated && param.deprecatedKey && (
+          <div className="big-spacer-top spacer-left">
+            <div className="note little-spacer-bottom">{translate('replaces')}:</div>
+            <code>{param.deprecatedKey}</code>
+            {param.deprecatedKeySince && (
+              <div className="little-spacer-top">
+                <DeprecatedBadge since={param.deprecatedKeySince} />
+              </div>
+            )}
+          </div>
+        )}
       </td>
     );
   }
 
-  renderConstraint(param: T.WebApi.Param, field: keyof T.WebApi.Param, label: string) {
+  renderConstraint(param: WebApi.Param, field: keyof WebApi.Param, label: string) {
     const value = param[field];
     if (value !== undefined) {
       return (
@@ -86,13 +87,13 @@ export default class Params extends React.PureComponent<Props> {
   render() {
     const { params, showDeprecated, showInternal } = this.props;
     const displayedParameters = params
-      .filter(p => showDeprecated || !p.deprecatedSince)
-      .filter(p => showInternal || !p.internal);
+      .filter((p) => showDeprecated || !p.deprecatedSince)
+      .filter((p) => showInternal || !p.internal);
     return (
       <div className="web-api-params">
         <table>
           <tbody>
-            {displayedParameters.map(param => (
+            {displayedParameters.map((param) => (
               <tr key={param.key}>
                 {this.renderKey(param)}
 
@@ -109,7 +110,7 @@ export default class Params extends React.PureComponent<Props> {
                     <div>
                       <h4>{translate('api_documentation.possible_values')}</h4>
                       <ul className="list-styled">
-                        {param.possibleValues.map(value => (
+                        {param.possibleValues.map((value) => (
                           <li className="little-spacer-top" key={value}>
                             <code>{value}</code>
                           </li>

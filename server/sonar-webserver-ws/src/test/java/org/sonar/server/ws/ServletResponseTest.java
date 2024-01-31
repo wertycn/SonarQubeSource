@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,12 @@
  */
 package org.sonar.server.ws;
 
+import java.io.IOException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.server.http.JavaxHttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -36,13 +36,10 @@ import static org.sonarqube.ws.MediaTypes.XML;
 
 public class ServletResponseTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+  private final ServletOutputStream output = mock(ServletOutputStream.class);
+  private final HttpServletResponse response = mock(HttpServletResponse.class);
 
-  private ServletOutputStream output = mock(ServletOutputStream.class);
-  private HttpServletResponse response = mock(HttpServletResponse.class);
-
-  private ServletResponse underTest = new ServletResponse(response);
+  private final ServletResponse underTest = new ServletResponse(new JavaxHttpResponse(response));
 
   @Before
   public void setUp() throws Exception {
@@ -85,6 +82,20 @@ public class ServletResponseTest {
     underTest.stream().setStatus(404);
 
     verify(response).setStatus(404);
+  }
+
+  @Test
+  public void setCharacterEncoding_encodingIsSet() {
+    underTest.stream().setCharacterEncoding("UTF-8");
+
+    verify(response).setCharacterEncoding("UTF-8");
+  }
+
+  @Test
+  public void flushBuffer_bufferIsFlushed() throws IOException {
+    underTest.stream().flushBuffer();
+
+    verify(response).flushBuffer();
   }
 
   @Test

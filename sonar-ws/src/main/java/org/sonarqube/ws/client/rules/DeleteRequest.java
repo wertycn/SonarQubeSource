@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,7 @@ public class DeleteRequest {
 
   /**
    * This is a mandatory parameter.
-   * Example value: "squid:XPath_1402065390816"
+   * Example value: "java:XPath_1402065390816"
    */
   public DeleteRequest setKey(String key) {
     this.key = key;

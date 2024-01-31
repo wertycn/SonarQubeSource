@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -102,7 +102,7 @@ public class DefaultInputModuleHierarchyTest {
 
     moduleHierarchy = new DefaultInputModuleHierarchy(root, parents);
 
-    assertThat(moduleHierarchy.relativePathToRoot(root)).isEqualTo("");
+    assertThat(moduleHierarchy.relativePathToRoot(root)).isEmpty();
     assertThat(moduleHierarchy.relativePathToRoot(mod1)).isEqualTo("mod1");
     assertThat(moduleHierarchy.relativePathToRoot(mod2)).isEqualTo("mod2");
     assertThat(moduleHierarchy.relativePathToRoot(mod3)).isNull();

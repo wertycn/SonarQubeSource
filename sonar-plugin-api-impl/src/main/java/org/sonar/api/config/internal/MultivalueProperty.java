@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,14 +21,18 @@ package org.sonar.api.config.internal;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang.ArrayUtils;
+
+import static java.util.function.UnaryOperator.identity;
 
 public class MultivalueProperty {
   private MultivalueProperty() {
@@ -36,16 +40,17 @@ public class MultivalueProperty {
   }
 
   public static String[] parseAsCsv(String key, String value) {
-    return parseAsCsv(key, value, Function.identity());
+    return parseAsCsv(key, value, identity());
   }
 
-  public static String[] parseAsCsv(String key, String value, Function<String, String> valueProcessor) {
+  public static String[] parseAsCsv(String key, String value, UnaryOperator<String> valueProcessor) {
     String cleanValue = MultivalueProperty.trimFieldsAndRemoveEmptyFields(value);
     List<String> result = new ArrayList<>();
-    try (CSVParser csvParser = CSVFormat.RFC4180
-      .withHeader((String) null)
-      .withIgnoreEmptyLines()
-      .withIgnoreSurroundingSpaces()
+    try (CSVParser csvParser = CSVFormat.RFC4180.builder()
+        .setSkipHeaderRecord(true)
+        .setIgnoreEmptyLines(true)
+        .setIgnoreSurroundingSpaces(true)
+        .build()
       .parse(new StringReader(cleanValue))) {
       List<CSVRecord> records = csvParser.getRecords();
       if (records.isEmpty()) {
@@ -53,7 +58,7 @@ public class MultivalueProperty {
       }
       processRecords(result, records, valueProcessor);
       return result.toArray(new String[result.size()]);
-    } catch (IOException e) {
+    } catch (IOException | UncheckedIOException e) {
       throw new IllegalStateException("Property: '" + key + "' doesn't contain a valid CSV value: '" + value + "'", e);
     }
   }

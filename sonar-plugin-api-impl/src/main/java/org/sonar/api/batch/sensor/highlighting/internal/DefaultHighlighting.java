@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,18 +73,6 @@ public class DefaultHighlighting extends DefaultStorable implements NewHighlight
 
   public InputFile inputFile() {
     return inputFile;
-  }
-
-  @Override
-  public DefaultHighlighting highlight(int startOffset, int endOffset, TypeOfText typeOfText) {
-    checkInputFileNotNull();
-    TextRange newRange;
-    try {
-      newRange = inputFile.newRange(startOffset, endOffset);
-    } catch (Exception e) {
-      throw new IllegalArgumentException("Unable to highlight file " + inputFile, e);
-    }
-    return highlight(newRange, typeOfText);
   }
 
   @Override

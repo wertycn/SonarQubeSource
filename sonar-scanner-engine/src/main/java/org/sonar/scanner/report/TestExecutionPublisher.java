@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,11 +26,10 @@ import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputComponent;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.sensor.measure.internal.DefaultMeasure;
-import org.sonar.api.test.MutableTestPlan;
-import org.sonar.api.test.TestCase;
-import org.sonar.api.test.TestCase.Status;
+import org.sonar.scanner.deprecated.test.DefaultTestCase;
+import org.sonar.scanner.deprecated.test.DefaultTestCase.Status;
+import org.sonar.scanner.deprecated.test.DefaultTestPlan;
 import org.sonar.scanner.deprecated.test.TestPlanBuilder;
-import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
 import org.sonar.scanner.scan.filesystem.InputComponentStore;
 
@@ -65,13 +64,14 @@ public class TestExecutionPublisher implements ReportPublisherStep {
   }
 
   private void updateTestExecutionFromTestPlan(final InputFile inputFile, ScannerReportWriter writer) {
-    final MutableTestPlan testPlan = testPlanBuilder.getTestPlanByFile(inputFile);
+    final DefaultTestPlan testPlan = testPlanBuilder.getTestPlanByFile(inputFile);
     if (testPlan == null || !testPlan.testCases().iterator().hasNext()) {
       return;
     }
     long nonSkippedTests = StreamSupport.stream(testPlan.testCases().spliterator(), false).filter(t -> t.status() != Status.SKIPPED).count();
     appendMeasure(inputFile, writer, new DefaultMeasure<Integer>().forMetric(TESTS).withValue((int) nonSkippedTests));
-    long executionTime = StreamSupport.stream(testPlan.testCases().spliterator(), false).map(TestCase::durationInMs).filter(Objects::nonNull).mapToLong(Long::longValue).sum();
+    long executionTime = StreamSupport.stream(testPlan.testCases().spliterator(), false).map(DefaultTestCase::durationInMs).filter(Objects::nonNull).mapToLong(Long::longValue)
+      .sum();
     appendMeasure(inputFile, writer, new DefaultMeasure<Long>().forMetric(TEST_EXECUTION_TIME).withValue(executionTime));
     long errorTests = StreamSupport.stream(testPlan.testCases().spliterator(), false).filter(t -> t.status() == Status.ERROR).count();
     appendMeasure(inputFile, writer, new DefaultMeasure<Integer>().forMetric(TEST_ERRORS).withValue((int) errorTests));
@@ -81,7 +81,7 @@ public class TestExecutionPublisher implements ReportPublisherStep {
     appendMeasure(inputFile, writer, new DefaultMeasure<Integer>().forMetric(TEST_FAILURES).withValue((int) failedTests));
   }
 
-  private void appendMeasure(InputFile inputFile, ScannerReportWriter writer, DefaultMeasure measure) {
+  private static void appendMeasure(InputFile inputFile, ScannerReportWriter writer, DefaultMeasure measure) {
     writer.appendComponentMeasure(((DefaultInputComponent) inputFile).scannerId(), toReportMeasure(measure));
   }
 

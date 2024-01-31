@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,11 +21,16 @@ package org.sonar.server.user;
 
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.user.UserDto;
+import org.sonar.db.user.UserTokenDto;
 
 @ServerSide
 public interface UserSessionFactory {
 
-  UserSession create(UserDto user);
+  UserSession create(UserDto user, boolean isAuthenticatedGuiSession);
+
+  UserSession create(UserDto user, UserTokenDto userToken);
+
+  GithubWebhookUserSession createGithubWebhookUserSession();
 
   UserSession createAnonymous();
 

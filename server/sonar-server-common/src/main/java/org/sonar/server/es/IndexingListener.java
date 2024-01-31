@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,8 @@ package org.sonar.server.es;
 
 import java.util.List;
 
+import static java.lang.String.format;
+
 public interface IndexingListener {
 
   void onSuccess(List<DocId> docIds);
@@ -36,7 +38,10 @@ public interface IndexingListener {
     @Override
     public void onFinish(IndexingResult result) {
       if (result.getFailures() > 0) {
-        throw new IllegalStateException(String.format("Unrecoverable indexation failures: %d errors among %d requests", result.getFailures(), result.getTotal()));
+        throw new IllegalStateException(
+          format("Unrecoverable indexing failures: %d errors among %d requests. Check Elasticsearch logs for further details.",
+            result.getFailures(),
+            result.getTotal()));
       }
     }
   };

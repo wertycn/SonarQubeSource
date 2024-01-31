@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@ export interface EvolutionProps {
 
 export default function Evolution({ profiles }: EvolutionProps) {
   return (
-    <div className="quality-profiles-evolution">
+    <div className="sw-flex sw-flex-col sw-gap-12">
       <EvolutionDeprecated profiles={profiles} />
       <EvolutionStagnant profiles={profiles} />
       <EvolutionRules />

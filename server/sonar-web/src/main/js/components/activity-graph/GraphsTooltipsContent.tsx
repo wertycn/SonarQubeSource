@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import ChartLegendIcon from 'sonar-ui-common/components/icons/ChartLegendIcon';
+import { ChartLegendIcon } from '../../components/icons/ChartLegendIcon';
 
 interface Props {
   name: string;
@@ -29,11 +29,11 @@ interface Props {
 
 export default function GraphsTooltipsContent({ name, index, translatedName, value }: Props) {
   return (
-    <tr className="activity-graph-tooltip-line" key={name}>
+    <tr className="sw-h-8" key={name}>
       <td className="thin">
         <ChartLegendIcon className="spacer-right" index={index} />
       </td>
-      <td className="activity-graph-tooltip-value text-right spacer-right thin">{value}</td>
+      <td className="sw-font-bold sw-text-right sw-pr-2 thin">{value}</td>
       <td>{translatedName}</td>
     </tr>
   );

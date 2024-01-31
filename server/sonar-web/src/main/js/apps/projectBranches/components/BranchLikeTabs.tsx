@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,133 +17,134 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BranchIcon, PullRequestIcon, ToggleButton } from 'design-system';
 import * as React from 'react';
-import BoxedTabs from 'sonar-ui-common/components/controls/BoxedTabs';
-import BranchIcon from 'sonar-ui-common/components/icons/BranchIcon';
-import PullRequestIcon from 'sonar-ui-common/components/icons/PullRequestIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { useState } from 'react';
+import { getTabId, getTabPanelId } from '../../../components/controls/BoxedTabs';
 import {
   isBranch,
   isMainBranch,
   isPullRequest,
   sortBranches,
-  sortPullRequests
+  sortPullRequests,
 } from '../../../helpers/branch-like';
-import { BranchLike } from '../../../types/branch-like';
+import { translate } from '../../../helpers/l10n';
+import { useBranchesQuery } from '../../../queries/branch';
+import { Branch, BranchLike, PullRequest } from '../../../types/branch-like';
+import { Component } from '../../../types/types';
 import BranchLikeTable from './BranchLikeTable';
 import DeleteBranchModal from './DeleteBranchModal';
 import RenameBranchModal from './RenameBranchModal';
+import SetAsMainBranchModal from './SetAsMainBranchModal';
 
 interface Props {
-  branchLikes: BranchLike[];
-  component: T.Component;
-  onBranchesChange: () => void;
-}
-
-interface State {
-  currentTab: Tabs;
-  deleting?: BranchLike;
-  renaming?: BranchLike;
+  component: Component;
+  fetchComponent: () => Promise<void>;
 }
 
 export enum Tabs {
   Branch,
-  PullRequest
+  PullRequest,
 }
 
 const TABS = [
   {
     key: Tabs.Branch,
+    value: Tabs.Branch,
     label: (
       <>
         <BranchIcon />
-        <span className="spacer-left">
-          {translate('project_branch_pull_request.tabs.branches')}
-        </span>
+        <span className="sw-ml-2">{translate('project_branch_pull_request.tabs.branches')}</span>
       </>
-    )
+    ),
   },
   {
     key: Tabs.PullRequest,
+    value: Tabs.PullRequest,
     label: (
       <>
         <PullRequestIcon />
-        <span className="spacer-left">
+        <span className="sw-ml-2">
           {translate('project_branch_pull_request.tabs.pull_requests')}
         </span>
       </>
-    )
-  }
+    ),
+  },
 ];
 
-export default class BranchLikeTabs extends React.PureComponent<Props, State> {
-  state: State = { currentTab: Tabs.Branch };
+export default function BranchLikeTabs(props: Props) {
+  const { component, fetchComponent } = props;
+  const [currentTab, setCurrentTab] = useState<Tabs>(Tabs.Branch);
+  const [renaming, setRenaming] = useState<BranchLike>();
+  const [settingAsMain, setSettingAsMain] = useState<Branch>();
+  const [deleting, setDeleting] = useState<BranchLike>();
 
-  onTabSelect = (currentTab: Tabs) => {
-    this.setState({ currentTab });
+  const handleClose = () => {
+    setRenaming(undefined);
+    setDeleting(undefined);
+    setSettingAsMain(undefined);
   };
 
-  onDeleteBranchLike = (branchLike: BranchLike) => this.setState({ deleting: branchLike });
-
-  onRenameBranchLike = (branchLike: BranchLike) => this.setState({ renaming: branchLike });
-
-  onClose = () => this.setState({ deleting: undefined, renaming: undefined });
-
-  onModalActionFulfilled = () => {
-    this.onClose();
-    this.props.onBranchesChange();
+  const handleSetAsMainBranch = () => {
+    handleClose();
+    fetchComponent();
   };
 
-  render() {
-    const { branchLikes, component } = this.props;
-    const { currentTab, deleting, renaming } = this.state;
+  const handleSetAsMainBranchOption = (branchLike: BranchLike) => {
+    if (isBranch(branchLike)) {
+      setSettingAsMain(branchLike);
+    }
+  };
 
-    const isBranchMode = currentTab === Tabs.Branch;
-    const branchLikesToDisplay: BranchLike[] = isBranchMode
-      ? sortBranches(branchLikes.filter(isBranch))
-      : sortPullRequests(branchLikes.filter(isPullRequest));
-    const title = translate(
-      isBranchMode
-        ? 'project_branch_pull_request.table.branch'
-        : 'project_branch_pull_request.table.pull_request'
-    );
+  const { data: { branchLikes } = { branchLikes: [] } } = useBranchesQuery(component);
 
-    return (
-      <>
-        <BoxedTabs
-          className="branch-like-tabs"
-          onSelect={this.onTabSelect}
-          selected={currentTab}
-          tabs={TABS}
-        />
+  const isBranchMode = currentTab === Tabs.Branch;
+  const branchLikesToDisplay: BranchLike[] = isBranchMode
+    ? sortBranches(branchLikes.filter(isBranch) as Branch[])
+    : sortPullRequests(branchLikes.filter(isPullRequest) as PullRequest[]);
+  const title = translate(
+    isBranchMode
+      ? 'project_branch_pull_request.table.branch'
+      : 'project_branch_pull_request.table.pull_request',
+  );
 
+  return (
+    <>
+      <ToggleButton
+        onChange={(currentTabKey: Tabs) => setCurrentTab(currentTabKey)}
+        value={currentTab}
+        options={TABS}
+        role="tablist"
+      />
+
+      <div role="tabpanel" id={getTabPanelId(currentTab)} aria-labelledby={getTabId(currentTab)}>
         <BranchLikeTable
           branchLikes={branchLikesToDisplay}
           component={component}
           displayPurgeSetting={isBranchMode}
-          onDelete={this.onDeleteBranchLike}
-          onRename={this.onRenameBranchLike}
+          onDelete={setDeleting}
+          onRename={setRenaming}
+          onSetAsMain={handleSetAsMainBranchOption}
           title={title}
         />
+      </div>
 
-        {deleting && (
-          <DeleteBranchModal
-            branchLike={deleting}
-            component={component}
-            onClose={this.onClose}
-            onDelete={this.onModalActionFulfilled}
-          />
-        )}
+      {deleting && (
+        <DeleteBranchModal branchLike={deleting} component={component} onClose={handleClose} />
+      )}
 
-        {renaming && isMainBranch(renaming) && (
-          <RenameBranchModal
-            branch={renaming}
-            component={component}
-            onClose={this.onClose}
-            onRename={this.onModalActionFulfilled}
-          />
-        )}
-      </>
-    );
-  }
+      {renaming && isMainBranch(renaming) && (
+        <RenameBranchModal branch={renaming} component={component} onClose={handleClose} />
+      )}
+
+      {settingAsMain && !isMainBranch(settingAsMain) && (
+        <SetAsMainBranchModal
+          component={component}
+          branch={settingAsMain}
+          onClose={handleClose}
+          onSetAsMain={handleSetAsMainBranch}
+        />
+      )}
+    </>
+  );
 }

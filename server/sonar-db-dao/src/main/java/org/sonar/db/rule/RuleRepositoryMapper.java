@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,21 +21,21 @@ package org.sonar.db.rule;
 
 import java.util.Collection;
 import java.util.List;
-import javax.annotation.CheckForNull;
+import java.util.Set;
+import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
 
 public interface RuleRepositoryMapper {
 
   List<RuleRepositoryDto> selectAll();
 
-  List<RuleRepositoryDto> selectByLanguage(@Param("language") String language);
+  Set<String> selectAllKeys();
 
-  @CheckForNull
-  RuleRepositoryDto selectByKey(@Param("key") String key);
+  List<RuleRepositoryDto> selectByQueryAndLanguage(@Param("query") String query,@Param("language") @Nullable String language);
 
   void insert(@Param("repository") RuleRepositoryDto repository, @Param("now") long now);
 
-  int update(@Param("repository") RuleRepositoryDto repository);
+  void update(@Param("repository") RuleRepositoryDto repository);
 
   void deleteIfKeyNotIn(@Param("keys") Collection<String> keys);
 }

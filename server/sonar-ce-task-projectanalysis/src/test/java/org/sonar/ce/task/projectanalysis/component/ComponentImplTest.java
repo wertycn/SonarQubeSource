@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,14 +21,13 @@ package org.sonar.ce.task.projectanalysis.component;
 
 import java.util.Arrays;
 import java.util.Collections;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.projectanalysis.component.Component.Status;
 
 import static com.google.common.base.Strings.repeat;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.FILE;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.PROJECT;
@@ -39,70 +38,63 @@ public class ComponentImplTest {
   static final String KEY = "KEY";
   static final String UUID = "UUID";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void verify_key_uuid_and_name() {
     ComponentImpl component = buildSimpleComponent(FILE, KEY).setUuid(UUID).setName("name").build();
 
-    assertThat(component.getDbKey()).isEqualTo(KEY);
+    assertThat(component.getKey()).isEqualTo(KEY);
     assertThat(component.getUuid()).isEqualTo(UUID);
     assertThat(component.getName()).isEqualTo("name");
   }
 
   @Test
   public void builder_throws_NPE_if_component_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(null);
+    assertThatThrownBy(() -> builder(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void builder_throws_NPE_if_status_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(FILE).setStatus(null);
+    assertThatThrownBy(() -> builder(FILE).setStatus(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void builder_throws_NPE_if_status_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(Component.Type.DIRECTORY)
-      .setName("DIR")
-      .setDbKey(KEY)
-      .setUuid(UUID)
-      .setReportAttributes(ReportAttributes.newBuilder(1).build())
-      .build();
+    assertThatThrownBy(() -> {
+      builder(Component.Type.DIRECTORY)
+        .setName("DIR")
+        .setKey(KEY)
+        .setUuid(UUID)
+        .setReportAttributes(ReportAttributes.newBuilder(1).build())
+        .build();
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void set_key_throws_NPE_if_component_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(FILE).setUuid(null);
+    assertThatThrownBy(() -> builder(FILE).setUuid(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void set_uuid_throws_NPE_if_component_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(FILE).setDbKey(null);
+    assertThatThrownBy(() -> builder(FILE).setKey(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void build_without_key_throws_NPE_if_component_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(FILE).setUuid("ABCD").build();
+    assertThatThrownBy(() -> builder(FILE).setUuid("ABCD").build())
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void build_without_uuid_throws_NPE_if_component_arg_is_Null() {
-    expectedException.expect(NullPointerException.class);
-
-    builder(FILE).setDbKey(KEY).build();
+    assertThatThrownBy(() -> builder(FILE).setKey(KEY).build())
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -200,14 +192,14 @@ public class ComponentImplTest {
   public void build_with_child() {
     ComponentImpl child = builder(FILE)
       .setName("CHILD_NAME")
-      .setDbKey("CHILD_KEY")
+      .setKey("CHILD_KEY")
       .setUuid("CHILD_UUID")
       .setStatus(Status.UNAVAILABLE)
       .setReportAttributes(ReportAttributes.newBuilder(2).build())
       .build();
     ComponentImpl componentImpl = builder(Component.Type.DIRECTORY)
       .setName("DIR")
-      .setDbKey(KEY)
+      .setKey(KEY)
       .setUuid(UUID)
       .setStatus(Status.UNAVAILABLE)
       .setReportAttributes(ReportAttributes.newBuilder(1).build())
@@ -216,7 +208,7 @@ public class ComponentImplTest {
 
     assertThat(componentImpl.getChildren()).hasSize(1);
     Component childReloaded = componentImpl.getChildren().iterator().next();
-    assertThat(childReloaded.getDbKey()).isEqualTo("CHILD_KEY");
+    assertThat(childReloaded.getKey()).isEqualTo("CHILD_KEY");
     assertThat(childReloaded.getUuid()).isEqualTo("CHILD_UUID");
     assertThat(childReloaded.getType()).isEqualTo(FILE);
   }
@@ -234,15 +226,15 @@ public class ComponentImplTest {
   public void hashCode_is_hashcode_of_uuid() {
     ComponentImpl.Builder builder = buildSimpleComponent(FILE, "1").setUuid(UUID);
 
-    assertThat(builder.build().hashCode()).isEqualTo(builder.build().hashCode());
-    assertThat(builder.build().hashCode()).isEqualTo(buildSimpleComponent(FILE, "2").setUuid(UUID).build().hashCode());
-    assertThat(builder.build().hashCode()).isEqualTo(UUID.hashCode());
+    assertThat(builder.build()).hasSameHashCodeAs(builder.build().hashCode());
+    assertThat(builder.build()).hasSameHashCodeAs(buildSimpleComponent(FILE, "2").setUuid(UUID).build().hashCode());
+    assertThat(builder.build()).hasSameHashCodeAs(UUID.hashCode());
   }
 
   private static ComponentImpl.Builder buildSimpleComponent(Component.Type type, String dbKey) {
     ComponentImpl.Builder builder = builder(type)
       .setName("name_" + dbKey)
-      .setDbKey(dbKey)
+      .setKey(dbKey)
       .setStatus(Status.UNAVAILABLE)
       .setUuid("uuid_" + dbKey)
       .setReportAttributes(ReportAttributes.newBuilder(dbKey.hashCode()).build());

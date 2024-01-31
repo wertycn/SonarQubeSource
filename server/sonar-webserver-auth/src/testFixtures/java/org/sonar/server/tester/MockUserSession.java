@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,12 +38,13 @@ import static org.sonar.server.user.UserSession.IdentityProvider.SONARQUBE;
 public class MockUserSession extends AbstractMockUserSession<MockUserSession> {
   private final String login;
   private String uuid;
-  private boolean root = false;
   private String name;
   private List<GroupDto> groups = new ArrayList<>();
   private UserSession.IdentityProvider identityProvider;
   private UserSession.ExternalIdentity externalIdentity;
   private Long lastSonarlintConnectionDate;
+
+  private boolean isAuthenticatedBrowserSession = false;
 
   public MockUserSession(String login) {
     super(MockUserSession.class);
@@ -82,12 +83,13 @@ public class MockUserSession extends AbstractMockUserSession<MockUserSession> {
   }
 
   @Override
-  public boolean isRoot() {
-    return root;
+  public boolean isActive() {
+    return true;
   }
 
-  public void setRoot(boolean root) {
-    this.root = root;
+  @Override
+  public boolean isAuthenticatedBrowserSession() {
+    return isAuthenticatedBrowserSession;
   }
 
   @Override
@@ -146,4 +148,8 @@ public class MockUserSession extends AbstractMockUserSession<MockUserSession> {
     return Optional.ofNullable(externalIdentity);
   }
 
+  @Override
+  public void flagAsBrowserSession() {
+    isAuthenticatedBrowserSession = true;
+  }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,9 +21,9 @@ package org.sonar.server.plugins;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.core.extension.PluginRiskConsent;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
@@ -37,8 +37,8 @@ import static org.sonar.core.config.CorePropertyDefinitions.PLUGINS_RISK_CONSENT
 import static org.sonar.core.extension.PluginRiskConsent.ACCEPTED;
 import static org.sonar.core.extension.PluginRiskConsent.NOT_ACCEPTED;
 import static org.sonar.core.extension.PluginRiskConsent.REQUIRED;
-import static org.sonar.server.plugins.PluginType.BUNDLED;
-import static org.sonar.server.plugins.PluginType.EXTERNAL;
+import static org.sonar.core.plugin.PluginType.BUNDLED;
+import static org.sonar.core.plugin.PluginType.EXTERNAL;
 
 public class PluginConsentVerifierTest {
   @Rule
@@ -68,7 +68,7 @@ public class PluginConsentVerifierTest {
 
     underTest.start();
 
-    assertThat(logTester.logs(LoggerLevel.WARN)).contains("Plugin(s) detected. Plugins are not provided by SonarSource"
+    assertThat(logTester.logs(Level.WARN)).contains("Plugin(s) detected. Plugins are not provided by SonarSource"
         + " and are therefore installed at your own risk. A SonarQube administrator needs to acknowledge this risk once logged in.");
     assertThat(dbClient.propertiesDao().selectGlobalProperty(PLUGINS_RISK_CONSENT))
       .extracting(PropertyDto::getValue)

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,12 +26,13 @@ import org.apache.commons.lang.CharUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.platform.ServerFileSystem;
 
+import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -39,9 +40,6 @@ public class BatchIndexTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private File jar;
 
@@ -84,23 +82,36 @@ public class BatchIndexTest {
    */
   @Test
   public void check_location_of_file() {
-    thrown.expect(NotFoundException.class);
-    thrown.expectMessage("Bad filename: ../sonar-batch.jar");
+    assertThatThrownBy(() -> {
+      BatchIndex batchIndex = new BatchIndex(fs);
+      batchIndex.start();
 
-    BatchIndex batchIndex = new BatchIndex(fs);
-    batchIndex.start();
-
-    batchIndex.getFile("../sonar-batch.jar");
+      batchIndex.getFile("../sonar-batch.jar");
+    })
+      .isInstanceOf(NotFoundException.class)
+      .hasMessage("Bad filename: ../sonar-batch.jar");
   }
 
   @Test
   public void file_does_not_exist() {
-    thrown.expect(NotFoundException.class);
-    thrown.expectMessage("Bad filename: other.jar");
+    assertThatThrownBy(() -> {
+      BatchIndex batchIndex = new BatchIndex(fs);
+      batchIndex.start();
+
+      batchIndex.getFile("other.jar");
+    })
+      .isInstanceOf(NotFoundException.class)
+      .hasMessage("Bad filename: other.jar");
+  }
+
+  @Test
+  public void start_whenBatchDirDoesntExist_shouldThrow() throws IOException {
+    File homeDir = temp.newFolder();
+    when(fs.getHomeDir()).thenReturn(homeDir);
 
     BatchIndex batchIndex = new BatchIndex(fs);
-    batchIndex.start();
-
-    batchIndex.getFile("other.jar");
+    assertThatThrownBy(batchIndex::start)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage(format("%s/lib/scanner folder not found", homeDir.getAbsolutePath()));
   }
 }

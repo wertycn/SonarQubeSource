@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,29 +20,28 @@
 package org.sonar.server.security;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
-
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+import org.sonar.api.server.rule.RulesDefinition.OwaspAsvsVersion;
+import org.sonar.api.server.rule.RulesDefinition.PciDssVersion;
 
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
+import static org.sonar.api.server.rule.RulesDefinition.PciDssVersion.V3_2;
 import static org.sonar.server.security.SecurityStandards.VulnerabilityProbability.HIGH;
 import static org.sonar.server.security.SecurityStandards.VulnerabilityProbability.LOW;
 import static org.sonar.server.security.SecurityStandards.VulnerabilityProbability.MEDIUM;
@@ -51,19 +50,37 @@ import static org.sonar.server.security.SecurityStandards.VulnerabilityProbabili
 public final class SecurityStandards {
 
   public static final String UNKNOWN_STANDARD = "unknown";
+
+  /**
+   * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
+   */
+  @Deprecated(since = "10.0", forRemoval = true)
   public static final String SANS_TOP_25_INSECURE_INTERACTION = "insecure-interaction";
+  @Deprecated(since = "10.0", forRemoval = true)
   public static final String SANS_TOP_25_RISKY_RESOURCE = "risky-resource";
+  @Deprecated(since = "10.0", forRemoval = true)
   public static final String SANS_TOP_25_POROUS_DEFENSES = "porous-defenses";
 
   private static final String OWASP_TOP10_PREFIX = "owaspTop10:";
+  private static final String OWASP_TOP10_2021_PREFIX = "owaspTop10-2021:";
+  private static final String PCI_DSS_32_PREFIX = V3_2.prefix() + ":";
+  private static final String PCI_DSS_40_PREFIX = PciDssVersion.V4_0.prefix() + ":";
+  private static final String OWASP_ASVS_40_PREFIX = OwaspAsvsVersion.V4_0.prefix() + ":";
   private static final String CWE_PREFIX = "cwe:";
   // See https://www.sans.org/top25-software-errors
+
+  /**
+   * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
+   */
+  @Deprecated(since = "10.0", forRemoval = true)
   private static final Set<String> INSECURE_CWE = new HashSet<>(asList("89", "78", "79", "434", "352", "601"));
+  @Deprecated(since = "10.0", forRemoval = true)
   private static final Set<String> RISKY_CWE = new HashSet<>(asList("120", "22", "494", "829", "676", "131", "134", "190"));
+  @Deprecated(since = "10.0", forRemoval = true)
   private static final Set<String> POROUS_CWE = new HashSet<>(asList("306", "862", "798", "311", "807", "250", "863", "732", "327", "307", "759"));
 
   /**
-   * @deprecated SansTop25 report is outdated and will be removed in future versions
+   * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
    */
   @Deprecated
   public static final Map<String, Set<String>> CWES_BY_SANS_TOP_25 = ImmutableMap.of(
@@ -71,21 +88,58 @@ public final class SecurityStandards {
     SANS_TOP_25_RISKY_RESOURCE, RISKY_CWE,
     SANS_TOP_25_POROUS_DEFENSES, POROUS_CWE);
 
-  // https://cwe.mitre.org/top25/archive/2019/2019_cwe_top25.html
-  public static final List<String> CWE_TOP25_2019 =
-    Collections.unmodifiableList(asList("119", "79", "20", "200", "125", "89", "416", "190", "352",
-      "22", "78", "787", "287", "476", "732", "434", "611", "94",
-      "798", "400", "772", "426", "502", "269", "295"));
+  // https://cwe.mitre.org/top25/archive/2021/2021_cwe_top25.html
+  public static final List<String> CWE_TOP25_2021 = List.of("787", "79", "125", "20", "78", "89", "416", "22", "352", "434", "306", "190", "502", "287", "476",
+    "798", "119", "862", "276", "200", "522", "732", "611", "918", "77");
 
-  // https://cwe.mitre.org/top25/archive/2020/2020_cwe_top25.html
-  public static final List<String> CWE_TOP25_2020 =
-    Collections.unmodifiableList(asList("79", "787", "20", "125", "119", "89", "200", "416", "352",
-      "78", "190", "22", "476", "287", "434", "732", "94", "522",
-      "611", "798", "502", "269", "400", "306", "862"));
+  // https://cwe.mitre.org/top25/archive/2022/2022_cwe_top25.html
+  public static final List<String> CWE_TOP25_2022 = List.of("787", "79", "89", "20", "125", "78", "416", "22", "352", "434", "476", "502", "190", "287", "798",
+    "862", "77", "306", "119", "276", "918", "362", "400", "611", "94");
 
-  public static final Map<String, List<String>> CWES_BY_CWE_TOP_25 = ImmutableMap.of(
-    "2019", CWE_TOP25_2019,
-    "2020", CWE_TOP25_2020);
+  // https://cwe.mitre.org/top25/archive/2023/2023_top25_list.html#tableView
+  public static final List<String> CWE_TOP25_2023 = List.of("787", "79", "89", "416", "78",  "20", "125", "22", "352", "434", "862", "476", "287", "190", "502",
+    "77", "119", "798", "918", "306", "362", "269", "94", "863", "276");
+
+  public static final String CWE_YEAR_2021 = "2021";
+  public static final String CWE_YEAR_2022 = "2022";
+  public static final String CWE_YEAR_2023 = "2023";
+
+  public static final Map<String, List<String>> CWES_BY_CWE_TOP_25 = Map.of(
+    CWE_YEAR_2021, CWE_TOP25_2021,
+    CWE_YEAR_2022, CWE_TOP25_2022,
+    CWE_YEAR_2023, CWE_TOP25_2023);
+
+  private static final List<String> OWASP_ASVS_40_LEVEL_1 = List.of("2.1.1", "2.1.10", "2.1.11", "2.1.12", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9",
+    "2.10.1", "2.10.2", "2.10.3", "2.10.4", "2.2.1", "2.2.2", "2.2.3", "2.3.1", "2.5.1", "2.5.2", "2.5.3", "2.5.4", "2.5.5", "2.5.6", "2.7.1", "2.7.2", "2.7.3", "2.7.4", "2.8.1",
+    "3.1.1", "3.2.1", "3.2.2", "3.2.3", "3.3.1", "3.3.2", "3.4.1", "3.4.2", "3.4.3", "3.4.4", "3.4.5", "3.7.1", "4.1.1", "4.1.2", "4.1.3", "4.1.4", "4.1.5", "4.2.1", "4.2.2",
+    "4.3.1", "4.3.2", "5.1.1", "5.1.2", "5.1.3", "5.1.4", "5.1.5", "5.2.1", "5.2.2", "5.2.3", "5.2.4", "5.2.5", "5.2.6", "5.2.7", "5.2.8", "5.3.1", "5.3.10", "5.3.2", "5.3.3",
+    "5.3.4", "5.3.5", "5.3.6", "5.3.7", "5.3.8", "5.3.9", "5.5.1", "5.5.2", "5.5.3", "5.5.4", "6.2.1", "7.1.1", "7.1.2", "7.4.1", "8.2.1", "8.2.2", "8.2.3", "8.3.1", "8.3.2",
+    "8.3.3", "8.3.4", "9.1.1", "9.1.2", "9.1.3", "10.3.1", "10.3.2", "10.3.3", "11.1.1", "11.1.2", "11.1.3", "11.1.4", "11.1.5", "12.1.1", "12.3.1", "12.3.2", "12.3.3", "12.3.4",
+    "12.3.5", "12.4.1", "12.4.2", "12.5.1", "12.5.2", "12.6.1", "13.1.1", "13.1.2", "13.1.3", "13.2.1", "13.2.2", "13.2.3", "13.3.1", "14.2.1", "14.2.2", "14.2.3", "14.3.1",
+    "14.3.2", "14.3.3", "14.4.1", "14.4.2", "14.4.3", "14.4.4", "14.4.5", "14.4.6", "14.4.7", "14.5.1", "14.5.2", "14.5.3");
+
+  private static final List<String> OWASP_ASVS_40_LEVEL_2 = Stream.concat(Stream.of("1.1.1", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.1.6",
+      "1.1.7", "1.10.1", "1.11.1", "1.11.2", "1.12.1", "1.12.2", "1.14.1", "1.14.2", "1.14.3", "1.14.4", "1.14.5", "1.14.6", "1.2.1", "1.2.2", "1.2.3", "1.2.4", "1.4.1", "1.4.2",
+      "1.4.3", "1.4.4", "1.4.5", "1.5.1", "1.5.2", "1.5.3", "1.5.4", "1.6.1", "1.6.2", "1.6.3", "1.6.4", "1.7.1", "1.7.2", "1.8.1", "1.8.2", "1.9.1", "1.9.2", "2.3.2", "2.3.3",
+      "2.4.1", "2.4.2", "2.4.3", "2.4.4", "2.4.5", "2.5.7", "2.6.1", "2.6.2", "2.6.3", "2.7.5", "2.7.6", "2.8.2", "2.8.3", "2.8.4", "2.8.5", "2.8.6", "2.9.1", "2.9.2", "2.9.3",
+      "3.2.4", "3.3.3", "3.3.4", "3.5.1", "3.5.2", "3.5.3", "4.3.3", "5.4.1", "5.4.2", "5.4.3", "6.1.1", "6.1.2", "6.1.3", "6.2.2", "6.2.3", "6.2.4", "6.2.5", "6.2.6", "6.3.1",
+      "6.3.2", "6.4.1", "6.4.2", "7.1.3", "7.1.4", "7.2.1", "7.2.2", "7.3.1", "7.3.2", "7.3.3", "7.3.4", "7.4.2", "7.4.3", "8.1.1", "8.1.2", "8.1.3", "8.1.4", "8.3.5", "8.3.6",
+      "8.3.7", "8.3.8", "9.2.1", "9.2.2", "9.2.3", "9.2.4", "10.2.1", "10.2.2", "11.1.6", "11.1.7", "11.1.8", "12.1.2", "12.1.3", "12.2.1", "12.3.6", "13.1.4", "13.1.5", "13.2.4",
+      "13.2.5", "13.2.6", "13.3.2", "13.4.1", "13.4.2", "14.1.1", "14.1.2", "14.1.3", "14.1.4", "14.2.4", "14.2.5", "14.2.6", "14.5.4"), OWASP_ASVS_40_LEVEL_1.stream())
+    .toList();
+
+  private static final List<String> OWASP_ASVS_40_LEVEL_3 = Stream
+    .concat(Stream.of("1.11.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.8.7", "3.6.1", "3.6.2", "6.2.7", "6.2.8", "6.3.3", "8.1.5",
+      "8.1.6", "9.2.5", "10.1.1", "10.2.3", "10.2.4", "10.2.5", "10.2.6", "14.1.5"), OWASP_ASVS_40_LEVEL_2.stream())
+    .toList();
+
+  public static final Map<Integer, List<String>> OWASP_ASVS_40_REQUIREMENTS_BY_LEVEL = Map.of(
+    1, OWASP_ASVS_40_LEVEL_1,
+    2, OWASP_ASVS_40_LEVEL_2,
+    3, OWASP_ASVS_40_LEVEL_3);
+
+  public static final Map<OwaspAsvsVersion, Map<Integer, List<String>>> OWASP_ASVS_REQUIREMENTS_BY_LEVEL = Map.of(
+    OwaspAsvsVersion.V4_0, OWASP_ASVS_40_REQUIREMENTS_BY_LEVEL);
 
   public enum VulnerabilityProbability {
     HIGH(3),
@@ -133,9 +187,12 @@ public final class SecurityStandards {
     AUTH("auth", HIGH),
     INSECURE_CONF("insecure-conf", LOW),
     FILE_MANIPULATION("file-manipulation", LOW),
+    ENCRYPTION_OF_SENSITIVE_DATA("encrypt-data", LOW),
+    TRACEABILITY("traceability", LOW),
+    PERMISSION("permission", MEDIUM),
     OTHERS("others", LOW);
 
-    private static final Map<String, SQCategory> SQ_CATEGORY_BY_KEY = stream(values()).collect(uniqueIndex(SQCategory::getKey));
+    private static final Map<String, SQCategory> SQ_CATEGORY_BY_KEY = stream(values()).collect(Collectors.toMap(SQCategory::getKey, Function.identity()));
     private final String key;
     private final VulnerabilityProbability vulnerability;
 
@@ -157,30 +214,61 @@ public final class SecurityStandards {
     }
   }
 
+  public enum PciDss {
+    R1("1"), R2("2"), R3("3"), R4("4"), R5("5"), R6("6"), R7("7"), R8("8"), R9("9"), R10("10"), R11("11"), R12("12");
+
+    private final String category;
+
+    PciDss(String category) {
+      this.category = category;
+    }
+
+    public String category() {
+      return category;
+    }
+  }
+
+  public enum OwaspAsvs {
+    C1("1"), C2("2"), C3("3"), C4("4"), C5("5"), C6("6"), C7("7"), C8("8"), C9("9"), C10("10"), C11("11"), C12("12"), C13("13"), C14("14");
+
+    private final String category;
+
+    OwaspAsvs(String category) {
+      this.category = category;
+    }
+
+    public String category() {
+      return category;
+    }
+  }
+
   public static final Map<SQCategory, Set<String>> CWES_BY_SQ_CATEGORY = ImmutableMap.<SQCategory, Set<String>>builder()
-    .put(SQCategory.BUFFER_OVERFLOW, ImmutableSet.of("119", "120", "131", "676", "788"))
-    .put(SQCategory.SQL_INJECTION, ImmutableSet.of("89", "564"))
-    .put(SQCategory.COMMAND_INJECTION, ImmutableSet.of("77", "78", "88", "214"))
-    .put(SQCategory.PATH_TRAVERSAL_INJECTION, ImmutableSet.of("22"))
-    .put(SQCategory.LDAP_INJECTION, ImmutableSet.of("90"))
-    .put(SQCategory.XPATH_INJECTION, ImmutableSet.of("643"))
-    .put(SQCategory.RCE, ImmutableSet.of("94", "95"))
-    .put(SQCategory.DOS, ImmutableSet.of("400", "624"))
-    .put(SQCategory.SSRF, ImmutableSet.of("918"))
-    .put(SQCategory.CSRF, ImmutableSet.of("352"))
-    .put(SQCategory.XSS, ImmutableSet.of("79", "80", "81", "82", "83", "84", "85", "86", "87"))
-    .put(SQCategory.LOG_INJECTION, ImmutableSet.of("117"))
-    .put(SQCategory.HTTP_RESPONSE_SPLITTING, ImmutableSet.of("113"))
-    .put(SQCategory.OPEN_REDIRECT, ImmutableSet.of("601"))
-    .put(SQCategory.XXE, ImmutableSet.of("611", "827"))
-    .put(SQCategory.OBJECT_INJECTION, ImmutableSet.of("134", "470", "502"))
-    .put(SQCategory.WEAK_CRYPTOGRAPHY, ImmutableSet.of("295", "297", "321", "322", "323", "324", "325", "326", "327", "328", "330", "780"))
-    .put(SQCategory.AUTH, ImmutableSet.of("798", "640", "620", "549", "522", "521", "263", "262", "261", "259", "284"))
-    .put(SQCategory.INSECURE_CONF, ImmutableSet.of("102", "215", "311", "315", "346", "614", "489", "942"))
-    .put(SQCategory.FILE_MANIPULATION, ImmutableSet.of("97", "73"))
+    .put(SQCategory.BUFFER_OVERFLOW, Set.of("119", "120", "131", "676", "788"))
+    .put(SQCategory.SQL_INJECTION, Set.of("89", "564", "943"))
+    .put(SQCategory.COMMAND_INJECTION, Set.of("77", "78", "88", "214"))
+    .put(SQCategory.PATH_TRAVERSAL_INJECTION, Set.of("22"))
+    .put(SQCategory.LDAP_INJECTION, Set.of("90"))
+    .put(SQCategory.XPATH_INJECTION, Set.of("643"))
+    .put(SQCategory.RCE, Set.of("94", "95"))
+    .put(SQCategory.DOS, Set.of("400", "624"))
+    .put(SQCategory.SSRF, Set.of("918"))
+    .put(SQCategory.CSRF, Set.of("352"))
+    .put(SQCategory.XSS, Set.of("79", "80", "81", "82", "83", "84", "85", "86", "87"))
+    .put(SQCategory.LOG_INJECTION, Set.of("117"))
+    .put(SQCategory.HTTP_RESPONSE_SPLITTING, Set.of("113"))
+    .put(SQCategory.OPEN_REDIRECT, Set.of("601"))
+    .put(SQCategory.XXE, Set.of("611", "827"))
+    .put(SQCategory.OBJECT_INJECTION, Set.of("134", "470", "502"))
+    .put(SQCategory.WEAK_CRYPTOGRAPHY, Set.of("295", "297", "321", "322", "323", "324", "325", "326", "327", "328", "330", "780"))
+    .put(SQCategory.AUTH, Set.of("798", "640", "620", "549", "522", "521", "263", "262", "261", "259", "308"))
+    .put(SQCategory.INSECURE_CONF, Set.of("102", "215", "346", "614", "489", "942"))
+    .put(SQCategory.FILE_MANIPULATION, Set.of("97", "73"))
+    .put(SQCategory.ENCRYPTION_OF_SENSITIVE_DATA, Set.of("311", "315", "319"))
+    .put(SQCategory.TRACEABILITY, Set.of("778"))
+    .put(SQCategory.PERMISSION, Set.of("266", "269", "284", "668", "732"))
     .build();
-  private static final Ordering<SQCategory> SQ_CATEGORY_ORDERING = Ordering.explicit(stream(SQCategory.values()).collect(Collectors.toList()));
-  public static final Ordering<String> SQ_CATEGORY_KEYS_ORDERING = Ordering.explicit(stream(SQCategory.values()).map(SQCategory::getKey).collect(Collectors.toList()));
+  private static final Ordering<SQCategory> SQ_CATEGORY_ORDERING = Ordering.explicit(stream(SQCategory.values()).toList());
+  public static final Ordering<String> SQ_CATEGORY_KEYS_ORDERING = Ordering.explicit(stream(SQCategory.values()).map(SQCategory::getKey).toList());
 
   private final Set<String> standards;
   private final Set<String> cwe;
@@ -202,12 +290,28 @@ public final class SecurityStandards {
     return cwe;
   }
 
+  public Set<String> getPciDss32() {
+    return getMatchingStandards(standards, PCI_DSS_32_PREFIX);
+  }
+
+  public Set<String> getPciDss40() {
+    return getMatchingStandards(standards, PCI_DSS_40_PREFIX);
+  }
+
+  public Set<String> getOwaspAsvs40() {
+    return getMatchingStandards(standards, OWASP_ASVS_40_PREFIX);
+  }
+
   public Set<String> getOwaspTop10() {
-    return toOwaspTop10(standards);
+    return getMatchingStandards(standards, OWASP_TOP10_PREFIX);
+  }
+
+  public Set<String> getOwaspTop10For2021() {
+    return getMatchingStandards(standards, OWASP_TOP10_2021_PREFIX);
   }
 
   /**
-   * @deprecated SansTop25 report is outdated and will be removed in future versions
+   * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
    */
   @Deprecated
   public Set<String> getSansTop25() {
@@ -233,26 +337,36 @@ public final class SecurityStandards {
    * @throws IllegalStateException if {@code securityStandards} maps to multiple {@link SQCategory SQCategories}
    */
   public static SecurityStandards fromSecurityStandards(Set<String> securityStandards) {
-    Set<String> standards = securityStandards.stream().filter(Objects::nonNull).collect(toSet());
+    Set<String> standards = securityStandards.stream().filter(Objects::nonNull).collect(Collectors.toSet());
     Set<String> cwe = toCwes(standards);
     List<SQCategory> sq = toSortedSQCategories(cwe);
     SQCategory sqCategory = sq.iterator().next();
-    Set<SQCategory> ignoredSQCategories = sq.stream().skip(1).collect(toSet());
+    Set<SQCategory> ignoredSQCategories = sq.stream().skip(1).collect(Collectors.toSet());
     return new SecurityStandards(standards, cwe, sqCategory, ignoredSQCategories);
   }
 
-  private static Set<String> toOwaspTop10(Set<String> securityStandards) {
+  public static Set<String> getRequirementsForCategoryAndLevel(String category, int level) {
+    return OWASP_ASVS_40_REQUIREMENTS_BY_LEVEL.get(level).stream()
+      .filter(req -> req.startsWith(category + "."))
+      .collect(Collectors.toSet());
+  }
+
+  public static Set<String> getRequirementsForCategoryAndLevel(OwaspAsvs category, int level) {
+    return getRequirementsForCategoryAndLevel(category.category(), level);
+  }
+
+  private static Set<String> getMatchingStandards(Set<String> securityStandards, String prefix) {
     return securityStandards.stream()
-      .filter(s -> s.startsWith(OWASP_TOP10_PREFIX))
-      .map(s -> s.substring(OWASP_TOP10_PREFIX.length()))
-      .collect(toSet());
+      .filter(s -> s.startsWith(prefix))
+      .map(s -> s.substring(prefix.length()))
+      .collect(Collectors.toSet());
   }
 
   private static Set<String> toCwes(Collection<String> securityStandards) {
     Set<String> result = securityStandards.stream()
       .filter(s -> s.startsWith(CWE_PREFIX))
       .map(s -> s.substring(CWE_PREFIX.length()))
-      .collect(toSet());
+      .collect(Collectors.toSet());
     return result.isEmpty() ? singleton(UNKNOWN_STANDARD) : result;
   }
 
@@ -261,7 +375,7 @@ public final class SecurityStandards {
       .keySet()
       .stream()
       .filter(k -> cwe.stream().anyMatch(CWES_BY_CWE_TOP_25.get(k)::contains))
-      .collect(toSet());
+      .collect(Collectors.toSet());
   }
 
   private static Set<String> toSansTop25(Collection<String> cwe) {
@@ -269,7 +383,7 @@ public final class SecurityStandards {
       .keySet()
       .stream()
       .filter(k -> cwe.stream().anyMatch(CWES_BY_SANS_TOP_25.get(k)::contains))
-      .collect(toSet());
+      .collect(Collectors.toSet());
   }
 
   private static List<SQCategory> toSortedSQCategories(Collection<String> cwe) {
@@ -278,7 +392,8 @@ public final class SecurityStandards {
       .stream()
       .filter(k -> cwe.stream().anyMatch(CWES_BY_SQ_CATEGORY.get(k)::contains))
       .sorted(SQ_CATEGORY_ORDERING)
-      .collect(toList());
+      .toList();
     return result.isEmpty() ? singletonList(SQCategory.OTHERS) : result;
   }
+
 }

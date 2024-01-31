@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -33,9 +34,8 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.junit.Rule;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.process.MessageException;
 import org.sonar.process.Props;
@@ -44,12 +44,11 @@ import static java.lang.String.valueOf;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 
 @RunWith(DataProviderRunner.class)
 public class JvmOptionsTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final Random random = new Random();
   private final String randomPropertyName = randomAlphanumeric(3);
@@ -67,9 +66,7 @@ public class JvmOptionsTest {
 
   @Test
   public void constructor_throws_NPE_if_argument_is_null() {
-    expectJvmOptionNotNullNPE();
-
-    new JvmOptions(null);
+    expectJvmOptionNotNullNPE(() -> new JvmOptions(null));
   }
 
   @Test
@@ -80,10 +77,9 @@ public class JvmOptionsTest {
         Stream.of(new Option(null, "value")))
         .flatMap(s -> s));
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("JVM option prefix can't be null");
-
-    new JvmOptions(mandatoryJvmOptions);
+    assertThatThrownBy(() ->  new JvmOptions(mandatoryJvmOptions))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("JVM option prefix can't be null");
   }
 
   @Test
@@ -95,10 +91,9 @@ public class JvmOptionsTest {
         Stream.of(new Option(emptyString, "value")))
         .flatMap(s -> s));
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("JVM option prefix can't be empty");
-
-    new JvmOptions(mandatoryJvmOptions);
+    assertThatThrownBy(() -> new JvmOptions(mandatoryJvmOptions))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("JVM option prefix can't be empty");
   }
 
   @Test
@@ -110,9 +105,7 @@ public class JvmOptionsTest {
         Stream.of(new Option(invalidPrefix, "value")))
         .flatMap(s -> s));
 
-    expectJvmOptionNotEmptyAndStartByDashIAE();
-
-    new JvmOptions(mandatoryJvmOptions);
+    expectJvmOptionNotEmptyAndStartByDashIAE(() -> new JvmOptions(mandatoryJvmOptions));
   }
 
   @Test
@@ -123,10 +116,9 @@ public class JvmOptionsTest {
         Stream.of(new Option("-prefix", null)))
         .flatMap(s -> s));
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("JVM option value can't be null");
-
-    new JvmOptions(mandatoryJvmOptions);
+    assertThatThrownBy(() -> new JvmOptions(mandatoryJvmOptions))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("JVM option value can't be null");
   }
 
   @Test
@@ -143,24 +135,19 @@ public class JvmOptionsTest {
 
   @Test
   public void add_throws_NPE_if_argument_is_null() {
-    expectJvmOptionNotNullNPE();
-
-    underTest.add(null);
+    expectJvmOptionNotNullNPE(() -> underTest.add(null));
   }
 
   @Test
   @UseDataProvider("variousEmptyStrings")
   public void add_throws_IAE_if_argument_is_empty(String emptyString) {
-    expectJvmOptionNotEmptyAndStartByDashIAE();
-
-    underTest.add(emptyString);
+    expectJvmOptionNotEmptyAndStartByDashIAE(() -> underTest.add(emptyString));
   }
 
   @Test
   public void add_throws_IAE_if_argument_does_not_start_with_dash() {
-    expectJvmOptionNotEmptyAndStartByDashIAE();
+    expectJvmOptionNotEmptyAndStartByDashIAE(() -> underTest.add(randomAlphanumeric(3)));
 
-    underTest.add(randomAlphanumeric(3));
   }
 
   @Test
@@ -227,16 +214,12 @@ public class JvmOptionsTest {
 
   @Test
   public void addFromMandatoryProperty_fails_with_IAE_if_property_does_not_exist() {
-    expectMissingPropertyIAE(this.randomPropertyName);
-
-    underTest.addFromMandatoryProperty(new Props(properties), this.randomPropertyName);
+    expectMissingPropertyIAE(() -> underTest.addFromMandatoryProperty(new Props(properties), this.randomPropertyName), this.randomPropertyName);
   }
 
   @Test
   public void addFromMandatoryProperty_fails_with_IAE_if_property_contains_an_empty_value() {
-    expectMissingPropertyIAE(this.randomPropertyName);
-
-    underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName);
+    expectMissingPropertyIAE(() -> underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName), this.randomPropertyName);
   }
 
   @Test
@@ -254,9 +237,7 @@ public class JvmOptionsTest {
   public void addFromMandatoryProperty_fails_with_MessageException_if_property_does_not_start_with_dash_after_trimmed(String emptyString) {
     properties.put(randomPropertyName, emptyString + "foo -bar");
 
-    expectJvmOptionNotEmptyAndStartByDashMessageException(randomPropertyName, "foo");
-
-    underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName);
+    expectJvmOptionNotEmptyAndStartByDashMessageException(() -> underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName), randomPropertyName, "foo");
   }
 
   @Test
@@ -337,12 +318,11 @@ public class JvmOptionsTest {
 
     JvmOptions underTest = new JvmOptions(ImmutableMap.of(randomPrefix, randomValue));
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("a JVM option can't overwrite mandatory JVM options. " +
-      "The following JVM options defined by property '" + randomPropertyName + "' are invalid: " +
-      overriding1 + " overwrites " + randomPrefix + randomValue + ", " + overriding2 + " overwrites " + randomPrefix + randomValue);
-
-    underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName);
+    assertThatThrownBy(() -> underTest.addFromMandatoryProperty(new Props(properties), randomPropertyName))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("a JVM option can't overwrite mandatory JVM options. " +
+        "The following JVM options defined by property '" + randomPropertyName + "' are invalid: " +
+        overriding1 + " overwrites " + randomPrefix + randomValue + ", " + overriding2 + " overwrites " + randomPrefix + randomValue);
   }
 
   @Test
@@ -359,28 +339,32 @@ public class JvmOptionsTest {
   public void toString_prints_all_jvm_options() {
     underTest.add("-foo").add("-bar");
 
-    assertThat(underTest.toString()).isEqualTo("[-foo, -bar]");
+    assertThat(underTest).hasToString("[-foo, -bar]");
   }
 
-  private void expectJvmOptionNotNullNPE() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("a JVM option can't be null");
+  private void expectJvmOptionNotNullNPE(ThrowingCallable callback) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("a JVM option can't be null");
   }
 
-  private void expectJvmOptionNotEmptyAndStartByDashIAE() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("a JVM option can't be empty and must start with '-'");
+  private void expectJvmOptionNotEmptyAndStartByDashIAE(ThrowingCallable callback) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("a JVM option can't be empty and must start with '-'");
   }
 
-  private void expectJvmOptionNotEmptyAndStartByDashMessageException(String randomPropertyName, String option) {
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("a JVM option can't be empty and must start with '-'. " +
-      "The following JVM options defined by property '" + randomPropertyName + "' are invalid: " + option);
+  private void expectJvmOptionNotEmptyAndStartByDashMessageException(ThrowingCallable callback, String randomPropertyName, String option) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(MessageException.class)
+      .hasMessage("a JVM option can't be empty and must start with '-'. " +
+        "The following JVM options defined by property '" + randomPropertyName + "' are invalid: " + option);
   }
 
-  public void expectMissingPropertyIAE(String randomPropertyName) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Missing property: " + randomPropertyName);
+  public void expectMissingPropertyIAE(ThrowingCallable callback, String randomPropertyName) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing property: " + randomPropertyName);
   }
 
   @DataProvider()
@@ -393,7 +377,7 @@ public class JvmOptionsTest {
   }
 
   private static Map<String, String> shuffleThenToMap(Stream<Option> stream) {
-    List<Option> options = stream.collect(Collectors.toList());
+    List<Option> options = stream.collect(Collectors.toCollection(ArrayList::new));
     Collections.shuffle(options);
     Map<String, String> res = new HashMap<>(options.size());
     for (Option option : options) {

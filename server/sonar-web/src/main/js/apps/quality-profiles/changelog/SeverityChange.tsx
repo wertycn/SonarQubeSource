@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,8 +18,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import SeverityHelper from '../../../components/shared/SeverityHelper';
+import { translate } from '../../../helpers/l10n';
 
 interface Props {
   severity: string;
@@ -28,7 +28,8 @@ interface Props {
 export default function SeverityChange({ severity }: Props) {
   return (
     <div className="nowrap">
-      {translate('quality_profiles.severity_set_to')} <SeverityHelper severity={severity} />
+      {translate('quality_profiles.deprecated_severity_set_to')}{' '}
+      <SeverityHelper severity={severity} />
     </div>
   );
 }

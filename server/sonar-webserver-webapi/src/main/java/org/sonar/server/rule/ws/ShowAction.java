@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,19 +23,18 @@ import com.google.common.io.Resources;
 import java.util.Collections;
 import java.util.List;
 import org.sonar.api.rule.RuleKey;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.exceptions.NotFoundException;
 import org.sonarqube.ws.Rules.ShowResponse;
 
 import static java.lang.String.format;
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
@@ -49,35 +48,43 @@ public class ShowAction implements RulesWsAction {
   public static final String PARAM_ACTIVES = "actives";
 
   private final DbClient dbClient;
-  private final RuleMapper mapper;
-  private final ActiveRuleCompleter activeRuleCompleter;
-  private final RuleWsSupport ruleWsSupport;
+  private final RulesResponseFormatter rulesResponseFormatter;
 
-  public ShowAction(DbClient dbClient, RuleMapper mapper, ActiveRuleCompleter activeRuleCompleter, RuleWsSupport ruleWsSupport) {
+  public ShowAction(DbClient dbClient, RulesResponseFormatter rulesResponseFormatter) {
     this.dbClient = dbClient;
-    this.activeRuleCompleter = activeRuleCompleter;
-    this.mapper = mapper;
-    this.ruleWsSupport = ruleWsSupport;
+    this.rulesResponseFormatter = rulesResponseFormatter;
   }
 
   @Override
   public void define(WebService.NewController controller) {
     WebService.NewAction action = controller
       .createAction("show")
-      .setDescription("Get detailed information about a rule<br>" +
-        "Since 5.5, following fields in the response have been deprecated :" +
-        "<ul>" +
-        "<li>\"effortToFixDescription\" becomes \"gapDescription\"</li>" +
-        "<li>\"debtRemFnCoeff\" becomes \"remFnGapMultiplier\"</li>" +
-        "<li>\"defaultDebtRemFnCoeff\" becomes \"defaultRemFnGapMultiplier\"</li>" +
-        "<li>\"debtRemFnOffset\" becomes \"remFnBaseEffort\"</li>" +
-        "<li>\"defaultDebtRemFnOffset\" becomes \"defaultRemFnBaseEffort\"</li>" +
-        "<li>\"debtOverloaded\" becomes \"remFnOverloaded\"</li>" +
-        "</ul>" +
-        "In 7.1, the field 'scope' has been added.")
+      .setDescription("Get detailed information about a rule<br>")
       .setSince("4.2")
       .setResponseExample(Resources.getResource(getClass(), "show-example.json"))
-      .setHandler(this);
+      .setHandler(this)
+      .setChangelog(
+        new Change("5.5", "The field 'effortToFixDescription' in the response has been deprecated, it becomes 'gapDescription'."),
+        new Change("5.5", "The field 'debtRemFnCoeff' in the response has been deprecated, it becomes 'remFnGapMultiplier'."),
+        new Change("5.5", "The field 'defaultDebtRemFnCoeff' in the response has been deprecated, it becomes 'defaultRemFnGapMultiplier'."),
+        new Change("5.5", "The field 'debtRemFnOffset' in the response has been deprecated, it becomes 'remFnBaseEffort'."),
+        new Change("5.5", "The field 'defaultDebtRemFnOffset' in the response has been deprecated, it becomes 'defaultRemFnBaseEffort'."),
+        new Change("5.5", "The field 'debtOverloaded' in the response has been deprecated, it becomes 'remFnOverloaded'."),
+        new Change("7.1", "The field 'scope' has been added."),
+        new Change("9.5", "The field 'htmlDesc' in the response has been deprecated, it becomes 'descriptionSections'."),
+        new Change("9.5", "The field 'descriptionSections' has been added to the payload."),
+        new Change("9.6", "'descriptionSections' can optionally embed a context field."),
+        new Change("9.6", "'educationPrinciples' has been added."),
+        new Change("10.0", "The deprecated field 'effortToFixDescription' has been removed, use 'gapDescription' instead."),
+        new Change("10.0", "The deprecated field 'debtRemFnCoeff' has been removed, use 'remFnGapMultiplier' instead."),
+        new Change("10.0", "The deprecated field 'defaultDebtRemFnCoeff' has been removed, use 'defaultRemFnGapMultiplier' instead."),
+        new Change("10.0", "The deprecated field 'debtRemFnOffset' has been removed, use 'remFnBaseEffort' instead."),
+        new Change("10.0", "The deprecated field 'defaultDebtRemFnOffset' has been removed, use 'defaultRemFnBaseEffort' instead."),
+        new Change("10.0", "The deprecated field 'debtOverloaded' has been removed, use 'remFnOverloaded' instead."),
+        new Change("10.0", "The field 'defaultDebtRemFnType' has been deprecated, use 'defaultRemFnType' instead"),
+        new Change("10.0", "The field 'debtRemFnType' has been deprecated, use 'remFnType' instead"),
+        new Change("10.2", "Add 'impacts', 'cleanCodeAttribute', 'cleanCodeAttributeCategory' fields to the response"),
+        new Change("10.2", "The field 'severity' and 'type' in the response have been deprecated, use 'impacts' instead."));
 
     action
       .createParam(PARAM_KEY)
@@ -99,13 +106,13 @@ public class ShowAction implements RulesWsAction {
       RuleDto rule = dbClient.ruleDao().selectByKey(dbSession, key)
         .orElseThrow(() -> new NotFoundException(format("Rule not found: %s", key)));
 
-      List<RuleDefinitionDto> templateRules = ofNullable(rule.getTemplateUuid())
-        .flatMap(templateUuid -> dbClient.ruleDao().selectDefinitionByUuid(rule.getTemplateUuid(), dbSession))
+      List<RuleDto> templateRules = ofNullable(rule.getTemplateUuid())
+        .flatMap(templateUuid -> dbClient.ruleDao().selectByUuid(rule.getTemplateUuid(), dbSession))
         .map(Collections::singletonList).orElseGet(Collections::emptyList);
 
       List<RuleParamDto> ruleParameters = dbClient.ruleDao().selectRuleParamsByRuleUuids(dbSession, singletonList(rule.getUuid()));
       ShowResponse showResponse = buildResponse(dbSession, request,
-        new SearchAction.SearchResult()
+        new RulesResponseFormatter.SearchResult()
           .setRules(singletonList(rule))
           .setTemplateRules(templateRules)
           .setRuleParameters(ruleParameters)
@@ -114,13 +121,12 @@ public class ShowAction implements RulesWsAction {
     }
   }
 
-  private ShowResponse buildResponse(DbSession dbSession, Request request, SearchAction.SearchResult searchResult) {
+  private ShowResponse buildResponse(DbSession dbSession, Request request, RulesResponseFormatter.SearchResult searchResult) {
     ShowResponse.Builder responseBuilder = ShowResponse.newBuilder();
     RuleDto rule = searchResult.getRules().get(0);
-    responseBuilder.setRule(mapper.toWsRule(rule.getDefinition(), searchResult, Collections.emptySet(), rule.getMetadata(),
-      ruleWsSupport.getUsersByUuid(dbSession, searchResult.getRules()), emptyMap()));
+    responseBuilder.setRule(rulesResponseFormatter.formatRule(dbSession, searchResult));
     if (request.mandatoryParamAsBoolean(PARAM_ACTIVES)) {
-      activeRuleCompleter.completeShow(dbSession, rule.getDefinition()).forEach(responseBuilder::addActives);
+      responseBuilder.addAllActives(rulesResponseFormatter.formatActiveRule(dbSession, rule));
     }
     return responseBuilder.build();
   }

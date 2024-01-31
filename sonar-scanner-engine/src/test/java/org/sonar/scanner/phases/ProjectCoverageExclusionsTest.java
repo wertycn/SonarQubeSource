@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.scanner.phases;
 
 import java.io.File;
+import java.nio.file.LinkOption;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,7 +45,7 @@ public class ProjectCoverageExclusionsTest {
 
   @Before
   public void prepare() throws Exception {
-    baseDir = temp.newFolder();
+    baseDir = temp.newFolder().toPath().toRealPath(LinkOption.NOFOLLOW_LINKS).toFile();
   }
 
   @Test

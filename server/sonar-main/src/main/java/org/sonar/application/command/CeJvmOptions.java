@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,21 +25,30 @@ import java.util.Map;
 
 public class CeJvmOptions extends JvmOptions<CeJvmOptions> {
 
-  public CeJvmOptions(File tmpDir, JavaVersion javaVersion) {
-    super(mandatoryOptions(tmpDir, javaVersion));
+  public CeJvmOptions(File tmpDir) {
+    super(mandatoryOptions(tmpDir));
   }
 
-  private static Map<String, String> mandatoryOptions(File tmpDir, JavaVersion javaVersion) {
+  private static Map<String, String> mandatoryOptions(File tmpDir) {
     Map<String, String> res = new LinkedHashMap<>(3);
     res.put("-Djava.awt.headless=", "true");
     res.put("-Dfile.encoding=", "UTF-8");
     res.put("-Djava.io.tmpdir=", tmpDir.getAbsolutePath());
     res.put("-XX:-OmitStackTraceInFastThrow", "");
+    // avoid illegal reflective access operations done by MyBatis
+    res.put("--add-opens=java.base/java.util=ALL-UNNAMED", "");
 
-    if (javaVersion.isAtLeastJava11()) {
-      // avoid illegal reflective access operations done by MyBatis
-      res.put("--add-opens=java.base/java.util=ALL-UNNAMED", "");
-    }
+    // avoid illegal reflective access operations done by Hazelcast
+    res.put("--add-exports=java.base/jdk.internal.ref=ALL-UNNAMED", "");
+    res.put("--add-opens=java.base/java.lang=ALL-UNNAMED", "");
+    res.put("--add-opens=java.base/java.nio=ALL-UNNAMED", "");
+    res.put("--add-opens=java.base/sun.nio.ch=ALL-UNNAMED", "");
+    res.put("--add-opens=java.management/sun.management=ALL-UNNAMED", "");
+    res.put("--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED", "");
+
+    // disable FIPS mode for the JVM so SonarQube can use certain algorithms
+    res.put("-Dcom.redhat.fips=", "false");
+    
     return res;
   }
 }

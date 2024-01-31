@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,17 +21,27 @@ package org.sonar.scanner.scm;
 
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
+import org.sonar.scm.git.ChangedFile;
+
+import static java.util.Collections.emptyMap;
+import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toMap;
 
 @Immutable
 public class ScmChangedFiles {
   @Nullable
-  private final Collection<Path> fileCollection;
+  private final Set<ChangedFile> changedFiles;
+  private final Map<Path, ChangedFile> changedFilesByPath;
 
-  public ScmChangedFiles(@Nullable Collection<Path> changedFiles) {
-    this.fileCollection = changedFiles;
+  public ScmChangedFiles(@Nullable Set<ChangedFile> changedFiles) {
+    this.changedFiles = changedFiles;
+    this.changedFilesByPath = toChangedFilesByPathMap(changedFiles);
   }
 
   public boolean isChanged(Path file) {
@@ -39,15 +49,33 @@ public class ScmChangedFiles {
       throw new IllegalStateException("Scm didn't provide valid data");
     }
 
-    return fileCollection.contains(file);
+    return this.getChangedFile(file).isPresent();
   }
 
   public boolean isValid() {
-    return fileCollection != null;
+    return changedFiles != null;
   }
 
   @CheckForNull
-  Collection<Path> get() {
-    return fileCollection;
+  public Collection<ChangedFile> get() {
+    return changedFiles;
+  }
+
+  @CheckForNull
+  public String getOldRelativeFilePath(Path absoluteFilePath) {
+    return this.getChangedFile(absoluteFilePath)
+      .filter(ChangedFile::isMovedFile)
+      .map(ChangedFile::getOldRelativeFilePathReference)
+      .orElse(null);
+  }
+
+  private Optional<ChangedFile> getChangedFile(Path absoluteFilePath) {
+    return Optional.ofNullable(changedFilesByPath.get(absoluteFilePath));
+  }
+
+  private static Map<Path, ChangedFile> toChangedFilesByPathMap(@Nullable Set<ChangedFile> changedFiles) {
+    return Optional.ofNullable(changedFiles)
+      .map(files -> files.stream().collect(toMap(ChangedFile::getAbsolutFilePath, identity())))
+      .orElse(emptyMap());
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,6 +30,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.component.ComponentFinder;
+import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventService;
 import org.sonar.server.user.UserSession;
 
 import static org.sonar.server.user.AbstractUserSession.insufficientPrivilegesException;
@@ -44,13 +45,16 @@ public class AddProjectAction implements QProfileWsAction {
   private final Languages languages;
   private final ComponentFinder componentFinder;
   private final QProfileWsSupport wsSupport;
+  private final QualityProfileChangeEventService qualityProfileChangeEventService;
 
-  public AddProjectAction(DbClient dbClient, UserSession userSession, Languages languages, ComponentFinder componentFinder, QProfileWsSupport wsSupport) {
+  public AddProjectAction(DbClient dbClient, UserSession userSession, Languages languages, ComponentFinder componentFinder,
+    QProfileWsSupport wsSupport, QualityProfileChangeEventService qualityProfileChangeEventService) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.languages = languages;
     this.componentFinder = componentFinder;
     this.wsSupport = wsSupport;
+    this.qualityProfileChangeEventService = qualityProfileChangeEventService;
   }
 
   @Override
@@ -61,7 +65,6 @@ public class AddProjectAction implements QProfileWsAction {
         "Requires one of the following permissions:" +
         "<ul>" +
         "  <li>'Administer Quality Profiles'</li>" +
-        "  <li>Edit right on the specified quality profile</li>" +
         "  <li>Administer right on the specified project</li>" +
         "</ul>")
       .setPost(true)
@@ -80,19 +83,29 @@ public class AddProjectAction implements QProfileWsAction {
     userSession.checkLoggedIn();
 
     try (DbSession dbSession = dbClient.openSession(false)) {
+
       ProjectDto project = loadProject(dbSession, request);
       QProfileDto profile = wsSupport.getProfile(dbSession, QProfileReference.fromName(request));
-      checkPermissions(dbSession, profile, project);
-
+      checkPermissions(profile, project);
       QProfileDto currentProfile = dbClient.qualityProfileDao().selectAssociatedToProjectAndLanguage(dbSession, project, profile.getLanguage());
+
+      QProfileDto deactivatedProfile = null;
+
       if (currentProfile == null) {
+        QProfileDto defaultProfile = dbClient.qualityProfileDao().selectDefaultProfile(dbSession, profile.getLanguage());
+        if (defaultProfile != null) {
+          deactivatedProfile = defaultProfile;
+        }
+
         // project uses the default profile
         dbClient.qualityProfileDao().insertProjectProfileAssociation(dbSession, project, profile);
         dbSession.commit();
       } else if (!profile.getKee().equals(currentProfile.getKee())) {
+        deactivatedProfile = currentProfile;
         dbClient.qualityProfileDao().updateProjectProfileAssociation(dbSession, project, profile.getKee(), currentProfile.getKee());
         dbSession.commit();
       }
+      qualityProfileChangeEventService.publishRuleActivationToSonarLintClients(project, profile, deactivatedProfile);
     }
 
     response.noContent();
@@ -103,9 +116,8 @@ public class AddProjectAction implements QProfileWsAction {
     return componentFinder.getProjectByKey(dbSession, projectKey);
   }
 
-  private void checkPermissions(DbSession dbSession, QProfileDto profile, ProjectDto project) {
-    if (wsSupport.canEdit(dbSession, profile)
-      || userSession.hasProjectPermission(UserRole.ADMIN, project)) {
+  private void checkPermissions(QProfileDto profile, ProjectDto project) {
+    if (wsSupport.canAdministrate(profile) || userSession.hasEntityPermission(UserRole.ADMIN, project)) {
       return;
     }
 

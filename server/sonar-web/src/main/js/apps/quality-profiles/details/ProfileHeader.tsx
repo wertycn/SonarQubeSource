@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,75 +17,103 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Badge, Breadcrumbs, HoverLink, Link, PageContentFontWrapper } from 'design-system';
 import * as React from 'react';
-import { IndexLink, Link } from 'react-router';
-import DateFromNow from 'sonar-ui-common/components/intl/DateFromNow';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { Helmet } from 'react-helmet-async';
+import { useLocation } from '../../../components/hoc/withRouter';
+import DateFromNow from '../../../components/intl/DateFromNow';
+import { AdminPageHeader } from '../../../components/ui/AdminPageHeader';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import BuiltInQualityProfileBadge from '../components/BuiltInQualityProfileBadge';
 import ProfileActions from '../components/ProfileActions';
-import ProfileLink from '../components/ProfileLink';
+import { PROFILE_PATH } from '../constants';
+import { QualityProfilePath } from '../routes';
 import { Profile } from '../types';
-import { getProfileChangelogPath, getProfilesForLanguagePath, PROFILE_PATH } from '../utils';
+import {
+  getProfileChangelogPath,
+  getProfilesForLanguagePath,
+  isProfileComparePath,
+} from '../utils';
 
 interface Props {
   profile: Profile;
+  isComparable: boolean;
   updateProfiles: () => Promise<void>;
 }
 
-export default class ProfileHeader extends React.PureComponent<Props> {
-  render() {
-    const { profile } = this.props;
+export default function ProfileHeader(props: Props) {
+  const { profile, isComparable, updateProfiles } = props;
+  const location = useLocation();
+  const isComparePage = location.pathname.endsWith(`/${QualityProfilePath.COMPARE}`);
+  const isChangeLogPage = location.pathname.endsWith(`/${QualityProfilePath.CHANGELOG}`);
 
-    return (
-      <header className="page-header quality-profile-header">
-        <div className="note spacer-bottom">
-          <IndexLink className="text-muted" to={PROFILE_PATH}>
-            {translate('quality_profiles.page')}
-          </IndexLink>
-          {' / '}
-          <Link className="text-muted" to={getProfilesForLanguagePath(profile.language)}>
-            {profile.languageName}
-          </Link>
-        </div>
-
-        <h1 className="page-title">
-          <ProfileLink className="link-base-color" language={profile.language} name={profile.name}>
-            <span>{profile.name}</span>
-          </ProfileLink>
-          {profile.isBuiltIn && (
-            <BuiltInQualityProfileBadge className="spacer-left" tooltip={false} />
+  return (
+    <div className="it__quality-profiles__header">
+      {(isComparePage || isChangeLogPage) && (
+        <Helmet
+          defer={false}
+          title={translateWithParameters(
+            isChangeLogPage
+              ? 'quality_profiles.page_title_changelog_x'
+              : 'quality_profiles.page_title_compare_x',
+            profile.name,
           )}
-        </h1>
+        />
+      )}
 
-        <div className="pull-right">
-          <ul className="list-inline" style={{ lineHeight: '24px' }}>
-            <li className="small spacer-right">
-              {translate('quality_profiles.updated_')} <DateFromNow date={profile.rulesUpdatedAt} />
-            </li>
-            <li className="small big-spacer-right">
-              {translate('quality_profiles.used_')} <DateFromNow date={profile.lastUsed} />
-            </li>
-            <li>
-              <Link className="button" to={getProfileChangelogPath(profile.name, profile.language)}>
-                {translate('changelog')}
-              </Link>
-            </li>
-            <li>
-              <ProfileActions
-                className="pull-left"
-                profile={profile}
-                updateProfiles={this.props.updateProfiles}
-              />
-            </li>
-          </ul>
+      <Breadcrumbs className="sw-mb-6">
+        <HoverLink to={PROFILE_PATH}>{translate('quality_profiles.page')}</HoverLink>
+        <HoverLink to={getProfilesForLanguagePath(profile.language)}>
+          {profile.languageName}
+        </HoverLink>
+      </Breadcrumbs>
+
+      <AdminPageHeader
+        description={profile.isBuiltIn && translate('quality_profiles.built_in.description')}
+        title={
+          <span className="sw-inline-flex sw-items-center sw-gap-2">
+            {profile.name}
+            {profile.isBuiltIn && <BuiltInQualityProfileBadge tooltip={false} />}
+            {profile.isDefault && <Badge>{translate('default')}</Badge>}
+          </span>
+        }
+      >
+        <div className="sw-flex sw-items-center sw-gap-3 sw-self-start">
+          {!isProfileComparePath(location.pathname) && (
+            <PageContentFontWrapper className="sw-body-sm sw-flex sw-gap-3">
+              <div>
+                <strong className="sw-body-sm-highlight">
+                  {translate('quality_profiles.updated_')}
+                </strong>{' '}
+                <DateFromNow date={profile.rulesUpdatedAt} />
+              </div>
+              <div>
+                <strong className="sw-body-sm-highlight">
+                  {translate('quality_profiles.used_')}
+                </strong>{' '}
+                <DateFromNow date={profile.lastUsed} />
+              </div>
+
+              {!isChangeLogPage && (
+                <div>
+                  <Link
+                    className="it__quality-profiles__changelog"
+                    to={getProfileChangelogPath(profile.name, profile.language)}
+                  >
+                    {translate('see_changelog')}
+                  </Link>
+                </div>
+              )}
+            </PageContentFontWrapper>
+          )}
+
+          <ProfileActions
+            profile={profile}
+            isComparable={isComparable}
+            updateProfiles={updateProfiles}
+          />
         </div>
-
-        {profile.isBuiltIn && (
-          <div className="page-description">
-            {translate('quality_profiles.built_in.description')}
-          </div>
-        )}
-      </header>
-    );
-  }
+      </AdminPageHeader>
+    </div>
+  );
 }

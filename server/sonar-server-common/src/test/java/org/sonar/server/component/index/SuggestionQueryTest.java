@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,31 +19,26 @@
  */
 package org.sonar.server.component.index;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class SuggestionQueryTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void should_fail_with_IAE_if_query_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Query must be at least two characters long");
-
-    SuggestionQuery.builder().setQuery("");
+    assertThatThrownBy(() -> SuggestionQuery.builder().setQuery(""))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Query must be at least two characters long");
   }
 
   @Test
   public void should_fail_with_IAE_if_query_is_one_character_long() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Query must be at least two characters long");
-
-    SuggestionQuery.builder().setQuery("a");
+    assertThatThrownBy(() -> SuggestionQuery.builder().setQuery("a"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Query must be at least two characters long");
   }
 
   @Test
@@ -57,20 +52,18 @@ public class SuggestionQueryTest {
   public void should_fail_with_IAE_if_limit_is_negative() {
     SuggestionQuery.Builder query = SuggestionQuery.builder().setQuery("ab");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Limit has to be strictly positive");
-
-    query.setLimit(-1);
+    assertThatThrownBy(() -> query.setLimit(-1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Limit has to be strictly positive");
   }
 
   @Test
   public void should_fail_with_IAE_if_limit_is_zero() {
     SuggestionQuery.Builder query = SuggestionQuery.builder().setQuery("ab");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Limit has to be strictly positive");
-
-    query.setLimit(0);
+    assertThatThrownBy(() ->  query.setLimit(0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Limit has to be strictly positive");
   }
 
   @Test
@@ -78,6 +71,6 @@ public class SuggestionQueryTest {
     SuggestionQuery query = SuggestionQuery.builder().setQuery("ab")
       .setLimit(1).build();
 
-    assertThat(query.getLimit()).isEqualTo(1);
+    assertThat(query.getLimit()).isOne();
   }
 }

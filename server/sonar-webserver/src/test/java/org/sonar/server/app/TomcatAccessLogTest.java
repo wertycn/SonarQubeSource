@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,13 +30,13 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
-import org.sonar.api.utils.log.Logger;
+import org.slf4j.Logger;
 import org.sonar.process.Props;
 
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.sonar.process.ProcessProperties.Property.PATH_LOGS;
 
 public class TomcatAccessLogTest {
@@ -69,7 +69,7 @@ public class TomcatAccessLogTest {
 
     LifecycleEvent event = new LifecycleEvent(mock(Lifecycle.class), "before_init", null);
     listener.lifecycleEvent(event);
-    verifyZeroInteractions(logger);
+    verifyNoInteractions(logger);
 
     event = new LifecycleEvent(mock(Lifecycle.class), "after_start", null);
     listener.lifecycleEvent(event);

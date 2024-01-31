@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,13 +33,16 @@ import org.sonar.core.issue.IssueChangeContext;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.IssueFinder;
+import org.sonar.server.pushapi.issues.IssueChangeEventService;
 import org.sonar.server.user.UserSession;
 
-import static org.sonar.api.rules.RuleType.SECURITY_HOTSPOT;
 import static org.sonar.api.web.UserRole.ISSUE_ADMIN;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
+import static org.sonar.db.component.BranchType.BRANCH;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.ACTION_SET_TYPE;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ISSUE;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_TYPE;
@@ -49,16 +52,18 @@ public class SetTypeAction implements IssuesWsAction {
 
   private final UserSession userSession;
   private final DbClient dbClient;
+  private final IssueChangeEventService issueChangeEventService;
   private final IssueFinder issueFinder;
   private final IssueFieldsSetter issueFieldsSetter;
   private final IssueUpdater issueUpdater;
   private final OperationResponseWriter responseWriter;
   private final System2 system2;
 
-  public SetTypeAction(UserSession userSession, DbClient dbClient, IssueFinder issueFinder, IssueFieldsSetter issueFieldsSetter, IssueUpdater issueUpdater,
-    OperationResponseWriter responseWriter, System2 system2) {
+  public SetTypeAction(UserSession userSession, DbClient dbClient, IssueChangeEventService issueChangeEventService, IssueFinder issueFinder,
+    IssueFieldsSetter issueFieldsSetter, IssueUpdater issueUpdater, OperationResponseWriter responseWriter, System2 system2) {
     this.userSession = userSession;
     this.dbClient = dbClient;
+    this.issueChangeEventService = issueChangeEventService;
     this.issueFinder = issueFinder;
     this.issueFieldsSetter = issueFieldsSetter;
     this.issueUpdater = issueUpdater;
@@ -78,9 +83,16 @@ public class SetTypeAction implements IssuesWsAction {
         "</ul>")
       .setSince("5.5")
       .setChangelog(
+        new Change("10.4", "The response fields 'status' and 'resolution' are deprecated. Please use 'issueStatus' instead."),
+        new Change("10.4", "Add 'issueStatus' field to the response."),
+        new Change("10.2", "Add 'impacts', 'cleanCodeAttribute', 'cleanCodeAttributeCategory' fields to the response"),
+        new Change("10.2", "This endpoint is now deprecated."),
+        new Change("9.6", "Response field 'ruleDescriptionContextKey' added"),
+        new Change("8.8", "The response field components.uuid is removed"),
         new Change("6.5", "the database ids of the components are removed from the response"),
         new Change("6.5", "the response field components.uuid is deprecated. Use components.key instead."))
       .setHandler(this)
+      .setDeprecatedSince("10.2")
       .setResponseExample(Resources.getResource(this.getClass(), "set_type-example.json"))
       .setPost(true);
 
@@ -111,9 +123,15 @@ public class SetTypeAction implements IssuesWsAction {
 
     userSession.checkComponentUuidPermission(ISSUE_ADMIN, issue.projectUuid());
 
-    IssueChangeContext context = IssueChangeContext.createUser(new Date(system2.now()), userSession.getUuid());
+    IssueChangeContext context = issueChangeContextByUserBuilder(new Date(system2.now()), userSession.getUuid()).withRefreshMeasures().build();
     if (issueFieldsSetter.setType(issue, ruleType, context)) {
-      return issueUpdater.saveIssueAndPreloadSearchResponseData(session, issue, context, true);
+      BranchDto branch = issueUpdater.getBranch(session, issue);
+      SearchResponseData response = issueUpdater.saveIssueAndPreloadSearchResponseData(session, issueDto, issue, context, branch);
+      if (branch.getBranchType().equals(BRANCH) && response.getComponentByUuid(issue.projectUuid()) != null) {
+        issueChangeEventService.distributeIssueChangeEvent(issue, null, ruleType.name(), null, branch,
+          response.getComponentByUuid(issue.projectUuid()).getKey());
+      }
+      return response;
     }
     return new SearchResponseData(issueDto);
   }

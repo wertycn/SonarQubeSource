@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,37 +42,39 @@ public class MatchTest {
 
   @Test
   public void getDbKey_returns_first_constructor_argument() {
-    assertThat(underTest.getDbUuid()).isEqualTo(SOME_KEY);
+    assertThat(underTest.dbUuid()).isEqualTo(SOME_KEY);
   }
 
   @Test
   public void getDbKey_returns_second_constructor_argument() {
-    assertThat(underTest.getReportUuid()).isEqualTo(SOME_REPORT_KEY);
+    assertThat(underTest.reportUuid()).isEqualTo(SOME_REPORT_KEY);
   }
 
   @Test
   public void equals_is_based_on_both_properties() {
-    assertThat(underTest).isEqualTo(new Match(SOME_KEY, SOME_REPORT_KEY));
-    assertThat(underTest).isNotEqualTo(new Match("other key", SOME_REPORT_KEY));
-    assertThat(underTest).isNotEqualTo(new Match(SOME_KEY, "other report key"));
-    assertThat(underTest).isNotEqualTo(new Match(null, SOME_REPORT_KEY));
-    assertThat(underTest).isNotEqualTo(new Match(SOME_KEY, null));
-    assertThat(underTest).isNotEqualTo(new Match(null, null));
+    assertThat(underTest)
+      .isEqualTo(new Match(SOME_KEY, SOME_REPORT_KEY))
+      .isNotEqualTo(new Match("other key", SOME_REPORT_KEY))
+      .isNotEqualTo(new Match(SOME_KEY, "other report key"))
+      .isNotEqualTo(new Match(null, SOME_REPORT_KEY))
+      .isNotEqualTo(new Match(SOME_KEY, null))
+      .isNotEqualTo(new Match(null, null));
   }
 
   @Test
   public void hashcode_is_base_on_both_properties() {
     int hashCode = underTest.hashCode();
-    assertThat(hashCode).isEqualTo(new Match(SOME_KEY, SOME_REPORT_KEY).hashCode());
-    assertThat(hashCode).isNotEqualTo(new Match("other key", SOME_REPORT_KEY).hashCode());
-    assertThat(hashCode).isNotEqualTo(new Match(SOME_KEY, "other report key").hashCode());
-    assertThat(hashCode).isNotEqualTo(new Match(null, SOME_REPORT_KEY).hashCode());
-    assertThat(hashCode).isNotEqualTo(new Match(SOME_KEY, null).hashCode());
-    assertThat(hashCode).isNotEqualTo(new Match(null, null).hashCode());
+    assertThat(hashCode)
+      .isEqualTo(new Match(SOME_KEY, SOME_REPORT_KEY).hashCode())
+      .isNotEqualTo(new Match("other key", SOME_REPORT_KEY).hashCode())
+      .isNotEqualTo(new Match(SOME_KEY, "other report key").hashCode())
+      .isNotEqualTo(new Match(null, SOME_REPORT_KEY).hashCode())
+      .isNotEqualTo(new Match(SOME_KEY, null).hashCode())
+      .isNotEqualTo(new Match(null, null).hashCode());
   }
 
   @Test
   public void toString_prints_both_properties() {
-    assertThat(underTest.toString()).isEqualTo("{key=>reportKey}");
+    assertThat(underTest).hasToString("{key=>reportKey}");
   }
 }

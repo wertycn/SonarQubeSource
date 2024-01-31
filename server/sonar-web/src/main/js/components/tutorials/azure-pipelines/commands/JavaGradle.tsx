@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,54 +17,60 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { ListItem, NumberedList, NumberedListItem, UnorderedList } from 'design-system';
 import * as React from 'react';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { translate, translateWithParameters } from '../../../../helpers/l10n';
 import SentenceWithHighlights from '../../components/SentenceWithHighlights';
 import { BuildTools } from '../../types';
+import JavaToolInstallation from '../JavaToolInstallation';
 import AlertClassicEditor from './AlertClassicEditor';
 import PrepareAnalysisCommand, { PrepareType } from './PrepareAnalysisCommand';
 import PublishSteps from './PublishSteps';
 
 export interface JavaGradleProps {
   projectKey: string;
+  projectName: string;
 }
 
 export default function JavaGradle(props: JavaGradleProps) {
-  const { projectKey } = props;
+  const { projectKey, projectName } = props;
 
   return (
     <>
       <AlertClassicEditor />
-      <ol className="list-styled big-spacer-top">
-        <li>
+      <NumberedList className="sw-mt-4">
+        <NumberedListItem>
           <SentenceWithHighlights
             translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.prepare"
             highlightKeys={['pipeline', 'task', 'before']}
           />
-        </li>
-        <PrepareAnalysisCommand
-          buildTool={BuildTools.Gradle}
-          kind={PrepareType.JavaMavenGradle}
-          projectKey={projectKey}
-        />
-        <li>
+          <PrepareAnalysisCommand
+            buildTool={BuildTools.Gradle}
+            kind={PrepareType.JavaMavenGradle}
+            projectKey={projectKey}
+            projectName={projectName}
+          />
+        </NumberedListItem>
+
+        <JavaToolInstallation />
+
+        <NumberedListItem>
           {translateWithParameters(
             'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.java',
-            translate('onboarding.build', BuildTools.Gradle)
+            translate('onboarding.build', BuildTools.Gradle),
           )}
-        </li>
-        <ul className="list-styled big-spacer-bottom">
-          <li>
-            <SentenceWithHighlights
-              translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.java.settings"
-              highlightKeys={['section', 'option']}
-            />
-          </li>
-        </ul>
+          <UnorderedList ticks className="sw-ml-12 sw-mb-4">
+            <ListItem>
+              <SentenceWithHighlights
+                translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.java.settings"
+                highlightKeys={['section', 'option']}
+              />
+            </ListItem>
+          </UnorderedList>
+        </NumberedListItem>
 
         <PublishSteps />
-      </ol>
+      </NumberedList>
     </>
   );
 }

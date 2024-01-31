@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentMatcher;
 import org.mockito.invocation.InvocationOnMock;
@@ -45,6 +44,7 @@ import static org.apache.commons.io.FileUtils.copyFileToDirectory;
 import static org.apache.commons.io.FileUtils.touch;
 import static org.apache.commons.io.FilenameUtils.separatorsToUnix;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -61,8 +61,6 @@ public class PluginDownloaderTest {
 
   @Rule
   public TemporaryFolder testFolder = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   private File downloadDir;
   private UpdateCenterMatrixFactory updateCenterMatrixFactory;
   private UpdateCenter updateCenter;
@@ -178,9 +176,8 @@ public class PluginDownloaderTest {
 
   @Test
   public void fail_if_no_compatible_plugin_found() {
-    expectedException.expect(BadRequestException.class);
-
-    pluginDownloader.download("foo", create("1.0"));
+    assertThatThrownBy(() -> pluginDownloader.download("foo", create("1.0")))
+      .isInstanceOf(BadRequestException.class);
   }
 
   @Test
@@ -188,7 +185,7 @@ public class PluginDownloaderTest {
     Plugin test = Plugin.factory("test");
     File file = testFolder.newFile("test-1.0.jar");
     file.createNewFile();
-    Release test10 = new Release(test, "1.0").setDownloadUrl("file://" + separatorsToUnix(file.getCanonicalPath()));
+    Release test10 = new Release(test, "1.0").setDownloadUrl("file://" + separatorsToUnix(file.getAbsolutePath()));
     test.addRelease(test10);
 
     when(updateCenter.findInstallablePlugins("foo", create("1.0"))).thenReturn(newArrayList(test10));
@@ -196,7 +193,7 @@ public class PluginDownloaderTest {
     pluginDownloader.start();
     pluginDownloader.download("foo", create("1.0"));
     verify(httpDownloader, never()).download(any(URI.class), any(File.class));
-    assertThat(noDownloadedFiles()).isGreaterThan(0);
+    assertThat(noDownloadedFiles()).isPositive();
   }
 
   @Test
@@ -270,7 +267,7 @@ public class PluginDownloaderTest {
     file2.createNewFile();
 
     pluginDownloader.start();
-    assertThat(noDownloadedFiles()).isGreaterThan(0);
+    assertThat(noDownloadedFiles()).isPositive();
     pluginDownloader.cancelDownloads();
     assertThat(noDownloadedFiles()).isZero();
   }

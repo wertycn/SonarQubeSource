@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,79 +17,73 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON, RequestData } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
 import getCoverageStatus from '../components/SourceViewer/helpers/getCoverageStatus';
-import { IssueResponse, RawIssuesResponse } from '../types/issues';
-
-type FacetName =
-  | 'assigned_to_me'
-  | 'assignees'
-  | 'authors'
-  | 'createdAt'
-  | 'cwe'
-  | 'directories'
-  | 'files'
-  | 'languages'
-  | 'modules'
-  | 'owaspTop10'
-  | 'projects'
-  | 'reporters'
-  | 'resolutions'
-  | 'rules'
-  | 'sansTop25'
-  | 'severities'
-  | 'statuses'
-  | 'tags'
-  | 'types';
+import { throwGlobalError } from '../helpers/error';
+import {
+  get,
+  getJSON,
+  HttpStatus,
+  parseJSON,
+  post,
+  postJSON,
+  RequestData,
+} from '../helpers/request';
+import { FacetName, IssueResponse, ListIssuesResponse, RawIssuesResponse } from '../types/issues';
+import { Dict, FacetValue, IssueChangelog, SnippetsByComponent, SourceLine } from '../types/types';
 
 export function searchIssues(query: RequestData): Promise<RawIssuesResponse> {
   return getJSON('/api/issues/search', query).catch(throwGlobalError);
 }
 
+export function listIssues(query: RequestData): Promise<ListIssuesResponse> {
+  return getJSON('/api/issues/list', query).catch(throwGlobalError);
+}
+
 export function getFacets(
   query: RequestData,
-  facets: FacetName[]
+  facets: FacetName[],
 ): Promise<{
-  facets: Array<{ property: string; values: T.FacetValue[] }>;
+  facets: Array<{ property: string; values: FacetValue[] }>;
   response: RawIssuesResponse;
 }> {
   const data = {
     ...query,
     facets: facets.join(),
     ps: 1,
-    additionalFields: '_all'
+    additionalFields: '_all',
   };
-  return searchIssues(data).then(r => {
+  return searchIssues(data).then((r) => {
     return { facets: r.facets, response: r };
   });
 }
 
 export function getFacet(
   query: RequestData,
-  facet: FacetName
+  facet: FacetName,
 ): Promise<{ facet: { count: number; val: string }[]; response: RawIssuesResponse }> {
-  return getFacets(query, [facet]).then(r => {
+  return getFacets(query, [facet]).then((r) => {
     return { facet: r.facets[0].values, response: r.response };
   });
 }
 
 export function searchIssueTags(data: {
   project?: string;
+  branch?: string;
+  all?: boolean;
   ps?: number;
   q?: string;
 }): Promise<string[]> {
   return getJSON('/api/issues/tags', data)
-    .then(r => r.tags)
+    .then((r) => r.tags)
     .catch(throwGlobalError);
 }
 
-export function getIssueChangelog(issue: string): Promise<{ changelog: T.IssueChangelog[] }> {
+export function getIssueChangelog(issue: string): Promise<{ changelog: IssueChangelog[] }> {
   return getJSON('/api/issues/changelog', { issue }).catch(throwGlobalError);
 }
 
 export function getIssueFilters() {
-  return getJSON('/api/issue_filters/search').then(r => r.issueFilters);
+  return getJSON('/api/issue_filters/search').then((r) => r.issueFilters);
 }
 
 export function addIssueComment(data: { issue: string; text: string }): Promise<IssueResponse> {
@@ -139,23 +133,30 @@ export function searchIssueAuthors(data: {
   ps?: number;
   q?: string;
 }): Promise<string[]> {
-  return getJSON('/api/issues/authors', data).then(r => r.authors, throwGlobalError);
+  return getJSON('/api/issues/authors', data).then((r) => r.authors, throwGlobalError);
 }
 
-export function getIssueFlowSnippets(issueKey: string): Promise<T.Dict<T.SnippetsByComponent>> {
-  return getJSON('/api/sources/issue_snippets', { issueKey }).then(result => {
-    Object.keys(result).forEach(k => {
-      if (result[k].sources) {
-        result[k].sources = result[k].sources.reduce(
-          (lineMap: T.Dict<T.SourceLine>, line: T.SourceLine) => {
-            line.coverageStatus = getCoverageStatus(line);
-            lineMap[line.line] = line;
-            return lineMap;
-          },
-          {}
-        );
+export function getIssueFlowSnippets(issueKey: string): Promise<Dict<SnippetsByComponent>> {
+  return get('/api/sources/issue_snippets', { issueKey })
+    .then((r) => {
+      if (r.status === HttpStatus.NoContent) {
+        return {} as any;
       }
+      return parseJSON(r);
+    })
+    .then((result) => {
+      Object.keys(result).forEach((k) => {
+        if (result[k].sources) {
+          result[k].sources = result[k].sources.reduce(
+            (lineMap: Dict<SourceLine>, line: SourceLine) => {
+              line.coverageStatus = getCoverageStatus(line);
+              lineMap[line.line] = line;
+              return lineMap;
+            },
+            {},
+          );
+        }
+      });
+      return result;
     });
-    return result;
-  });
 }

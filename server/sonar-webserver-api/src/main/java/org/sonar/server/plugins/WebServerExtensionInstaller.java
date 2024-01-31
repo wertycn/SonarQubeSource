@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.server.plugins;
 
 import org.sonar.api.SonarRuntime;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.server.ServerSide;
 import org.sonar.core.platform.PluginRepository;
 
@@ -27,7 +28,7 @@ import static java.util.Collections.singleton;
 
 @ServerSide
 public class WebServerExtensionInstaller extends ServerExtensionInstaller {
-  public WebServerExtensionInstaller(SonarRuntime sonarRuntime, PluginRepository pluginRepository) {
-    super(sonarRuntime, pluginRepository, singleton(ServerSide.class));
+  public WebServerExtensionInstaller(Configuration configuration, SonarRuntime sonarRuntime, PluginRepository pluginRepository) {
+    super(configuration, sonarRuntime, pluginRepository, singleton(ServerSide.class));
   }
 }

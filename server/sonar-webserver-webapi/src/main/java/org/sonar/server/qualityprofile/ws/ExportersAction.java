@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,18 +24,21 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService.NewController;
 import org.sonar.api.utils.text.JsonWriter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class ExportersAction implements QProfileWsAction {
 
-  private ProfileExporter[] exporters;
+  private final ProfileExporter[] exporters;
 
+  @Autowired(required = false)
   public ExportersAction(ProfileExporter[] exporters) {
     this.exporters = exporters;
   }
 
   /**
-   * Used by Pico if no {@link ProfileExporter} is found
+   * Used by the container if no {@link ProfileExporter} is found
    */
+  @Autowired(required = false)
   public ExportersAction() {
     this(new ProfileExporter[0]);
   }

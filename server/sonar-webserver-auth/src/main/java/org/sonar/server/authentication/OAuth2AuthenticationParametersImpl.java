@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,23 +20,22 @@
 package org.sonar.server.authentication;
 
 import com.google.common.base.Strings;
-import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import org.sonar.api.server.http.Cookie;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
 
 import static java.net.URLDecoder.decode;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Optional.empty;
-import static org.apache.commons.lang.StringUtils.isNotBlank;
 import static org.sonar.server.authentication.AuthenticationRedirection.encodeMessage;
 import static org.sonar.server.authentication.Cookies.findCookie;
 import static org.sonar.server.authentication.Cookies.newCookieBuilder;
@@ -53,29 +52,15 @@ public class OAuth2AuthenticationParametersImpl implements OAuth2AuthenticationP
    */
   private static final String RETURN_TO_PARAMETER = "return_to";
 
-  /**
-   * This parameter is used to allow the shift of email from an existing user to the authenticating user
-   */
-  private static final String ALLOW_EMAIL_SHIFT_PARAMETER = "allowEmailShift";
-
-  /**
-   * This parameter is used to allow the update of login
-   */
-  private static final String ALLOW_LOGIN_UPDATE_PARAMETER = "allowUpdateLogin";
-
-  private static final Type JSON_MAP_TYPE = new TypeToken<HashMap<String, String>>() {
-  }.getType();
+  private static final TypeToken<Map<String, String>> JSON_MAP_TYPE = new TypeToken<>() {
+  };
 
   @Override
-  public void init(HttpServletRequest request, HttpServletResponse response) {
+  public void init(HttpRequest request, HttpResponse response) {
     String returnTo = request.getParameter(RETURN_TO_PARAMETER);
-    String allowEmailShift = request.getParameter(ALLOW_EMAIL_SHIFT_PARAMETER);
     Map<String, String> parameters = new HashMap<>();
     Optional<String> sanitizeRedirectUrl = sanitizeRedirectUrl(returnTo);
     sanitizeRedirectUrl.ifPresent(s -> parameters.put(RETURN_TO_PARAMETER, s));
-    if (isNotBlank(allowEmailShift)) {
-      parameters.put(ALLOW_EMAIL_SHIFT_PARAMETER, allowEmailShift);
-    }
     if (parameters.isEmpty()) {
       return;
     }
@@ -88,26 +73,14 @@ public class OAuth2AuthenticationParametersImpl implements OAuth2AuthenticationP
   }
 
   @Override
-  public Optional<String> getReturnTo(HttpServletRequest request) {
+  public Optional<String> getReturnTo(HttpRequest request) {
     return getParameter(request, RETURN_TO_PARAMETER)
       .flatMap(OAuth2AuthenticationParametersImpl::sanitizeRedirectUrl);
   }
 
-  @Override
-  public Optional<Boolean> getAllowEmailShift(HttpServletRequest request) {
-    Optional<String> parameter = getParameter(request, ALLOW_EMAIL_SHIFT_PARAMETER);
-    return parameter.map(Boolean::parseBoolean);
-  }
-
-  @Override
-  public Optional<Boolean> getAllowUpdateLogin(HttpServletRequest request) {
-    Optional<String> parameter = getParameter(request, ALLOW_LOGIN_UPDATE_PARAMETER);
-    return parameter.map(Boolean::parseBoolean);
-  }
-
-  private static Optional<String> getParameter(HttpServletRequest request, String parameterKey) {
-    Optional<javax.servlet.http.Cookie> cookie = findCookie(AUTHENTICATION_COOKIE_NAME, request);
-    if (!cookie.isPresent()) {
+  private static Optional<String> getParameter(HttpRequest request, String parameterKey) {
+    Optional<Cookie> cookie = findCookie(AUTHENTICATION_COOKIE_NAME, request);
+    if (cookie.isEmpty()) {
       return empty();
     }
 
@@ -119,7 +92,7 @@ public class OAuth2AuthenticationParametersImpl implements OAuth2AuthenticationP
   }
 
   @Override
-  public void delete(HttpServletRequest request, HttpServletResponse response) {
+  public void delete(HttpRequest request, HttpResponse response) {
     response.addCookie(newCookieBuilder(request)
       .setName(AUTHENTICATION_COOKIE_NAME)
       .setValue(null)

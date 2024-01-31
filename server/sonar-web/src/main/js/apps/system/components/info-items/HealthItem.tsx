@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,39 +17,37 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
 import * as React from 'react';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { translateWithParameters } from 'sonar-ui-common/helpers/l10n';
 import StatusIndicator from '../../../../components/common/StatusIndicator';
+import Tooltip from '../../../../components/controls/Tooltip';
+import { translateWithParameters } from '../../../../helpers/l10n';
+import { HealthTypes } from '../../../../types/types';
 import HealthCauseItem from './HealthCauseItem';
 
 interface Props {
-  biggerHealth?: boolean;
   name?: string;
   className?: string;
-  health: T.HealthType;
+  health: HealthTypes;
   healthCauses?: string[];
 }
 
-export default function HealthItem({ biggerHealth, className, name, health, healthCauses }: Props) {
-  const hasHealthCauses = healthCauses && healthCauses.length > 0 && health !== 'GREEN';
-  const statusIndicator = (
-    <StatusIndicator color={health.toLowerCase()} size={biggerHealth ? 'big' : undefined} />
-  );
+export default function HealthItem({ className, name, health, healthCauses }: Readonly<Props>) {
+  const hasHealthCauses = healthCauses && healthCauses.length > 0 && health !== HealthTypes.GREEN;
+
+  const statusIndicator = <StatusIndicator color={health} />;
   return (
-    <div className={classNames('system-info-health-info', className)}>
+    <div className={classNames('sw-flex sw-items-center', className)}>
       {hasHealthCauses &&
-        healthCauses!.map((cause, idx) => (
-          <HealthCauseItem className="spacer-right" health={health} healthCause={cause} key={idx} />
+        healthCauses.map((cause) => (
+          <HealthCauseItem className="sw-mr-2" health={health} healthCause={cause} key={cause} />
         ))}
-      {name ? (
-        <Tooltip overlay={translateWithParameters('system.current_health_of_x', name)}>
-          <span>{statusIndicator}</span>
-        </Tooltip>
-      ) : (
-        statusIndicator
-      )}
+
+      <Tooltip
+        overlay={name ? translateWithParameters('system.current_health_of_x', name) : undefined}
+      >
+        <span>{statusIndicator}</span>
+      </Tooltip>
     </div>
   );
 }

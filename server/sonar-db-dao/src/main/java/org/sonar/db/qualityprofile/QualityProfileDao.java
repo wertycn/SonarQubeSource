@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.Dao;
 import org.sonar.db.DatabaseUtils;
 import org.sonar.db.DbSession;
@@ -145,8 +144,12 @@ public class QualityProfileDao implements Dao {
     return executeLargeInputs(languages, partition -> mapper(dbSession).selectDefaultProfiles(partition));
   }
 
-  public List<QProfileDto> selectDefaultBuiltInProfilesWithoutActiveRules(DbSession dbSession, Set<String> languages) {
-    return executeLargeInputs(languages, partition -> mapper(dbSession).selectDefaultBuiltInProfilesWithoutActiveRules(partition));
+  public List<QProfileDto> selectAllDefaultProfiles(DbSession dbSession) {
+    return mapper(dbSession).selectAllDefaultProfiles();
+  }
+
+  public List<QProfileDto> selectDefaultProfilesWithoutActiveRules(DbSession dbSession, Set<String> languages, boolean builtIn) {
+    return executeLargeInputs(languages, partition -> mapper(dbSession).selectDefaultProfilesWithoutActiveRules(partition, builtIn));
   }
 
   @CheckForNull
@@ -155,12 +158,21 @@ public class QualityProfileDao implements Dao {
   }
 
   @CheckForNull
+  public String selectDefaultProfileUuid(DbSession dbSession, String language) {
+    return mapper(dbSession).selectDefaultProfileUuid(language);
+  }
+
+  @CheckForNull
   public QProfileDto selectAssociatedToProjectAndLanguage(DbSession dbSession, ProjectDto project, String language) {
     return mapper(dbSession).selectAssociatedToProjectUuidAndLanguage(project.getUuid(), language);
   }
 
-  public List<QProfileDto> selectAssociatedToProjectUuidAndLanguages(DbSession dbSession, ProjectDto project, Collection<String> languages) {
+  public List<QProfileDto> selectAssociatedToProjectAndLanguages(DbSession dbSession, ProjectDto project, Collection<String> languages) {
     return executeLargeInputs(languages, partition -> mapper(dbSession).selectAssociatedToProjectUuidAndLanguages(project.getUuid(), partition));
+  }
+
+  public List<QProfileDto> selectQProfilesByProjectUuid(DbSession dbSession, String projectUuid) {
+    return mapper(dbSession).selectQProfilesByProjectUuid(projectUuid);
   }
 
   public List<QProfileDto> selectByLanguage(DbSession dbSession, String language) {
@@ -168,7 +180,7 @@ public class QualityProfileDao implements Dao {
   }
 
   public List<QProfileDto> selectChildren(DbSession dbSession, Collection<QProfileDto> profiles) {
-    List<String> uuids = profiles.stream().map(QProfileDto::getKee).collect(MoreCollectors.toArrayList(profiles.size()));
+    List<String> uuids = profiles.stream().map(QProfileDto::getKee).toList();
     return DatabaseUtils.executeLargeInputs(uuids, chunk -> mapper(dbSession).selectChildren(chunk));
   }
 
@@ -200,7 +212,7 @@ public class QualityProfileDao implements Dao {
   }
 
   public Map<String, Long> countProjectsByProfiles(DbSession dbSession, List<QProfileDto> profiles) {
-    List<String> profileUuids = profiles.stream().map(QProfileDto::getKee).collect(MoreCollectors.toList());
+    List<String> profileUuids = profiles.stream().map(QProfileDto::getKee).toList();
     return KeyLongValue.toMap(executeLargeInputs(profileUuids, partition -> mapper(dbSession).countProjectsByProfiles(partition)));
   }
 
@@ -236,6 +248,9 @@ public class QualityProfileDao implements Dao {
     return mapper(dbSession).selectProjectAssociations(profile.getKee(), nameQuery);
   }
 
+  public List<ProjectQProfileLanguageAssociationDto> selectAllProjectAssociations(DbSession dbSession) {
+    return mapper(dbSession).selectAllProjectAssociations();
+  }
   public Collection<String> selectUuidsOfCustomRulesProfiles(DbSession dbSession, String language, String name) {
     return mapper(dbSession).selectUuidsOfCustomRuleProfiles(language, name);
   }

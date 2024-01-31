@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,21 +20,26 @@
 package org.sonar.core.util;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.test.TestUtils;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.core.test.Test.Fake;
 
 public class ProtobufTest {
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
@@ -46,12 +51,12 @@ public class ProtobufTest {
 
   @Test
   public void read_file_fails_if_file_does_not_exist() throws Exception {
-    thrown.expect(ContextException.class);
-    thrown.expectMessage("Unable to read message");
-
-    File file = temp.newFile();
-    FileUtils.forceDelete(file);
-    Protobuf.read(file, Fake.parser());
+    assertThatThrownBy(() -> {
+      File file = temp.newFile();
+      FileUtils.forceDelete(file);
+      Protobuf.read(file, Fake.parser());
+    }).isInstanceOf(ContextException.class)
+      .hasMessageContaining("Unable to read message");
   }
 
   @Test
@@ -72,12 +77,12 @@ public class ProtobufTest {
   }
 
   @Test
-  public void fail_to_write_single_message() throws Exception {
-    thrown.expect(ContextException.class);
-    thrown.expectMessage("Unable to write message");
-
-    File dir = temp.newFolder();
-    Protobuf.write(Fake.getDefaultInstance(), dir);
+  public void fail_to_write_single_message() {
+    assertThatThrownBy(() -> {
+      File dir = temp.newFolder();
+      Protobuf.write(Fake.getDefaultInstance(), dir);
+    }).isInstanceOf(ContextException.class)
+      .hasMessageContaining("Unable to write message");
   }
 
   @Test
@@ -91,7 +96,7 @@ public class ProtobufTest {
     CloseableIterator<Fake> it = Protobuf.readStream(file, Fake.parser());
     Fake read = it.next();
     assertThat(read.getLabel()).isEqualTo("one");
-    assertThat(read.getLine()).isEqualTo(1);
+    assertThat(read.getLine()).isOne();
     read = it.next();
     assertThat(read.getLabel()).isEqualTo("two");
     assertThat(read.hasLine()).isFalse();
@@ -99,12 +104,40 @@ public class ProtobufTest {
   }
 
   @Test
-  public void fail_to_read_stream() throws Exception {
-    thrown.expect(ContextException.class);
-    thrown.expectMessage("Unable to read messages");
+  public void write_gzip_file() throws IOException {
+    File file = temp.newFile();
 
-    File dir = temp.newFolder();
-    Protobuf.readStream(dir, Fake.parser());
+    Fake item1 = Fake.newBuilder().setLabel("one").setLine(1).build();
+    Protobuf.writeGzip(item1, file);
+    try (InputStream is = new GZIPInputStream(new FileInputStream(file))) {
+      assertThat(Protobuf.read(is, Fake.parser()).getLabel()).isEqualTo("one");
+    }
+  }
+
+  @Test
+  public void read_gzip_stream() throws IOException {
+    File file = temp.newFile();
+
+    Fake item1 = Fake.newBuilder().setLabel("one").setLine(1).build();
+    Fake item2 = Fake.newBuilder().setLabel("two").setLine(2).build();
+
+    try (OutputStream os = new GZIPOutputStream(new FileOutputStream(file))) {
+      item1.writeDelimitedTo(os);
+      item2.writeDelimitedTo(os);
+    }
+
+    Iterable<Fake> it = () -> Protobuf.readGzipStream(file, Fake.parser());
+
+    assertThat(it).containsExactly(item1, item2);
+  }
+
+  @Test
+  public void fail_to_read_stream() {
+    assertThatThrownBy(() -> {
+      File dir = temp.newFolder();
+      Protobuf.readStream(dir, Fake.parser());
+    }).isInstanceOf(ContextException.class)
+      .hasMessageContaining("Unable to read messages");
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,28 @@
  */
 package org.sonar.db.user;
 
+import java.util.List;
 import java.util.Set;
+import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
+import org.sonar.db.Pagination;
+import org.sonar.db.audit.AuditPersister;
+import org.sonar.db.audit.model.UserGroupNewValue;
 
 public class UserGroupDao implements Dao {
+  private final AuditPersister auditPersister;
+  private final UuidFactory uuidFactory;
 
-  public UserGroupDto insert(DbSession session, UserGroupDto dto) {
+  public UserGroupDao(AuditPersister auditPersister, UuidFactory uuidFactory) {
+    this.auditPersister = auditPersister;
+    this.uuidFactory = uuidFactory;
+  }
+
+  public UserGroupDto insert(DbSession session, UserGroupDto dto, String groupName, String login) {
+    dto.setUuid(uuidFactory.create());
     mapper(session).insert(dto);
+    auditPersister.addUserToGroup(session, new UserGroupNewValue(dto, groupName, login));
     return dto;
   }
 
@@ -34,19 +48,40 @@ public class UserGroupDao implements Dao {
     return mapper(session).selectUserUuidsInGroup(groupUuid);
   }
 
-  public void delete(DbSession session, String groupUuid, String userUuid) {
-    mapper(session).delete(groupUuid, userUuid);
+  public List<UserGroupDto> selectByQuery(DbSession session, UserGroupQuery query, int page, int pageSize) {
+    return mapper(session).selectByQuery(query, Pagination.forPage(page).andSize(pageSize));
   }
 
-  public void deleteByGroupUuid(DbSession session, String groupUuid) {
-    mapper(session).deleteByGroupUuid(groupUuid);
+  public int countByQuery(DbSession session, UserGroupQuery query) {
+    return mapper(session).countByQuery(query);
   }
 
-  public void deleteByUserUuid(DbSession dbSession, String userUuid) {
-    mapper(dbSession).deleteByUserUuid(userUuid);
+  public void delete(DbSession session, GroupDto group, UserDto user) {
+    int deletedRows = mapper(session).delete(group.getUuid(), user.getUuid());
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserFromGroup(session, new UserGroupNewValue(group, user));
+    }
+  }
+
+  public void deleteByGroupUuid(DbSession session, String groupUuid, String groupName) {
+    int deletedRows = mapper(session).deleteByGroupUuid(groupUuid);
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserFromGroup(session, new UserGroupNewValue(groupUuid, groupName));
+    }
+  }
+
+  public void deleteByUserUuid(DbSession dbSession, UserDto userDto) {
+    int deletedRows = mapper(dbSession).deleteByUserUuid(userDto.getUuid());
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserFromGroup(dbSession, new UserGroupNewValue(userDto));
+    }
   }
 
   private static UserGroupMapper mapper(DbSession session) {
     return session.getMapper(UserGroupMapper.class);
   }
+
 }

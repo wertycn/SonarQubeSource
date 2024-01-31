@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,9 +26,11 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.FileAppender;
 import ch.qos.logback.core.encoder.Encoder;
+import javax.annotation.CheckForNull;
 import org.sonar.application.config.AppSettings;
 import org.sonar.application.process.StreamGobbler;
 import org.sonar.process.ProcessId;
+import org.sonar.process.Props;
 import org.sonar.process.logging.LogLevelConfig;
 import org.sonar.process.logging.LogbackHelper;
 import org.sonar.process.logging.PatternLayoutEncoder;
@@ -36,6 +38,9 @@ import org.sonar.process.logging.RootLoggerConfig;
 
 import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 import static org.sonar.application.process.StreamGobbler.LOGGER_GOBBLER;
+import static org.sonar.application.process.StreamGobbler.LOGGER_STARTUP;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_NAME;
 import static org.sonar.process.logging.RootLoggerConfig.newRootLoggerConfigBuilder;
 
 /**
@@ -114,15 +119,24 @@ public class AppLogging {
   private static final String CONSOLE_PLAIN_APPENDER = "CONSOLE";
   private static final String APP_CONSOLE_APPENDER = "APP_CONSOLE";
   private static final String GOBBLER_PLAIN_CONSOLE = "GOBBLER_CONSOLE";
-  private static final RootLoggerConfig APP_ROOT_LOGGER_CONFIG = newRootLoggerConfigBuilder()
-    .setProcessId(ProcessId.APP)
-    .build();
 
+  private final RootLoggerConfig rootLoggerConfig;
   private final LogbackHelper helper = new LogbackHelper();
   private final AppSettings appSettings;
 
   public AppLogging(AppSettings appSettings) {
     this.appSettings = appSettings;
+    rootLoggerConfig = newRootLoggerConfigBuilder()
+      .setNodeNameField(getNodeNameWhenCluster(appSettings.getProps()))
+      .setProcessId(ProcessId.APP)
+      .build();
+  }
+
+  @CheckForNull
+  private static String getNodeNameWhenCluster(Props props) {
+    boolean clusterEnabled = props.valueAsBoolean(CLUSTER_ENABLED.getKey(),
+      Boolean.parseBoolean(CLUSTER_ENABLED.getDefaultValue()));
+    return clusterEnabled ? props.value(CLUSTER_NODE_NAME.getKey(), CLUSTER_NODE_NAME.getDefaultValue()) : null;
   }
 
   public LoggerContext configure() {
@@ -132,11 +146,8 @@ public class AppLogging {
     helper.enableJulChangePropagation(ctx);
 
     configureConsole(ctx);
-    if (helper.isAllLogsToConsoleEnabled(appSettings.getProps()) || !appSettings.getProps().valueAsBoolean("sonar.wrapped", false)) {
-      configureWithLogbackWritingToFile(ctx);
-    } else {
-      configureWithWrapperWritingToFile(ctx);
-    }
+    configureWithLogbackWritingToFile(ctx);
+
     helper.apply(
       LogLevelConfig.newBuilder(helper.getRootLoggerName())
         .rootLevelFor(ProcessId.APP)
@@ -168,51 +179,22 @@ public class AppLogging {
    * printing to sonar.log must be done at logback level.
    */
   private void configureWithLogbackWritingToFile(LoggerContext ctx) {
-    // configure all logs (ie. root logger) to be written to sonar.log and also to the console with formatting
-    // in practice, this will be only APP's own logs as logs from sub processes LOGGER_GOBBLER and LOGGER_GOBBLER
-    // is configured below to be detached from root
-    // so, this will make all APP's log to be both written to sonar.log and visible in the console
-    configureRootWithLogbackWritingToFile(ctx);
-
-    // if option -Dsonar.log.console=true has been set, sub processes will write their logs to their own files but also
-    // copy them to their System.out.
-    // otherwise, the only logs to be expected in LOGGER_GOBBLER are those before logback is setup in subprocesses or
-    // when their JVM crashes
-    // they must be printed to App's System.out as is (as they are already formatted)
-    // logger is configured to be non additive as we don't want these logs to be written to sonar.log and duplicated in
-    // the console (with an incorrect formatting)
-    configureGobbler(ctx);
-  }
-
-  /**
-   * SQ has been started by the wrapper (ie. with sonar.sh) therefor, APP's System.out (and System.err) are written to
-   * sonar.log by the wrapper.
-   */
-  private void configureWithWrapperWritingToFile(LoggerContext ctx) {
-    // configure all logs (ie. root logger) to be written to console with formatting
-    // in practice, this will be only APP's own logs as logs from sub processes are written to LOGGER_GOBBLER and
-    // LOGGER_GOBBLER is configured below to be detached from root
-    // logs are written to the console because we want them to be in sonar.log and the wrapper will write any log
-    // from APP's System.out and System.err to sonar.log
     Logger rootLogger = ctx.getLogger(ROOT_LOGGER_NAME);
-    Encoder<ILoggingEvent> encoder = helper.createEncoder(appSettings.getProps(), APP_ROOT_LOGGER_CONFIG, ctx);
-    rootLogger.addAppender(createAppConsoleAppender(ctx, encoder));
-
-    // in regular configuration, sub processes are not copying their logs to their System.out, so, the only logs to be
-    // expected in LOGGER_GOBBLER are those before logback is setup in subprocesses or when JVM crashes
-    // so, they must be printed to App's System.out as is (as they are already formatted) and the wrapper will write
-    // them to sonar.log
-    // logger is configured to be non additive as we don't want these logs written to sonar.log and duplicated in the
-    // console with an incorrect formatting
-    configureGobbler(ctx);
-  }
-
-  private void configureRootWithLogbackWritingToFile(LoggerContext ctx) {
-    Logger rootLogger = ctx.getLogger(ROOT_LOGGER_NAME);
-    Encoder<ILoggingEvent> encoder = helper.createEncoder(appSettings.getProps(), APP_ROOT_LOGGER_CONFIG, ctx);
-    FileAppender<ILoggingEvent> fileAppender = helper.newFileAppender(ctx, appSettings.getProps(), APP_ROOT_LOGGER_CONFIG, encoder);
+    Encoder<ILoggingEvent> encoder = helper.createEncoder(appSettings.getProps(), rootLoggerConfig, ctx);
+    FileAppender<ILoggingEvent> fileAppender = helper.newFileAppender(ctx, appSettings.getProps(), rootLoggerConfig, encoder);
     rootLogger.addAppender(fileAppender);
     rootLogger.addAppender(createAppConsoleAppender(ctx, encoder));
+
+    configureGobbler(ctx);
+
+    configureStartupLogger(ctx, fileAppender, encoder);
+  }
+
+  private void configureStartupLogger(LoggerContext ctx, FileAppender<ILoggingEvent> fileAppender, Encoder<ILoggingEvent> encoder) {
+    Logger startupLogger = ctx.getLogger(LOGGER_STARTUP);
+    startupLogger.setAdditive(false);
+    startupLogger.addAppender(fileAppender);
+    startupLogger.addAppender(helper.newConsoleAppender(ctx, GOBBLER_PLAIN_CONSOLE, encoder));
   }
 
   /**

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,109 +18,97 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { WithRouterProps } from 'react-router';
-import { getHostUrl } from 'sonar-ui-common/helpers/urls';
 import { getAlmSettingsNoCatch } from '../../api/alm-settings';
-import { getValues } from '../../api/settings';
-import { AlmSettingsInstance, ProjectAlmBindingResponse } from '../../types/alm-settings';
+import { getScannableProjects } from '../../api/components';
+import { getValue } from '../../api/settings';
+import { getHostUrl } from '../../helpers/urls';
+import { hasGlobalPermission } from '../../helpers/users';
+import { useProjectBindingQuery } from '../../queries/devops-integration';
+import { AlmSettingsInstance } from '../../types/alm-settings';
+import { Permissions } from '../../types/permissions';
 import { SettingsKey } from '../../types/settings';
-import { withRouter } from '../hoc/withRouter';
+import { Component } from '../../types/types';
+import { LoggedInUser } from '../../types/users';
+import { Location, withRouter } from '../hoc/withRouter';
 import TutorialSelectionRenderer from './TutorialSelectionRenderer';
 import { TutorialModes } from './types';
 
-interface Props extends Pick<WithRouterProps, 'router' | 'location'> {
-  component: T.Component;
-  currentUser: T.LoggedInUser;
-  projectBinding?: ProjectAlmBindingResponse;
+interface Props {
+  component: Component;
+  currentUser: LoggedInUser;
+  willRefreshAutomatically?: boolean;
+  location: Location;
 }
 
-interface State {
-  almBinding?: AlmSettingsInstance;
-  baseUrl: string;
-  forceManual: boolean;
-  loading: boolean;
-}
+export function TutorialSelection(props: Props) {
+  const { component, currentUser, location, willRefreshAutomatically } = props;
+  const [currentUserCanScanProject, setCurrentUserCanScanProject] = React.useState(false);
+  const [baseUrl, setBaseUrl] = React.useState(getHostUrl());
+  const [loading, setLoading] = React.useState(true);
+  const [loadingAlm, setLoadingAlm] = React.useState(false);
+  const [almBinding, setAlmBinding] = React.useState<AlmSettingsInstance | undefined>(undefined);
+  const { data: projectBinding } = useProjectBindingQuery(component.key);
 
-export class TutorialSelection extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = {
-    baseUrl: getHostUrl(),
-    forceManual: true,
-    loading: true
-  };
+  React.useEffect(() => {
+    const checkUserPermissions = async () => {
+      if (hasGlobalPermission(currentUser, Permissions.Scan)) {
+        setCurrentUserCanScanProject(true);
+        return Promise.resolve();
+      }
 
-  async componentDidMount() {
-    this.mounted = true;
+      const { projects } = await getScannableProjects();
+      setCurrentUserCanScanProject(projects.find((p) => p.key === component.key) !== undefined);
 
-    await Promise.all([this.fetchAlmBindings(), this.fetchBaseUrl()]);
+      return Promise.resolve();
+    };
 
-    if (this.mounted) {
-      this.setState({ loading: false });
-    }
-  }
+    const fetchBaseUrl = async () => {
+      const setting = await getValue({ key: SettingsKey.ServerBaseUrl }).catch(() => undefined);
+      const baseUrl = setting?.value;
+      if (baseUrl && baseUrl.length > 0) {
+        setBaseUrl(baseUrl);
+      }
+    };
 
-  componentWillUnmount() {
-    this.mounted = false;
-  }
+    Promise.all([fetchBaseUrl(), checkUserPermissions()])
+      .then(() => {
+        setLoading(false);
+      })
+      .catch(() => {});
+  }, [component.key, currentUser]);
 
-  fetchAlmBindings = async () => {
-    const { component, projectBinding } = this.props;
-
-    if (projectBinding === undefined) {
-      this.setState({ forceManual: true });
-    } else {
-      const almSettings = await getAlmSettingsNoCatch(component.key).catch(() => undefined);
-      if (this.mounted) {
+  React.useEffect(() => {
+    const fetchAlmBindings = async () => {
+      if (projectBinding != null) {
+        setLoadingAlm(true);
+        const almSettings = await getAlmSettingsNoCatch(component.key).catch(() => undefined);
         let almBinding;
         if (almSettings !== undefined) {
-          almBinding = almSettings.find(d => d.key === projectBinding.key);
+          almBinding = almSettings.find((d) => d.key === projectBinding.key);
         }
-        this.setState({ almBinding, forceManual: false });
+        setAlmBinding(almBinding);
+        setLoadingAlm(false);
       }
-    }
-  };
+    };
 
-  fetchBaseUrl = async () => {
-    const settings = await getValues({ keys: SettingsKey.ServerBaseUrl }).catch(() => undefined);
-    const baseUrl = settings && settings.find(s => s.key === SettingsKey.ServerBaseUrl)?.value;
-    if (baseUrl && baseUrl.length > 0 && this.mounted) {
-      this.setState({ baseUrl });
-    }
-  };
+    fetchAlmBindings().catch(() => {});
+  }, [component.key, projectBinding]);
 
-  handleSelectTutorial = (selectedTutorial: TutorialModes) => {
-    const {
-      router,
-      location: { pathname, query }
-    } = this.props;
+  const selectedTutorial: TutorialModes | undefined = location.query?.selectedTutorial;
 
-    router.push({
-      pathname,
-      query: { ...query, selectedTutorial }
-    });
-  };
-
-  render() {
-    const { component, currentUser, location, projectBinding } = this.props;
-    const { almBinding, baseUrl, forceManual, loading } = this.state;
-
-    const selectedTutorial: TutorialModes | undefined = forceManual
-      ? TutorialModes.Manual
-      : location.query?.selectedTutorial;
-
-    return (
-      <TutorialSelectionRenderer
-        almBinding={almBinding}
-        baseUrl={baseUrl}
-        component={component}
-        currentUser={currentUser}
-        loading={loading}
-        onSelectTutorial={this.handleSelectTutorial}
-        projectBinding={projectBinding}
-        selectedTutorial={selectedTutorial}
-      />
-    );
-  }
+  return (
+    <TutorialSelectionRenderer
+      almBinding={almBinding}
+      baseUrl={baseUrl}
+      component={component}
+      currentUser={currentUser}
+      currentUserCanScanProject={currentUserCanScanProject}
+      loading={loading || loadingAlm}
+      projectBinding={projectBinding}
+      selectedTutorial={selectedTutorial}
+      willRefreshAutomatically={willRefreshAutomatically}
+    />
+  );
 }
 
 export default withRouter(TutorialSelection);

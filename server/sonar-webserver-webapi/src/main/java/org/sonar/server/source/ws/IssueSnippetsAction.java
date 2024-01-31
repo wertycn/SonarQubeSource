@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.source.ws;
 
-import com.google.common.io.Resources;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,9 +34,11 @@ import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.api.web.UserRole;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.issue.IssueDto;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.db.protobuf.DbCommons;
 import org.sonar.db.protobuf.DbFileSources;
 import org.sonar.db.protobuf.DbIssues;
@@ -46,6 +47,7 @@ import org.sonar.server.exceptions.NotFoundException;
 import org.sonar.server.source.SourceService;
 import org.sonar.server.user.UserSession;
 
+import static com.google.common.io.Resources.getResource;
 import static java.lang.String.format;
 
 public class IssueSnippetsAction implements SourcesWsAction {
@@ -67,16 +69,16 @@ public class IssueSnippetsAction implements SourcesWsAction {
   @Override
   public void define(WebService.NewController controller) {
     WebService.NewAction action = controller.createAction("issue_snippets")
-      .setDescription("Get code snipets involved in an issue. Requires 'Browse' permission on the project<br/>")
+      .setDescription("Get code snippets involved in an issue or hotspot. Requires 'See Source Code permission' permission on the project<br/>")
       .setSince("7.8")
       .setInternal(true)
-      .setResponseExample(Resources.getResource(getClass(), "example-show.json"))
+      .setResponseExample(getResource(getClass(), "example-issue-snippets.json"))
       .setHandler(this);
 
     action
       .createParam("issueKey")
       .setRequired(true)
-      .setDescription("Issue key")
+      .setDescription("Issue or hotspot key")
       .setExampleValue("AU-Tpxb--iU5OvuD2FLy");
   }
 
@@ -86,9 +88,10 @@ public class IssueSnippetsAction implements SourcesWsAction {
     try (DbSession dbSession = dbClient.openSession(false)) {
       IssueDto issueDto = dbClient.issueDao().selectByKey(dbSession, issueKey)
         .orElseThrow(() -> new NotFoundException(format("Issue with key '%s' does not exist", issueKey)));
-      ComponentDto project = dbClient.componentDao().selectByUuid(dbSession, issueDto.getProjectUuid())
+      ProjectDto projectDto = dbClient.projectDao().selectByBranchUuid(dbSession, issueDto.getProjectUuid())
         .orElseThrow(() -> new NotFoundException(format("Project with uuid '%s' does not exist", issueDto.getProjectUuid())));
-      userSession.checkComponentPermission(UserRole.CODEVIEWER, project);
+
+      userSession.checkEntityPermission(UserRole.CODEVIEWER, projectDto);
 
       DbIssues.Locations locations = issueDto.parseLocations();
       String componentUuid = issueDto.getComponentUuid();
@@ -98,13 +101,23 @@ public class IssueSnippetsAction implements SourcesWsAction {
         Map<String, TreeSet<Integer>> linesPerComponent = getLinesPerComponent(componentUuid, locations);
         Map<String, ComponentDto> componentsByUuid = dbClient.componentDao().selectByUuids(dbSession, linesPerComponent.keySet())
           .stream().collect(Collectors.toMap(ComponentDto::uuid, c -> c));
+
+        Set<String> branchUuids = componentsByUuid.values().stream()
+          .map(ComponentDto::branchUuid)
+          .collect(Collectors.toSet());
+
+        Map<String, BranchDto> branches = dbClient.branchDao()
+          .selectByUuids(dbSession, branchUuids)
+          .stream()
+          .collect(Collectors.toMap(BranchDto::getUuid, b -> b));
+
         try (JsonWriter jsonWriter = response.newJsonWriter()) {
           jsonWriter.beginObject();
 
           for (Map.Entry<String, TreeSet<Integer>> e : linesPerComponent.entrySet()) {
             ComponentDto componentDto = componentsByUuid.get(e.getKey());
             if (componentDto != null) {
-              writeSnippet(dbSession, jsonWriter, componentDto, e.getValue());
+              writeSnippet(dbSession, jsonWriter, projectDto, componentDto, e.getValue(), branches.get(componentDto.branchUuid()));
             }
           }
 
@@ -114,14 +127,14 @@ public class IssueSnippetsAction implements SourcesWsAction {
     }
   }
 
-  private void writeSnippet(DbSession dbSession, JsonWriter writer, ComponentDto fileDto, Set<Integer> lines) {
+  private void writeSnippet(DbSession dbSession, JsonWriter writer, ProjectDto projectDto, ComponentDto fileDto, Set<Integer> lines, BranchDto branchDto) {
     Optional<Iterable<DbFileSources.Line>> lineSourcesOpt = sourceService.getLines(dbSession, fileDto.uuid(), lines);
-    if (!lineSourcesOpt.isPresent()) {
+    if (lineSourcesOpt.isEmpty()) {
       return;
     }
 
     Supplier<Optional<Long>> periodDateSupplier = () -> dbClient.snapshotDao()
-      .selectLastAnalysisByComponentUuid(dbSession, fileDto.projectUuid())
+      .selectLastAnalysisByComponentUuid(dbSession, fileDto.branchUuid())
       .map(SnapshotDto::getPeriodDate);
 
     Iterable<DbFileSources.Line> lineSources = lineSourcesOpt.get();
@@ -129,7 +142,9 @@ public class IssueSnippetsAction implements SourcesWsAction {
     writer.name(fileDto.getKey()).beginObject();
 
     writer.name("component").beginObject();
-    componentViewerJsonWriter.writeComponentWithoutFav(writer, fileDto, dbSession, false);
+    String branch = branchDto.isMain() ? null : branchDto.getBranchKey();
+    String pullRequest = branchDto.getPullRequestKey();
+    componentViewerJsonWriter.writeComponentWithoutFav(writer, projectDto, fileDto, branch, pullRequest);
     componentViewerJsonWriter.writeMeasures(writer, fileDto, dbSession);
     writer.endObject();
     linesJsonWriter.writeSource(lineSources, writer, periodDateSupplier);
@@ -165,7 +180,7 @@ public class IssueSnippetsAction implements SourcesWsAction {
     TreeSet<Integer> lines = linesPerComponent.computeIfAbsent(componentUuid, c -> new TreeSet<>());
     IntStream.rangeClosed(start, end).forEach(lines::add);
 
-    // If two snippets in the same component are 10 lines apart of each other, include those 10 lines.
+    // If two snippets in the same component are 10 lines apart from each other, include those 10 lines.
     Integer closestToStart = lines.lower(start);
     if (closestToStart != null && closestToStart >= start - 11) {
       IntStream.range(closestToStart + 1, start).forEach(lines::add);

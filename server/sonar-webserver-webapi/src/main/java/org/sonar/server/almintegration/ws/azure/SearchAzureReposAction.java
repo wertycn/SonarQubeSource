@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,8 +35,8 @@ import org.sonar.alm.client.azure.GsonAzureRepoList;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.alm.pat.AlmPatDto;
@@ -51,7 +51,6 @@ import org.sonarqube.ws.AlmIntegrations.SearchAzureReposWsResponse;
 
 import static java.util.Comparator.comparing;
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
@@ -60,7 +59,7 @@ import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class SearchAzureReposAction implements AlmIntegrationsWsAction {
 
-  private static final Logger LOG = Loggers.get(SearchAzureReposAction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SearchAzureReposAction.class);
 
   private static final String PARAM_ALM_SETTING = "almSetting";
   private static final String PARAM_PROJECT_NAME = "projectName";
@@ -84,12 +83,13 @@ public class SearchAzureReposAction implements AlmIntegrationsWsAction {
         "Requires the 'Create Projects' permission")
       .setPost(false)
       .setSince("8.6")
+      .setResponseExample(getClass().getResource("example-search_azure_repos.json"))
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
     action.createParam(PARAM_PROJECT_NAME)
       .setRequired(false)
       .setMaximumLength(200)
@@ -116,13 +116,13 @@ public class SearchAzureReposAction implements AlmIntegrationsWsAction {
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID cannot be null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
       Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
 
       String projectKey = request.param(PARAM_PROJECT_NAME);
       String searchQuery = request.param(PARAM_SEARCH_QUERY);
       String pat = almPatDto.map(AlmPatDto::getPersonalAccessToken).orElseThrow(() -> new IllegalArgumentException("No personal access token found"));
-      String url = requireNonNull(almSettingDto.getUrl(), "ALM url cannot be null");
+      String url = requireNonNull(almSettingDto.getUrl(), "DevOps Platform url cannot be null");
 
       GsonAzureRepoList gsonAzureRepoList = azureDevOpsHttpClient.getRepos(url, pat, projectKey);
 
@@ -133,7 +133,7 @@ public class SearchAzureReposAction implements AlmIntegrationsWsAction {
         .filter(r -> isSearchOnlyByProjectName(searchQuery) || doesSearchCriteriaMatchProjectOrRepo(r, searchQuery))
         .map(repo -> toAzureRepo(repo, sqProjectsKeyByAzureKey))
         .sorted(comparing(AzureRepo::getName, String::compareToIgnoreCase))
-        .collect(toList());
+        .toList();
 
       LOG.debug(repositories.toString());
 

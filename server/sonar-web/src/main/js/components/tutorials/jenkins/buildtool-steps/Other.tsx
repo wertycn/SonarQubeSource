@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,8 @@
  */
 import * as React from 'react';
 import DefaultProjectKey from '../../components/DefaultProjectKey';
+import { LanguageProps } from '../JenkinsStep';
 import CreateJenkinsfileBulletPoint from './CreateJenkinsfileBulletPoint';
-
-export interface OtherProps {
-  component: T.Component;
-}
 
 const JENKINSFILE_SNIPPET = `node {
   stage('SCM') {
@@ -37,7 +34,8 @@ const JENKINSFILE_SNIPPET = `node {
   }
 }`;
 
-export default function Other({ component }: OtherProps) {
+export default function Other(props: LanguageProps) {
+  const { component } = props;
   return (
     <>
       <DefaultProjectKey component={component} />

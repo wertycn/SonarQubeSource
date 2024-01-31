@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,15 +28,14 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.event.Level;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.FileMetadata;
 import org.sonar.api.batch.fs.internal.Metadata;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.notifications.AnalysisWarnings;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
+import org.sonar.api.testfixtures.log.LogTester;
 
 import static org.apache.commons.codec.digest.DigestUtils.md5Hex;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,8 +45,6 @@ import static org.mockito.Mockito.verify;
 
 public class FileMetadataTest {
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
@@ -63,7 +60,7 @@ public class FileMetadataTest {
     FileUtils.touch(tempFile);
 
     Metadata metadata = new FileMetadata(analysisWarnings).readMetadata(new FileInputStream(tempFile), StandardCharsets.UTF_8, tempFile.getName());
-    assertThat(metadata.lines()).isEqualTo(1);
+    assertThat(metadata.lines()).isOne();
     assertThat(metadata.nonBlankLines()).isZero();
     assertThat(metadata.hash()).isNotEmpty();
     assertThat(metadata.originalLineStartOffsets()).containsOnly(0);
@@ -294,8 +291,9 @@ public class FileMetadataTest {
     String hash1a = new FileMetadata(analysisWarnings).readMetadata(new FileInputStream(file1a), StandardCharsets.UTF_8, file1a.getName()).hash();
     String hash2 = new FileMetadata(analysisWarnings).readMetadata(new FileInputStream(file2), StandardCharsets.UTF_8, file2.getName()).hash();
 
-    assertThat(hash1).isEqualTo(hash1a);
-    assertThat(hash1).isNotEqualTo(hash2);
+    assertThat(hash1)
+      .isEqualTo(hash1a)
+      .isNotEqualTo(hash2);
   }
 
   @Test
@@ -308,9 +306,9 @@ public class FileMetadataTest {
     assertThat(metadata.nonBlankLines()).isEqualTo(133);
     assertThat(metadata.hash()).isNotEmpty();
 
-    assertThat(logTester.logs(LoggerLevel.WARN).get(0)).contains("Invalid character encountered in file");
+    assertThat(logTester.logs(Level.WARN).get(0)).contains("Invalid character encountered in file");
     verify(analysisWarnings).addUnique("There are problems with file encoding in the source code. Please check the scanner logs for more details.");
-    assertThat(logTester.logs(LoggerLevel.WARN).get(0)).contains(
+    assertThat(logTester.logs(Level.WARN).get(0)).contains(
       "glyphicons-halflings-regular.woff at line 1 for encoding UTF-8. Please fix file content or configure the encoding to be used using property 'sonar.sourceEncoding'.");
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -83,7 +83,7 @@ public class AnalysisPropertyDto {
 
   @Override
   public String toString() {
-    return "BranchDto{" + "uuid='" + uuid + '\'' +
+    return "AnalysisPropertyDto{" + "uuid='" + uuid + '\'' +
       ", analysisUuid='" + analysisUuid + '\'' +
       ", key='" + key + '\'' +
       ", value='" + value + "'" +

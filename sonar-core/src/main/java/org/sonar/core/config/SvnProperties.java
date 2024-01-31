@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,8 @@
  */
 package org.sonar.core.config;
 
-import java.util.Arrays;
-import java.util.List;
-import org.sonar.api.CoreProperties;
-import org.sonar.api.PropertyType;
-import org.sonar.api.config.PropertyDefinition;
-import org.sonar.api.resources.Qualifiers;
-
 public class SvnProperties {
 
-  private static final String CATEGORY_SVN = "SVN";
   public static final String USER_PROP_KEY = "sonar.svn.username";
   public static final String PRIVATE_KEY_PATH_PROP_KEY = "sonar.svn.privateKeyPath";
   public static final String PASSWORD_PROP_KEY = "sonar.svn.password.secured";
@@ -36,45 +28,5 @@ public class SvnProperties {
 
   private SvnProperties() {
     //private only
-  }
-
-  public static List<PropertyDefinition> all() {
-    return Arrays.asList(
-      PropertyDefinition.builder(USER_PROP_KEY)
-        .name("Username")
-        .description("Username to be used for SVN server or SVN+SSH authentication")
-        .type(PropertyType.STRING)
-        .onQualifiers(Qualifiers.PROJECT)
-        .category(CoreProperties.CATEGORY_SCM)
-        .subCategory(CATEGORY_SVN)
-        .index(0)
-        .build(),
-      PropertyDefinition.builder(PASSWORD_PROP_KEY)
-        .name("Password")
-        .description("Password to be used for SVN server or SVN+SSH authentication")
-        .type(PropertyType.PASSWORD)
-        .onQualifiers(Qualifiers.PROJECT)
-        .category(CoreProperties.CATEGORY_SCM)
-        .subCategory(CATEGORY_SVN)
-        .index(1)
-        .build(),
-      PropertyDefinition.builder(PRIVATE_KEY_PATH_PROP_KEY)
-        .name("Path to private key file")
-        .description("Can be used instead of password for SVN+SSH authentication")
-        .type(PropertyType.STRING)
-        .onQualifiers(Qualifiers.PROJECT)
-        .category(CoreProperties.CATEGORY_SCM)
-        .subCategory(CATEGORY_SVN)
-        .index(2)
-        .build(),
-      PropertyDefinition.builder(PASSPHRASE_PROP_KEY)
-        .name("Passphrase")
-        .description("Optional passphrase of your private key file")
-        .type(PropertyType.PASSWORD)
-        .onQualifiers(Qualifiers.PROJECT)
-        .category(CoreProperties.CATEGORY_SCM)
-        .subCategory(CATEGORY_SVN)
-        .index(3)
-        .build());
   }
 }

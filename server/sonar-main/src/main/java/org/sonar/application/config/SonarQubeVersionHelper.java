@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 import static java.lang.String.format;
 
 public class SonarQubeVersionHelper {
-  private static final String SONARQUBE_VERSION_PATH = "/sonarqube-version.txt";
+  private static final String SONARQUBE_VERSION_PATH = "/sq-version.txt";
 
   private static String sonarqubeVersion;
 

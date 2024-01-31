@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,17 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-.domain-measures-value {
-  margin-right: 4px;
-}
-
-.domain-measures-value span {
-  line-height: 16px;
-}
-
-.domain-measures-value .rating {
-  margin-left: -4px;
-  margin-right: -4px;
+button.search-navigator-facet {
+  text-align: start;
 }
 
 .search-navigator-facet .leak-box {
@@ -58,66 +49,6 @@
   border-bottom-left-radius: 0;
 }
 
-.domain-measures-header {
-  display: inline-block;
-  padding: 4px 10px;
-  white-space: nowrap;
-}
-
-.measure-details-metric {
-  display: flex;
-  align-items: center;
-}
-
-.measure-details-primary {
-  display: flex;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.measure-details-primary-actions {
-  display: flex;
-  align-items: center;
-}
-
-.measure-details-secondary {
-  display: inline-block;
-  width: 260px;
-  margin-top: 4px;
-}
-
-.measure-details-component-row.selected {
-  background-color: var(--lightBlue) !important;
-}
-
-.measure-details-component-cell {
-  max-width: 0;
-}
-
-.measure-details-component-cell > div {
-  max-width: 100%;
-}
-
-.domain-measures-value .rating,
-.measure-details-value .rating {
-  width: 18px;
-  height: 18px;
-  line-height: 18px;
-  margin-top: -2px;
-  margin-bottom: -2px;
-  font-size: var(--smallFontSize);
-}
-
-.domain-measures-value .level {
-  height: 18px;
-  line-height: 18px;
-  border-radius: 18px;
-  margin-top: -2px;
-  margin-bottom: -2px;
-  margin-right: -4px;
-}
-
 .measure-details-treemap-legend.color-box-legend {
   margin-right: 0;
 }
@@ -132,94 +63,4 @@
   .measure-details-viewer .issue-list {
     width: calc(60vw - 80px);
   }
-}
-
-.measure-view-select {
-  width: 102px;
-}
-
-.measure-view-select .Select-menu-outer {
-  width: 100px;
-  border-top-right-radius: 4px;
-}
-
-.measure-content-header {
-  display: flex;
-  align-items: center;
-}
-
-.measure-content-header-left {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.measure-content-header-right .page-actions {
-  margin-bottom: 0;
-}
-
-.measure-content-header-right {
-  margin-left: calc(2 * var(--gridSize));
-  white-space: nowrap;
-}
-
-.measure-favorite svg {
-  vertical-align: middle;
-}
-
-.measure-overview-bubble-chart {
-  position: relative;
-  border: 1px solid var(--barBorderColor);
-  background-color: #fff;
-}
-
-.measure-overview-bubble-chart-content {
-  padding: 0;
-  padding-left: 60px;
-}
-
-.measure-overview-bubble-chart-header {
-  display: flex;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid var(--barBorderColor);
-}
-
-.measure-overview-bubble-chart-title {
-  position: absolute;
-}
-
-.measure-overview-bubble-chart-legend {
-  display: flex;
-  flex-direction: column;
-  text-align: center;
-  flex-grow: 1;
-}
-
-.measure-overview-bubble-chart-footer {
-  padding: 15px 60px;
-  border-top: 1px solid var(--barBorderColor);
-  text-align: center;
-  font-size: var(--smallFontSize);
-  line-height: 1.4;
-}
-
-.measure-overview-bubble-chart-axis {
-  color: var(--secondFontColor);
-  font-size: var(--smallFontSize);
-}
-
-.measure-overview-bubble-chart-axis.x {
-  position: relative;
-  top: -8px;
-  padding-bottom: 8px;
-  text-align: center;
-}
-
-.measure-overview-bubble-chart-axis.y {
-  position: absolute;
-  top: 50%;
-  left: 30px;
-  transform: rotate(-90deg) translateX(-50%);
-  transform-origin: left;
 }

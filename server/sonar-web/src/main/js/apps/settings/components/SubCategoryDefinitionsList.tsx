@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,38 +17,45 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { groupBy, isEqual, sortBy } from 'lodash';
+import { BasicSeparator, Note, SubTitle } from 'design-system';
+import { groupBy, sortBy } from 'lodash';
 import * as React from 'react';
-import { Setting, SettingCategoryDefinition } from '../../../types/settings';
-import { getSubCategoryDescription, getSubCategoryName, sanitizeTranslation } from '../utils';
+import { Location, withRouter } from '../../../components/hoc/withRouter';
+import { sanitizeStringRestricted } from '../../../helpers/sanitize';
+import { SettingDefinitionAndValue } from '../../../types/settings';
+import { Component } from '../../../types/types';
+import { getSubCategoryDescription, getSubCategoryName } from '../utils';
 import DefinitionsList from './DefinitionsList';
 import EmailForm from './EmailForm';
 
-interface Props {
+export interface SubCategoryDefinitionsListProps {
   category: string;
-  component?: T.Component;
-  fetchValues: Function;
-  settings: Array<Setting & { definition: SettingCategoryDefinition }>;
+  component?: Component;
+  location: Location;
+  settings: Array<SettingDefinitionAndValue>;
   subCategory?: string;
+  displaySubCategoryTitle?: boolean;
+  noPadding?: boolean;
 }
 
-export default class SubCategoryDefinitionsList extends React.PureComponent<Props> {
-  componentDidMount() {
-    this.fetchValues();
-  }
-
-  componentDidUpdate(prevProps: Props) {
-    const prevKeys = prevProps.settings.map(setting => setting.definition.key);
-    const keys = this.props.settings.map(setting => setting.definition.key);
-    if (prevProps.component !== this.props.component || !isEqual(prevKeys, keys)) {
-      this.fetchValues();
+class SubCategoryDefinitionsList extends React.PureComponent<SubCategoryDefinitionsListProps> {
+  componentDidUpdate(prevProps: SubCategoryDefinitionsListProps) {
+    const { hash } = this.props.location;
+    if (hash && prevProps.location.hash !== hash) {
+      const query = `[data-scroll-key=${hash.substring(1).replace(/[.#/]/g, '\\$&')}]`;
+      const element = document.querySelector<HTMLHeadingElement | HTMLLIElement>(query);
+      this.scrollToSubCategoryOrDefinition(element);
     }
   }
 
-  fetchValues() {
-    const keys = this.props.settings.map(setting => setting.definition.key).join();
-    this.props.fetchValues(keys, this.props.component && this.props.component.key);
-  }
+  scrollToSubCategoryOrDefinition = (element: HTMLHeadingElement | HTMLLIElement | null) => {
+    if (element) {
+      const { hash } = this.props.location;
+      if (hash && hash.substring(1) === element.getAttribute('data-scroll-key')) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      }
+    }
+  };
 
   renderEmailForm = (subCategoryKey: string) => {
     const isEmailSettings = this.props.category === 'general' && subCategoryKey === 'email';
@@ -59,37 +66,64 @@ export default class SubCategoryDefinitionsList extends React.PureComponent<Prop
   };
 
   render() {
-    const bySubCategory = groupBy(this.props.settings, setting => setting.definition.subCategory);
-    const subCategories = Object.keys(bySubCategory).map(key => ({
+    const {
+      displaySubCategoryTitle = true,
+      settings,
+      subCategory,
+      component,
+      noPadding,
+    } = this.props;
+    const bySubCategory = groupBy(settings, (setting) => setting.definition.subCategory);
+    const subCategories = Object.keys(bySubCategory).map((key) => ({
       key,
       name: getSubCategoryName(bySubCategory[key][0].definition.category, key),
-      description: getSubCategoryDescription(bySubCategory[key][0].definition.category, key)
+      description: getSubCategoryDescription(bySubCategory[key][0].definition.category, key),
     }));
-    const sortedSubCategories = sortBy(subCategories, subCategory =>
-      subCategory.name.toLowerCase()
+    const sortedSubCategories = sortBy(subCategories, (subCategory) =>
+      subCategory.name.toLowerCase(),
     );
-    const filteredSubCategories = this.props.subCategory
-      ? sortedSubCategories.filter(c => c.key === this.props.subCategory)
+    const filteredSubCategories = subCategory
+      ? sortedSubCategories.filter((c) => c.key === subCategory)
       : sortedSubCategories;
     return (
-      <ul className="settings-sub-categories-list">
-        {filteredSubCategories.map(subCategory => (
-          <li key={subCategory.key}>
-            <h2 className="settings-sub-category-name">{subCategory.name}</h2>
+      <ul>
+        {filteredSubCategories.map((subCategory, index) => (
+          <li className={noPadding ? '' : 'sw-p-6'} key={subCategory.key}>
+            {displaySubCategoryTitle && (
+              <SubTitle
+                as="h3"
+                data-key={subCategory.key}
+                ref={this.scrollToSubCategoryOrDefinition}
+              >
+                {subCategory.name}
+              </SubTitle>
+            )}
             {subCategory.description != null && (
-              <div
-                className="settings-sub-category-description markdown"
-                dangerouslySetInnerHTML={{ __html: sanitizeTranslation(subCategory.description) }}
+              <Note
+                className="markdown"
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeStringRestricted(subCategory.description),
+                }}
               />
             )}
+            <BasicSeparator className="sw-mt-6" />
             <DefinitionsList
-              component={this.props.component}
+              component={component}
+              scrollToDefinition={this.scrollToSubCategoryOrDefinition}
               settings={bySubCategory[subCategory.key]}
             />
             {this.renderEmailForm(subCategory.key)}
+
+            {
+              // Add a separator to all but the last element
+              index !== filteredSubCategories.length - 1 && <BasicSeparator />
+            }
           </li>
         ))}
       </ul>
     );
   }
 }
+
+export default withRouter(SubCategoryDefinitionsList);

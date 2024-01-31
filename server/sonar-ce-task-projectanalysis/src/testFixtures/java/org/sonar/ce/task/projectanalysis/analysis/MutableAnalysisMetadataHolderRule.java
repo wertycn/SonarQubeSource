@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -56,19 +56,8 @@ public class MutableAnalysisMetadataHolderRule extends ExternalResource implemen
   }
 
   @Override
-  public MutableAnalysisMetadataHolder setForkDate(@Nullable Long date) {
-    return delegate.setForkDate(date);
-  }
-
-  @Override
   public long getAnalysisDate() {
     return delegate.getAnalysisDate();
-  }
-
-  @CheckForNull
-  @Override
-  public Long getForkDate() {
-    return delegate.getForkDate();
   }
 
   @Override
@@ -176,9 +165,18 @@ public class MutableAnalysisMetadataHolderRule extends ExternalResource implemen
     return this;
   }
 
+  @Override public MutableAnalysisMetadataHolder setNewCodeReferenceBranch(String newCodeReferenceBranch) {
+    delegate.setNewCodeReferenceBranch(newCodeReferenceBranch);
+    return this;
+  }
+
   @Override
   public Optional<String> getScmRevision() {
     return delegate.getScmRevision();
+  }
+
+  @Override public Optional<String> getNewCodeReferenceBranch() {
+    return delegate.getNewCodeReferenceBranch();
   }
 
   @Override

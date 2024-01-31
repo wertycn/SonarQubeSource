@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -126,7 +126,8 @@ public class CreateAction implements WebhooksWsAction {
 
       webhookSupport.checkUrlPattern(url, "Url parameter with value '%s' is not a valid url", url);
       WebhookDto dto = doHandle(dbSession, projectDto, name, url, secret);
-      dbClient.webhookDao().insert(dbSession, dto);
+      String projectName = projectDto == null ? null : projectDto.getName();
+      dbClient.webhookDao().insert(dbSession, dto, projectKey, projectName);
       dbSession.commit();
       writeResponse(request, response, dto);
     }
@@ -155,10 +156,8 @@ public class CreateAction implements WebhooksWsAction {
     webhookBuilder
       .setKey(dto.getUuid())
       .setName(dto.getName())
-      .setUrl(dto.getUrl());
-    if (dto.getSecret() != null) {
-      webhookBuilder.setSecret(dto.getSecret());
-    }
+      .setUrl(dto.getUrl())
+      .setHasSecret(dto.getSecret() != null);
     writeProtobuf(newBuilder().setWebhook(webhookBuilder).build(), request, response);
   }
 
@@ -173,8 +172,8 @@ public class CreateAction implements WebhooksWsAction {
   }
 
   private void checkNumberOfGlobalWebhooks(DbSession dbSession) {
-    int globalWehbooksCount = dbClient.webhookDao().selectGlobalWebhooks(dbSession).size();
-    if (globalWehbooksCount >= MAX_NUMBER_OF_WEBHOOKS) {
+    int globalWebhooksCount = dbClient.webhookDao().selectGlobalWebhooks(dbSession).size();
+    if (globalWebhooksCount >= MAX_NUMBER_OF_WEBHOOKS) {
       throw new IllegalArgumentException("Maximum number of global webhooks reached");
     }
   }

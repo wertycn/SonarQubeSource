@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.process.MessageException;
 import org.sonar.process.NetworkUtils;
 import org.sonar.process.ProcessId;
@@ -42,7 +41,6 @@ import static java.util.Arrays.stream;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.sonar.process.ProcessProperties.Property.AUTH_JWT_SECRET;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
@@ -96,7 +94,7 @@ public class ClusterSettings implements Consumer<Props> {
   private void checkForApplicationNode(Props props) {
     ensureNotH2(props);
     requireValue(props, AUTH_JWT_SECRET);
-    Set<AddressAndPort> hzNodes = parseHosts(CLUSTER_HZ_HOSTS, requireValue(props, CLUSTER_HZ_HOSTS));
+    Set<AddressAndPort> hzNodes = parseAndCheckHosts(CLUSTER_HZ_HOSTS, requireValue(props, CLUSTER_HZ_HOSTS));
     ensureNotLoopbackAddresses(CLUSTER_HZ_HOSTS, hzNodes);
     checkClusterNodeHost(props);
     checkClusterSearchHosts(props);
@@ -117,22 +115,26 @@ public class ClusterSettings implements Consumer<Props> {
   }
 
   private void checkClusterSearchHosts(Props props) {
-    Set<AddressAndPort> searchHosts = parseHosts(CLUSTER_SEARCH_HOSTS, requireValue(props, CLUSTER_SEARCH_HOSTS));
+    Set<AddressAndPort> searchHosts = parseAndCheckHosts(CLUSTER_SEARCH_HOSTS, requireValue(props, CLUSTER_SEARCH_HOSTS));
     ensureNotLoopbackAddresses(CLUSTER_SEARCH_HOSTS, searchHosts);
   }
 
   private void checkClusterEsHosts(Props props) {
-    Set<AddressAndPort> esHosts = parseHosts(CLUSTER_ES_HOSTS, requireValue(props, CLUSTER_ES_HOSTS));
+    Set<AddressAndPort> esHosts = parseHosts(requireValue(props, CLUSTER_ES_HOSTS));
     ensureNotLoopbackAddresses(CLUSTER_ES_HOSTS, esHosts);
     ensureEitherPortsAreProvidedOrOnlyHosts(CLUSTER_ES_HOSTS, esHosts);
   }
 
-  private Set<AddressAndPort> parseHosts(Property property, String value) {
-    Set<AddressAndPort> res = stream(value.split(","))
+  private static Set<AddressAndPort> parseHosts(String value) {
+    return stream(value.split(","))
       .filter(Objects::nonNull)
       .map(String::trim)
       .map(ClusterSettings::parseHost)
       .collect(toSet());
+  }
+
+  private Set<AddressAndPort> parseAndCheckHosts(Property property, String value) {
+    Set<AddressAndPort> res = parseHosts(value);
     checkValidHosts(property, res);
     return res;
   }
@@ -142,7 +144,7 @@ public class ClusterSettings implements Consumer<Props> {
       .map(AddressAndPort::getHost)
       .filter(t -> !network.toInetAddress(t).isPresent())
       .sorted()
-      .collect(toList());
+      .toList();
     if (!invalidHosts.isEmpty()) {
       throw new MessageException(format("Address in property %s is not a valid address: %s",
         property.getKey(), String.join(", ", invalidHosts)));
@@ -183,7 +185,7 @@ public class ClusterSettings implements Consumer<Props> {
     List<String> violations = FORBIDDEN_SEARCH_NODE_SETTINGS.stream()
       .filter(setting -> props.value(setting.getKey()) != null)
       .map(Property::getKey)
-      .collect(toList());
+      .toList();
 
     if (!violations.isEmpty()) {
       throw new MessageException(format("Properties [%s] are not allowed when running SonarQube in cluster mode.", String.join(", ", violations)));
@@ -201,7 +203,7 @@ public class ClusterSettings implements Consumer<Props> {
   private void ensureNotLoopbackAddresses(Property property, Set<AddressAndPort> hostAndPorts) {
     Set<AddressAndPort> loopbackAddresses = hostAndPorts.stream()
       .filter(t -> network.isLoopback(t.getHost()))
-      .collect(MoreCollectors.toSet());
+      .collect(toSet());
     if (!loopbackAddresses.isEmpty()) {
       throw new MessageException(format("Property %s must not contain a loopback address: %s", property.getKey(),
         loopbackAddresses.stream().map(AddressAndPort::getHost).sorted().collect(Collectors.joining(", "))));
@@ -227,7 +229,9 @@ public class ClusterSettings implements Consumer<Props> {
   private static class AddressAndPort {
     private static final int NO_PORT = -1;
 
-    /** the host from setting, can be a hostname or an IP address */
+    /**
+     * the host from setting, can be a hostname or an IP address
+     */
     private final String host;
     private final int port;
 

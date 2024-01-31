@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,22 +19,18 @@
  */
 package org.sonar.ce.task.projectanalysis.duplication;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class InnerDuplicateTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void constructors_throws_NPE_if_textBlock_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("textBlock of duplicate can not be null");
-
-    new InnerDuplicate(null);
+    assertThatThrownBy(() -> new InnerDuplicate(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("textBlock of duplicate can not be null");
   }
 
   @Test
@@ -52,11 +48,11 @@ public class InnerDuplicateTest {
   @Test
   public void hashcode_is_TextBlock_hashcode() {
     TextBlock textBlock = new TextBlock(1, 2);
-    assertThat(new InnerDuplicate(textBlock).hashCode()).isEqualTo(textBlock.hashCode());
+    assertThat(new InnerDuplicate(textBlock)).hasSameHashCodeAs(textBlock);
   }
 
   @Test
   public void verify_toString() {
-    assertThat(new InnerDuplicate(new TextBlock(1, 2)).toString()).isEqualTo("InnerDuplicate{textBlock=TextBlock{start=1, end=2}}");
+    assertThat(new InnerDuplicate(new TextBlock(1, 2))).hasToString("InnerDuplicate{textBlock=TextBlock{start=1, end=2}}");
   }
 }

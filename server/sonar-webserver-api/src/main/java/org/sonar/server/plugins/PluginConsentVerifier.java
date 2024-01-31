@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,10 +21,11 @@ package org.sonar.server.plugins;
 
 import java.util.Optional;
 
-import org.picocontainer.Startable;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.sonar.api.Startable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.extension.PluginRiskConsent;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.property.PropertyDto;
@@ -35,7 +36,7 @@ import static org.sonar.core.extension.PluginRiskConsent.REQUIRED;
 import static org.sonar.server.log.ServerProcessLogging.STARTUP_LOGGER_NAME;
 
 public class PluginConsentVerifier implements Startable {
-  private static final Logger LOGGER = Loggers.get(STARTUP_LOGGER_NAME);
+  private static final Logger LOGGER = LoggerFactory.getLogger(STARTUP_LOGGER_NAME);
 
   private final ServerPluginRepository pluginRepository;
   private final DbClient dbClient;

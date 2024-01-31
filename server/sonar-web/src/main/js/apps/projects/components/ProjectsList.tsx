@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,12 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
+import { Spinner } from 'design-system';
 import * as React from 'react';
 import { AutoSizer } from 'react-virtualized/dist/commonjs/AutoSizer';
 import { List, ListRowProps } from 'react-virtualized/dist/commonjs/List';
-import { WindowScroller } from 'react-virtualized/dist/commonjs/WindowScroller';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import EmptySearch from '../../../components/common/EmptySearch';
+import ListFooter from '../../../components/controls/ListFooter';
+import { translate } from '../../../helpers/l10n';
+import { CurrentUser } from '../../../types/users';
 import { Query } from '../query';
 import { Project } from '../types';
 import EmptyFavoriteSearch from './EmptyFavoriteSearch';
@@ -30,17 +33,21 @@ import EmptyInstance from './EmptyInstance';
 import NoFavoriteProjects from './NoFavoriteProjects';
 import ProjectCard from './project-card/ProjectCard';
 
-const PROJECT_CARD_HEIGHT = 145;
+const PROJECT_CARD_HEIGHT = 181;
 const PROJECT_CARD_MARGIN = 20;
+const PROJECT_LIST_FOOTER_HEIGHT = 90;
 
 interface Props {
   cardType?: string;
-  currentUser: T.CurrentUser;
+  currentUser: CurrentUser;
   handleFavorite: (component: string, isFavorite: boolean) => void;
   isFavorite: boolean;
   isFiltered: boolean;
+  loading: boolean;
+  loadMore: () => void;
   projects: Project[];
   query: Query;
+  total?: number;
 }
 
 export default class ProjectsList extends React.PureComponent<Props> {
@@ -53,15 +60,31 @@ export default class ProjectsList extends React.PureComponent<Props> {
   }
 
   renderRow = ({ index, key, style }: ListRowProps) => {
-    const project = this.props.projects[index];
+    const { loading, projects, total } = this.props;
+    if (index === projects.length) {
+      return (
+        <div key="footer" style={{ ...style }}>
+          <ListFooter
+            loadMoreAriaLabel={translate('projects.show_more')}
+            count={projects !== undefined ? projects.length : 0}
+            loadMore={this.props.loadMore}
+            loading={loading}
+            ready={!loading}
+            useMIUIButtons
+            total={total ?? 0}
+          />
+        </div>
+      );
+    }
+
+    const project = projects[index];
 
     return (
       <div key={key} role="row" style={{ ...style, height: PROJECT_CARD_HEIGHT }}>
-        <div role="gridcell">
+        <div className="sw-h-full" role="gridcell">
           <ProjectCard
             currentUser={this.props.currentUser}
             handleFavorite={this.props.handleFavorite}
-            height={PROJECT_CARD_HEIGHT}
             key={project.key}
             project={project}
             type={this.props.cardType}
@@ -72,41 +95,34 @@ export default class ProjectsList extends React.PureComponent<Props> {
   };
 
   renderList() {
-    return (
-      <WindowScroller>
-        {({ height, isScrolling, onChildScroll, scrollTop }) => (
-          <AutoSizer disableHeight={true}>
-            {({ width }) => (
-              <div>
-                <List
-                  aria-label={translate('project_plural')}
-                  autoHeight={true}
-                  height={height}
-                  isScrolling={isScrolling}
-                  onScroll={onChildScroll}
-                  overscanRowCount={2}
-                  rowCount={this.props.projects.length}
-                  rowHeight={PROJECT_CARD_HEIGHT + PROJECT_CARD_MARGIN}
-                  rowRenderer={this.renderRow}
-                  scrollTop={scrollTop}
-                  style={{ outline: 'none' }}
-                  width={width}
-                />
-              </div>
-            )}
-          </AutoSizer>
+    return this.props.loading ? (
+      <Spinner />
+    ) : (
+      <AutoSizer>
+        {({ height, width }) => (
+          <List
+            aria-label={translate('project_plural')}
+            height={height}
+            overscanRowCount={2}
+            rowCount={this.props.projects.length + 1}
+            rowHeight={({ index }) =>
+              index === this.props.projects.length
+                ? PROJECT_LIST_FOOTER_HEIGHT
+                : PROJECT_CARD_HEIGHT + PROJECT_CARD_MARGIN
+            }
+            rowRenderer={this.renderRow}
+            style={{ outline: 'none' }}
+            tabIndex={-1}
+            width={width}
+          />
         )}
-      </WindowScroller>
+      </AutoSizer>
     );
   }
 
   render() {
     const { projects } = this.props;
 
-    return (
-      <div className="projects-list">
-        {projects.length > 0 ? this.renderList() : this.renderNoProjects()}
-      </div>
-    );
+    return projects.length > 0 ? this.renderList() : this.renderNoProjects();
   }
 }

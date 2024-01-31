@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -72,11 +72,6 @@ table.spacedicon td {
 
 .thin {
   width: 1%;
-}
-
-.spacer {
-  width: 5px;
-  display: inline-block;
 }
 
 .formError {
@@ -167,6 +162,12 @@ table.data th.small {
   white-space: nowrap;
 }
 
+table.data > caption {
+  padding: 8px 10px;
+  text-align: center;
+  font-weight: bold;
+}
+
 table.data > thead > tr > th {
   position: relative;
   vertical-align: top;
@@ -191,7 +192,6 @@ table.data > tfoot > tr > td {
 table.data > tbody > tr > td {
   position: relative;
   padding: 8px 10px;
-  vertical-align: text-top;
   line-height: 16px;
 }
 

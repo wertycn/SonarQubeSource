@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,171 +17,199 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { hasMessage } from '../../../helpers/l10n';
+import { mockComponent } from '../../../helpers/mocks/component';
+import { mockDefinition, mockSettingValue } from '../../../helpers/mocks/settings';
 import {
+  ExtendedSettingDefinition,
   Setting,
-  SettingCategoryDefinition,
-  SettingFieldDefinition
+  SettingFieldDefinition,
+  SettingType,
 } from '../../../types/settings';
-import { getDefaultValue, getEmptyValue, sanitizeTranslation } from '../utils';
+import {
+  buildSettingLink,
+  getDefaultValue,
+  getEmptyValue,
+  getPropertyName,
+  getSettingValue,
+} from '../utils';
+
+jest.mock('../../../helpers/l10n', () => ({
+  ...jest.requireActual('../../../helpers/l10n'),
+  hasMessage: jest.fn(),
+}));
 
 const fields = [
   { key: 'foo', type: 'STRING' } as SettingFieldDefinition,
-  { key: 'bar', type: 'SINGLE_SELECT_LIST' } as SettingFieldDefinition
+  { key: 'bar', type: 'SINGLE_SELECT_LIST' } as SettingFieldDefinition,
 ];
 
-const settingDefinition: SettingCategoryDefinition = {
+const settingDefinition: ExtendedSettingDefinition = {
   category: 'test',
   fields: [],
   key: 'test',
   options: [],
-  subCategory: 'subtest'
+  subCategory: 'subtest',
 };
+
+describe('getPropertyName', () => {
+  it('should return correct value for existing translation', () => {
+    jest.mocked(hasMessage).mockImplementation(() => true);
+    expect(getPropertyName(mockDefinition())).toBe('property.foo.name');
+  });
+
+  it('should return a name when translation doesn`t exist', () => {
+    jest.mocked(hasMessage).mockImplementation(() => false);
+    expect(getPropertyName(mockDefinition({ name: 'nicename', key: 'keey' }))).toBe('nicename');
+  });
+  it('should return a key when translation and name dont exist', () => {
+    expect(getPropertyName(mockDefinition({ key: 'keey' }))).toBe('keey');
+  });
+});
 
 describe('#getEmptyValue()', () => {
   it('should work for property sets', () => {
-    const setting: SettingCategoryDefinition = {
+    const setting: ExtendedSettingDefinition = {
       ...settingDefinition,
-      type: 'PROPERTY_SET',
-      fields
+      type: SettingType.PROPERTY_SET,
+      fields,
     };
     expect(getEmptyValue(setting)).toEqual([{ foo: '', bar: null }]);
   });
 
   it('should work for multi values string', () => {
-    const setting: SettingCategoryDefinition = {
+    const setting: ExtendedSettingDefinition = {
       ...settingDefinition,
-      type: 'STRING',
-      multiValues: true
+      type: SettingType.STRING,
+      multiValues: true,
     };
     expect(getEmptyValue(setting)).toEqual(['']);
   });
 
   it('should work for multi values boolean', () => {
-    const setting: SettingCategoryDefinition = {
+    const setting: ExtendedSettingDefinition = {
       ...settingDefinition,
-      type: 'BOOLEAN',
-      multiValues: true
+      type: SettingType.BOOLEAN,
+      multiValues: true,
     };
     expect(getEmptyValue(setting)).toEqual([null]);
+  });
+});
+
+describe('#getSettingValue()', () => {
+  it('should work for property sets', () => {
+    const setting: ExtendedSettingDefinition = {
+      ...settingDefinition,
+      type: SettingType.PROPERTY_SET,
+      fields,
+    };
+    const settingValue = mockSettingValue({ fieldValues: [{ foo: '' }] });
+    expect(getSettingValue(setting, settingValue)).toEqual([{ foo: '' }]);
+  });
+
+  it('should work for category definitions', () => {
+    const setting: ExtendedSettingDefinition = {
+      ...settingDefinition,
+      type: SettingType.FORMATTED_TEXT,
+      fields,
+      multiValues: true,
+    };
+    const settingValue = mockSettingValue({ values: ['*text*', 'text'] });
+    expect(getSettingValue(setting, settingValue)).toEqual(['*text*', 'text']);
+  });
+
+  it('should work for formatted text', () => {
+    const setting: ExtendedSettingDefinition = {
+      ...settingDefinition,
+      type: SettingType.FORMATTED_TEXT,
+      fields,
+    };
+    const settingValue = mockSettingValue({ values: ['*text*', 'text'] });
+    expect(getSettingValue(setting, settingValue)).toEqual('*text*');
+  });
+
+  it('should work for formatted text when values is undefined', () => {
+    const setting: ExtendedSettingDefinition = {
+      ...settingDefinition,
+      type: SettingType.FORMATTED_TEXT,
+      fields,
+    };
+    const settingValue = mockSettingValue({ values: undefined });
+    expect(getSettingValue(setting, settingValue)).toBeUndefined();
   });
 });
 
 describe('#getDefaultValue()', () => {
   it.each([
     ['true', 'settings.boolean.true'],
-    ['false', 'settings.boolean.false']
+    ['false', 'settings.boolean.false'],
   ])(
     'should work for boolean field when passing "%s"',
     (parentValue?: string, expected?: string) => {
       const setting: Setting = {
-        definition: { key: 'test', options: [], type: 'BOOLEAN' },
+        hasValue: true,
+        definition: { key: 'test', options: [], type: SettingType.BOOLEAN },
         parentValue,
-        key: 'test'
+        key: 'test',
       };
       expect(getDefaultValue(setting)).toEqual(expected);
-    }
+    },
   );
 });
 
-describe('sanitizeTranslation', () => {
-  it('should preserve formatting tags', () => {
-    const allowed = `
-    Hi this is <i>in italics</i> and <ul>
-    <li> lists </li>
-    <li> are allowed</li>
-    </ul>
-    <p>
-    as well. This is <b>Amazing</b> and this <strong>bold</strong> <br>
-    and <code>code.is.accepted too</code>
-    </p>
-  `;
-
-    const clean = sanitizeTranslation(allowed);
-    expect(clean).toBe(allowed);
-  });
-
-  /*
-   * Test code borrowed from OWASP's sanitizer tests
-   * https://github.com/OWASP/java-html-sanitizer/blob/master/src/test/resources/org/owasp/html/htmllexerinput1.html
-   */
-  it('should strip everything else', () => {
-    const clean = sanitizeTranslation(`<?xml version="not-even-close"?>
-
-    <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-    
-    <!-- a test input for HtmlLexer -->
-    
-    <html>
-    <head>
-    <title>Test File For HtmlLexer &amp; HtmlParser</title>
-    <link rel=stylesheet type="text/css" src=foo/bar.css />
-    <body
-     bgcolor=white
-     linkcolor = "blue"
-     onload="document.writeln(
-      &quot;&lt;p&gt;properly escaped code in a handler&lt;/p&gt;&quot;);"
-    >
-    
-    <script type="text/javascript"><!--
-    document.writeln("<p>Some initialization code in global context</p>");
-    --></script>
-    
-    <script type="text/javascript">
-    // hi there
-    document.writeln("<p>More initialization</p>");
-    </script>
-    
-    <div id=clickydiv onclick="handleClicky(event)"
-     ondblclick=this.onclick(event);return(false)>
-    Clicky
-    </div>
-    
-    <input id=foo>
-    <gxp:attr name="onchange">alert("&lt;b&gt;hi&lt;/b&gt;");</gxp:attr>
-    </input>
-    
-    <pre>&lt;div id=notarealtag onclick=notcode()&gt;</pre>
-    
-    <!-- some tokenization corner cases -->
-    
-    < notatag <atag/>
-    
-    </ notatag> </redundantlyclosed/>
-    
-    <messyattributes a=b=c d="e"f=g h =i j= k l = m checked n="o"/>
-    
-    < < < all in one text block > > >
-    
-    <xmp>Make sure that <!-- comments don't obscure the xmp close</xmp>
-    <% # some php code here
-    write("<pre>$horriblySyntacticConstruct1</pre>\n\n");
-    %>
-    <script type="text/javascript"><!--
-    alert("hello world");
-    // --></script>
-    
-    <script>/* </script> */alert('hi');</script>
-    <script><!--/* </script> */alert('hi');--></script>
-    
-    <xmp style=color:blue><!--/* </xmp> */alert('hi');--></xmp>
-    
-    <style><!-- p { contentf: '</style>' } --></style>
-    <style>Foo<!-- > </style> --></style>
-    <textarea><!-- Zoicks </textarea>--></textarea>
-    <!-- An escaping text span start may share its U+002D HYPHEN-MINUS characters
-       - with its corresponding escaping text span end. -->
-    <script><!--></script>
-    <script><!---></script>
-    <script><!----></script>
-    </body>
-    </html>
-    <![CDATA[ No such thing as a CDATA> section in HTML ]]>
-    <script>a<b</script>
-    <img src=foo.gif /><a href=><a href=/>
-    <span title=malformed attribs' do=don't id=foo checked onclick="a<b">Bar</span>`);
-
-    expect(clean.replace(/\s+/g, '')).toBe(
-      `Clickyalert("&lt;b&gt;hi&lt;/b&gt;");&lt;divid=notarealtagonclick=notcode()&gt;&lt;notatag&lt;&lt;&lt;allinonetextblock&gt;&gt;&gt;&lt;%#somephpcodeherewrite("$horriblySyntacticConstruct1");%&gt;*/alert('hi');*/alert('hi');--&gt;*/alert('hi');--&gt;'}--&gt;--&gt;&lt;!--Zoicks--&gt;sectioninHTML]]&gt;Bar`
-    );
+describe('buildSettingLink', () => {
+  it.each([
+    [
+      mockDefinition({ key: 'anykey' }),
+      undefined,
+      { hash: '#anykey', pathname: '/admin/settings', search: '?category=foo+category' },
+    ],
+    [
+      mockDefinition({ key: 'sonar.auth.gitlab.name' }),
+      undefined,
+      {
+        hash: '#sonar.auth.gitlab.name',
+        pathname: '/admin/settings',
+        search: '?category=foo+category&tab=gitlab',
+      },
+    ],
+    [
+      mockDefinition({ key: 'sonar.auth.github.token' }),
+      undefined,
+      {
+        hash: '#sonar.auth.github.token',
+        pathname: '/admin/settings',
+        search: '?category=foo+category&tab=github',
+      },
+    ],
+    [
+      mockDefinition({ key: 'sonar.auth.bitbucket.token' }),
+      undefined,
+      {
+        hash: '#sonar.auth.bitbucket.token',
+        pathname: '/admin/settings',
+        search: '?category=foo+category&tab=bitbucket',
+      },
+    ],
+    [
+      mockDefinition({ key: 'sonar.almintegration.azure' }),
+      undefined,
+      {
+        hash: '#sonar.almintegration.azure',
+        pathname: '/admin/settings',
+        search: '?category=foo+category&alm=azure',
+      },
+    ],
+    [
+      mockDefinition({ key: 'defKey' }),
+      mockComponent({ key: 'componentKey' }),
+      {
+        hash: '#defKey',
+        pathname: '/project/settings',
+        search: '?id=componentKey&category=foo+category',
+      },
+    ],
+  ])('should work as expected', (definition, component, expectedUrl) => {
+    expect(buildSettingLink(definition, component)).toEqual(expectedUrl);
   });
 });

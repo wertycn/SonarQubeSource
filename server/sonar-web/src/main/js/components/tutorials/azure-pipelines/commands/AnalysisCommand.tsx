@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,6 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 import * as React from 'react';
 import { BuildTools } from '../../types';
 import ClangGCC from './ClangGCC';
@@ -28,28 +27,29 @@ import Other from './Other';
 
 export interface AnalysisCommandProps {
   projectKey: string;
+  projectName: string;
   buildTool?: BuildTools;
   onStepValidationChange: (isValid: boolean) => void;
 }
 
 export default function AnalysisCommand(props: AnalysisCommandProps) {
-  const { buildTool, projectKey } = props;
+  const { buildTool, onStepValidationChange, projectKey, projectName } = props;
 
   React.useEffect(() => {
     if (buildTool && buildTool !== BuildTools.CFamily) {
-      props.onStepValidationChange(true);
+      onStepValidationChange(true);
     }
-  }, [buildTool, props.onStepValidationChange]);
+  }, [buildTool, onStepValidationChange]);
 
   if (!buildTool) {
     return null;
   }
   switch (buildTool) {
     case BuildTools.Maven:
-      return <JavaMaven projectKey={projectKey} />;
+      return <JavaMaven projectKey={projectKey} projectName={projectName} />;
 
     case BuildTools.Gradle:
-      return <JavaGradle projectKey={projectKey} />;
+      return <JavaGradle projectKey={projectKey} projectName={projectName} />;
 
     case BuildTools.DotNet:
       return <DotNet projectKey={projectKey} />;

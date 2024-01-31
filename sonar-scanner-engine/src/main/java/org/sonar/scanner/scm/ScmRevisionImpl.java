@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,8 +21,8 @@ package org.sonar.scanner.scm;
 
 import java.util.Optional;
 import org.sonar.api.batch.scm.ScmProvider;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.bootstrap.ScannerProperties;
 import org.sonar.scanner.ci.CiConfiguration;
 import org.sonar.scanner.fs.InputModuleHierarchy;
@@ -32,7 +32,7 @@ import static org.sonar.scanner.scan.ScanProperties.SCM_REVISION;
 
 public class ScmRevisionImpl implements ScmRevision {
 
-  private static final Logger LOG = Loggers.get(ScmRevisionImpl.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScmRevisionImpl.class);
 
   private final CiConfiguration ciConfiguration;
   private final ScannerProperties scannerConfiguration;

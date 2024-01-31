@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,71 +17,53 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator, Title, TutorialStepList } from 'design-system';
 import * as React from 'react';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import {
-  isProjectGitLabBindingResponse,
-  ProjectAlmBindingResponse
-} from '../../../types/alm-settings';
+import { translate } from '../../../helpers/l10n';
+import { AlmKeys } from '../../../types/alm-settings';
+import { Component } from '../../../types/types';
+import { LoggedInUser } from '../../../types/users';
+import AllSet from '../components/AllSet';
 import EnvironmentVariablesStep from './EnvironmentVariablesStep';
-import ProjectKeyStep from './ProjectKeyStep';
-import { GitlabBuildTools } from './types';
 import YmlFileStep from './YmlFileStep';
 
 export enum Steps {
-  PROJECT_KEY,
   ENV_VARIABLES,
-  YML
+  YML,
+  ALL_SET,
 }
 
 export interface GitLabCITutorialProps {
   baseUrl: string;
-  component: T.Component;
-  currentUser: T.LoggedInUser;
-  projectBinding: ProjectAlmBindingResponse;
+  component: Component;
+  currentUser: LoggedInUser;
+  willRefreshAutomatically?: boolean;
 }
 
 export default function GitLabCITutorial(props: GitLabCITutorialProps) {
-  const { baseUrl, component, currentUser, projectBinding } = props;
+  const { baseUrl, component, currentUser, willRefreshAutomatically } = props;
 
-  const [step, setStep] = React.useState(Steps.PROJECT_KEY);
-  const [buildTool, setBuildTool] = React.useState<GitlabBuildTools | undefined>();
-
-  // Failsafe; should never happen.
-  if (!isProjectGitLabBindingResponse(projectBinding)) {
-    return (
-      <Alert variant="error">{translate('onboarding.tutorial.with.gitlab_ci.unsupported')}</Alert>
-    );
-  }
-
+  const [done, setDone] = React.useState<boolean>(false);
   return (
     <>
-      <div className="page-header big-spacer-bottom">
-        <h1 className="page-title">{translate('onboarding.tutorial.with.gitlab_ci.title')}</h1>
-      </div>
+      <Title>{translate('onboarding.tutorial.with.gitlab_ci.title')}</Title>
 
-      <ProjectKeyStep
-        buildTool={buildTool}
-        component={component}
-        finished={step > Steps.PROJECT_KEY}
-        onDone={() => setStep(Steps.ENV_VARIABLES)}
-        onOpen={() => setStep(Steps.PROJECT_KEY)}
-        open={step === Steps.PROJECT_KEY}
-        setBuildTool={setBuildTool}
-      />
+      <TutorialStepList className="sw-mb-8">
+        <EnvironmentVariablesStep
+          baseUrl={baseUrl}
+          component={component}
+          currentUser={currentUser}
+        />
 
-      <EnvironmentVariablesStep
-        baseUrl={baseUrl}
-        component={component}
-        currentUser={currentUser}
-        finished={step > Steps.ENV_VARIABLES}
-        onDone={() => setStep(Steps.YML)}
-        onOpen={() => setStep(Steps.ENV_VARIABLES)}
-        open={step === Steps.ENV_VARIABLES}
-      />
+        <YmlFileStep component={component} setDone={setDone} />
+      </TutorialStepList>
 
-      <YmlFileStep buildTool={buildTool} open={step === Steps.YML} projectKey={component.key} />
+      {done && (
+        <>
+          <BasicSeparator className="sw-my-10" />
+          <AllSet alm={AlmKeys.GitLab} willRefreshAutomatically={willRefreshAutomatically} />
+        </>
+      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,16 +39,6 @@ public class MeasureAssert extends AbstractAssert<MeasureAssert, Measure> {
 
   public static MeasureAssert assertThat(@Nullable Optional<Measure> actual) {
     return new MeasureAssert(actual == null ? null : actual.orElse(null));
-  }
-
-  public MeasureAssert hasValueType(Measure.ValueType expected) {
-    isNotNull();
-
-    if (actual.getValueType() != expected) {
-      failWithMessage("Expected ValueType of Measure to be <%s> but was <%s>", expected, actual.getValueType());
-    }
-
-    return this;
   }
 
   public MeasureAssert hasValue(int expected) {
@@ -94,6 +84,25 @@ public class MeasureAssert extends AbstractAssert<MeasureAssert, Measure> {
 
     if (actual.getDoubleValue() != expected) {
       failWithMessage("Expected value of Measure to be <%s> but was <%s>", expected, actual.getDoubleValue());
+    }
+
+    return this;
+  }
+
+  public MeasureAssert hasValue(double expected, Offset<Double> offset) {
+    isNotNull();
+
+    if (actual.getValueType() != Measure.ValueType.DOUBLE) {
+      failWithMessage(
+        "Expected Measure to have a double value and therefore its ValueType to be <%s> but was <%s>",
+        Measure.ValueType.DOUBLE, actual.getValueType());
+    }
+
+    double value = actual.getDoubleValue();
+    if (abs(expected - value) > offset.value) {
+      failWithMessage(
+        "Expected value of Measure to be close to <%s> by less than <%s> but was <%s>",
+        expected, offset.value, value);
     }
 
     return this;
@@ -204,46 +213,6 @@ public class MeasureAssert extends AbstractAssert<MeasureAssert, Measure> {
   private void hasQualityGateStatus() {
     if (!actual.hasQualityGateStatus()) {
       failWithMessage("Expected Measure to have a QualityGateStatus but it did not");
-    }
-  }
-
-  public MeasureAssert hasVariation(double expected) {
-    isNotNull();
-    hasVariation();
-
-    if (!actual.hasVariation()) {
-      failWithMessage("Expected Measure to have a variation but it did not");
-    }
-
-    double variation = actual.getVariation();
-    if (variation != expected) {
-      failWithMessage("Expected variation of Measure to be <%s> but was <%s>", expected, variation);
-    }
-
-    return this;
-  }
-
-  public MeasureAssert hasVariation(double expected, Offset<Double> offset) {
-    isNotNull();
-    hasVariation();
-
-    if (!actual.hasVariation()) {
-      failWithMessage("Expected Measure to have a variation but it did not");
-    }
-
-    double variation = actual.getVariation();
-    if (abs(expected - variation) > offset.value) {
-      failWithMessage(
-        "Expected variation of Measure to be close to <%s> by less than <%s> but was <%s>",
-        expected, offset.value, variation);
-    }
-
-    return this;
-  }
-
-  private void hasVariation() {
-    if (!actual.hasVariation()) {
-      failWithMessage("Expected Measure to have a variation but it did not");
     }
   }
 

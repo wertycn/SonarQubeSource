@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,15 +24,18 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.text.JsonWriter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class ImportersAction implements QProfileWsAction {
 
   private final ProfileImporter[] importers;
 
+  @Autowired(required = false)
   public ImportersAction(ProfileImporter[] importers) {
     this.importers = importers;
   }
 
+  @Autowired(required = false)
   public ImportersAction() {
     this(new ProfileImporter[0]);
   }

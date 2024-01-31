@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,36 +19,30 @@
  */
 package org.sonar.scanner.scan.filesystem;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.Before;
+import java.util.Set;
 import org.junit.Test;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.scanner.repository.FileData;
-import org.sonar.scanner.repository.ProjectRepositoriesSupplier;
+import org.sonar.scanner.repository.ProjectRepositories;
 import org.sonar.scanner.repository.SingleProjectRepository;
 import org.sonar.scanner.scm.ScmChangedFiles;
+import org.sonar.scm.git.ChangedFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class StatusDetectionTest {
-  private ProjectRepositoriesSupplier projectRepositoriesSupplier = mock(ProjectRepositoriesSupplier.class);
-
-  @Before
-  public void setUp() {
-    when(projectRepositoriesSupplier.get()).thenReturn(new SingleProjectRepository(createFileDataPerPathMap()));
-  }
+  private final ProjectRepositories projectRepositories = new SingleProjectRepository(createFileDataPerPathMap());
 
   @Test
   public void detect_status() {
     ScmChangedFiles changedFiles = new ScmChangedFiles(null);
-    StatusDetection statusDetection = new StatusDetection(projectRepositoriesSupplier, changedFiles);
+    StatusDetection statusDetection = new StatusDetection(projectRepositories, changedFiles);
 
     assertThat(statusDetection.status("foo", createFile("src/Foo.java"), "ABCDE")).isEqualTo(InputFile.Status.SAME);
     assertThat(statusDetection.status("foo", createFile("src/Foo.java"), "XXXXX")).isEqualTo(InputFile.Status.CHANGED);
@@ -57,8 +51,8 @@ public class StatusDetectionTest {
 
   @Test
   public void detect_status_branches_exclude() {
-    ScmChangedFiles changedFiles = new ScmChangedFiles(Collections.emptyList());
-    StatusDetection statusDetection = new StatusDetection(projectRepositoriesSupplier, changedFiles);
+    ScmChangedFiles changedFiles = new ScmChangedFiles(Set.of());
+    StatusDetection statusDetection = new StatusDetection(projectRepositories, changedFiles);
 
     // normally changed
     assertThat(statusDetection.status("foo", createFile("src/Foo.java"), "XXXXX")).isEqualTo(InputFile.Status.SAME);
@@ -69,9 +63,10 @@ public class StatusDetectionTest {
 
   @Test
   public void detect_status_branches_confirm() {
-    ScmChangedFiles changedFiles = new ScmChangedFiles(Collections.singletonList(Paths.get("module", "src", "Foo.java")));
-    StatusDetection statusDetection = new StatusDetection(projectRepositoriesSupplier, changedFiles);
+    Path filePath = Paths.get("module", "src", "Foo.java");
+    ScmChangedFiles changedFiles = new ScmChangedFiles(Set.of(ChangedFile.of(filePath)));
 
+    StatusDetection statusDetection = new StatusDetection(projectRepositories, changedFiles);
     assertThat(statusDetection.status("foo", createFile("src/Foo.java"), "XXXXX")).isEqualTo(InputFile.Status.CHANGED);
   }
 

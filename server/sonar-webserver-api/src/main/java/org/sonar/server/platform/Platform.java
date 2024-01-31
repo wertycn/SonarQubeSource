@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,14 @@
  */
 package org.sonar.server.platform;
 
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ExtensionContainer;
 
 public interface Platform {
   void doStart();
 
   Status status();
 
-  ComponentContainer getContainer();
+  ExtensionContainer getContainer();
 
   enum Status {
     BOOTING, SAFEMODE, STARTING, UP

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,33 +19,27 @@
  */
 package org.sonar.ce.task.projectanalysis.duplication;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CrossProjectDuplicateTest {
   private static final String FILE_KEY_1 = "file key 1";
   private static final String FILE_KEY_2 = "file key 2";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   @Test
   public void constructors_throws_NPE_if_fileKey_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("fileKey can not be null");
-
-    new CrossProjectDuplicate(null, new TextBlock(1, 1));
+    assertThatThrownBy(() -> new CrossProjectDuplicate(null, new TextBlock(1, 1)))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("fileKey can not be null");
   }
 
   @Test
   public void constructors_throws_NPE_if_textBlock_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("textBlock of duplicate can not be null");
-
-    new CrossProjectDuplicate(FILE_KEY_1, null);
+    assertThatThrownBy(() -> new CrossProjectDuplicate(FILE_KEY_1, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("textBlock of duplicate can not be null");
   }
 
   @Test
@@ -73,7 +67,7 @@ public class CrossProjectDuplicateTest {
   @Test
   public void hashcode_depends_on_file_and_TextBlock() {
     TextBlock textBlock = new TextBlock(1, 2);
-    assertThat(new CrossProjectDuplicate(FILE_KEY_1, textBlock).hashCode()).isEqualTo(new CrossProjectDuplicate(FILE_KEY_1, textBlock).hashCode());
+    assertThat(new CrossProjectDuplicate(FILE_KEY_1, textBlock)).hasSameHashCodeAs(new CrossProjectDuplicate(FILE_KEY_1, textBlock));
 
     assertThat(new CrossProjectDuplicate(FILE_KEY_1, textBlock).hashCode()).isNotEqualTo(new CrossProjectDuplicate(FILE_KEY_2, textBlock).hashCode());
     assertThat(new CrossProjectDuplicate(FILE_KEY_1, textBlock).hashCode()).isNotEqualTo(new CrossProjectDuplicate(FILE_KEY_2, new TextBlock(1, 1)).hashCode());
@@ -81,7 +75,7 @@ public class CrossProjectDuplicateTest {
 
   @Test
   public void verify_toString() {
-    assertThat(new CrossProjectDuplicate(FILE_KEY_1, new TextBlock(1, 2)).toString()).isEqualTo("CrossProjectDuplicate{fileKey='file key 1', textBlock=TextBlock{start=1, end=2}}");
+    assertThat(new CrossProjectDuplicate(FILE_KEY_1, new TextBlock(1, 2))).hasToString("CrossProjectDuplicate{fileKey='file key 1', textBlock=TextBlock{start=1, end=2}}");
   }
 
 }

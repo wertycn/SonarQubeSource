@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,11 @@
  */
 package org.sonar.scanner.protocol.output;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import javax.annotation.CheckForNull;
 import org.sonar.core.util.CloseableIterator;
 import org.sonar.core.util.Protobuf;
@@ -27,11 +31,10 @@ import org.sonar.core.util.Protobuf;
 import static org.sonar.core.util.CloseableIterator.emptyCloseableIterator;
 
 public class ScannerReportReader {
-
   private final FileStructure fileStructure;
 
-  public ScannerReportReader(File dir) {
-    this.fileStructure = new FileStructure(dir);
+  public ScannerReportReader(FileStructure fileStructure) {
+    this.fileStructure = fileStructure;
   }
 
   public ScannerReport.Metadata readMetadata() {
@@ -75,6 +78,19 @@ public class ScannerReportReader {
     return null;
   }
 
+  @CheckForNull
+  public InputStream getAnalysisCache() {
+    File file = fileStructure.analysisCache();
+    if (fileExists(file)) {
+      try {
+        return new BufferedInputStream(new FileInputStream(fileStructure.analysisCache()));
+      } catch (FileNotFoundException e) {
+        throw new IllegalStateException("Unable to open file " + fileStructure.analysisCache(), e);
+      }
+    }
+    return null;
+  }
+
   public ScannerReport.Component readComponent(int componentRef) {
     File file = fileStructure.fileFor(FileStructure.Domain.COMPONENT, componentRef);
     if (!fileExists(file)) {
@@ -89,6 +105,11 @@ public class ScannerReportReader {
       return Protobuf.readStream(file, ScannerReport.Issue.parser());
     }
     return emptyCloseableIterator();
+  }
+
+  public boolean hasIssues(int componentRef) {
+    File file = fileStructure.fileFor(FileStructure.Domain.ISSUES, componentRef);
+    return fileExists(file);
   }
 
   public CloseableIterator<ScannerReport.ExternalIssue> readComponentExternalIssues(int componentRef) {

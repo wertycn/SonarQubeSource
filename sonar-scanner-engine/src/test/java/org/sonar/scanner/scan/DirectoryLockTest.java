@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,16 +23,14 @@ import java.nio.file.Paths;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class DirectoryLockTest {
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   private DirectoryLock lock;
 
   @Before
@@ -42,7 +40,7 @@ public class DirectoryLockTest {
 
   @Test
   public void tryLock() {
-    assertThat(temp.getRoot().list()).isEmpty();
+    assertThat(temp.getRoot()).isEmptyDirectory();
     lock.tryLock();
     assertThat(temp.getRoot().toPath().resolve(".sonar_lock")).exists();
     lock.unlock();
@@ -57,9 +55,8 @@ public class DirectoryLockTest {
   public void errorTryLock() {
     lock = new DirectoryLock(Paths.get("non", "existing", "path"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Failed to create lock");
-
-    lock.tryLock();
+    assertThatThrownBy(() -> lock.tryLock())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Failed to create lock");
   }
 }

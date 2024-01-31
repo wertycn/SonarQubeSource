@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -67,7 +67,7 @@ public interface CeWorker extends Callable<CeWorker.Result> {
 
   /**
    * Classes implementing will be called a task start and finishes executing.
-   * All classes implementing this interface are guaranted to be called for each event, even if another implementation
+   * All classes implementing this interface are guaranteed to be called for each event, even if another implementation
    * failed when called.
    */
   @ComputeEngineSide

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,10 +33,8 @@ import java.util.Set;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.batch.scm.ScmProvider;
-import org.tmatesoft.svn.core.SVNCancelException;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.wc.SVNClientManager;
@@ -83,10 +80,6 @@ public class SvnScmProviderTest {
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
-  private FindFork findFork = mock(FindFork.class);
   private SvnConfiguration config = mock(SvnConfiguration.class);
   private SvnTester svnTester;
 
@@ -102,7 +95,7 @@ public class SvnScmProviderTest {
   @Test
   public void sanityCheck() {
     SvnBlameCommand blameCommand = new SvnBlameCommand(config);
-    SvnScmProvider svnScmProvider = new SvnScmProvider(config, blameCommand, findFork);
+    SvnScmProvider svnScmProvider = new SvnScmProvider(config, blameCommand);
     assertThat(svnScmProvider.key()).isEqualTo("svn");
     assertThat(svnScmProvider.blameCommand()).isEqualTo(blameCommand);
   }
@@ -235,7 +228,7 @@ public class SvnScmProviderTest {
     svnTester.createBranch("b1");
     svnTester.checkout(b1, "branches/b1");
 
-    SvnScmProvider scmProvider = new SvnScmProvider(config, new SvnBlameCommand(config), findFork) {
+    SvnScmProvider scmProvider = new SvnScmProvider(config, new SvnBlameCommand(config)) {
       @Override
       ChangedLinesComputer newChangedLinesComputer(Path rootBaseDir, Set<Path> changedFiles) {
         throw new IllegalStateException("crash");
@@ -245,29 +238,9 @@ public class SvnScmProviderTest {
   }
 
   @Test
-  public void forkDate_returns_null_if_no_fork_found() {
-    assertThat(new SvnScmProvider(config, new SvnBlameCommand(config), findFork).forkDate("branch", Paths.get(""))).isNull();
-  }
-
-  @Test
-  public void forkDate_returns_instant_if_fork_found() throws SVNException {
-    Path rootBaseDir = Paths.get("");
-    String referenceBranch = "branch";
-    Instant forkDate = Instant.ofEpochMilli(123456789L);
-    SvnScmProvider provider = new SvnScmProvider(config, new SvnBlameCommand(config), findFork);
-    when(findFork.findDate(rootBaseDir, referenceBranch)).thenReturn(forkDate);
-
-    assertThat(provider.forkDate(referenceBranch, rootBaseDir)).isEqualTo(forkDate);
-  }
-
-  @Test
-  public void forkDate_returns_null_if_exception_occurs() throws SVNException {
-    Path rootBaseDir = Paths.get("");
-    String referenceBranch = "branch";
-    SvnScmProvider provider = new SvnScmProvider(config, new SvnBlameCommand(config), findFork);
-    when(findFork.findDate(rootBaseDir, referenceBranch)).thenThrow(new SVNCancelException());
-
-    assertThat(provider.forkDate(referenceBranch, rootBaseDir)).isNull();
+  public void forkDate_returns_null() throws SVNException {
+    SvnScmProvider provider = new SvnScmProvider(config, new SvnBlameCommand(config));
+    assertThat(provider.forkDate("", Paths.get(""))).isNull();
   }
 
   @Test
@@ -309,7 +282,7 @@ public class SvnScmProviderTest {
     svnTester.commit(worktree);
   }
 
-  private void deleteAndCommitFile(Path worktree, String filename) throws IOException, SVNException {
+  private void deleteAndCommitFile(Path worktree, String filename) throws SVNException {
     svnTester.deleteFile(worktree, filename);
     svnTester.commit(worktree);
   }
@@ -320,6 +293,6 @@ public class SvnScmProviderTest {
   }
 
   private SvnScmProvider newScmProvider() {
-    return new SvnScmProvider(config, new SvnBlameCommand(config), findFork);
+    return new SvnScmProvider(config, new SvnBlameCommand(config));
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,6 +30,7 @@ import java.io.StringWriter;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -45,15 +46,23 @@ import static java.util.Objects.requireNonNull;
  */
 public class LogbackJsonLayout extends LayoutBase<ILoggingEvent> {
 
-  private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME
+  static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME
     .withLocale(Locale.US)
     .withZone(ZoneId.systemDefault());
   private static final Pattern NEWLINE_REGEXP = Pattern.compile("\n");
 
   private final String processKey;
+  private final String nodeName;
+  private final List<String> exclusions;
 
-  public LogbackJsonLayout(String processKey) {
+  public LogbackJsonLayout(String processKey, String nodeName) {
+    this(processKey, nodeName, List.of());
+  }
+
+  public LogbackJsonLayout(String processKey, String nodeName, List<String> exclusions) {
     this.processKey = requireNonNull(processKey);
+    this.nodeName = nodeName;
+    this.exclusions = exclusions;
   }
 
   String getProcessKey() {
@@ -65,15 +74,17 @@ public class LogbackJsonLayout extends LayoutBase<ILoggingEvent> {
     StringWriter output = new StringWriter();
     try (JsonWriter json = new JsonWriter(output)) {
       json.beginObject();
+      if (!"".equals(nodeName)) {
+        json.name("nodename").value(nodeName);
+      }
       json.name("process").value(processKey);
       for (Map.Entry<String, String> entry : event.getMDCPropertyMap().entrySet()) {
-        if (entry.getValue() != null) {
+        if (entry.getValue() != null && !exclusions.contains(entry.getKey())) {
           json.name(entry.getKey()).value(entry.getValue());
         }
       }
       json
-        .name("instant").value(event.getTimeStamp())
-        .name("date").value(DATE_FORMATTER.format(Instant.ofEpochMilli(event.getTimeStamp())))
+        .name("timestamp").value(DATE_FORMATTER.format(Instant.ofEpochMilli(event.getTimeStamp())))
         .name("severity").value(event.getLevel().toString())
         .name("logger").value(event.getLoggerName())
         .name("message").value(NEWLINE_REGEXP.matcher(event.getFormattedMessage()).replaceAll("\r"));

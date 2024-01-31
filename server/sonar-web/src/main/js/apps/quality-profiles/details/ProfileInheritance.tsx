@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,14 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { ButtonSecondary, FlagMessage, Spinner, SubTitle, Table } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getProfileInheritance } from '../../../api/quality-profiles';
+import { translate } from '../../../helpers/l10n';
+import { useProfileInheritanceQuery } from '../../../queries/quality-profiles';
 import { Profile } from '../types';
 import ChangeParentForm from './ChangeParentForm';
-import ProfileInheritanceBox from './ProfileInheritanceBox';
+import ProfileInheritanceRow from './ProfileInheritanceRow';
 
 interface Props {
   profile: Profile;
@@ -32,158 +32,113 @@ interface Props {
   updateProfiles: () => Promise<void>;
 }
 
-interface State {
-  ancestors?: T.ProfileInheritanceDetails[];
-  children?: T.ProfileInheritanceDetails[];
-  formOpen: boolean;
-  loading: boolean;
-  profile?: T.ProfileInheritanceDetails;
-}
+export default function ProfileInheritance(props: Readonly<Props>) {
+  const { profile, profiles, updateProfiles } = props;
+  const [formOpen, setFormOpen] = React.useState(false);
 
-export default class ProfileInheritance extends React.PureComponent<Props, State> {
-  mounted = false;
+  const { data: { ancestors, children, profile: profileInheritanceDetail } = {}, isLoading } =
+    useProfileInheritanceQuery(profile);
 
-  state: State = {
-    formOpen: false,
-    loading: true
-  };
+  const handleChangeParentClick = React.useCallback(() => {
+    setFormOpen(true);
+  }, [setFormOpen]);
 
-  componentDidMount() {
-    this.mounted = true;
-    this.loadData();
-  }
+  const closeForm = React.useCallback(() => {
+    setFormOpen(false);
+  }, [setFormOpen]);
 
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.profile.key !== this.props.profile.key) {
-      this.loadData();
+  const handleParentChange = React.useCallback(async () => {
+    try {
+      await updateProfiles();
+    } finally {
+      closeForm();
     }
-  }
+  }, [closeForm, updateProfiles]);
 
-  componentWillUnmount() {
-    this.mounted = false;
-  }
+  const highlightCurrent =
+    !isLoading &&
+    ancestors != null &&
+    children != null &&
+    (ancestors.length > 0 || children.length > 0);
 
-  loadData() {
-    getProfileInheritance(this.props.profile).then(
-      r => {
-        if (this.mounted) {
-          const { ancestors, children } = r;
-          ancestors.reverse();
+  const extendsBuiltIn = ancestors?.some((p) => p.isBuiltIn);
 
-          this.setState({
-            children,
-            ancestors,
-            profile: r.profile,
-            loading: false
-          });
-        }
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      }
-    );
-  }
-
-  handleChangeParentClick = () => {
-    this.setState({ formOpen: true });
-  };
-
-  closeForm = () => {
-    this.setState({ formOpen: false });
-  };
-
-  handleParentChange = () => {
-    this.props.updateProfiles().then(
-      () => {
-        this.loadData();
-      },
-      () => {}
-    );
-    this.closeForm();
-  };
-
-  render() {
-    const { profile, profiles } = this.props;
-    const { ancestors } = this.state;
-
-    const highlightCurrent =
-      !this.state.loading &&
-      ancestors != null &&
-      this.state.children != null &&
-      (ancestors.length > 0 || this.state.children.length > 0);
-
-    const extendsBuiltIn = ancestors != null && ancestors.some(profile => profile.isBuiltIn);
-
-    return (
-      <div className="boxed-group quality-profile-inheritance">
-        {profile.actions && profile.actions.edit && !profile.isBuiltIn && (
-          <div className="boxed-group-actions">
-            <Button className="pull-right js-change-parent" onClick={this.handleChangeParentClick}>
-              {translate('quality_profiles.change_parent')}
-            </Button>
-          </div>
-        )}
-
-        <header className="boxed-group-header">
-          <h2>{translate('quality_profiles.profile_inheritance')}</h2>
-        </header>
-
-        <div className="boxed-group-inner">
-          {this.state.loading ? (
-            <i className="spinner" />
-          ) : (
-            <table className="data zebra">
-              <tbody>
-                {ancestors != null &&
-                  ancestors.map((ancestor, index) => (
-                    <ProfileInheritanceBox
-                      depth={index}
-                      key={ancestor.key}
-                      language={profile.language}
-                      profile={ancestor}
-                      type="ancestor"
-                    />
-                  ))}
-
-                {this.state.profile != null && (
-                  <ProfileInheritanceBox
-                    className={classNames({
-                      selected: highlightCurrent
-                    })}
-                    depth={ancestors ? ancestors.length : 0}
-                    displayLink={false}
-                    extendsBuiltIn={extendsBuiltIn}
-                    language={profile.language}
-                    profile={this.state.profile}
-                  />
-                )}
-
-                {this.state.children != null &&
-                  this.state.children.map(child => (
-                    <ProfileInheritanceBox
-                      depth={ancestors ? ancestors.length + 1 : 0}
-                      key={child.key}
-                      language={profile.language}
-                      profile={child}
-                      type="child"
-                    />
-                  ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {this.state.formOpen && (
-          <ChangeParentForm
-            onChange={this.handleParentChange}
-            onClose={this.closeForm}
-            profile={profile}
-            profiles={profiles.filter(p => p !== profile && p.language === profile.language)}
-          />
+  return (
+    <section
+      aria-label={translate('quality_profiles.profile_inheritance')}
+      className="it__quality-profiles__inheritance"
+    >
+      <div className="sw-flex sw-items-center sw-gap-3 sw-mb-6">
+        <SubTitle className="sw-mb-0">{translate('quality_profiles.profile_inheritance')}</SubTitle>
+        {profile.actions?.edit && !profile.isBuiltIn && (
+          <ButtonSecondary
+            className="it__quality-profiles__change-parent"
+            onClick={handleChangeParentClick}
+          >
+            {translate('quality_profiles.change_parent')}
+          </ButtonSecondary>
         )}
       </div>
-    );
-  }
+
+      {!extendsBuiltIn && !profile.isBuiltIn && (
+        <FlagMessage variant="info" className="sw-mb-4">
+          <div className="sw-flex sw-flex-col">
+            {translate('quality_profiles.no_built_in_updates_warning')}
+            {profile.actions?.edit && (
+              <span className="sw-mt-1">
+                {translate('quality_profiles.no_built_in_updates_warning_admin')}
+              </span>
+            )}
+          </div>
+        </FlagMessage>
+      )}
+
+      <Spinner loading={isLoading}>
+        <Table columnCount={3} noSidePadding>
+          {ancestors?.map((ancestor, index) => (
+            <ProfileInheritanceRow
+              depth={index}
+              key={ancestor.key}
+              language={profile.language}
+              profile={ancestor}
+              type="ancestor"
+            />
+          ))}
+
+          {profileInheritanceDetail && (
+            <ProfileInheritanceRow
+              className={classNames({
+                selected: highlightCurrent,
+              })}
+              depth={ancestors ? ancestors.length : 0}
+              displayLink={false}
+              language={profile.language}
+              profile={profileInheritanceDetail}
+            />
+          )}
+
+          {children?.map((child) => (
+            <ProfileInheritanceRow
+              depth={ancestors ? ancestors.length + 1 : 0}
+              key={child.key}
+              language={profile.language}
+              profile={child}
+              type="child"
+            />
+          ))}
+        </Table>
+      </Spinner>
+
+      {formOpen && (
+        <ChangeParentForm
+          onChange={handleParentChange}
+          onClose={closeForm}
+          profile={profile}
+          profiles={profiles.filter(
+            (p) => p.key !== profileInheritanceDetail?.key && p.language === profile.language,
+          )}
+        />
+      )}
+    </section>
+  );
 }

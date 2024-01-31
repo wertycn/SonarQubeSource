@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,7 +36,7 @@ import static java.lang.String.format;
 
 /**
  * {@link CeTaskProcessorRepository} implementation which provides access to the {@link CeTaskProcessor} existing in the
- * PicoContainer the current object belongs to.
+ * ioc container the current object belongs to.
  */
 public class CeTaskProcessorRepositoryImpl implements CeTaskProcessorRepository {
   private final Map<String, CeTaskProcessor> taskProcessorByCeTaskType;

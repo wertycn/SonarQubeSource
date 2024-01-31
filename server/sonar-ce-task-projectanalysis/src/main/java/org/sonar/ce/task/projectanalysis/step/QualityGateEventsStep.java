@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,25 +19,24 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.api.measures.CoreMetrics;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
 import org.sonar.ce.task.projectanalysis.component.Component;
-import org.sonar.ce.task.projectanalysis.component.ComponentVisitor;
-import org.sonar.ce.task.projectanalysis.component.CrawlerDepthLimit;
-import org.sonar.ce.task.projectanalysis.component.DepthTraversalTypeAwareCrawler;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
-import org.sonar.ce.task.projectanalysis.component.TypeAwareVisitorAdapter;
 import org.sonar.ce.task.projectanalysis.event.Event;
 import org.sonar.ce.task.projectanalysis.event.EventRepository;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 import org.sonar.ce.task.projectanalysis.measure.MeasureRepository;
 import org.sonar.ce.task.projectanalysis.measure.QualityGateStatus;
 import org.sonar.ce.task.projectanalysis.metric.Metric;
+import org.sonar.ce.task.projectanalysis.metric.Metric.MetricType;
 import org.sonar.ce.task.projectanalysis.metric.MetricRepository;
 import org.sonar.ce.task.step.ComputationStep;
 import org.sonar.server.notification.NotificationService;
@@ -49,7 +48,7 @@ import static java.util.Collections.singleton;
  * This step must be executed after computation of quality gate measure {@link QualityGateMeasuresStep}
  */
 public class QualityGateEventsStep implements ComputationStep {
-  private static final Logger LOGGER = Loggers.get(QualityGateEventsStep.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(QualityGateEventsStep.class);
 
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
@@ -75,13 +74,7 @@ public class QualityGateEventsStep implements ComputationStep {
     if (analysisMetadataHolder.isPullRequest()) {
       return;
     }
-    new DepthTraversalTypeAwareCrawler(
-      new TypeAwareVisitorAdapter(CrawlerDepthLimit.PROJECT, ComponentVisitor.Order.PRE_ORDER) {
-        @Override
-        public void visitProject(Component project) {
-          executeForProject(project);
-        }
-      }).visit(treeRootHolder.getRoot());
+    executeForProject(treeRootHolder.getRoot());
   }
 
   private void executeForProject(Component project) {
@@ -102,7 +95,7 @@ public class QualityGateEventsStep implements ComputationStep {
     }
 
     if (!baseMeasure.get().hasQualityGateStatus()) {
-      LOGGER.warn(String.format("Previous Quality gate status for project %s is not a supported value. Can not compute Quality Gate event", project.getDbKey()));
+      LOGGER.warn(String.format("Previous Quality gate status for project %s is not a supported value. Can not compute Quality Gate event", project.getKey()));
       checkNewQualityGate(project, rawStatus);
       return;
     }
@@ -110,7 +103,7 @@ public class QualityGateEventsStep implements ComputationStep {
 
     if (baseStatus.getStatus() != rawStatus.getStatus()) {
       // The QualityGate status has changed
-      createEvent(project, rawStatus.getStatus().getLabel(), rawStatus.getText());
+      createEvent(rawStatus.getStatus().getLabel(), rawStatus.getText());
       boolean isNewKo = rawStatus.getStatus() == Measure.Level.OK;
       notifyUsers(project, rawStatus, isNewKo);
     }
@@ -119,7 +112,7 @@ public class QualityGateEventsStep implements ComputationStep {
   private void checkNewQualityGate(Component project, QualityGateStatus rawStatus) {
     if (rawStatus.getStatus() != Measure.Level.OK) {
       // There were no defined alerts before, so this one is a new one
-      createEvent(project, rawStatus.getStatus().getLabel(), rawStatus.getText());
+      createEvent(rawStatus.getStatus().getLabel(), rawStatus.getText());
       notifyUsers(project, rawStatus, true);
     }
   }
@@ -142,14 +135,18 @@ public class QualityGateEventsStep implements ComputationStep {
     if (!branch.isMain()) {
       notification.setFieldValue("branch", branch.getName());
     }
+
+    List<Metric> ratingMetrics = metricRepository.getMetricsByType(MetricType.RATING);
+    String ratingMetricsInOneString = ratingMetrics.stream().map(Metric::getName).collect(Collectors.joining(","));
+    notification.setFieldValue("ratingMetrics", ratingMetricsInOneString);
     notificationService.deliverEmails(singleton(notification));
 
     // compatibility with old API
     notificationService.deliver(notification);
   }
 
-  private void createEvent(Component project, String name, @Nullable String description) {
-    eventRepository.add(project, Event.createAlert(name, null, description));
+  private void createEvent(String name, @Nullable String description) {
+    eventRepository.add(Event.createAlert(name, null, description));
   }
 
   @Override

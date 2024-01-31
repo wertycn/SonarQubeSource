@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,38 +19,51 @@
  */
 package org.sonar.server.issue;
 
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import org.apache.commons.lang.time.DateUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.issue.Issue;
+import org.sonar.api.issue.IssueStatus;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
+import org.sonar.api.rules.CleanCodeAttribute;
+import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.issue.FieldDiffs;
 import org.sonar.core.issue.IssueChangeContext;
+import org.sonar.db.protobuf.DbCommons;
+import org.sonar.db.protobuf.DbIssues;
+import org.sonar.db.protobuf.DbIssues.MessageFormattingType;
 import org.sonar.db.user.UserDto;
+import org.sonar.db.user.UserIdDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.rules.ExpectedException.none;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
+import static org.sonar.db.protobuf.DbIssues.MessageFormattingType.CODE;
 import static org.sonar.db.user.UserTesting.newUserDto;
 import static org.sonar.server.issue.IssueFieldsSetter.ASSIGNEE;
-import static org.sonar.server.issue.IssueFieldsSetter.RESOLUTION;
 import static org.sonar.server.issue.IssueFieldsSetter.SEVERITY;
 import static org.sonar.server.issue.IssueFieldsSetter.STATUS;
 import static org.sonar.server.issue.IssueFieldsSetter.TECHNICAL_DEBT;
+import static org.sonar.server.issue.IssueFieldsSetter.TYPE;
 import static org.sonar.server.issue.IssueFieldsSetter.UNUSED;
 
 public class IssueFieldsSetterTest {
 
-  @Rule
-  public ExpectedException thrown = none();
+  private final String DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY = "spring";
 
-  private DefaultIssue issue = new DefaultIssue();
-  private IssueChangeContext context = IssueChangeContext.createUser(new Date(), "user_uuid");
-  private IssueFieldsSetter underTest = new IssueFieldsSetter();
+  private final DefaultIssue issue = new DefaultIssue();
+  private final IssueChangeContext context = issueChangeContextByUserBuilder(new Date(), "user_uuid").build();
+  private final IssueFieldsSetter underTest = new IssueFieldsSetter();
 
   @Test
   public void assign() {
@@ -104,9 +117,10 @@ public class IssueFieldsSetterTest {
 
   @Test
   public void set_new_assignee() {
-    boolean updated = underTest.setNewAssignee(issue, "user_uuid", context);
+    boolean updated = underTest.setNewAssignee(issue, new UserIdDto("user_uuid", "user_login"), context);
     assertThat(updated).isTrue();
     assertThat(issue.assignee()).isEqualTo("user_uuid");
+    assertThat(issue.assigneeLogin()).isEqualTo("user_login");
     assertThat(issue.mustSendNotifications()).isTrue();
     FieldDiffs.Diff diff = issue.currentChange().get(ASSIGNEE);
     assertThat(diff.oldValue()).isEqualTo(UNUSED);
@@ -125,9 +139,24 @@ public class IssueFieldsSetterTest {
   public void fail_with_ISE_when_setting_new_assignee_on_already_assigned_issue() {
     issue.setAssigneeUuid("user_uuid");
 
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("It's not possible to update the assignee with this method, please use assign()");
-    underTest.setNewAssignee(issue, "another_user_uuid", context);
+    UserIdDto userId = new UserIdDto("another_user_uuid", "another_user_login");
+    assertThatThrownBy(() -> underTest.setNewAssignee(issue, userId, context))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("It's not possible to update the assignee with this method, please use assign()");
+  }
+
+  @Test
+  public void set_type() {
+    issue.setType(RuleType.CODE_SMELL);
+    boolean updated = underTest.setType(issue, RuleType.BUG, context);
+    assertThat(updated).isTrue();
+    assertThat(issue.type()).isEqualTo(RuleType.BUG);
+    assertThat(issue.manualSeverity()).isFalse();
+    assertThat(issue.mustSendNotifications()).isFalse();
+
+    FieldDiffs.Diff diff = issue.currentChange().get(TYPE);
+    assertThat(diff.oldValue()).isEqualTo(RuleType.CODE_SMELL);
+    assertThat(diff.newValue()).isEqualTo(RuleType.BUG);
   }
 
   @Test
@@ -273,21 +302,90 @@ public class IssueFieldsSetterTest {
   }
 
   @Test
-  public void change_locations() {
-    issue.setLocations("[1-3]");
-    boolean updated = underTest.setLocations(issue, "[1-4]");
+  public void change_locations_if_primary_text_rage_changed() {
+    DbCommons.TextRange range = DbCommons.TextRange.newBuilder().setStartLine(1).build();
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .setTextRange(range)
+      .build();
+    DbIssues.Locations locations2 = locations.toBuilder().setTextRange(range.toBuilder().setEndLine(2).build()).build();
+    issue.setLocations(locations);
+    boolean updated = underTest.setLocations(issue, locations2);
     assertThat(updated).isTrue();
-    assertThat(issue.getLocations().toString()).isEqualTo("[1-4]");
+    assertThat((Object) issue.getLocations()).isEqualTo(locations2);
+    assertThat(issue.locationsChanged()).isTrue();
     assertThat(issue.currentChange()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
   }
 
   @Test
-  public void do_not_change_locations() {
-    issue.setLocations("[1-3]");
-    boolean updated = underTest.setLocations(issue, "[1-3]");
+  public void change_locations_if_secondary_text_rage_changed() {
+    DbCommons.TextRange range = DbCommons.TextRange.newBuilder().setStartLine(1).build();
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .addFlow(DbIssues.Flow.newBuilder()
+        .addLocation(DbIssues.Location.newBuilder().setTextRange(range))
+        .build())
+      .build();
+    issue.setLocations(locations);
+    DbIssues.Locations.Builder builder = locations.toBuilder();
+    builder.getFlowBuilder(0).getLocationBuilder(0).setTextRange(range.toBuilder().setEndLine(2));
+    boolean updated = underTest.setLocations(issue, builder.build());
+    assertThat(updated).isTrue();
+  }
+
+  @Test
+  public void change_locations_if_secondary_message_changed() {
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .addFlow(DbIssues.Flow.newBuilder()
+        .addLocation(DbIssues.Location.newBuilder().setMsg("msg1"))
+        .build())
+      .build();
+    issue.setLocations(locations);
+    DbIssues.Locations.Builder builder = locations.toBuilder();
+    builder.getFlowBuilder(0).getLocationBuilder(0).setMsg("msg2");
+    boolean updated = underTest.setLocations(issue, builder.build());
+    assertThat(updated).isTrue();
+  }
+
+  @Test
+  public void change_locations_if_different_flow_count() {
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .addFlow(DbIssues.Flow.newBuilder()
+        .addLocation(DbIssues.Location.newBuilder())
+        .build())
+      .build();
+    issue.setLocations(locations);
+    DbIssues.Locations.Builder builder = locations.toBuilder();
+    builder.clearFlow();
+    boolean updated = underTest.setLocations(issue, builder.build());
+    assertThat(updated).isTrue();
+  }
+
+  @Test
+  public void do_not_change_locations_if_primary_hash_changed() {
+    DbCommons.TextRange range = DbCommons.TextRange.newBuilder().setStartLine(1).build();
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .setTextRange(range)
+      .setChecksum("1")
+      .build();
+    issue.setLocations(locations);
+    boolean updated = underTest.setLocations(issue, locations.toBuilder().setChecksum("2").build());
     assertThat(updated).isFalse();
-    assertThat(issue.getLocations().toString()).isEqualTo("[1-3]");
+  }
+
+  @Test
+  public void do_not_change_locations_if_secondary_hash_changed() {
+    DbCommons.TextRange range = DbCommons.TextRange.newBuilder().setStartLine(1).build();
+    DbIssues.Locations locations = DbIssues.Locations.newBuilder()
+      .addFlow(DbIssues.Flow.newBuilder()
+        .addLocation(DbIssues.Location.newBuilder().setTextRange(range))
+        .build())
+      .setChecksum("1")
+      .build();
+    issue.setLocations(locations);
+    DbIssues.Locations.Builder builder = locations.toBuilder();
+    builder.getFlowBuilder(0).getLocationBuilder(0).setChecksum("2");
+    boolean updated = underTest.setLocations(issue, builder.build());
+    assertThat(updated).isFalse();
     assertThat(issue.currentChange()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
   }
@@ -303,12 +401,12 @@ public class IssueFieldsSetterTest {
   }
 
   @Test
-  public void set_resolution() {
-    boolean updated = underTest.setResolution(issue, "OPEN", context);
+  public void setResolution_shouldNotTriggerFieldChange() {
+    boolean updated = underTest.setResolution(issue, Issue.STATUS_OPEN, context);
     assertThat(updated).isTrue();
-    assertThat(issue.resolution()).isEqualTo("OPEN");
+    assertThat(issue.resolution()).isEqualTo(Issue.STATUS_OPEN);
 
-    FieldDiffs.Diff diff = issue.currentChange().get(RESOLUTION);
+    FieldDiffs.Diff diff = issue.currentChange().get(IssueFieldsSetter.RESOLUTION);
     assertThat(diff.oldValue()).isNull();
     assertThat(diff.newValue()).isEqualTo("OPEN");
     assertThat(issue.mustSendNotifications()).isTrue();
@@ -316,24 +414,65 @@ public class IssueFieldsSetterTest {
 
   @Test
   public void not_change_resolution() {
-    issue.setResolution("FIXED");
-    boolean updated = underTest.setResolution(issue, "FIXED", context);
+    issue.setResolution(Issue.RESOLUTION_FIXED);
+    boolean updated = underTest.setResolution(issue, Issue.RESOLUTION_FIXED, context);
     assertThat(updated).isFalse();
-    assertThat(issue.resolution()).isEqualTo("FIXED");
+    assertThat(issue.resolution()).isEqualTo(Issue.RESOLUTION_FIXED);
     assertThat(issue.currentChange()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
   }
 
   @Test
   public void set_status() {
-    boolean updated = underTest.setStatus(issue, "OPEN", context);
+    boolean updated = underTest.setStatus(issue, Issue.STATUS_OPEN, context);
     assertThat(updated).isTrue();
-    assertThat(issue.status()).isEqualTo("OPEN");
+    assertThat(issue.status()).isEqualTo(Issue.STATUS_OPEN);
 
     FieldDiffs.Diff diff = issue.currentChange().get(STATUS);
     assertThat(diff.oldValue()).isNull();
-    assertThat(diff.newValue()).isEqualTo("OPEN");
+    assertThat(diff.newValue()).isEqualTo(Issue.STATUS_OPEN);
     assertThat(issue.mustSendNotifications()).isTrue();
+  }
+
+  @Test
+  public void setIssueStatus_shouldTriggerFieldChange() {
+    issue.setResolution(null);
+    issue.setStatus(Issue.STATUS_OPEN);
+
+    IssueStatus issueStatus = issue.issueStatus();
+
+    underTest.setResolution(issue, Issue.RESOLUTION_WONT_FIX, context);
+    underTest.setStatus(issue, Issue.STATUS_RESOLVED, context);
+    underTest.setIssueStatus(issue, issueStatus, issue.issueStatus(), context);
+
+    FieldDiffs.Diff diff = issue.currentChange().diffs().get(IssueFieldsSetter.ISSUE_STATUS);
+    assertThat(diff.oldValue()).isEqualTo(IssueStatus.OPEN);
+    assertThat(diff.newValue()).isEqualTo(IssueStatus.ACCEPTED);
+  }
+
+  @Test
+  public void setIssueStatus_shouldNotTriggerFieldChange_whenNoChanges() {
+    issue.setResolution(null);
+    issue.setStatus(Issue.STATUS_OPEN);
+
+    IssueStatus issueStatus = issue.issueStatus();
+    underTest.setIssueStatus(issue, issueStatus, issue.issueStatus(), context);
+
+    assertThat(issue.currentChange()).isNull();
+  }
+
+  @Test
+  public void setIssueStatus_shouldNotTriggerFieldChange_whenSecurityHotspot() {
+    issue.setResolution(null);
+    issue.setStatus(Issue.STATUS_TO_REVIEW);
+
+    IssueStatus issueStatus = issue.issueStatus();
+
+    issue.setResolution(Issue.RESOLUTION_SAFE);
+    issue.setStatus(Issue.STATUS_REVIEWED);
+    underTest.setIssueStatus(issue, issueStatus, issue.issueStatus(), context);
+
+    assertThat(issue.currentChange()).isNull();
   }
 
   @Test
@@ -343,37 +482,6 @@ public class IssueFieldsSetterTest {
     assertThat(updated).isFalse();
     assertThat(issue.status()).isEqualTo("CLOSED");
     assertThat(issue.currentChange()).isNull();
-    assertThat(issue.mustSendNotifications()).isFalse();
-  }
-
-  @Test
-  public void set_new_attribute_value() {
-    boolean updated = underTest.setAttribute(issue, "JIRA", "FOO-123", context);
-    assertThat(updated).isTrue();
-    assertThat(issue.attribute("JIRA")).isEqualTo("FOO-123");
-    assertThat(issue.currentChange().diffs()).hasSize(1);
-    assertThat(issue.currentChange().get("JIRA").oldValue()).isNull();
-    assertThat(issue.currentChange().get("JIRA").newValue()).isEqualTo("FOO-123");
-    assertThat(issue.mustSendNotifications()).isFalse();
-  }
-
-  @Test
-  public void unset_attribute() {
-    issue.setAttribute("JIRA", "FOO-123");
-    boolean updated = underTest.setAttribute(issue, "JIRA", null, context);
-    assertThat(updated).isTrue();
-    assertThat(issue.attribute("JIRA")).isNull();
-    assertThat(issue.currentChange().diffs()).hasSize(1);
-    assertThat(issue.currentChange().get("JIRA").oldValue()).isEqualTo("FOO-123");
-    assertThat(issue.currentChange().get("JIRA").newValue()).isNull();
-    assertThat(issue.mustSendNotifications()).isFalse();
-  }
-
-  @Test
-  public void not_update_attribute() {
-    issue.setAttribute("JIRA", "FOO-123");
-    boolean updated = underTest.setAttribute(issue, "JIRA", "FOO-123", context);
-    assertThat(updated).isFalse();
     assertThat(issue.mustSendNotifications()).isFalse();
   }
 
@@ -452,6 +560,44 @@ public class IssueFieldsSetterTest {
   }
 
   @Test
+  public void setCodeVariants_whenCodeVariantAdded_shouldBeUpdated() {
+    Set<String> currentCodeVariants = new HashSet<>(Arrays.asList("linux"));
+    Set<String> newCodeVariants = new HashSet<>(Arrays.asList("linux", "windows"));
+
+    issue.setCodeVariants(newCodeVariants);
+    boolean updated = underTest.setCodeVariants(issue, currentCodeVariants, context);
+    assertThat(updated).isTrue();
+    assertThat(issue.codeVariants()).contains("linux", "windows");
+
+    FieldDiffs.Diff diff = issue.currentChange().get("code_variants");
+    assertThat(diff.oldValue()).isEqualTo("linux");
+    assertThat(diff.newValue()).isEqualTo("linux windows");
+    assertThat(issue.mustSendNotifications()).isTrue();
+  }
+
+  @Test
+  public void setImpacts_whenImpactAdded_shouldBeUpdated() {
+    Map<SoftwareQuality, Severity> currentImpacts = Map.of(SoftwareQuality.RELIABILITY, Severity.LOW);
+    Map<SoftwareQuality, Severity> newImpacts = Map.of(SoftwareQuality.MAINTAINABILITY, Severity.HIGH);
+
+    issue.replaceImpacts(newImpacts);
+    boolean updated = underTest.setImpacts(issue, currentImpacts, context);
+    assertThat(updated).isTrue();
+    assertThat(issue.impacts()).isEqualTo(newImpacts);
+  }
+
+  @Test
+  public void setCodeVariants_whenCodeVariantsUnchanged_shouldNotBeUpdated() {
+    Set<String> currentCodeVariants = new HashSet<>(Arrays.asList("linux", "windows"));
+    Set<String> newCodeVariants = new HashSet<>(Arrays.asList("windows", "linux"));
+
+    issue.setCodeVariants(newCodeVariants);
+    boolean updated = underTest.setCodeVariants(issue, currentCodeVariants, context);
+    assertThat(updated).isFalse();
+    assertThat(issue.currentChange()).isNull();
+  }
+
+  @Test
   public void set_message() {
     boolean updated = underTest.setMessage(issue, "the message", context);
     assertThat(updated).isTrue();
@@ -463,13 +609,80 @@ public class IssueFieldsSetterTest {
   @Test
   public void set_past_message() {
     issue.setMessage("new message");
-    boolean updated = underTest.setPastMessage(issue, "past message", context);
+    boolean updated = underTest.setPastMessage(issue, "past message", null, context);
     assertThat(updated).isTrue();
     assertThat(issue.message()).isEqualTo("new message");
 
     // do not save change
     assertThat(issue.currentChange()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
+  }
+
+  @Test
+  public void set_past_message_formatting() {
+    issue.setMessage("past message");
+    DbIssues.MessageFormattings newFormatting = formattings(formatting(0, 3, CODE));
+    DbIssues.MessageFormattings pastFormatting = formattings(formatting(0, 7, CODE));
+    issue.setMessageFormattings(newFormatting);
+    boolean updated = underTest.setPastMessage(issue, "past message", pastFormatting, context);
+    assertThat(updated).isTrue();
+    assertThat(issue.message()).isEqualTo("past message");
+    assertThat((DbIssues.MessageFormattings) issue.getMessageFormattings()).isEqualTo(newFormatting);
+
+    // do not save change
+    assertThat(issue.currentChange()).isNull();
+    assertThat(issue.mustSendNotifications()).isFalse();
+  }
+
+  @Test
+  public void set_past_message_formatting_no_changes() {
+    issue.setMessage("past message");
+    DbIssues.MessageFormattings sameFormatting = formattings(formatting(0, 3, CODE));
+    issue.setMessageFormattings(sameFormatting);
+    boolean updated = underTest.setPastMessage(issue, "past message", sameFormatting, context);
+    assertThat(updated).isFalse();
+    assertThat(issue.message()).isEqualTo("past message");
+    assertThat((DbIssues.MessageFormattings) issue.getMessageFormattings()).isEqualTo(sameFormatting);
+
+    // do not save change
+    assertThat(issue.currentChange()).isNull();
+    assertThat(issue.mustSendNotifications()).isFalse();
+  }
+
+  @Test
+  public void message_formatting_different_size_is_changed() {
+    issue.setMessageFormattings(formattings(formatting(0, 3, CODE)));
+    boolean updated = underTest.setLocations(issue, formattings(formatting(0, 3, CODE), formatting(4, 6, CODE)));
+    assertThat(updated).isTrue();
+  }
+
+  @Test
+  public void message_formatting_different_start_is_changed() {
+    issue.setMessageFormattings(formattings(formatting(0, 3, CODE)));
+    boolean updated = underTest.setLocations(issue, formattings(formatting(1, 3, CODE)));
+    assertThat(updated).isTrue();
+  }
+
+  @Test
+  public void message_formatting_different_end_is_changed() {
+    issue.setMessageFormattings(formattings(formatting(0, 3, CODE)));
+    boolean updated = underTest.setLocations(issue, formattings(formatting(0, 4, CODE)));
+    assertThat(updated).isTrue();
+  }
+
+  private static DbIssues.MessageFormatting formatting(int start, int end, MessageFormattingType type) {
+    return DbIssues.MessageFormatting
+      .newBuilder()
+      .setStart(start)
+      .setEnd(end)
+      .setType(type)
+      .build();
+  }
+
+  private static DbIssues.MessageFormattings formattings(DbIssues.MessageFormatting... messageFormatting) {
+    return DbIssues.MessageFormattings.newBuilder()
+      .addAllMessageFormatting(List.of(messageFormatting))
+      .build();
   }
 
   @Test
@@ -507,43 +720,98 @@ public class IssueFieldsSetterTest {
   public void fail_with_ISE_when_setting_new_author_on_issue() {
     issue.setAuthorLogin("simon");
 
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("It's not possible to update the author with this method, please use setAuthorLogin()");
-    underTest.setNewAuthor(issue, "julien", context);
+    assertThatThrownBy(() -> underTest.setNewAuthor(issue, "julien", context))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("It's not possible to update the author with this method, please use setAuthorLogin()");
   }
 
   @Test
-  public void setIssueMoved_has_no_effect_if_component_uuid_is_not_changed() {
-    String componentUuid = "a";
+  public void setIssueComponent_has_no_effect_if_component_uuid_is_not_changed() {
+    String componentKey = "key";
+    String componentUuid = "uuid";
+
     issue.setComponentUuid(componentUuid);
+    issue.setComponentKey(componentKey);
 
-    underTest.setIssueMoved(issue, componentUuid, context);
+    underTest.setIssueComponent(issue, componentUuid, componentKey, context.date());
 
-    assertThat(issue.changes()).isEmpty();
     assertThat(issue.componentUuid()).isEqualTo(componentUuid);
+    assertThat(issue.componentKey()).isEqualTo(componentKey);
     assertThat(issue.isChanged()).isFalse();
     assertThat(issue.updateDate()).isNull();
     assertThat(issue.mustSendNotifications()).isFalse();
   }
 
   @Test
-  public void setIssueMoved_changes_componentUuid_adds_a_change() {
+  public void setIssueComponent_changes_component_uuid() {
     String oldComponentUuid = "a";
     String newComponentUuid = "b";
+    String componentKey = "key";
+
     issue.setComponentUuid(oldComponentUuid);
 
-    underTest.setIssueMoved(issue, newComponentUuid, context);
+    underTest.setIssueComponent(issue, newComponentUuid, componentKey, context.date());
 
-    assertThat(issue.changes()).hasSize(1);
-    FieldDiffs fieldDiffs = issue.changes().get(0);
-    assertThat(fieldDiffs.creationDate()).isEqualTo(context.date());
-    assertThat(fieldDiffs.diffs()).hasSize(1);
-    Map.Entry<String, FieldDiffs.Diff> entry = fieldDiffs.diffs().entrySet().iterator().next();
-    assertThat(entry.getKey()).isEqualTo("file");
-    assertThat(entry.getValue().oldValue()).isEqualTo(oldComponentUuid);
-    assertThat(entry.getValue().newValue()).isEqualTo(newComponentUuid);
     assertThat(issue.componentUuid()).isEqualTo(newComponentUuid);
+    assertThat(issue.componentKey()).isEqualTo(componentKey);
     assertThat(issue.isChanged()).isTrue();
     assertThat(issue.updateDate()).isEqualTo(DateUtils.truncate(context.date(), Calendar.SECOND));
+  }
+
+  @Test
+  public void setRuleDescriptionContextKey_setContextKeyIfPreviousValueIsNull() {
+    issue.setRuleDescriptionContextKey(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+    boolean updated = underTest.setRuleDescriptionContextKey(issue, null);
+
+    assertThat(updated).isTrue();
+    assertThat(issue.getRuleDescriptionContextKey()).contains(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+  }
+
+  @Test
+  public void setRuleDescriptionContextKey_dontSetContextKeyIfPreviousValueIsTheSame() {
+    issue.setRuleDescriptionContextKey(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+    boolean updated = underTest.setRuleDescriptionContextKey(issue, DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+
+    assertThat(updated).isFalse();
+    assertThat(issue.getRuleDescriptionContextKey()).contains(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+  }
+
+  @Test
+  public void setRuleDescriptionContextKey_dontSetContextKeyIfBothValuesAreNull() {
+    issue.setRuleDescriptionContextKey(null);
+    boolean updated = underTest.setRuleDescriptionContextKey(issue, null);
+
+    assertThat(updated).isFalse();
+    assertThat(issue.getRuleDescriptionContextKey()).isEmpty();
+  }
+
+  @Test
+  public void setRuleDescriptionContextKey_setContextKeyIfValuesAreDifferent() {
+    issue.setRuleDescriptionContextKey(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+    boolean updated = underTest.setRuleDescriptionContextKey(issue, "hibernate");
+
+    assertThat(updated).isTrue();
+    assertThat(issue.getRuleDescriptionContextKey()).contains(DEFAULT_RULE_DESCRIPTION_CONTEXT_KEY);
+  }
+
+  @Test
+  public void setCleanCodeAttribute_whenCleanCodeAttributeChanged_shouldUpdateIssue() {
+    issue.setCleanCodeAttribute(CleanCodeAttribute.CLEAR);
+    boolean updated = underTest.setCleanCodeAttribute(issue, CleanCodeAttribute.COMPLETE, context);
+
+    assertThat(updated).isTrue();
+    assertThat(issue.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CLEAR);
+    assertThat(issue.currentChange().get("cleanCodeAttribute"))
+      .extracting(FieldDiffs.Diff::oldValue, FieldDiffs.Diff::newValue)
+      .containsExactly(CleanCodeAttribute.COMPLETE, CleanCodeAttribute.CLEAR.name());
+  }
+
+  @Test
+  public void setCleanCodeAttribute_whenCleanCodeAttributeNotChanged_shouldNotUpdateIssue() {
+    issue.setCleanCodeAttribute(CleanCodeAttribute.CLEAR);
+    boolean updated = underTest.setCleanCodeAttribute(issue, CleanCodeAttribute.CLEAR, context);
+
+    assertThat(updated).isFalse();
+    assertThat(issue.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CLEAR);
   }
 }

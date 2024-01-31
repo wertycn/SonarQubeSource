@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,39 +22,37 @@ package org.sonar.server.authentication;
 import com.google.common.collect.ImmutableMap;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.impl.DefaultClaims;
+import io.jsonwebtoken.impl.DefaultClaimsBuilder;
+import io.jsonwebtoken.security.MacAlgorithm;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.DateUtils;
 import org.sonar.api.utils.System2;
 import org.sonar.server.authentication.JwtSerializer.JwtSession;
-import org.sonar.server.authentication.event.AuthenticationEvent.Source;
+import org.sonar.server.authentication.event.AuthenticationException;
 
-import static io.jsonwebtoken.SignatureAlgorithm.HS256;
 import static org.apache.commons.lang.time.DateUtils.addMinutes;
 import static org.apache.commons.lang.time.DateUtils.addYears;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.sonar.server.authentication.event.AuthenticationExceptionMatcher.authenticationException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
 
 public class JwtSerializerTest {
+
+  private static final MacAlgorithm SIGNATURE_ALGORITHM = Jwts.SIG.HS256;
 
   private static final String A_SECRET_KEY = "HrPSavOYLNNrwTY+SOqpChr7OwvbR/zbDLdVXRN0+Eg=";
   private static final String USER_LOGIN = "john";
   private static final String SESSION_TOKEN_UUID = "ABCD";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
-  private MapSettings settings = new MapSettings();
-  private System2 system2 = System2.INSTANCE;
-  private JwtSerializer underTest = new JwtSerializer(settings.asConfig(), system2);
+  private final MapSettings settings = new MapSettings();
+  private final System2 system2 = System2.INSTANCE;
+  private final JwtSerializer underTest = new JwtSerializer(settings.asConfig(), system2);
 
   @Test
   public void generate_token() {
@@ -103,7 +101,7 @@ public class JwtSerializerTest {
 
     assertThat(token).isNotEmpty();
     Claims claims = underTest.decode(token).get();
-    assertThat(claims.get("custom")).isEqualTo("property");
+    assertThat(claims).containsEntry("custom", "property");
   }
 
   @Test
@@ -128,10 +126,10 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setIssuedAt(new Date(system2.now()))
-      .setExpiration(addMinutes(new Date(), -20))
-      .signWith(decodeSecretKey(A_SECRET_KEY), HS256)
+      .id("123")
+      .issuedAt(new Date(system2.now()))
+      .expiration(addMinutes(new Date(), -20))
+      .signWith(decodeSecretKey(A_SECRET_KEY), SIGNATURE_ALGORITHM)
       .compact();
 
     assertThat(underTest.decode(token)).isEmpty();
@@ -143,11 +141,11 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setSubject(USER_LOGIN)
-      .setIssuedAt(new Date(system2.now()))
-      .setExpiration(addMinutes(new Date(), 20))
-      .signWith(decodeSecretKey("LyWgHktP0FuHB2K+kMs3KWMCJyFHVZDdDSqpIxAMVaQ="), HS256)
+      .id("123")
+      .subject(USER_LOGIN)
+      .issuedAt(new Date(system2.now()))
+      .expiration(addMinutes(new Date(), 20))
+      .signWith(decodeSecretKey("LyWgHktP0FuHB2K+kMs3KWMCJyFHVZDdDSqpIxAMVaQ="), SIGNATURE_ALGORITHM)
       .compact();
 
     assertThat(underTest.decode(token)).isEmpty();
@@ -159,10 +157,10 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setSubject(USER_LOGIN)
-      .setIssuedAt(new Date(system2.now()))
-      .setExpiration(addMinutes(new Date(), 20))
+      .id("123")
+      .subject(USER_LOGIN)
+      .issuedAt(new Date(system2.now()))
+      .expiration(addMinutes(new Date(), 20))
       .compact();
 
     assertThat(underTest.decode(token)).isEmpty();
@@ -174,16 +172,18 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setSubject(USER_LOGIN)
-      .setIssuer("sonarqube")
-      .setIssuedAt(new Date(system2.now()))
-      .setExpiration(addMinutes(new Date(), 20))
-      .signWith(decodeSecretKey(A_SECRET_KEY), HS256)
+      .subject(USER_LOGIN)
+      .issuer("sonarqube")
+      .issuedAt(new Date(system2.now()))
+      .expiration(addMinutes(new Date(), 20))
+      .signWith(decodeSecretKey(A_SECRET_KEY), SIGNATURE_ALGORITHM)
       .compact();
 
-    expectedException.expect(authenticationException().from(Source.jwt()).withLogin(USER_LOGIN).andNoPublicMessage());
-    expectedException.expectMessage("Token id hasn't been found");
-    underTest.decode(token);
+    assertThatThrownBy(() -> underTest.decode(token))
+      .hasMessage("Token id hasn't been found")
+      .isInstanceOf(AuthenticationException.class)
+      .hasFieldOrPropertyWithValue("source", Source.jwt())
+      .hasFieldOrPropertyWithValue("login", USER_LOGIN);
   }
 
   @Test
@@ -192,16 +192,17 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setIssuer("sonarqube")
-      .setIssuedAt(new Date(system2.now()))
-      .setExpiration(addMinutes(new Date(), 20))
-      .signWith(HS256, decodeSecretKey(A_SECRET_KEY))
+      .id("123")
+      .issuer("sonarqube")
+      .issuedAt(new Date(system2.now()))
+      .expiration(addMinutes(new Date(), 20))
+      .signWith(decodeSecretKey(A_SECRET_KEY), SIGNATURE_ALGORITHM)
       .compact();
 
-    expectedException.expect(authenticationException().from(Source.jwt()).withoutLogin().andNoPublicMessage());
-    expectedException.expectMessage("Token subject hasn't been found");
-    underTest.decode(token);
+    assertThatThrownBy(() -> underTest.decode(token))
+      .hasMessage("Token subject hasn't been found")
+      .isInstanceOf(AuthenticationException.class)
+      .hasFieldOrPropertyWithValue("source", Source.jwt());
   }
 
   @Test
@@ -210,16 +211,18 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setIssuer("sonarqube")
-      .setSubject(USER_LOGIN)
-      .setIssuedAt(new Date(system2.now()))
-      .signWith(decodeSecretKey(A_SECRET_KEY), HS256)
+      .id("123")
+      .issuer("sonarqube")
+      .subject(USER_LOGIN)
+      .issuedAt(new Date(system2.now()))
+      .signWith(decodeSecretKey(A_SECRET_KEY), SIGNATURE_ALGORITHM)
       .compact();
 
-    expectedException.expect(authenticationException().from(Source.jwt()).withLogin(USER_LOGIN).andNoPublicMessage());
-    expectedException.expectMessage("Token expiration date hasn't been found");
-    underTest.decode(token);
+    assertThatThrownBy(() -> underTest.decode(token))
+      .hasMessage("Token expiration date hasn't been found")
+      .isInstanceOf(AuthenticationException.class)
+      .hasFieldOrPropertyWithValue("source", Source.jwt())
+      .hasFieldOrPropertyWithValue("login", USER_LOGIN);
   }
 
   @Test
@@ -228,15 +231,17 @@ public class JwtSerializerTest {
     underTest.start();
 
     String token = Jwts.builder()
-      .setId("123")
-      .setSubject(USER_LOGIN)
-      .setExpiration(addMinutes(new Date(), 20))
-      .signWith(decodeSecretKey(A_SECRET_KEY), HS256)
+      .id("123")
+      .subject(USER_LOGIN)
+      .expiration(addMinutes(new Date(), 20))
+      .signWith(decodeSecretKey(A_SECRET_KEY), SIGNATURE_ALGORITHM)
       .compact();
 
-    expectedException.expect(authenticationException().from(Source.jwt()).withLogin(USER_LOGIN).andNoPublicMessage());
-    expectedException.expectMessage("Token creation date hasn't been found");
-    underTest.decode(token);
+    assertThatThrownBy(() -> underTest.decode(token))
+      .hasMessage("Token creation date hasn't been found")
+      .isInstanceOf(AuthenticationException.class)
+      .hasFieldOrPropertyWithValue("source", Source.jwt())
+      .hasFieldOrPropertyWithValue("login", USER_LOGIN);
   }
 
   @Test
@@ -246,7 +251,7 @@ public class JwtSerializerTest {
     underTest.start();
 
     assertThat(underTest.getSecretKey()).isNotNull();
-    assertThat(underTest.getSecretKey().getAlgorithm()).isEqualTo(HS256.getJcaName());
+    assertThat(underTest.getSecretKey().getAlgorithm()).isEqualTo("HmacSHA256");
   }
 
   @Test
@@ -268,14 +273,15 @@ public class JwtSerializerTest {
     // Expired in 10 minutes
     Date expiredAt = addMinutes(new Date(), 10);
     Date lastRefreshDate = addMinutes(new Date(), -4);
-    Claims token = new DefaultClaims()
+    Claims token = new DefaultClaimsBuilder()
       .setId("id")
-      .setSubject("subject")
-      .setIssuer("sonarqube")
-      .setIssuedAt(createdAt)
-      .setExpiration(expiredAt);
-    token.put("lastRefreshTime", lastRefreshDate.getTime());
-    token.put("key", "value");
+      .subject("subject")
+      .issuer("sonarqube")
+      .issuedAt(createdAt)
+      .expiration(expiredAt)
+      .add("lastRefreshTime", lastRefreshDate.getTime())
+      .add("key", "value")
+      .build();
 
     // Refresh the token with a higher expiration time
     String encodedToken = underTest.refresh(token, addMinutes(new Date(), 20).getTime());
@@ -286,7 +292,7 @@ public class JwtSerializerTest {
     assertThat(result.getIssuer()).isEqualTo("sonarqube");
     assertThat(result.getIssuedAt()).isEqualTo(createdAt);
     assertThat(((long) result.get("lastRefreshTime"))).isGreaterThanOrEqualTo(now.getTime());
-    assertThat(result.get("key")).isEqualTo("value");
+    assertThat(result).containsEntry("key", "value");
     // Expiration date has been changed
     assertThat(result.getExpiration()).isNotEqualTo(expiredAt)
       .isAfterOrEqualTo(addMinutes(new Date(), 19));
@@ -306,31 +312,32 @@ public class JwtSerializerTest {
 
   @Test
   public void encode_fail_when_not_started() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("org.sonar.server.authentication.JwtSerializer not started");
-
-    underTest.encode(new JwtSession(USER_LOGIN, SESSION_TOKEN_UUID, addMinutes(new Date(), 10).getTime()));
+    JwtSession jwtSession = new JwtSession(USER_LOGIN, SESSION_TOKEN_UUID, addMinutes(new Date(), 10).getTime());
+    assertThatThrownBy(() -> underTest.encode(jwtSession))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("org.sonar.server.authentication.JwtSerializer not started");
   }
 
   @Test
   public void decode_fail_when_not_started() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("org.sonar.server.authentication.JwtSerializer not started");
-
-    underTest.decode("token");
+    assertThatThrownBy(() -> underTest.decode("token"))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("org.sonar.server.authentication.JwtSerializer not started");
   }
 
   @Test
   public void refresh_fail_when_not_started() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("org.sonar.server.authentication.JwtSerializer not started");
+    Claims claims = new DefaultClaimsBuilder().build();
+    long time = addMinutes(new Date(), 10).getTime();
 
-    underTest.refresh(new DefaultClaims(), addMinutes(new Date(), 10).getTime());
+    assertThatThrownBy(() -> underTest.refresh(claims, time))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("org.sonar.server.authentication.JwtSerializer not started");
   }
 
   private SecretKey decodeSecretKey(String encodedKey) {
     byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
-    return new SecretKeySpec(decodedKey, 0, decodedKey.length, HS256.getJcaName());
+    return new SecretKeySpec(decodedKey, 0, decodedKey.length, "HmacSHA256");
   }
 
   private void setSecretKey(String s) {

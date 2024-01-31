@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
 /**
  * Markdown interprets text in brackets followed by text in parentheses to generate documented links.
  *
- * E.g., the input [See documentation](http://docs.sonarqube.org/display/SONAR) will produce
- * {@literal<a href="http://docs.sonarqube.org/display/SONAR">}See documentation{@literal</a>}
+ * E.g., the input [See documentation](http://docs.sonarsource.com/sonarqube/display/SONAR) will produce
+ * {@literal<a href="http://docs.sonarsource.com/sonarqube/display/SONAR">}See documentation{@literal</a>}
  */
 class HtmlLinkChannel extends RegexChannel<MarkdownOutput> {
 
@@ -47,9 +47,10 @@ class HtmlLinkChannel extends RegexChannel<MarkdownOutput> {
     matcher.matches();
     String content = matcher.group(1);
     String url = matcher.group(2);
+    boolean isRelativeUrl = !url.contains("://");
     output.append("<a href=\"");
     output.append(url);
-    output.append("\" target=\"_blank\">");
+    output.append(isRelativeUrl ? "\">" : "\" target=\"_blank\" rel=\"noopener noreferrer\">");
     output.append(content);
     output.append("</a>");
   }

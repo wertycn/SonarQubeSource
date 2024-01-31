@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,12 +24,16 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.exceptions.BadRequestException;
+import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventService;
+import org.sonar.server.qualityprofile.builtin.RuleActivationContext;
+import org.sonar.server.qualityprofile.builtin.RuleActivator;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -41,11 +45,13 @@ public class QProfileResetImpl implements QProfileReset {
   private final DbClient db;
   private final RuleActivator activator;
   private final ActiveRuleIndexer activeRuleIndexer;
+  private final QualityProfileChangeEventService qualityProfileChangeEventService;
 
-  public QProfileResetImpl(DbClient db, RuleActivator activator, ActiveRuleIndexer activeRuleIndexer) {
+  public QProfileResetImpl(DbClient db, RuleActivator activator, ActiveRuleIndexer activeRuleIndexer, QualityProfileChangeEventService qualityProfileChangeEventService) {
     this.db = db;
     this.activator = activator;
     this.activeRuleIndexer = activeRuleIndexer;
+    this.qualityProfileChangeEventService = qualityProfileChangeEventService;
   }
 
   @Override
@@ -54,14 +60,10 @@ public class QProfileResetImpl implements QProfileReset {
     checkArgument(!profile.isBuiltIn(), "Operation forbidden for built-in Quality Profile '%s'", profile.getKee());
 
     BulkChangeResult result = new BulkChangeResult();
-    Set<String> rulesToBeDeactivated = new HashSet<>();
     // Keep reference to all the activated rules before backup restore
-    for (ActiveRuleDto activeRuleDto : db.activeRuleDao().selectByProfile(dbSession, profile)) {
-      if (activeRuleDto.getInheritance() == null) {
-        // inherited rules can't be deactivated
-        rulesToBeDeactivated.add(activeRuleDto.getRuleUuid());
-      }
-    }
+    Set<String> rulesToBeDeactivated = db.activeRuleDao().selectByProfile(dbSession, profile).stream()
+      .map(ActiveRuleDto::getRuleUuid)
+      .collect(Collectors.toSet());
     Set<String> ruleUuids = new HashSet<>(rulesToBeDeactivated.size() + activations.size());
     ruleUuids.addAll(rulesToBeDeactivated);
     activations.forEach(a -> ruleUuids.add(a.getRuleUuid()));
@@ -84,9 +86,10 @@ public class QProfileResetImpl implements QProfileReset {
       try {
         changes.addAll(activator.deactivate(dbSession, context, ruleUuid, false));
       } catch (BadRequestException e) {
-        // ignore, probably a rule inherited from parent that can't be deactivated
+        // ignore, could be a removed rule
       }
     }
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), changes, profile.getLanguage());
     activeRuleIndexer.commitAndIndex(dbSession, changes);
     return result;
   }

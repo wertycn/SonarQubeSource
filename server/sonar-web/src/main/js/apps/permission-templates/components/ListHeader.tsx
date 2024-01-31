@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,24 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ContentCell, FlagMessage, HelperHintIcon, TableRow } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import InstanceMessage from '../../../components/common/InstanceMessage';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import { translate } from '../../../helpers/l10n';
+import { Permission } from '../../../types/types';
 
 interface Props {
-  permissions: T.Permission[];
+  permissions: Permission[];
 }
 
 export default class ListHeader extends React.PureComponent<Props> {
-  renderTooltip(permission: T.Permission) {
+  renderTooltip(permission: Permission) {
     return permission.key === 'user' || permission.key === 'codeviewer' ? (
       <div>
         <InstanceMessage message={translate('projects_role', permission.key, 'desc')} />
-        <Alert className="spacer-top" variant="warning">
+        <FlagMessage className="sw-mt-2" variant="warning">
           {translate('projects_role.public_projects_warning')}
-        </Alert>
+        </FlagMessage>
       </div>
     ) : (
       <InstanceMessage message={translate('projects_role', permission.key, 'desc')} />
@@ -42,23 +43,21 @@ export default class ListHeader extends React.PureComponent<Props> {
   }
 
   render() {
-    const cells = this.props.permissions.map(permission => (
-      <th className="permission-column little-padded-left little-padded-right" key={permission.key}>
-        <div className="permission-column-inner">
-          <span className="text-middle">{translate('projects_role', permission.key)}</span>
-          <HelpTooltip className="spacer-left" overlay={this.renderTooltip(permission)} />
-        </div>
-      </th>
+    const cells = this.props.permissions.map((permission) => (
+      <ContentCell key={permission.key}>
+        <span>{translate('projects_role', permission.key)}</span>
+        <HelpTooltip overlay={this.renderTooltip(permission)}>
+          <HelperHintIcon className="sw-ml-2" />
+        </HelpTooltip>
+      </ContentCell>
     ));
 
     return (
-      <thead>
-        <tr>
-          <th className="little-padded-left little-padded-right">&nbsp;</th>
-          {cells}
-          <th className="thin nowrap text-right little-padded-left little-padded-right">&nbsp;</th>
-        </tr>
-      </thead>
+      <TableRow>
+        <ContentCell>&nbsp;</ContentCell>
+        {cells}
+        <ContentCell>&nbsp;</ContentCell>
+      </TableRow>
     );
   }
 }

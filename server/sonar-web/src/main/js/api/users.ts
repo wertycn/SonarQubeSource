@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import axios from 'axios';
+import { throwGlobalError } from '../helpers/error';
+import { HttpStatus, axiosToCatch, getJSON, parseJSON, post } from '../helpers/request';
+import { IdentityProvider, Paging } from '../types/types';
+import {
+  ChangePasswordResults,
+  CurrentUser,
+  HomePage,
+  NoticeType,
+  RestUserBase,
+  RestUserDetailed,
+} from '../types/users';
 
-export function getCurrentUser(): Promise<T.CurrentUser> {
-  return getJSON('/api/users/current');
+const USERS_ENDPOINT = '/api/v2/users-management/users';
+
+export function getCurrentUser(): Promise<CurrentUser> {
+  return getJSON('/api/users/current', undefined, true);
+}
+
+export function dismissNotice(notice: NoticeType) {
+  return post('/api/users/dismiss_notice', { notice }).catch(throwGlobalError);
 }
 
 export function changePassword(data: {
@@ -29,71 +45,59 @@ export function changePassword(data: {
   password: string;
   previousPassword?: string;
 }) {
-  return post('/api/users/change_password', data).catch(throwGlobalError);
-}
+  return post('/api/users/change_password', data).catch(async (response) => {
+    if (response.status === HttpStatus.BadRequest) {
+      const { result } = await parseJSON(response);
+      return Promise.reject<ChangePasswordResults>(result);
+    }
 
-export interface UserGroup {
-  default: boolean;
-  description: string;
-  id: number;
-  name: string;
-  selected: boolean;
-}
-
-export function getUserGroups(data: {
-  login: string;
-  p?: number;
-  ps?: number;
-  q?: string;
-  selected?: string;
-}): Promise<{ paging: T.Paging; groups: UserGroup[] }> {
-  return getJSON('/api/users/groups', data);
-}
-
-export function getIdentityProviders(): Promise<{ identityProviders: T.IdentityProvider[] }> {
-  return getJSON('/api/users/identity_providers').catch(throwGlobalError);
-}
-
-export function searchUsers(data: {
-  p?: number;
-  ps?: number;
-  q?: string;
-}): Promise<{ paging: T.Paging; users: T.User[] }> {
-  data.q = data.q || undefined;
-  return getJSON('/api/users/search', data).catch(throwGlobalError);
-}
-
-export function createUser(data: {
-  email?: string;
-  local?: boolean;
-  login: string;
-  name: string;
-  password?: string;
-  scmAccount: string[];
-}): Promise<void | Response> {
-  return post('/api/users/create', data);
-}
-
-export function updateUser(data: {
-  email?: string;
-  login: string;
-  name?: string;
-  scmAccount: string[];
-}): Promise<T.User> {
-  return postJSON('/api/users/update', {
-    ...data,
-    scmAccount: data.scmAccount.length > 0 ? data.scmAccount : ''
+    return throwGlobalError(response);
   });
 }
 
-export function deactivateUser(data: { login: string }): Promise<T.User> {
-  return postJSON('/api/users/deactivate', data).catch(throwGlobalError);
+export function getIdentityProviders(): Promise<{ identityProviders: IdentityProvider[] }> {
+  return getJSON('/api/users/identity_providers').catch(throwGlobalError);
 }
 
-export function setHomePage(homepage: T.HomePage): Promise<void | Response> {
+export function getUsers<T extends RestUserBase>(data: {
+  q: string;
+  active?: boolean;
+  managed?: boolean;
+  sonarQubeLastConnectionDateFrom?: string;
+  sonarQubeLastConnectionDateTo?: string;
+  sonarLintLastConnectionDateFrom?: string;
+  sonarLintLastConnectionDateTo?: string;
+  pageSize?: number;
+  pageIndex?: number;
+  groupId?: string;
+  'groupId!'?: string;
+}) {
+  return axios.get<{ page: Paging; users: T[] }>(USERS_ENDPOINT, {
+    params: data,
+  });
+}
+
+export function postUser(data: {
+  email?: string;
+  login: string;
+  name: string;
+  password?: string;
+  scmAccounts: string[];
+}) {
+  return axiosToCatch.post<RestUserDetailed>(USERS_ENDPOINT, data);
+}
+
+export function updateUser(
+  id: string,
+  data: Partial<Pick<RestUserDetailed, 'email' | 'name' | 'scmAccounts'>>,
+) {
+  return axiosToCatch.patch<RestUserDetailed>(`${USERS_ENDPOINT}/${id}`, data);
+}
+
+export function deleteUser({ id, anonymize }: { id: string; anonymize?: boolean }) {
+  return axios.delete(`${USERS_ENDPOINT}/${id}`, { params: { anonymize } });
+}
+
+export function setHomePage(homepage: HomePage): Promise<void | Response> {
   return post('/api/users/set_homepage', homepage).catch(throwGlobalError);
-}
-
-export function setUserSetting(setting: T.CurrentUserSetting): Promise<void | Response> {
-  return post('/api/users/set_setting', setting).catch(throwGlobalError);
 }

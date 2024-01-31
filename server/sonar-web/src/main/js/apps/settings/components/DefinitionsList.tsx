@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,23 +17,43 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import { themeBorder } from 'design-system/lib';
 import * as React from 'react';
-import { Setting } from '../../../types/settings';
+import { SettingDefinitionAndValue } from '../../../types/settings';
+import { Component } from '../../../types/types';
 import Definition from './Definition';
 
 interface Props {
-  component?: T.Component;
-  settings: Setting[];
+  component?: Component;
+  scrollToDefinition: (element: HTMLLIElement) => void;
+  settings: SettingDefinitionAndValue[];
 }
 
-export default function DefinitionsList({ component, settings }: Props) {
+export default function DefinitionsList(props: Readonly<Props>) {
+  const { component, settings } = props;
   return (
-    <ul className="settings-definitions-list">
-      {settings.map(setting => (
-        <li key={setting.definition.key}>
-          <Definition component={component} setting={setting} />
-        </li>
+    <ul>
+      {settings.map((setting) => (
+        <StyledListItem
+          className="sw-p-6"
+          key={setting.definition.key}
+          data-scroll-key={setting.definition.key}
+          ref={props.scrollToDefinition}
+        >
+          <Definition
+            component={component}
+            definition={setting.definition}
+            initialSettingValue={setting.settingValue}
+          />
+        </StyledListItem>
       ))}
     </ul>
   );
 }
+
+const StyledListItem = styled.li`
+  & + & {
+    border-top: ${themeBorder('default')};
+  }
+`;

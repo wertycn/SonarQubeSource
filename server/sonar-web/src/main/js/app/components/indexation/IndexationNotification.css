@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@
 }
 
 .indexation-notification-banner {
-  position: fixed;
   width: 100%;
   z-index: var(--globalBannerZIndex);
   margin-bottom: 0 !important;

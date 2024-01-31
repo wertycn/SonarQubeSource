@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,8 +35,9 @@ public class NodeInfoTest {
     assertThat(foo.equals(bar)).isFalse();
     assertThat(bar.equals(bar2)).isTrue();
 
-    assertThat(bar.hashCode()).isEqualTo(bar.hashCode());
-    assertThat(bar.hashCode()).isEqualTo(bar2.hashCode());
+    assertThat(bar)
+      .hasSameHashCodeAs(bar)
+      .hasSameHashCodeAs(bar2);
   }
 
 }

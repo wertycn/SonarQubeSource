@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,18 +23,25 @@ import org.sonar.api.config.internal.Settings;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
+import org.sonar.db.DbClient;
+import org.sonar.db.DbSession;
+import org.sonar.db.audit.AuditPersister;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Settings.GenerateSecretKeyWsResponse;
 
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class GenerateSecretKeyAction implements SettingsWsAction {
+  private final DbClient dbClient;
   private final Settings settings;
   private final UserSession userSession;
+  private final AuditPersister auditPersister;
 
-  public GenerateSecretKeyAction(Settings settings, UserSession userSession) {
+  public GenerateSecretKeyAction(DbClient dbClient, Settings settings, UserSession userSession, AuditPersister auditPersister) {
+    this.dbClient = dbClient;
     this.settings = settings;
     this.userSession = userSession;
+    this.auditPersister = auditPersister;
   }
 
   @Override
@@ -53,5 +60,10 @@ public class GenerateSecretKeyAction implements SettingsWsAction {
     userSession.checkIsSystemAdministrator();
 
     writeProtobuf(GenerateSecretKeyWsResponse.newBuilder().setSecretKey(settings.getEncryption().generateRandomSecretKey()).build(), request, response);
+
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      auditPersister.generateSecretKey(dbSession);
+      dbSession.commit();
+    }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,27 +25,34 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.sonar.api.issue.IssueStatus;
 import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
-import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.rule.RuleKey;
+import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.DateUtils;
 import org.sonar.api.utils.Duration;
 import org.sonar.api.utils.Durations;
 import org.sonar.api.utils.Paging;
+import org.sonar.db.component.BranchDto;
+import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueChangeDto;
 import org.sonar.db.issue.IssueDto;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.db.protobuf.DbIssues;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.markdown.Markdown;
 import org.sonar.server.es.Facets;
 import org.sonar.server.issue.TextRangeResponseFormatter;
 import org.sonar.server.issue.index.IssueScope;
 import org.sonar.server.issue.workflow.Transition;
+import org.sonar.server.ws.MessageFormattingUtils;
 import org.sonarqube.ws.Common;
 import org.sonarqube.ws.Common.Comment;
 import org.sonarqube.ws.Common.User;
@@ -67,10 +74,15 @@ import static java.lang.String.format;
 import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
+import static org.sonar.api.resources.Qualifiers.UNIT_TEST_FILE;
 import static org.sonar.api.rule.RuleKey.EXTERNAL_RULE_REPO_PREFIX;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 import static org.sonar.server.issue.index.IssueIndex.FACET_ASSIGNED_TO_ME;
 import static org.sonar.server.issue.index.IssueIndex.FACET_PROJECTS;
+import static org.sonar.server.issue.ws.SearchAdditionalField.ACTIONS;
+import static org.sonar.server.issue.ws.SearchAdditionalField.ALL_ADDITIONAL_FIELDS;
+import static org.sonar.server.issue.ws.SearchAdditionalField.COMMENTS;
+import static org.sonar.server.issue.ws.SearchAdditionalField.RULE_DESCRIPTION_CONTEXT_KEY;
+import static org.sonar.server.issue.ws.SearchAdditionalField.TRANSITIONS;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ASSIGNEES;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_RULES;
 
@@ -93,7 +105,7 @@ public class SearchResponseFormat {
 
     formatPaging(paging, response);
     ofNullable(data.getEffortTotal()).ifPresent(response::setEffortTotal);
-    response.addAllIssues(formatIssues(fields, data));
+    response.addAllIssues(createIssues(fields, data));
     response.addAllComponents(formatComponents(data));
     formatFacets(data, facets, response);
     if (fields.contains(SearchAdditionalField.RULES)) {
@@ -108,17 +120,23 @@ public class SearchResponseFormat {
     return response.build();
   }
 
+  Issues.ListWsResponse formatList(Set<SearchAdditionalField> fields, SearchResponseData data, Paging paging) {
+    Issues.ListWsResponse.Builder response = Issues.ListWsResponse.newBuilder();
+
+    response.setPaging(Common.Paging.newBuilder()
+      .setPageIndex(paging.pageIndex())
+      .setPageSize(data.getIssues().size()));
+    response.addAllIssues(createIssues(fields, data));
+    response.addAllComponents(formatComponents(data));
+    return response.build();
+  }
+
   Operation formatOperation(SearchResponseData data) {
     Operation.Builder response = Operation.newBuilder();
 
     if (data.getIssues().size() == 1) {
-      Issue.Builder issueBuilder = Issue.newBuilder();
       IssueDto dto = data.getIssues().get(0);
-      formatIssue(issueBuilder, dto, data);
-      formatIssueActions(data, issueBuilder, dto);
-      formatIssueTransitions(data, issueBuilder, dto);
-      formatIssueComments(data, issueBuilder, dto);
-      response.setIssue(issueBuilder.build());
+      response.setIssue(createIssue(ALL_ADDITIONAL_FIELDS, data, dto));
     }
     response.addAllComponents(formatComponents(data));
     response.addAllRules(formatRules(data).getRulesList());
@@ -140,41 +158,42 @@ public class SearchResponseFormat {
       .setTotal(paging.total());
   }
 
-  private List<Issues.Issue> formatIssues(Set<SearchAdditionalField> fields, SearchResponseData data) {
-    List<Issues.Issue> result = new ArrayList<>();
-    Issue.Builder issueBuilder = Issue.newBuilder();
-    data.getIssues().forEach(dto -> {
-      issueBuilder.clear();
-      formatIssue(issueBuilder, dto, data);
-      if (fields.contains(SearchAdditionalField.ACTIONS)) {
-        formatIssueActions(data, issueBuilder, dto);
-      }
-      if (fields.contains(SearchAdditionalField.TRANSITIONS)) {
-        formatIssueTransitions(data, issueBuilder, dto);
-      }
-      if (fields.contains(SearchAdditionalField.COMMENTS)) {
-        formatIssueComments(data, issueBuilder, dto);
-      }
-      result.add(issueBuilder.build());
-    });
-    return result;
+  private List<Issues.Issue> createIssues(Collection<SearchAdditionalField> fields, SearchResponseData data) {
+    return data.getIssues().stream()
+      .map(dto -> createIssue(fields, data, dto))
+      .toList();
   }
 
-  private void formatIssue(Issue.Builder issueBuilder, IssueDto dto, SearchResponseData data) {
+  private Issue createIssue(Collection<SearchAdditionalField> fields, SearchResponseData data, IssueDto dto) {
+    Issue.Builder issueBuilder = Issue.newBuilder();
+    addMandatoryFieldsToIssueBuilder(issueBuilder, dto, data);
+    addAdditionalFieldsToIssueBuilder(fields, data, dto, issueBuilder);
+    return issueBuilder.build();
+  }
+
+  private void addMandatoryFieldsToIssueBuilder(Issue.Builder issueBuilder, IssueDto dto, SearchResponseData data) {
     issueBuilder.setKey(dto.getKey());
     issueBuilder.setType(Common.RuleType.forNumber(dto.getType()));
 
+    CleanCodeAttribute cleanCodeAttribute = dto.getEffectiveCleanCodeAttribute();
+    if (cleanCodeAttribute != null) {
+      issueBuilder.setCleanCodeAttribute(Common.CleanCodeAttribute.valueOf(cleanCodeAttribute.name()));
+      issueBuilder.setCleanCodeAttributeCategory(Common.CleanCodeAttributeCategory.valueOf(cleanCodeAttribute.getAttributeCategory().name()));
+    }
+    issueBuilder.addAllImpacts(dto.getEffectiveImpacts().entrySet()
+      .stream()
+      .map(entry -> Common.Impact.newBuilder()
+        .setSoftwareQuality(Common.SoftwareQuality.valueOf(entry.getKey().name()))
+        .setSeverity(Common.ImpactSeverity.valueOf(entry.getValue().name()))
+        .build())
+      .toList());
+
     ComponentDto component = data.getComponentByUuid(dto.getComponentUuid());
     issueBuilder.setComponent(component.getKey());
-    ofNullable(component.getBranch()).ifPresent(issueBuilder::setBranch);
-    ofNullable(component.getPullRequest()).ifPresent(issueBuilder::setPullRequest);
-    ComponentDto project = data.getComponentByUuid(dto.getProjectUuid());
-    if (project != null) {
-      issueBuilder.setProject(project.getKey());
-      ComponentDto subProject = data.getComponentByUuid(dto.getModuleUuid());
-      if (subProject != null && !subProject.getDbKey().equals(project.getDbKey())) {
-        issueBuilder.setSubProject(subProject.getKey());
-      }
+    setBranchOrPr(component, issueBuilder, data);
+    ComponentDto branch = data.getComponentByUuid(dto.getProjectUuid());
+    if (branch != null) {
+      issueBuilder.setProject(branch.getKey());
     }
     issueBuilder.setRule(dto.getRuleKey().toString());
     if (dto.isExternal()) {
@@ -186,8 +205,11 @@ public class SearchResponseFormat {
     ofNullable(data.getUserByUuid(dto.getAssigneeUuid())).ifPresent(assignee -> issueBuilder.setAssignee(assignee.getLogin()));
     ofNullable(emptyToNull(dto.getResolution())).ifPresent(issueBuilder::setResolution);
     issueBuilder.setStatus(dto.getStatus());
+    ofNullable(dto.getIssueStatus()).map(IssueStatus::name).ifPresent(issueBuilder::setIssueStatus);
     issueBuilder.setMessage(nullToEmpty(dto.getMessage()));
+    issueBuilder.addAllMessageFormattings(MessageFormattingUtils.dbMessageFormattingToWs(dto.parseMessageFormattings()));
     issueBuilder.addAllTags(dto.getTags());
+    issueBuilder.addAllCodeVariants(dto.getCodeVariants());
     Long effort = dto.getEffort();
     if (effort != null) {
       String effortValue = durations.encode(Duration.create(effort));
@@ -202,7 +224,26 @@ public class SearchResponseFormat {
     ofNullable(dto.getIssueCreationDate()).map(DateUtils::formatDateTime).ifPresent(issueBuilder::setCreationDate);
     ofNullable(dto.getIssueUpdateDate()).map(DateUtils::formatDateTime).ifPresent(issueBuilder::setUpdateDate);
     ofNullable(dto.getIssueCloseDate()).map(DateUtils::formatDateTime).ifPresent(issueBuilder::setCloseDate);
-    issueBuilder.setScope(Qualifiers.UNIT_TEST_FILE.equals(component.qualifier()) ? IssueScope.TEST.name() : IssueScope.MAIN.name());
+
+    Optional.of(dto.isQuickFixAvailable())
+      .ifPresentOrElse(issueBuilder::setQuickFixAvailable, () -> issueBuilder.setQuickFixAvailable(false));
+
+    issueBuilder.setScope(UNIT_TEST_FILE.equals(component.qualifier()) ? IssueScope.TEST.name() : IssueScope.MAIN.name());
+  }
+
+  private static void addAdditionalFieldsToIssueBuilder(Collection<SearchAdditionalField> fields, SearchResponseData data, IssueDto dto, Issue.Builder issueBuilder) {
+    if (fields.contains(ACTIONS)) {
+      issueBuilder.setActions(createIssueActions(data, dto));
+    }
+    if (fields.contains(TRANSITIONS)) {
+      issueBuilder.setTransitions(createIssueTransition(data, dto));
+    }
+    if (fields.contains(COMMENTS)) {
+      issueBuilder.setComments(createIssueComments(data, dto));
+    }
+    if (fields.contains(RULE_DESCRIPTION_CONTEXT_KEY)) {
+      dto.getOptionalRuleDescriptionContextKey().ifPresent(issueBuilder::setRuleDescriptionContextKey);
+    }
   }
 
   private static String engineNameFrom(RuleKey ruleKey) {
@@ -216,16 +257,10 @@ public class SearchResponseFormat {
       return;
     }
     textRangeFormatter.formatTextRange(locations, issueBuilder::setTextRange);
-    for (DbIssues.Flow flow : locations.getFlowList()) {
-      Common.Flow.Builder targetFlow = Common.Flow.newBuilder();
-      for (DbIssues.Location flowLocation : flow.getLocationList()) {
-        targetFlow.addLocations(textRangeFormatter.formatLocation(flowLocation, issueBuilder.getComponent(), data.getComponentsByUuid()));
-      }
-      issueBuilder.addFlows(targetFlow.build());
-    }
+    issueBuilder.addAllFlows(textRangeFormatter.formatFlows(locations, issueBuilder.getComponent(), data.getComponentsByUuid()));
   }
 
-  private static void formatIssueTransitions(SearchResponseData data, Issue.Builder wsIssue, IssueDto dto) {
+  private static Transitions createIssueTransition(SearchResponseData data, IssueDto dto) {
     Transitions.Builder wsTransitions = Transitions.newBuilder();
     List<Transition> transitions = data.getTransitionsForIssueKey(dto.getKey());
     if (transitions != null) {
@@ -233,19 +268,19 @@ public class SearchResponseFormat {
         wsTransitions.addTransitions(transition.key());
       }
     }
-    wsIssue.setTransitions(wsTransitions);
+    return wsTransitions.build();
   }
 
-  private static void formatIssueActions(SearchResponseData data, Issue.Builder wsIssue, IssueDto dto) {
+  private static Actions createIssueActions(SearchResponseData data, IssueDto dto) {
     Actions.Builder wsActions = Actions.newBuilder();
     List<String> actions = data.getActionsForIssueKey(dto.getKey());
     if (actions != null) {
       wsActions.addAllActions(actions);
     }
-    wsIssue.setActions(wsActions);
+    return wsActions.build();
   }
 
-  private static void formatIssueComments(SearchResponseData data, Issue.Builder wsIssue, IssueDto dto) {
+  private static Comments createIssueComments(SearchResponseData data, IssueDto dto) {
     Comments.Builder wsComments = Comments.newBuilder();
     List<IssueChangeDto> comments = data.getCommentsForIssueKey(dto.getKey());
     if (comments != null) {
@@ -266,19 +301,19 @@ public class SearchResponseFormat {
         wsComments.addComments(wsComment);
       }
     }
-    wsIssue.setComments(wsComments);
+    return wsComments.build();
   }
 
   private Common.Rules.Builder formatRules(SearchResponseData data) {
     Common.Rules.Builder wsRules = Common.Rules.newBuilder();
-    List<RuleDefinitionDto> rules = firstNonNull(data.getRules(), emptyList());
-    for (RuleDefinitionDto rule : rules) {
+    List<RuleDto> rules = firstNonNull(data.getRules(), emptyList());
+    for (RuleDto rule : rules) {
       wsRules.addRules(formatRule(rule));
     }
     return wsRules;
   }
 
-  private Common.Rule.Builder formatRule(RuleDefinitionDto rule) {
+  private Common.Rule.Builder formatRule(RuleDto rule) {
     Common.Rule.Builder builder = Common.Rule.newBuilder()
       .setKey(rule.getKey().toString())
       .setName(nullToEmpty(rule.getName()))
@@ -302,13 +337,38 @@ public class SearchResponseFormat {
         .setName(nullToEmpty(dto.name()))
         .setLongName(nullToEmpty(dto.longName()))
         .setEnabled(dto.isEnabled());
-      ofNullable(dto.getBranch()).ifPresent(builder::setBranch);
-      ofNullable(dto.getPullRequest()).ifPresent(builder::setPullRequest);
+      setBranchOrPr(dto, builder, data);
       ofNullable(emptyToNull(dto.path())).ifPresent(builder::setPath);
 
       result.add(builder.build());
     }
     return result;
+  }
+
+  private static void setBranchOrPr(ComponentDto componentDto, Component.Builder builder, SearchResponseData data) {
+    String branchUuid = componentDto.getCopyComponentUuid() != null ? componentDto.getCopyComponentUuid() : componentDto.branchUuid();
+    BranchDto branchDto = data.getBranch(branchUuid);
+    if (branchDto.isMain()) {
+      return;
+    }
+    if (branchDto.getBranchType() == BranchType.BRANCH) {
+      builder.setBranch(branchDto.getKey());
+    } else if (branchDto.getBranchType() == BranchType.PULL_REQUEST) {
+      builder.setPullRequest(branchDto.getKey());
+    }
+  }
+
+  private static void setBranchOrPr(ComponentDto componentDto, Issue.Builder builder, SearchResponseData data) {
+    String branchUuid = componentDto.getCopyComponentUuid() != null ? componentDto.getCopyComponentUuid() : componentDto.branchUuid();
+    BranchDto branchDto = data.getBranch(branchUuid);
+    if (branchDto.isMain()) {
+      return;
+    }
+    if (branchDto.getBranchType() == BranchType.BRANCH) {
+      builder.setBranch(branchDto.getKey());
+    } else if (branchDto.getBranchType() == BranchType.PULL_REQUEST) {
+      builder.setPullRequest(branchDto.getKey());
+    }
   }
 
   private Users.Builder formatUsers(SearchResponseData data) {
@@ -406,7 +466,7 @@ public class SearchResponseFormat {
       return;
     }
 
-    Map<String, RuleKey> ruleUuidsByRuleKeys = data.getRules().stream().collect(uniqueIndex(RuleDefinitionDto::getUuid, RuleDefinitionDto::getKey));
+    Map<String, RuleKey> ruleUuidsByRuleKeys = data.getRules().stream().collect(Collectors.toMap(RuleDto::getUuid, RuleDto::getKey));
     Common.Facet.Builder wsFacet = wsFacets.addFacetsBuilder();
     wsFacet.setProperty(PARAM_RULES);
     facet.forEach((ruleUuid, count) -> wsFacet.addValuesBuilder()
@@ -424,10 +484,10 @@ public class SearchResponseFormat {
     Common.Facet.Builder wsFacet = wsFacets.addFacetsBuilder();
     wsFacet.setProperty(FACET_PROJECTS);
     facet.forEach((uuid, count) -> {
-      ComponentDto component = datas.getComponentByUuid(uuid);
-      requireNonNull(component, format("Component has not been found for uuid '%s'", uuid));
+      ProjectDto project = datas.getProject(uuid);
+      requireNonNull(project, format("Project has not been found for uuid '%s'", uuid));
       wsFacet.addValuesBuilder()
-        .setVal(component.getKey())
+        .setVal(project.getKey())
         .setCount(count)
         .build();
     });

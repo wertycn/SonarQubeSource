@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,17 @@
  */
 package org.sonar.server.rule;
 
+import java.util.Collection;
 import java.util.Optional;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleFinder;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 public interface ServerRuleFinder extends RuleFinder {
-  Optional<RuleDefinitionDto> findDtoByKey(RuleKey key);
+  Optional<RuleDto> findDtoByKey(RuleKey key);
+
+  Optional<RuleDto> findDtoByUuid(String uuid);
+
+  Collection<RuleDto> findAll();
+
 }

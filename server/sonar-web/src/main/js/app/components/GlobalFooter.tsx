@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,90 +17,81 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { LargeCenteredLayout } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import DocLink from '../../components/common/DocLink';
 import InstanceMessage from '../../components/common/InstanceMessage';
+import Link from '../../components/common/Link';
+import { Alert } from '../../components/ui/Alert';
 import { getEdition } from '../../helpers/editions';
-import { EditionKey } from '../../types/editions';
+import { translate, translateWithParameters } from '../../helpers/l10n';
 import GlobalFooterBranding from './GlobalFooterBranding';
+import { AppStateContext } from './app-state/AppStateContext';
 
-interface Props {
+interface GlobalFooterProps {
   hideLoggedInInfo?: boolean;
-  productionDatabase: boolean;
-  sonarqubeEdition?: EditionKey;
-  sonarqubeVersion?: string;
 }
 
-export default function GlobalFooter({
-  hideLoggedInInfo,
-  productionDatabase,
-  sonarqubeEdition,
-  sonarqubeVersion
-}: Props) {
-  const currentEdition = sonarqubeEdition && getEdition(sonarqubeEdition);
+export default function GlobalFooter({ hideLoggedInInfo }: GlobalFooterProps) {
+  const appState = React.useContext(AppStateContext);
+  const currentEdition = appState?.edition && getEdition(appState.edition);
 
   return (
     <div className="page-footer page-container" id="footer">
-      {productionDatabase === false && (
-        <Alert display="inline" id="evaluation_warning" variant="warning">
-          <p className="big">{translate('footer.production_database_warning')}</p>
-          <p>
-            <InstanceMessage message={translate('footer.production_database_explanation')} />
-          </p>
-        </Alert>
-      )}
+      <LargeCenteredLayout className=" sw-flex sw-flex-col sw-items-center">
+        {appState?.productionDatabase === false && (
+          <Alert display="inline" id="evaluation_warning" variant="warning">
+            <p className="big">{translate('footer.production_database_warning')}</p>
+            <p>
+              <InstanceMessage message={translate('footer.production_database_explanation')} />
+            </p>
+          </Alert>
+        )}
 
-      <GlobalFooterBranding />
+        <GlobalFooterBranding />
 
-      <ul className="page-footer-menu">
-        {!hideLoggedInInfo && currentEdition && (
-          <li className="page-footer-menu-item">{currentEdition.name}</li>
-        )}
-        {!hideLoggedInInfo && sonarqubeVersion && (
+        <ul className="page-footer-menu">
+          {!hideLoggedInInfo && currentEdition && (
+            <li className="page-footer-menu-item">{currentEdition.name}</li>
+          )}
+          {!hideLoggedInInfo && appState?.version && (
+            <li className="page-footer-menu-item">
+              {translateWithParameters('footer.version_x', appState.version)}
+            </li>
+          )}
           <li className="page-footer-menu-item">
-            {translateWithParameters('footer.version_x', sonarqubeVersion)}
+            <a
+              href="https://www.gnu.org/licenses/lgpl-3.0.txt"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {translate('footer.license')}
+            </a>
           </li>
-        )}
-        <li className="page-footer-menu-item">
-          <a
-            href="https://www.gnu.org/licenses/lgpl-3.0.txt"
-            rel="noopener noreferrer"
-            target="_blank">
-            {translate('footer.license')}
-          </a>
-        </li>
-        <li className="page-footer-menu-item">
-          <a
-            href="https://community.sonarsource.com/c/help/sq"
-            rel="noopener noreferrer"
-            target="_blank">
-            {translate('footer.community')}
-          </a>
-        </li>
-        <li className="page-footer-menu-item">
-          <Link to="/documentation">{translate('footer.documentation')}</Link>
-        </li>
-        <li className="page-footer-menu-item">
-          <a
-            href="https://redirect.sonarsource.com/doc/plugin-library.html"
-            rel="noopener noreferrer"
-            target="_blank">
-            {translate('footer.plugins')}
-          </a>
-        </li>
-        {!hideLoggedInInfo && (
           <li className="page-footer-menu-item">
-            <Link to="/web_api">{translate('footer.web_api')}</Link>
+            <a
+              href="https://community.sonarsource.com/c/help/sq"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {translate('footer.community')}
+            </a>
           </li>
-        )}
-        {!hideLoggedInInfo && (
           <li className="page-footer-menu-item">
-            <Link to="/about">{translate('footer.about')}</Link>
+            <DocLink to="/">{translate('footer.documentation')}</DocLink>
           </li>
-        )}
-      </ul>
+          <li className="page-footer-menu-item">
+            <DocLink to="/instance-administration/plugin-version-matrix/">
+              {translate('footer.plugins')}
+            </DocLink>
+          </li>
+          {!hideLoggedInInfo && (
+            <li className="page-footer-menu-item">
+              <Link to="/web_api">{translate('footer.web_api')}</Link>
+            </li>
+          )}
+        </ul>
+      </LargeCenteredLayout>
     </div>
   );
 }

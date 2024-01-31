@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,27 +21,25 @@ package org.sonar.server.qualitygate.ws;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import javax.annotation.Nullable;
 import org.apache.commons.io.IOUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.db.component.SnapshotDto;
 import org.sonarqube.ws.Qualitygates.ProjectStatusResponse;
 import org.sonarqube.ws.Qualitygates.ProjectStatusResponse.ProjectStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.assertEquals;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
+import static org.sonar.server.qualitygate.QualityGateCaycStatus.NON_COMPLIANT;
 
 public class QualityGateDetailsFormatterTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private QualityGateDetailsFormatter underTest;
 
   @Test
-  public void map_level_conditions_and_periods() throws IOException {
+  public void map_level_conditions_and_period() throws IOException {
     String measureData = IOUtils.toString(getClass().getResource("QualityGateDetailsFormatterTest/quality_gate_details.json"));
     SnapshotDto snapshot = new SnapshotDto()
       .setPeriodMode("last_version")
@@ -52,6 +50,7 @@ public class QualityGateDetailsFormatterTest {
     ProjectStatus result = underTest.format();
 
     assertThat(result.getStatus()).isEqualTo(ProjectStatusResponse.Status.ERROR);
+    assertEquals(NON_COMPLIANT.toString(), result.getCaycStatus());
     // check conditions
     assertThat(result.getConditionsCount()).isEqualTo(3);
     List<ProjectStatusResponse.Condition> conditions = result.getConditionsList();
@@ -64,18 +63,15 @@ public class QualityGateDetailsFormatterTest {
       ProjectStatusResponse.Comparator.LT,
       ProjectStatusResponse.Comparator.GT,
       ProjectStatusResponse.Comparator.GT);
-    assertThat(conditions).extracting("periodIndex").containsExactly(1, 1, 1);
     assertThat(conditions).extracting("warningThreshold").containsOnly("80", "");
     assertThat(conditions).extracting("errorThreshold").containsOnly("85", "0", "0");
     assertThat(conditions).extracting("actualValue").containsExactly("82.2985024398452", "1", "0");
 
-    // check periods
-    assertThat(result.getPeriodsCount()).isEqualTo(1);
-    List<ProjectStatusResponse.Period> periods = result.getPeriodsList();
-    assertThat(periods).extracting("index").containsExactly(1);
-    assertThat(periods).extracting("mode").containsExactly("last_version");
-    assertThat(periods).extracting("parameter").containsExactly("2015-12-07");
-    assertThat(periods.get(0).getDate()).isEqualTo(formatDateTime(snapshot.getPeriodDate()));
+    // check period
+    ProjectStatusResponse.NewCodePeriod period = result.getPeriod();
+    assertThat(period).extracting("mode").isEqualTo("last_version");
+    assertThat(period).extracting("parameter").isEqualTo("2015-12-07");
+    assertThat(period.getDate()).isEqualTo(formatDateTime(snapshot.getPeriodDate()));
   }
 
   @Test
@@ -90,12 +86,11 @@ public class QualityGateDetailsFormatterTest {
     ProjectStatus result = underTest.format();
 
     // check conditions
-    assertThat(result.getConditionsCount()).isEqualTo(1);
+    assertThat(result.getConditionsCount()).isOne();
     List<ProjectStatusResponse.Condition> conditions = result.getConditionsList();
     assertThat(conditions).extracting("status").containsExactly(ProjectStatusResponse.Status.ERROR);
     assertThat(conditions).extracting("metricKey").containsExactly("new_coverage");
     assertThat(conditions).extracting("comparator").containsExactly(ProjectStatusResponse.Comparator.LT);
-    assertThat(conditions).extracting("periodIndex").containsExactly(1);
     assertThat(conditions).extracting("errorThreshold").containsOnly("85");
     assertThat(conditions).extracting("actualValue").containsExactly("82.2985024398452");
   }
@@ -117,10 +112,10 @@ public class QualityGateDetailsFormatterTest {
       "  ]\n" +
       "}";
     underTest = newQualityGateDetailsFormatter(measureData, new SnapshotDto());
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Unknown quality gate status 'UNKNOWN'");
 
-    underTest.format();
+    assertThatThrownBy(() -> underTest.format())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Unknown quality gate status 'UNKNOWN'");
   }
 
   @Test
@@ -140,13 +135,13 @@ public class QualityGateDetailsFormatterTest {
       "  ]\n" +
       "}";
     underTest = newQualityGateDetailsFormatter(measureData, new SnapshotDto());
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Unknown quality gate comparator 'UNKNOWN'");
 
-    underTest.format();
+    assertThatThrownBy(() -> underTest.format())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Unknown quality gate comparator 'UNKNOWN'");
   }
 
   private static QualityGateDetailsFormatter newQualityGateDetailsFormatter(@Nullable String measureData, @Nullable SnapshotDto snapshotDto) {
-    return new QualityGateDetailsFormatter(Optional.ofNullable(measureData), Optional.ofNullable(snapshotDto));
+    return new QualityGateDetailsFormatter(measureData, snapshotDto, NON_COMPLIANT);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,10 +30,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
-import javax.servlet.http.HttpServletRequest;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
+import org.sonar.api.server.authentication.UnauthorizedException;
 import org.sonar.api.server.authentication.UserIdentity;
+import org.sonar.api.server.http.HttpRequest;
 
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.stream.Collectors.toSet;
@@ -41,7 +42,7 @@ import static java.util.stream.Collectors.toSet;
 public class GitLabIdentityProvider implements OAuth2IdentityProvider {
 
   public static final String API_SCOPE = "api";
-  public static final String READ_USER_SCOPE = "read_user";
+  public static final String KEY = "gitlab";
   private final GitLabSettings gitLabSettings;
   private final ScribeGitLabOauth2Api scribeApi;
   private final GitLabRestClient gitLabRestClient;
@@ -54,7 +55,7 @@ public class GitLabIdentityProvider implements OAuth2IdentityProvider {
 
   @Override
   public String getKey() {
-    return "gitlab";
+    return KEY;
   }
 
   @Override
@@ -65,7 +66,7 @@ public class GitLabIdentityProvider implements OAuth2IdentityProvider {
   @Override
   public Display getDisplay() {
     return Display.builder()
-      .setIconPath("/images/gitlab-icon-rgb.svg")
+      .setIconPath("/images/alm/gitlab.svg")
       .setBackgroundColor("#6a4fbb")
       .build();
   }
@@ -83,16 +84,16 @@ public class GitLabIdentityProvider implements OAuth2IdentityProvider {
   @Override
   public void init(InitContext context) {
     String state = context.generateCsrfState();
-    OAuth20Service scribe = newScribeBuilder(context, gitLabSettings.syncUserGroups()).build(scribeApi);
+    OAuth20Service scribe = newScribeBuilder(context).build(scribeApi);
     String url = scribe.getAuthorizationUrl(state);
     context.redirectTo(url);
   }
 
-  private ServiceBuilderOAuth20 newScribeBuilder(OAuth2Context context, boolean syncUserGroups) {
+  private ServiceBuilderOAuth20 newScribeBuilder(OAuth2Context context) {
     checkState(isEnabled(), "GitLab authentication is disabled");
     return new ServiceBuilder(gitLabSettings.applicationId())
       .apiSecret(gitLabSettings.secret())
-      .defaultScope(syncUserGroups ? API_SCOPE : READ_USER_SCOPE)
+      .defaultScope(API_SCOPE)
       .callback(context.getCallbackUrl());
   }
 
@@ -109,8 +110,8 @@ public class GitLabIdentityProvider implements OAuth2IdentityProvider {
   }
 
   private void onCallback(CallbackContext context) throws InterruptedException, ExecutionException, IOException {
-    HttpServletRequest request = context.getRequest();
-    OAuth20Service scribe = newScribeBuilder(context, gitLabSettings.syncUserGroups()).build(scribeApi);
+    HttpRequest request = context.getHttpRequest();
+    OAuth20Service scribe = newScribeBuilder(context).build(scribeApi);
     String code = request.getParameter(OAuthConstants.CODE);
     OAuth2AccessToken accessToken = scribe.getAccessToken(code);
 
@@ -122,12 +123,32 @@ public class GitLabIdentityProvider implements OAuth2IdentityProvider {
       .setName(user.getName())
       .setEmail(user.getEmail());
 
+
+    Set<String> userGroups = getGroups(scribe, accessToken);
+
+    if (!gitLabSettings.allowedGroups().isEmpty()) {
+      validateUserInAllowedGroups(userGroups, gitLabSettings.allowedGroups());
+    }
+
     if (gitLabSettings.syncUserGroups()) {
-      builder.setGroups(getGroups(scribe, accessToken));
+      builder.setGroups(userGroups);
     }
 
     context.authenticate(builder.build());
     context.redirectToRequestedPage();
+  }
+
+  private static void validateUserInAllowedGroups(Set<String> userGroups, Set<String> allowedGroups) {
+    boolean allowedUser = userGroups.stream()
+      .anyMatch(userGroup -> isAllowedGroup(userGroup, allowedGroups));
+
+    if (!allowedUser) {
+      throw new UnauthorizedException("You are not allowed to authenticate");
+    }
+  }
+
+  private static boolean isAllowedGroup(String group, Set<String> allowedGroups) {
+    return allowedGroups.stream().anyMatch(group::startsWith);
   }
 
   private Set<String> getGroups(OAuth20Service scribe, OAuth2AccessToken accessToken) {

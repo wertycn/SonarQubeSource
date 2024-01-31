@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@ export interface WithIndexationContextProps {
 }
 
 export default function withIndexationContext<P>(
-  WrappedComponent: React.ComponentType<P & WithIndexationContextProps>
+  WrappedComponent: React.ComponentType<React.PropsWithChildren<P & WithIndexationContextProps>>,
 ) {
   return class WithIndexationContext extends React.PureComponent<
     Omit<P, keyof WithIndexationContextProps>
@@ -37,7 +37,7 @@ export default function withIndexationContext<P>(
     render() {
       return (
         <IndexationContext.Consumer>
-          {indexationContext => {
+          {(indexationContext) => {
             if (indexationContext) {
               return (
                 <WrappedComponent indexationContext={indexationContext} {...(this.props as P)} />

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Rule;
@@ -50,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HOSTS;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HTTP_KEYSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_KEYSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_TRUSTSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NAME;
@@ -154,8 +154,9 @@ public class EsSettingsTest {
       // no cluster, but cluster and node names are set though
       .containsEntry("cluster.name", "sonarqube")
       .containsEntry("node.name", "sonarqube")
-      .containsEntry("discovery.seed_hosts", "127.0.0.1")
-      .containsEntry("cluster.initial_master_nodes", "127.0.0.1");
+      .containsEntry("discovery.type", "single-node")
+      .doesNotContainKey("discovery.seed_hosts")
+      .doesNotContainKey("cluster.initial_master_nodes");
 
     assertThat(generated.get("path.data")).isNotNull();
     assertThat(generated.get("path.logs")).isNotNull();
@@ -241,7 +242,7 @@ public class EsSettingsTest {
     File data = new File(foo, "data");
     when(mockedEsInstallation.getDataDirectory()).thenReturn(data);
 
-    EsSettings underTest = new EsSettings(minProps(new Random().nextBoolean()), mockedEsInstallation, system);
+    EsSettings underTest = new EsSettings(minProps(true), mockedEsInstallation, system);
 
     Map<String, String> generated = underTest.build();
     assertThat(generated)
@@ -304,7 +305,7 @@ public class EsSettingsTest {
   @Test
   @UseDataProvider("clusterEnabledOrNot")
   public void enable_http_connector_on_specified_port(boolean clusterEnabled) throws Exception {
-    String port = "" + new Random().nextInt(49151);
+    String port = "" + 49150;
     Props props = minProps(clusterEnabled, null, port);
     Map<String, String> settings = new EsSettings(props, new EsInstallation(props), System2.INSTANCE).build();
 
@@ -366,7 +367,7 @@ public class EsSettingsTest {
   }
 
   @Test
-  public void configureAuthentication_givenClusterSearchPasswordNotProvided_dontAddXpackParameters() throws Exception {
+  public void configureSecurity_givenClusterSearchPasswordNotProvided_dontAddXpackParameters() throws Exception {
     Props props = minProps(true);
 
     EsSettings settings = new EsSettings(props, new EsInstallation(props), system);
@@ -377,7 +378,7 @@ public class EsSettingsTest {
   }
 
   @Test
-  public void configureAuthentication_givenClusterSearchPasswordProvided_addXpackParameters_file_exists() throws Exception {
+  public void configureSecurity_givenClusterSearchPasswordProvided_addXpackParameters_file_exists() throws Exception {
     Props props = minProps(true);
     props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
     File keystore = temp.newFile("keystore.p12");
@@ -390,13 +391,15 @@ public class EsSettingsTest {
 
     Map<String, String> outputParams = settings.build();
 
-    assertThat(outputParams).containsEntry("xpack.security.transport.ssl.enabled", "true")
+    assertThat(outputParams)
+      .containsEntry("xpack.security.transport.ssl.enabled", "true")
+      .containsEntry("xpack.security.transport.ssl.supported_protocols", "TLSv1.3,TLSv1.2")
       .containsEntry("xpack.security.transport.ssl.keystore.path", keystore.getName())
       .containsEntry("xpack.security.transport.ssl.truststore.path", truststore.getName());
   }
 
   @Test
-  public void configureAuthentication_givenClusterSearchPasswordProvidedButKeystorePathMissing_throwException() throws Exception {
+  public void configureSecurity_givenClusterSearchPasswordProvidedButKeystorePathMissing_throwException() throws Exception {
     Props props = minProps(true);
     props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
 
@@ -408,7 +411,7 @@ public class EsSettingsTest {
   }
 
   @Test
-  public void configureAuthentication_givenClusterModeFalse_dontAddXpackParameters() throws Exception {
+  public void configureSecurity_givenClusterModeFalse_dontAddXpackParameters() throws Exception {
     Props props = minProps(false);
     props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
 
@@ -420,7 +423,7 @@ public class EsSettingsTest {
   }
 
   @Test
-  public void configureAuthentication_givenFileNotExist_throwException() throws Exception {
+  public void configureSecurity_givenFileNotExist_throwException() throws Exception {
     Props props = minProps(true);
     props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
     File truststore = temp.newFile("truststore.p12");
@@ -433,6 +436,61 @@ public class EsSettingsTest {
     assertThatThrownBy(settings::build)
       .isInstanceOf(MessageException.class)
       .hasMessage("Unable to configure: sonar.cluster.es.ssl.keystore. File specified in [not-existing-file] does not exist");
+  }
+
+  @Test
+  public void configureSecurity_whenHttpKeystoreProvided_shouldAddHttpProperties() throws Exception {
+    Props props = minProps(true);
+    File keystore = temp.newFile("keystore.p12");
+    File truststore = temp.newFile("truststore.p12");
+    File httpKeystore = temp.newFile("http-keystore.p12");
+    props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
+    props.set(CLUSTER_ES_KEYSTORE.getKey(), keystore.getAbsolutePath());
+    props.set(CLUSTER_ES_TRUSTSTORE.getKey(), truststore.getAbsolutePath());
+    props.set(CLUSTER_ES_HTTP_KEYSTORE.getKey(), httpKeystore.getAbsolutePath());
+
+    EsSettings settings = new EsSettings(props, new EsInstallation(props), system);
+
+    Map<String, String> outputParams = settings.build();
+
+    assertThat(outputParams)
+      .containsEntry("xpack.security.http.ssl.enabled", "true")
+      .containsEntry("xpack.security.http.ssl.keystore.path", httpKeystore.getName());
+  }
+
+  @Test
+  public void configureSecurity_whenHttpKeystoreNotProvided_shouldNotAddHttpProperties() throws Exception {
+    Props props = minProps(true);
+    File keystore = temp.newFile("keystore.p12");
+    File truststore = temp.newFile("truststore.p12");
+    props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
+    props.set(CLUSTER_ES_KEYSTORE.getKey(), keystore.getAbsolutePath());
+    props.set(CLUSTER_ES_TRUSTSTORE.getKey(), truststore.getAbsolutePath());
+
+    EsSettings settings = new EsSettings(props, new EsInstallation(props), system);
+
+    Map<String, String> outputParams = settings.build();
+
+    assertThat(outputParams)
+      .doesNotContainKey("xpack.security.http.ssl.enabled")
+      .doesNotContainKey("xpack.security.http.ssl.keystore.path");
+  }
+
+  @Test
+  public void configureSecurity_whenHttpKeystoreProvided_shouldFailIfNotExists() throws Exception {
+    Props props = minProps(true);
+    File keystore = temp.newFile("keystore.p12");
+    File truststore = temp.newFile("truststore.p12");
+    props.set(CLUSTER_SEARCH_PASSWORD.getKey(), "qwerty");
+    props.set(CLUSTER_ES_KEYSTORE.getKey(), keystore.getAbsolutePath());
+    props.set(CLUSTER_ES_TRUSTSTORE.getKey(), truststore.getAbsolutePath());
+    props.set(CLUSTER_ES_HTTP_KEYSTORE.getKey(), "not-existing-file");
+
+    EsSettings settings = new EsSettings(props, new EsInstallation(props), system);
+
+    assertThatThrownBy(settings::build)
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Unable to configure: sonar.cluster.es.http.ssl.keystore. File specified in [not-existing-file] does not exist");
   }
 
   @DataProvider

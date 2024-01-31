@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,5 +21,52 @@ export enum RuleStatus {
   Ready = 'READY',
   Beta = 'BETA',
   Deprecated = 'DEPRECATED',
-  Removed = 'REMOVED'
+  Removed = 'REMOVED',
+}
+
+export interface SearchRulesQuery {
+  activation?: boolean | string;
+  active_severities?: string;
+  asc?: boolean | string;
+  available_since?: string;
+  cleanCodeAttributeCategories?: string;
+  cwe?: string;
+  f?: string;
+  facets?: string;
+  include_external?: boolean | string;
+  inheritance?: string;
+  is_template?: boolean | string;
+  languages?: string;
+  owaspTop10?: string;
+  ['owaspTop10-2021']?: string;
+  p?: number;
+  ps?: number;
+  q?: string;
+  qprofile?: string;
+  repositories?: string;
+  rule_key?: string;
+  s?: string;
+  impactSoftwareQualities?: string;
+  impactSeverities?: string;
+  sonarsourceSecurity?: string;
+  statuses?: string;
+  tags?: string;
+  template_key?: string;
+  types?: string;
+}
+
+export enum RulesFacetName {
+  AvailableSince = 'availableSince',
+  CleanCodeAttributeCategories = 'cleanCodeAttributeCategories',
+  Cwe = 'cwe',
+  Inheritance = 'inheritance',
+  ImpactSoftwareQualities = 'impactSoftwareQualities',
+  ImpactSeverities = 'impactSeverities',
+  Languages = 'languages',
+  Profile = 'profile',
+  Repositories = 'repositories',
+  Statuses = 'statuses',
+  Tags = 'tags',
+  Template = 'template',
+  Types = 'types',
 }

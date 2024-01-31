@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,13 @@
  */
 import * as React from 'react';
 import { DraggableCore, DraggableData } from 'react-draggable';
-import { ButtonIcon } from 'sonar-ui-common/components/controls/buttons';
-import ClearIcon from 'sonar-ui-common/components/icons/ClearIcon';
-import CollapseIcon from 'sonar-ui-common/components/icons/CollapseIcon';
-import ExpandIcon from 'sonar-ui-common/components/icons/ExpandIcon';
-import { IconProps } from 'sonar-ui-common/components/icons/Icon';
-import MinimizeIcon from 'sonar-ui-common/components/icons/MinimizeIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { ButtonIcon } from '../../components/controls/buttons';
+import ClearIcon from '../../components/icons/ClearIcon';
+import CollapseIcon from '../../components/icons/CollapseIcon';
+import ExpandIcon from '../../components/icons/ExpandIcon';
+import { IconProps } from '../../components/icons/Icon';
+import MinimizeIcon from '../../components/icons/MinimizeIcon';
+import { translate } from '../../helpers/l10n';
 
 export interface Props {
   children: React.ReactNode;
@@ -84,7 +84,7 @@ export default class WorkspaceHeader extends React.PureComponent<Props> {
 }
 
 interface WorkspaceHeaderButtonProps {
-  icon: React.SFC<IconProps>;
+  icon: React.FC<React.PropsWithChildren<IconProps>>;
   onClick: () => void;
   tooltip: string;
 }
@@ -93,9 +93,11 @@ function WorkspaceHeaderButton({ icon: Icon, onClick, tooltip }: WorkspaceHeader
   return (
     <ButtonIcon
       className="workspace-header-icon"
+      aria-label={translate(tooltip)}
       color="#fff"
       onClick={onClick}
-      tooltip={translate(tooltip)}>
+      tooltip={translate(tooltip)}
+    >
       <Icon fill={undefined} />
     </ButtonIcon>
   );

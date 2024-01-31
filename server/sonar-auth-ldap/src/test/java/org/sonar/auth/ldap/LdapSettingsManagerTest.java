@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,52 +19,42 @@
  */
 package org.sonar.auth.ldap;
 
-import java.util.Arrays;
-import java.util.Collections;
-import org.junit.Rule;
+import java.util.Map;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.sonar.auth.ldap.LdapAutodiscovery.LdapSrvRecord;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class LdapSettingsManagerTest {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
   @Test
   public void shouldFailWhenNoLdapUrl() {
     MapSettings settings = generateMultipleLdapSettingsWithUserAndGroupMapping();
     settings.removeProperty("ldap.example.url");
-    LdapSettingsManager settingsManager = new LdapSettingsManager(settings.asConfig(), new LdapAutodiscovery());
+    LdapSettingsManager settingsManager = new LdapSettingsManager(settings.asConfig());
 
-    thrown.expect(LdapException.class);
-    thrown.expectMessage("The property 'ldap.example.url' property is empty while it is mandatory.");
-    settingsManager.getContextFactories();
+    assertThatThrownBy(settingsManager::getContextFactories)
+      .isInstanceOf(LdapException.class)
+      .hasMessage("The property 'ldap.example.url' property is empty while it is mandatory.");
   }
 
   @Test
   public void shouldFailWhenMixingSingleAndMultipleConfiguration() {
     MapSettings settings = generateMultipleLdapSettingsWithUserAndGroupMapping();
     settings.setProperty("ldap.url", "ldap://foo");
-    LdapSettingsManager settingsManager = new LdapSettingsManager(settings.asConfig(), new LdapAutodiscovery());
+    LdapSettingsManager settingsManager = new LdapSettingsManager(settings.asConfig());
 
-    thrown.expect(LdapException.class);
-    thrown
-      .expectMessage(
-        "When defining multiple LDAP servers with the property 'ldap.servers', all LDAP properties must be linked to one of those servers. Please remove properties like 'ldap.url', 'ldap.realm', ...");
-    settingsManager.getContextFactories();
+    assertThatThrownBy(settingsManager::getContextFactories)
+      .isInstanceOf(LdapException.class)
+      .hasMessage("When defining multiple LDAP servers with the property 'ldap.servers', all LDAP properties must be linked to one of those servers. Please remove properties like 'ldap.url', 'ldap.realm', ...");
   }
 
   @Test
   public void testContextFactoriesWithSingleLdap() {
     LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateSingleLdapSettingsWithUserAndGroupMapping().asConfig(), new LdapAutodiscovery());
-    assertThat(settingsManager.getContextFactories().size()).isEqualTo(1);
+      generateSingleLdapSettingsWithUserAndGroupMapping().asConfig());
+    assertThat(settingsManager.getContextFactories()).hasSize(1);
   }
 
   /**
@@ -74,74 +64,69 @@ public class LdapSettingsManagerTest {
   @Test
   public void testContextFactoriesWithMultipleLdap() {
     LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig(), new LdapAutodiscovery());
-    assertThat(settingsManager.getContextFactories().size()).isEqualTo(2);
+      generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig());
+    assertThat(settingsManager.getContextFactories()).hasSize(2);
     // We do it twice to make sure the settings keep the same.
-    assertThat(settingsManager.getContextFactories().size()).isEqualTo(2);
+    assertThat(settingsManager.getContextFactories()).hasSize(2);
   }
 
   @Test
-  public void testAutodiscover() {
-    LdapAutodiscovery ldapAutodiscovery = mock(LdapAutodiscovery.class);
-    LdapSrvRecord ldap1 = new LdapSrvRecord("ldap://localhost:189", 1, 1);
-    LdapSrvRecord ldap2 = new LdapSrvRecord("ldap://localhost:1899", 1, 1);
-    when(ldapAutodiscovery.getLdapServers("example.org")).thenReturn(Arrays.asList(ldap1, ldap2));
-    LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateAutodiscoverSettings().asConfig(), ldapAutodiscovery);
-    assertThat(settingsManager.getContextFactories().size()).isEqualTo(2);
+  public void getUserMappings_shouldCreateUserMappings_whenMultipleLdapConfig() {
+    Configuration configuration = generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig();
+    LdapSettingsManager settingsManager = new LdapSettingsManager(configuration);
+
+    Map<String, LdapUserMapping> result = settingsManager.getUserMappings();
+
+    assertThat(result).hasSize(2).containsOnlyKeys("example", "infosupport");
+    assertThat(result.get("example")).usingRecursiveComparison().isEqualTo(new LdapUserMapping(configuration, "ldap.example"));
+    assertThat(result.get("infosupport")).usingRecursiveComparison().isEqualTo(new LdapUserMapping(configuration, "ldap.infosupport"));
   }
 
   @Test
-  public void testAutodiscoverFailed() {
-    LdapAutodiscovery ldapAutodiscovery = mock(LdapAutodiscovery.class);
-    when(ldapAutodiscovery.getLdapServers("example.org")).thenReturn(Collections.emptyList());
-    LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateAutodiscoverSettings().asConfig(), ldapAutodiscovery);
+  public void getGroupMappings_shouldCreateGroupMappings_whenMultipleLdapConfig() {
+    Configuration configuration = generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig();
+    LdapSettingsManager settingsManager = new LdapSettingsManager(configuration);
 
-    thrown.expect(LdapException.class);
-    thrown.expectMessage("The property 'ldap.url' is empty and SonarQube is not able to auto-discover any LDAP server.");
+    Map<String, LdapGroupMapping> result = settingsManager.getGroupMappings();
 
-    settingsManager.getContextFactories();
-  }
-
-  /**
-   * Test there are 2 @link{org.sonar.plugins.ldap.LdapUserMapping}s found.
-   *
-   */
-  @Test
-  public void testUserMappings() {
-    LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig(), new LdapAutodiscovery());
-    assertThat(settingsManager.getUserMappings().size()).isEqualTo(2);
-    // We do it twice to make sure the settings keep the same.
-    assertThat(settingsManager.getUserMappings().size()).isEqualTo(2);
-  }
-
-  /**
-   * Test there are 2 @link{org.sonar.plugins.ldap.LdapGroupMapping}s found.
-   *
-   */
-  @Test
-  public void testGroupMappings() {
-    LdapSettingsManager settingsManager = new LdapSettingsManager(
-      generateMultipleLdapSettingsWithUserAndGroupMapping().asConfig(), new LdapAutodiscovery());
-    assertThat(settingsManager.getGroupMappings().size()).isEqualTo(2);
-    // We do it twice to make sure the settings keep the same.
-    assertThat(settingsManager.getGroupMappings().size()).isEqualTo(2);
+    assertThat(result).hasSize(2).containsOnlyKeys("example", "infosupport");
+    assertThat(result.get("example")).usingRecursiveComparison().isEqualTo(new LdapGroupMapping(configuration, "ldap.example"));
+    assertThat(result.get("infosupport")).usingRecursiveComparison().isEqualTo(new LdapGroupMapping(configuration, "ldap.infosupport"));
   }
 
   /**
    * Test what happens when no configuration is set.
-   * Normally there will be a contextFactory, but the autodiscovery doesn't work for the test server.
    */
   @Test
   public void testEmptySettings() {
     LdapSettingsManager settingsManager = new LdapSettingsManager(
-      new MapSettings().asConfig(), new LdapAutodiscovery());
+      new MapSettings().asConfig());
 
-    thrown.expect(LdapException.class);
-    thrown.expectMessage("The property 'ldap.url' is empty and no realm configured to try auto-discovery.");
-    settingsManager.getContextFactories();
+    assertThatThrownBy(settingsManager::getContextFactories)
+      .isInstanceOf(LdapException.class)
+      .hasMessage("The property 'ldap.url' property is empty while it is mandatory.");
+  }
+
+  @Test
+  public void getUserMappings_shouldCreateUserMappings_whenSingleLdapConfig() {
+    Configuration configuration = generateSingleLdapSettingsWithUserAndGroupMapping().asConfig();
+    LdapSettingsManager settingsManager = new LdapSettingsManager(configuration);
+
+    Map<String, LdapUserMapping> result = settingsManager.getUserMappings();
+
+    assertThat(result).hasSize(1).containsOnlyKeys("default");
+    assertThat(result.get("default")).usingRecursiveComparison().isEqualTo(new LdapUserMapping(configuration, "ldap"));
+  }
+
+  @Test
+  public void getGroupMappings_shouldCreateGroupMappings_whenSingleLdapConfig() {
+    Configuration configuration = generateSingleLdapSettingsWithUserAndGroupMapping().asConfig();
+    LdapSettingsManager settingsManager = new LdapSettingsManager(configuration);
+
+    Map<String, LdapGroupMapping> result = settingsManager.getGroupMappings();
+
+    assertThat(result).hasSize(1).containsOnlyKeys("default");
+    assertThat(result.get("default")).usingRecursiveComparison().isEqualTo(new LdapGroupMapping(configuration, "ldap"));
   }
 
   private MapSettings generateMultipleLdapSettingsWithUserAndGroupMapping() {
@@ -170,18 +155,6 @@ public class LdapSettingsManagerTest {
     MapSettings settings = new MapSettings();
 
     settings.setProperty("ldap.url", "/users.example.org.ldif")
-      .setProperty("ldap.user.baseDn", "ou=users,dc=example,dc=org")
-      .setProperty("ldap.group.baseDn", "ou=groups,dc=example,dc=org")
-      .setProperty("ldap.group.request",
-        "(&(objectClass=posixGroup)(memberUid={uid}))");
-
-    return settings;
-  }
-
-  private MapSettings generateAutodiscoverSettings() {
-    MapSettings settings = new MapSettings();
-
-    settings.setProperty("ldap.realm", "example.org")
       .setProperty("ldap.user.baseDn", "ou=users,dc=example,dc=org")
       .setProperty("ldap.group.baseDn", "ou=groups,dc=example,dc=org")
       .setProperty("ldap.group.request",

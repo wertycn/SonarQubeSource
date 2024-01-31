@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,21 +26,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.taskprocessor.CeWorker;
 import org.sonar.ce.taskprocessor.CeWorkerFactory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StandaloneCeDistributedInformationTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void broadcastWorkerUUIDs_must_retrieve_from_ceworkerfactory() {
@@ -74,10 +71,9 @@ public class StandaloneCeDistributedInformationTest {
     CeWorkerFactory ceWorkerFactory = mock(CeWorkerFactory.class);
     StandaloneCeDistributedInformation ceCluster = new StandaloneCeDistributedInformation(ceWorkerFactory);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Invalid call, broadcastWorkerUUIDs() must be called first.");
-
-    ceCluster.getWorkerUUIDs();
+    assertThatThrownBy(ceCluster::getWorkerUUIDs)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Invalid call, broadcastWorkerUUIDs() must be called first.");
   }
 
   @Test

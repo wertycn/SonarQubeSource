@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import org.apache.commons.lang.math.RandomUtils;
 import org.sonar.core.util.Uuids;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.protobuf.DbFileSources;
@@ -45,11 +44,11 @@ public class FileSourceTester {
   public final FileSourceDto insertFileSource(ComponentDto file, Consumer<FileSourceDto>... dtoPopulators) {
     FileSourceDto dto = new FileSourceDto()
       .setUuid(Uuids.createFast())
-      .setProjectUuid(file.projectUuid())
+      .setProjectUuid(file.branchUuid())
       .setFileUuid(file.uuid())
       .setSrcHash(randomAlphanumeric(50))
       .setDataHash(randomAlphanumeric(50))
-      .setLineHashes(IntStream.range(0, new Random().nextInt(21)).mapToObj(String::valueOf).collect(MoreCollectors.toList()))
+      .setLineHashes(IntStream.range(0, new Random().nextInt(21)).mapToObj(String::valueOf).toList())
       .setRevision(randomAlphanumeric(100))
       .setSourceData(newRandomData(3).build())
       .setCreatedAt(new Date().getTime())
@@ -65,11 +64,11 @@ public class FileSourceTester {
   public final FileSourceDto insertFileSource(ComponentDto file, int numLines, Consumer<FileSourceDto>... dtoPopulators) {
     FileSourceDto dto = new FileSourceDto()
       .setUuid(Uuids.createFast())
-      .setProjectUuid(file.projectUuid())
+      .setProjectUuid(file.branchUuid())
       .setFileUuid(file.uuid())
       .setSrcHash(randomAlphanumeric(50))
       .setDataHash(randomAlphanumeric(50))
-      .setLineHashes(IntStream.range(0, numLines).mapToObj(String::valueOf).collect(MoreCollectors.toList()))
+      .setLineHashes(IntStream.range(0, numLines).mapToObj(String::valueOf).toList())
       .setRevision(randomAlphanumeric(100))
       .setSourceData(newRandomData(numLines).build())
       .setCreatedAt(new Date().getTime())

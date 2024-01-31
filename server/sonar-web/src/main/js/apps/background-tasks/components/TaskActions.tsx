@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ActionCell, ActionsDropdown, ItemButton, ItemDangerButton } from 'design-system';
 import * as React from 'react';
-import ActionsDropdown, {
-  ActionsDropdownItem
-} from 'sonar-ui-common/components/controls/ActionsDropdown';
-import ConfirmModal from 'sonar-ui-common/components/controls/ConfirmModal';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import ConfirmModal from '../../../components/controls/ConfirmModal';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { Task, TaskStatuses } from '../../../types/tasks';
+import AnalysisWarningsModal from './AnalysisWarningsModal';
 import ScannerContext from './ScannerContext';
 import Stacktrace from './Stacktrace';
-
-const AnalysisWarningsModal = lazyLoadComponent(
-  () => import('../../../components/common/AnalysisWarningsModal'),
-  'AnalysisWarningsModal'
-);
 
 interface Props {
   component?: unknown;
@@ -52,7 +45,7 @@ export default class TaskActions extends React.PureComponent<Props, State> {
     cancelTaskOpen: false,
     scannerContextOpen: false,
     stacktraceOpen: false,
-    warningsOpen: false
+    warningsOpen: false,
   };
 
   handleFilterClick = () => {
@@ -98,7 +91,7 @@ export default class TaskActions extends React.PureComponent<Props, State> {
   render() {
     const { component, task } = this.props;
 
-    const canFilter = component === undefined;
+    const canFilter = component === undefined && task.componentName;
     const canCancel = task.status === TaskStatuses.Pending;
     const canShowStacktrace = task.errorMessage !== undefined;
     const canShowWarnings = task.warningCount !== undefined && task.warningCount > 0;
@@ -110,44 +103,45 @@ export default class TaskActions extends React.PureComponent<Props, State> {
     }
 
     return (
-      <td className="thin nowrap">
-        <ActionsDropdown className="js-task-action">
+      <ActionCell>
+        <ActionsDropdown
+          id={`task-${task.id}-actions`}
+          ariaLabel={translate('background_tasks.show_actions')}
+          className="js-task-action"
+        >
           {canFilter && task.componentName && (
-            <ActionsDropdownItem className="js-task-filter" onClick={this.handleFilterClick}>
+            <ItemButton className="js-task-filter" onClick={this.handleFilterClick}>
               {translateWithParameters(
                 'background_tasks.filter_by_component_x',
-                task.componentName
+                task.componentName,
               )}
-            </ActionsDropdownItem>
+            </ItemButton>
           )}
           {canCancel && (
-            <ActionsDropdownItem
-              className="js-task-cancel"
-              destructive={true}
-              onClick={this.handleCancelClick}>
+            <ItemDangerButton className="js-task-cancel" onClick={this.handleCancelClick}>
               {translate('background_tasks.cancel_task')}
-            </ActionsDropdownItem>
+            </ItemDangerButton>
           )}
           {task.hasScannerContext && (
-            <ActionsDropdownItem
+            <ItemButton
               className="js-task-show-scanner-context"
-              onClick={this.handleShowScannerContextClick}>
+              onClick={this.handleShowScannerContextClick}
+            >
               {translate('background_tasks.show_scanner_context')}
-            </ActionsDropdownItem>
+            </ItemButton>
           )}
           {canShowStacktrace && (
-            <ActionsDropdownItem
+            <ItemButton
               className="js-task-show-stacktrace"
-              onClick={this.handleShowStacktraceClick}>
+              onClick={this.handleShowStacktraceClick}
+            >
               {translate('background_tasks.show_stacktrace')}
-            </ActionsDropdownItem>
+            </ItemButton>
           )}
           {canShowWarnings && (
-            <ActionsDropdownItem
-              className="js-task-show-warnings"
-              onClick={this.handleShowWarningsClick}>
+            <ItemButton className="js-task-show-warnings" onClick={this.handleShowWarningsClick}>
               {translate('background_tasks.show_warnings')}
-            </ActionsDropdownItem>
+            </ItemButton>
           )}
         </ActionsDropdown>
 
@@ -156,9 +150,10 @@ export default class TaskActions extends React.PureComponent<Props, State> {
             cancelButtonText={translate('close')}
             confirmButtonText={translate('background_tasks.cancel_task')}
             header={translate('background_tasks.cancel_task')}
-            isDestructive={true}
+            isDestructive
             onClose={this.closeCancelTask}
-            onConfirm={this.handleCancelTask}>
+            onConfirm={this.handleCancelTask}
+          >
             {translate('background_tasks.cancel_task.text')}
           </ConfirmModal>
         )}
@@ -176,7 +171,7 @@ export default class TaskActions extends React.PureComponent<Props, State> {
             taskId={task.id}
           />
         )}
-      </td>
+      </ActionCell>
     );
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,40 +22,41 @@ package org.sonar.server.plugins;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ListMultimap;
-import java.lang.annotation.Annotation;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-import org.sonar.api.ExtensionProvider;
 import org.sonar.api.Plugin;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.internal.PluginContextImpl;
 import org.sonar.api.utils.AnnotationUtils;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ExtensionContainer;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
 
+import java.lang.annotation.Annotation;
+import java.util.Collection;
+import java.util.Set;
+
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
-import static org.sonar.core.extension.ExtensionProviderSupport.isExtensionProvider;
 
 /**
  * Loads the plugins server extensions and injects them to DI container
  */
 public abstract class ServerExtensionInstaller {
+  private final Configuration configuration;
   private final SonarRuntime sonarRuntime;
   private final PluginRepository pluginRepository;
   private final Set<Class<? extends Annotation>> supportedAnnotationTypes;
 
-  protected ServerExtensionInstaller(SonarRuntime sonarRuntime, PluginRepository pluginRepository, Collection<Class<? extends Annotation>> supportedAnnotationTypes) {
+  protected ServerExtensionInstaller(Configuration configuration, SonarRuntime sonarRuntime, PluginRepository pluginRepository,
+    Collection<Class<? extends Annotation>> supportedAnnotationTypes) {
     requireNonNull(supportedAnnotationTypes, "At least one supported annotation type must be specified");
+    this.configuration = configuration;
     this.sonarRuntime = sonarRuntime;
     this.pluginRepository = pluginRepository;
     this.supportedAnnotationTypes = ImmutableSet.copyOf(supportedAnnotationTypes);
   }
 
-  public void installExtensions(ComponentContainer container) {
+  public void installExtensions(ExtensionContainer container) {
     ListMultimap<PluginInfo, Object> installedExtensionsByPlugin = ArrayListMultimap.create();
     for (PluginInfo pluginInfo : pluginRepository.getPluginInfos()) {
       try {
@@ -65,11 +66,11 @@ public abstract class ServerExtensionInstaller {
 
         Plugin.Context context = new PluginContextImpl.Builder()
           .setSonarRuntime(sonarRuntime)
-          .setBootConfiguration(container.getComponentByType(Configuration.class))
+          .setBootConfiguration(configuration)
           .build();
         plugin.define(context);
         for (Object extension : context.getExtensions()) {
-          if (installExtension(container, pluginInfo, extension, true) != null) {
+          if (installExtension(container, pluginInfo, extension) != null) {
             installedExtensionsByPlugin.put(pluginInfo, extension);
           } else {
             container.declareExtension(pluginInfo, extension);
@@ -80,40 +81,11 @@ public abstract class ServerExtensionInstaller {
         throw new IllegalStateException(format("Fail to load plugin %s [%s]", pluginInfo.getName(), pluginInfo.getKey()), e);
       }
     }
-    for (Map.Entry<PluginInfo, Object> entry : installedExtensionsByPlugin.entries()) {
-      PluginInfo pluginInfo = entry.getKey();
-      try {
-        Object extension = entry.getValue();
-        if (isExtensionProvider(extension)) {
-          ExtensionProvider provider = (ExtensionProvider) container.getComponentByKey(extension);
-          installProvider(container, pluginInfo, provider);
-        }
-      } catch (Throwable e) {
-        // catch Throwable because we want to catch Error too (IncompatibleClassChangeError, ...)
-        throw new IllegalStateException(format("Fail to load plugin %s [%s]", pluginInfo.getName(), pluginInfo.getKey()), e);
-      }
-    }
   }
 
-  private void installProvider(ComponentContainer container, PluginInfo pluginInfo, ExtensionProvider provider) {
-    Object obj = provider.provide();
-    if (obj != null) {
-      if (obj instanceof Iterable) {
-        for (Object ext : (Iterable) obj) {
-          installExtension(container, pluginInfo, ext, false);
-        }
-      } else {
-        installExtension(container, pluginInfo, obj, false);
-      }
-    }
-  }
-
-  private Object installExtension(ComponentContainer container, PluginInfo pluginInfo, Object extension, boolean acceptProvider) {
+  private Object installExtension(ExtensionContainer container, PluginInfo pluginInfo, Object extension) {
     for (Class<? extends Annotation> supportedAnnotationType : supportedAnnotationTypes) {
       if (AnnotationUtils.getAnnotation(extension, supportedAnnotationType) != null) {
-        if (!acceptProvider && isExtensionProvider(extension)) {
-          throw new IllegalStateException("ExtensionProvider can not include providers itself: " + extension);
-        }
         container.addExtension(pluginInfo, extension);
         return extension;
       }

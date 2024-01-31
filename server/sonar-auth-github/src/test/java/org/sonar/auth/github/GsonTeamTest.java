@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -67,8 +67,8 @@ public class GsonTeamTest {
 
   @Test
   public void should_have_no_arg_constructor() {
-    assertThat(new GsonTeam().getId()).isEqualTo("");
-    assertThat(new GsonTeam.GsonOrganization().getLogin()).isEqualTo("");
+    assertThat(new GsonTeam().getId()).isEmpty();
+    assertThat(new GsonTeam.GsonOrganization().getLogin()).isEmpty();
   }
 
 }

@@ -873,203 +873,6 @@
       ]
     },
     {
-      "path": "api/custom_measures",
-      "since": "5.2",
-      "description": "Manage custom measures for a project. See also api/metrics.",
-      "actions": [
-        {
-          "key": "create",
-          "description": "Create a custom measure.<br /> The project id or the project key must be provided (only project and module custom measures can be created). The metric id or the metric key must be provided.<br/>Requires 'Administer System' permission or 'Administer' permission on the project.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "description",
-              "description": "Description",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Team size growing."
-            },
-            {
-              "key": "metricId",
-              "description": "Metric id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "16"
-            },
-            {
-              "key": "metricKey",
-              "description": "Metric key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "ncloc"
-            },
-            {
-              "key": "projectId",
-              "description": "Project id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "ce4c03d6-430f-40a9-b777-ad877c00aa4d"
-            },
-            {
-              "key": "projectKey",
-              "description": "Project key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "my_project"
-            },
-            {
-              "key": "value",
-              "description": "Measure value. Value type depends on metric type:<ul><li>INT - type: integer</li><li>FLOAT - type: double</li><li>PERCENT - type: double</li><li>BOOL - the possible values are true or false</li><li>STRING - type: string</li><li>MILLISEC - type: integer</li><li>DATA - type: string</li><li>LEVEL - the possible values are OK, WARN, ERROR</li><li>DISTRIB - type: string</li><li>RATING - type: double</li><li>WORK_DUR - long representing the number of minutes</li></ul>",
-              "required": true,
-              "internal": false,
-              "exampleValue": "47"
-            }
-          ]
-        },
-        {
-          "key": "delete",
-          "description": "Delete a custom measure.<br /> Requires 'Administer System' permission or 'Administer' permission on the project.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "id",
-              "description": "Id",
-              "required": true,
-              "internal": false,
-              "exampleValue": "24"
-            }
-          ]
-        },
-        {
-          "key": "metrics",
-          "description": "List all custom metrics for which no custom measure already exists on a given project.<br /> The project id or project key must be provided.<br />Requires 'Administer System' permission or 'Administer' permission on the project.",
-          "since": "5.2",
-          "internal": true,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "projectId",
-              "description": "Project id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "ce4c03d6-430f-40a9-b777-ad877c00aa4d"
-            },
-            {
-              "key": "projectKey",
-              "description": "Project key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "my_project"
-            }
-          ]
-        },
-        {
-          "key": "search",
-          "description": "List custom measures. The project id or project key must be provided.<br />Requires 'Administer System' permission or 'Administer' permission on the project.",
-          "since": "5.2",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "f",
-              "description": "Comma-separated list of the fields to be returned in response. All the fields are returned by default.",
-              "required": false,
-              "internal": false,
-              "possibleValues": [
-                "projectId",
-                "projectKey",
-                "value",
-                "description",
-                "metric",
-                "createdAt",
-                "updatedAt",
-                "user",
-                "pending"
-              ]
-            },
-            {
-              "key": "p",
-              "description": "1-based page number",
-              "required": false,
-              "internal": false,
-              "defaultValue": "1",
-              "exampleValue": "42",
-              "deprecatedKey": "pageIndex",
-              "deprecatedKeySince": "5.2"
-            },
-            {
-              "key": "projectId",
-              "description": "Project id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "ce4c03d6-430f-40a9-b777-ad877c00aa4d"
-            },
-            {
-              "key": "projectKey",
-              "description": "Project key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "my_project"
-            },
-            {
-              "key": "ps",
-              "description": "Page size. Must be greater than 0 and less than 500",
-              "required": false,
-              "internal": false,
-              "defaultValue": "100",
-              "exampleValue": "20",
-              "deprecatedKey": "pageSize",
-              "deprecatedKeySince": "5.2",
-              "maximumValue": 500
-            }
-          ]
-        },
-        {
-          "key": "update",
-          "description": "Update a custom measure. Value and/or description must be provided<br />Requires 'Administer System' permission or 'Administer' permission on the project.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "description",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Team size growing."
-            },
-            {
-              "key": "id",
-              "description": "id",
-              "required": true,
-              "internal": false,
-              "exampleValue": "42"
-            },
-            {
-              "key": "value",
-              "description": "Measure value. Value type depends on metric type:<ul><li>INT - type: integer</li><li>FLOAT - type: double</li><li>PERCENT - type: double</li><li>BOOL - the possible values are true or false</li><li>STRING - type: string</li><li>MILLISEC - type: integer</li><li>DATA - type: string</li><li>LEVEL - the possible values are OK, WARN, ERROR</li><li>DISTRIB - type: string</li><li>RATING - type: double</li><li>WORK_DUR - long representing the number of minutes</li></ul>",
-              "required": false,
-              "internal": false,
-              "exampleValue": "true"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "path": "api/duplications",
       "since": "4.4",
       "description": "Get duplication information for a project.",
@@ -2099,7 +1902,7 @@
               ]
             },
             {
-              "key": "sinceLeakPeriod",
+              "key": "inNewCodePeriod",
               "description": "To retrieve issues created since the leak period.<br>If this parameter is set to a truthy value, createdAfter must not be set and one component id or key must be provided.",
               "required": false,
               "internal": false,
@@ -2744,105 +2547,8 @@
     {
       "path": "api/metrics",
       "since": "2.6",
-      "description": "Get information on automatic metrics, and manage custom metrics. See also api/custom_measures.",
+      "description": "Get information on automatic metrics, and manage metrics.",
       "actions": [
-        {
-          "key": "create",
-          "description": "Create custom metric.<br /> Requires 'Administer System' permission.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "description",
-              "description": "Description",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Size of the team",
-              "maximumLength": 255
-            },
-            {
-              "key": "domain",
-              "description": "Domain",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Tests",
-              "maximumLength": 64
-            },
-            {
-              "key": "key",
-              "description": "Key",
-              "required": true,
-              "internal": false,
-              "exampleValue": "team_size",
-              "maximumLength": 64
-            },
-            {
-              "key": "name",
-              "description": "Name",
-              "required": true,
-              "internal": false,
-              "exampleValue": "Team Size",
-              "maximumLength": 64
-            },
-            {
-              "key": "type",
-              "description": "Metric type key",
-              "required": true,
-              "internal": false,
-              "exampleValue": "INT",
-              "possibleValues": [
-                "INT",
-                "FLOAT",
-                "PERCENT",
-                "BOOL",
-                "STRING",
-                "MILLISEC",
-                "DATA",
-                "LEVEL",
-                "DISTRIB",
-                "RATING",
-                "WORK_DUR"
-              ]
-            }
-          ]
-        },
-        {
-          "key": "delete",
-          "description": "Delete metrics and associated measures. Delete only custom metrics.<br />Ids or keys must be provided. <br />Requires 'Administer System' permission.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "ids",
-              "description": "Metrics ids to delete.",
-              "required": false,
-              "internal": false,
-              "exampleValue": "5, 23, 42"
-            },
-            {
-              "key": "keys",
-              "description": "Metrics keys to delete",
-              "required": false,
-              "internal": false,
-              "exampleValue": "team_size, business_value"
-            }
-          ]
-        },
-        {
-          "key": "domains",
-          "description": "List all custom metric domains.",
-          "since": "5.2",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": []
-        },
         {
           "key": "search",
           "description": "Search for metrics",
@@ -2906,75 +2612,6 @@
           "post": false,
           "hasResponseExample": true,
           "changelog": []
-        },
-        {
-          "key": "update",
-          "description": "Update a custom metric.<br /> Requires 'Administer System' permission.",
-          "since": "5.2",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "description",
-              "description": "Description",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Size of the team",
-              "maximumLength": 255
-            },
-            {
-              "key": "domain",
-              "description": "Domain",
-              "required": false,
-              "internal": false,
-              "exampleValue": "Tests",
-              "maximumLength": 64
-            },
-            {
-              "key": "id",
-              "description": "Id of the custom metric to update",
-              "required": true,
-              "internal": false,
-              "exampleValue": "42"
-            },
-            {
-              "key": "key",
-              "description": "Key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "team_size",
-              "maximumLength": 64
-            },
-            {
-              "key": "name",
-              "description": "Name",
-              "required": false,
-              "internal": false,
-              "maximumLength": 64
-            },
-            {
-              "key": "type",
-              "description": "Metric type key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "INT",
-              "possibleValues": [
-                "INT",
-                "FLOAT",
-                "PERCENT",
-                "BOOL",
-                "STRING",
-                "MILLISEC",
-                "DATA",
-                "LEVEL",
-                "DISTRIB",
-                "RATING",
-                "WORK_DUR"
-              ]
-            }
-          ]
         }
       ]
     },
@@ -4304,89 +3941,6 @@
           ]
         },
         {
-          "key": "search_global_permissions",
-          "description": "List global permissions. <br />Requires the following permission: 'Administer System'",
-          "since": "5.2",
-          "deprecatedSince": "6.5",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "organization",
-              "description": "Key of organization, used when group name is set",
-              "since": "6.2",
-              "required": false,
-              "internal": true,
-              "exampleValue": "my-org"
-            }
-          ]
-        },
-        {
-          "key": "search_project_permissions",
-          "description": "List project permissions. A project can be a technical project, a view or a developer.<br />Requires one of the following permissions:<ul><li>'Administer System'</li><li>'Administer' rights on the specified project</li></ul>",
-          "since": "5.2",
-          "deprecatedSince": "6.5",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "p",
-              "description": "1-based page number",
-              "required": false,
-              "internal": false,
-              "defaultValue": "1",
-              "exampleValue": "42",
-              "deprecatedKey": "pageIndex",
-              "deprecatedKeySince": "5.2"
-            },
-            {
-              "key": "projectId",
-              "description": "Project id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "ce4c03d6-430f-40a9-b777-ad877c00aa4d"
-            },
-            {
-              "key": "projectKey",
-              "description": "Project key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "my_project"
-            },
-            {
-              "key": "ps",
-              "description": "Page size. Must be greater than 0.",
-              "required": false,
-              "internal": false,
-              "defaultValue": "25",
-              "exampleValue": "20",
-              "deprecatedKey": "pageSize",
-              "deprecatedKeySince": "5.2"
-            },
-            {
-              "key": "q",
-              "description": "Limit search to: <ul><li>project names that contain the supplied string</li><li>project keys that are exactly the same as the supplied string</li></ul>",
-              "required": false,
-              "internal": false,
-              "exampleValue": "apac"
-            },
-            {
-              "key": "qualifier",
-              "description": "Project qualifier. Filter the results with the specified qualifier. Possible values are:<ul><li>TRK - Projects</li></ul>",
-              "since": "5.3",
-              "required": false,
-              "internal": false,
-              "possibleValues": [
-                "TRK"
-              ]
-            }
-          ]
-        },
-        {
           "key": "search_templates",
           "description": "List permission templates.<br />Requires the following permission: 'Administer System'.",
           "since": "5.2",
@@ -5052,7 +4606,7 @@
     {
       "path": "api/project_branches",
       "since": "6.6",
-      "description": "Manage branch (only available when the Branch plugin is installed)",
+      "description": "Manage branch",
       "actions": [
         {
           "key": "delete",
@@ -5968,48 +5522,6 @@
       ]
     },
     {
-      "path": "api/properties",
-      "since": "2.6",
-      "description": "This web service is deprecated, please use api/settings instead.",
-      "actions": [
-        {
-          "key": "index",
-          "description": "This web service is deprecated, please use api/settings/values instead.",
-          "since": "2.6",
-          "deprecatedSince": "6.3",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "format",
-              "description": "Only json response format is available",
-              "required": false,
-              "internal": false,
-              "possibleValues": [
-                "json"
-              ]
-            },
-            {
-              "key": "id",
-              "description": "Setting key",
-              "required": false,
-              "internal": false,
-              "exampleValue": "sonar.test.inclusions"
-            },
-            {
-              "key": "resource",
-              "description": "Component key or database id",
-              "required": false,
-              "internal": false,
-              "exampleValue": "my_project"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "path": "api/qualitygates",
       "since": "4.3",
       "description": "Manage quality gates, including conditions and project association.",
@@ -6432,24 +5944,6 @@
           ]
         },
         {
-          "key": "unset_default",
-          "description": "Unset a quality gate as the default quality gate.<br>Requires the 'Administer Quality Gates' permission.",
-          "since": "4.3",
-          "internal": false,
-          "post": true,
-          "hasResponseExample": false,
-          "changelog": [],
-          "params": [
-            {
-              "key": "id",
-              "description": "ID of the quality gate to unset as default",
-              "required": true,
-              "internal": false,
-              "exampleValue": "1"
-            }
-          ]
-        },
-        {
           "key": "update_condition",
           "description": "Update a condition attached to a quality gate.<br>Requires the 'Administer Quality Gates' permission.",
           "since": "4.3",
@@ -6843,7 +6337,7 @@
         },
         {
           "key": "add_project",
-          "description": "Associate a project with a quality profile.<br> Requires one of the following permissions:<ul>  <li>'Administer Quality Profiles'</li>  <li>Edit right on the specified quality profile</li>  <li>Administer right on the specified project</li></ul>",
+          "description": "Associate a project with a quality profile.<br> Requires one of the following permissions:<ul>  <li>'Administer Quality Profiles'</li>  <li>Administer right on the specified project</li></ul>",
           "since": "5.2",
           "internal": false,
           "post": true,
@@ -9425,7 +8919,7 @@
         },
         {
           "key": "restart",
-          "description": "Restart server. Require 'Administer System' permission. Perform a full restart of the Web, Search and Compute Engine Servers processes.",
+          "description": "Restarts server. Requires 'Administer System' permission. Performs a full restart of the Web, Search and Compute Engine Servers processes. Does not reload sonar.properties.",
           "since": "4.3",
           "internal": false,
           "post": true,
@@ -9593,48 +9087,10 @@
       ]
     },
     {
-      "path": "api/timemachine",
-      "since": "2.10",
-      "description": "Removed since 6.3, please use api/measures/search_history instead",
-      "actions": [
-        {
-          "key": "index",
-          "description": "The web service is removed and you're invited to use api/measures/search_history instead",
-          "since": "2.10",
-          "deprecatedSince": "6.3",
-          "internal": false,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": []
-        }
-      ]
-    },
-    {
       "path": "api/updatecenter",
       "since": "2.10",
       "description": "Get list of installed plugins",
       "actions": [
-        {
-          "key": "installed_plugins",
-          "description": "Get the list of all the plugins installed on the SonarQube instance",
-          "since": "2.10",
-          "deprecatedSince": "6.3",
-          "internal": true,
-          "post": false,
-          "hasResponseExample": true,
-          "changelog": [],
-          "params": [
-            {
-              "key": "format",
-              "description": "Only json response format is available",
-              "required": false,
-              "internal": false,
-              "possibleValues": [
-                "json"
-              ]
-            }
-          ]
-        },
         {
           "key": "upload",
           "description": "Upload a plugin.<br /> Requires 'Administer System' permission.",

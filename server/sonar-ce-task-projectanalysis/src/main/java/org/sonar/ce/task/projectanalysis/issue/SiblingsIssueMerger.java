@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,16 +25,19 @@ import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.issue.tracking.SimpleTracker;
 import org.sonar.core.issue.tracking.Tracking;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class SiblingsIssueMerger {
   private final SiblingsIssuesLoader siblingsIssuesLoader;
   private final SimpleTracker<DefaultIssue, SiblingIssue> tracker;
   private final IssueLifecycle issueLifecycle;
 
+  @Autowired(required = false)
   public SiblingsIssueMerger(SiblingsIssuesLoader resolvedSiblingsIssuesLoader, IssueLifecycle issueLifecycle) {
     this(resolvedSiblingsIssuesLoader, new SimpleTracker<>(), issueLifecycle);
   }
 
+  @Autowired(required = false)
   public SiblingsIssueMerger(SiblingsIssuesLoader siblingsIssuesLoader, SimpleTracker<DefaultIssue, SiblingIssue> tracker, IssueLifecycle issueLifecycle) {
     this.siblingsIssuesLoader = siblingsIssuesLoader;
     this.tracker = tracker;

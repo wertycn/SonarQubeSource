@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.server.qualitygate;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -28,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.api.measures.Metric.ValueType;
 import org.sonar.core.util.Uuids;
@@ -61,13 +58,12 @@ import static org.sonar.server.qualitygate.Condition.Operator.LESS_THAN;
 import static org.sonar.server.qualitygate.ValidRatingMetrics.isCoreRatingMetric;
 
 public class QualityGateConditionsUpdater {
-  public static final Set<String> INVALID_METRIC_KEYS = ImmutableSet.of(ALERT_STATUS_KEY, SECURITY_HOTSPOTS_KEY, NEW_SECURITY_HOTSPOTS_KEY);
+  public static final Set<String> INVALID_METRIC_KEYS = Set.of(ALERT_STATUS_KEY, SECURITY_HOTSPOTS_KEY, NEW_SECURITY_HOTSPOTS_KEY);
 
-  private static final Map<Integer, ImmutableSet<Condition.Operator>> VALID_OPERATORS_BY_DIRECTION = ImmutableMap.<Integer, ImmutableSet<Condition.Operator>>builder()
-    .put(DIRECTION_NONE, ImmutableSet.of(GREATER_THAN, LESS_THAN))
-    .put(DIRECTION_BETTER, ImmutableSet.of(LESS_THAN))
-    .put(DIRECTION_WORST, ImmutableSet.of(GREATER_THAN))
-    .build();
+  private static final Map<Integer, Set<Condition.Operator>> VALID_OPERATORS_BY_DIRECTION = Map.of(
+    DIRECTION_NONE, Set.of(GREATER_THAN, LESS_THAN),
+    DIRECTION_BETTER, Set.of(LESS_THAN),
+    DIRECTION_WORST, Set.of(GREATER_THAN));
 
   private static final EnumSet<ValueType> VALID_METRIC_TYPES = EnumSet.of(
     ValueType.INT,
@@ -78,7 +74,7 @@ public class QualityGateConditionsUpdater {
     ValueType.RATING,
     ValueType.WORK_DUR);
 
-  private static final List<String> RATING_VALID_INT_VALUES = stream(Rating.values()).map(r -> Integer.toString(r.getIndex())).collect(Collectors.toList());
+  private static final List<String> RATING_VALID_INT_VALUES = stream(Rating.values()).map(r -> Integer.toString(r.getIndex())).toList();
 
   private final DbClient dbClient;
 
@@ -179,21 +175,16 @@ public class QualityGateConditionsUpdater {
     try {
       ValueType valueType = ValueType.valueOf(metric.getValueType());
       switch (valueType) {
-        case BOOL:
-        case INT:
-        case RATING:
+        case BOOL, INT, RATING:
           parseInt(errorThreshold);
           return;
-        case MILLISEC:
-        case WORK_DUR:
+        case MILLISEC, WORK_DUR:
           parseLong(errorThreshold);
           return;
-        case FLOAT:
-        case PERCENT:
+        case FLOAT, PERCENT:
           parseDouble(errorThreshold);
           return;
-        case STRING:
-        case LEVEL:
+        case STRING, LEVEL:
           return;
         default:
           throw new IllegalArgumentException(format("Unsupported value type %s. Cannot convert condition value", valueType));

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,26 +24,28 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.sonar.api.batch.fs.internal.SensorStrategy;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.util.logs.Profiler;
 import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.scanner.fs.InputModuleHierarchy;
 
 public class ModuleSensorsExecutor {
-  private static final Logger LOG = Loggers.get(ModuleSensorsExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ModuleSensorsExecutor.class);
   private static final Profiler profiler = Profiler.create(LOG);
-  private final ModuleSensorExtensionDictionnary selector;
+  private final ModuleSensorExtensionDictionary selector;
   private final SensorStrategy strategy;
   private final ScannerPluginRepository pluginRepo;
+  private final ExecutingSensorContext executingSensorCtx;
   private final boolean isRoot;
 
-  public ModuleSensorsExecutor(ModuleSensorExtensionDictionnary selector, DefaultInputModule module, InputModuleHierarchy hierarchy,
-    SensorStrategy strategy, ScannerPluginRepository pluginRepo) {
+  public ModuleSensorsExecutor(ModuleSensorExtensionDictionary selector, DefaultInputModule module, InputModuleHierarchy hierarchy,
+    SensorStrategy strategy, ScannerPluginRepository pluginRepo, ExecutingSensorContext executingSensorCtx) {
     this.selector = selector;
     this.strategy = strategy;
     this.pluginRepo = pluginRepo;
+    this.executingSensorCtx = executingSensorCtx;
     this.isRoot = hierarchy.isRoot(module);
   }
 
@@ -80,20 +82,19 @@ public class ModuleSensorsExecutor {
 
   private void execute(Collection<ModuleSensorWrapper> sensors) {
     for (ModuleSensorWrapper sensor : sensors) {
-      String sensorName = getSensorName(sensor);
-      profiler.startInfo("Sensor " + sensorName);
+      SensorId sensorId = getSensorId(sensor);
+      profiler.startInfo("Sensor " + sensorId);
+      executingSensorCtx.setSensorExecuting(sensorId);
       sensor.analyse();
+      executingSensorCtx.clearExecutingSensor();
       profiler.stopInfo();
     }
   }
 
-  private String getSensorName(ModuleSensorWrapper sensor) {
+  private SensorId getSensorId(ModuleSensorWrapper sensor) {
     ClassLoader cl = getSensorClassLoader(sensor);
     String pluginKey = pluginRepo.getPluginKey(cl);
-    if (pluginKey != null) {
-      return sensor.toString() + " [" + pluginKey + "]";
-    }
-    return sensor.toString();
+    return new SensorId(pluginKey, sensor.toString());
   }
 
   private static ClassLoader getSensorClassLoader(ModuleSensorWrapper sensor) {

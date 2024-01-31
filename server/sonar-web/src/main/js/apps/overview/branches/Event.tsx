@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,61 +17,84 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Badge, QualityGateIndicator } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import Level from 'sonar-ui-common/components/ui/Level';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { isDefinitionChangeEvent } from '../../projectActivity/components/DefinitionChangeEventInner';
-import { isRichQualityGateEvent } from '../../projectActivity/components/RichQualityGateEventInner';
+import { isDefinitionChangeEvent } from '../../../components/activity-graph/DefinitionChangeEventInner';
+import { isRichQualityGateEvent } from '../../../components/activity-graph/RichQualityGateEventInner';
+import {
+  RichQualityProfileEventInner,
+  isRichQualityProfileEvent,
+} from '../../../components/activity-graph/RichQualityProfileEventInner';
+import { SqUpgradeActivityEventMessage } from '../../../components/activity-graph/SqUpgradeActivityEventMessage';
+import { translate } from '../../../helpers/l10n';
+import { AnalysisEvent, ProjectAnalysisEventCategory } from '../../../types/project-activity';
 
 interface Props {
-  event: T.AnalysisEvent;
+  event: AnalysisEvent;
 }
 
 export function Event({ event }: Props) {
-  if (event.category === 'VERSION') {
+  if (event.category === ProjectAnalysisEventCategory.Version) {
     return (
-      <span
-        className="overview-analysis-event analysis-version"
-        title={`${translate('version')} ${event.name}`}>
-        {event.name}
-      </span>
-    );
-  }
-
-  const eventCategory = translate('event.category', event.category);
-  if (isDefinitionChangeEvent(event)) {
-    return (
-      <div className="overview-analysis-event">
-        <span className="note">{eventCategory}</span>
+      <div>
+        <Badge className="sw-px-1 sw-text-ellipsis sw-mb-1" variant="new">
+          {event.name}
+        </Badge>
       </div>
     );
   }
 
+  if (event.category === ProjectAnalysisEventCategory.SqUpgrade) {
+    return <SqUpgradeActivityEventMessage event={event} />;
+  }
+
+  const eventCategory = translate('event.category', event.category);
+
+  if (isRichQualityProfileEvent(event)) {
+    return (
+      <div className="sw-mb-1">
+        <span className="sw-mr-2">{eventCategory}:</span>
+        <RichQualityProfileEventInner event={event} />
+      </div>
+    );
+  }
+
+  if (isDefinitionChangeEvent(event)) {
+    return <div className="sw-mb-1">{eventCategory}</div>;
+  }
+
   if (isRichQualityGateEvent(event)) {
     return (
-      <div className="overview-analysis-event">
-        <span className="note">{eventCategory}:</span>{' '}
-        {event.qualityGate.stillFailing ? (
-          <FormattedMessage
-            defaultMessage={translate('event.quality_gate.still_x')}
-            id="event.quality_gate.still_x"
-            values={{ status: <Level level={event.qualityGate.status} small={true} /> }}
-          />
-        ) : (
-          <Level level={event.qualityGate.status} small={true} />
-        )}
+      <div className="sw-flex sw-items-center sw-mb-1">
+        <span>{eventCategory}:</span>
+        <div className="sw-mx-2">
+          {event.qualityGate.stillFailing ? (
+            <FormattedMessage
+              defaultMessage={translate('event.quality_gate.still_x')}
+              id="event.quality_gate.still_x"
+              values={{
+                status: <QualityGateIndicator status={event.qualityGate.status} size="sm" />,
+              }}
+            />
+          ) : (
+            <QualityGateIndicator status={event.qualityGate.status} size="sm" />
+          )}
+        </div>
+        <span className="sw-body-sm-highlight">
+          {translate(`event.quality_gate.${event.qualityGate.status}`)}
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="overview-analysis-event">
-      <span className="note">{eventCategory}:</span>{' '}
+    <div className="sw-mb-1">
+      <span className="sw-text-ellipsis sw-mr-2">{eventCategory}:</span>
       {event.description ? (
-        <strong title={event.description}>{event.name}</strong>
+        <span title={event.description}>{event.name}</span>
       ) : (
-        <strong>{event.name}</strong>
+        <span>{event.name}</span>
       )}
     </div>
   );

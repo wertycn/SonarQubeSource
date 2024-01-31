@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,17 +22,16 @@ package org.sonar.scanner.sensor;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.batch.fs.InputFile;
-import org.sonar.api.batch.rule.ActiveRules;
-import org.sonar.api.batch.rule.internal.NewActiveRule;
-import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.batch.fs.internal.DefaultFileSystem;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
-import org.sonar.api.batch.sensor.internal.DefaultSensorDescriptor;
-import org.sonar.api.rule.RuleKey;
+import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.rule.internal.ActiveRulesBuilder;
+import org.sonar.api.batch.rule.internal.NewActiveRule;
+import org.sonar.api.batch.sensor.internal.DefaultSensorDescriptor;
+import org.sonar.api.config.internal.MapSettings;
+import org.sonar.api.rule.RuleKey;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,9 +39,6 @@ public class ModuleSensorOptimizerTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private DefaultFileSystem fs;
   private ModuleSensorOptimizer optimizer;
@@ -103,7 +99,7 @@ public class ModuleSensorOptimizerTest {
   @Test
   public void should_optimize_on_repository() {
     DefaultSensorDescriptor descriptor = new DefaultSensorDescriptor()
-      .createIssuesForRuleRepositories("squid");
+      .createIssuesForRuleRepositories("java");
     assertThat(optimizer.shouldExecute(descriptor)).isFalse();
 
     ActiveRules activeRules = new ActiveRulesBuilder()
@@ -115,7 +111,7 @@ public class ModuleSensorOptimizerTest {
 
     activeRules = new ActiveRulesBuilder()
       .addRule(new NewActiveRule.Builder().setRuleKey(RuleKey.of("repo1", "foo")).build())
-      .addRule(new NewActiveRule.Builder().setRuleKey(RuleKey.of("squid", "rule")).build())
+      .addRule(new NewActiveRule.Builder().setRuleKey(RuleKey.of("java", "rule")).build())
       .build();
     optimizer = new ModuleSensorOptimizer(fs, activeRules, settings.asConfig());
     assertThat(optimizer.shouldExecute(descriptor)).isTrue();
@@ -123,8 +119,8 @@ public class ModuleSensorOptimizerTest {
 
   @Test
   public void should_optimize_on_settings() {
-    DefaultSensorDescriptor descriptor = new DefaultSensorDescriptor()
-      .requireProperty("sonar.foo.reportPath");
+    DefaultSensorDescriptor descriptor = new DefaultSensorDescriptor();
+    descriptor.onlyWhenConfiguration(c -> c.hasKey("sonar.foo.reportPath"));
     assertThat(optimizer.shouldExecute(descriptor)).isFalse();
 
     settings.setProperty("sonar.foo.reportPath", "foo");

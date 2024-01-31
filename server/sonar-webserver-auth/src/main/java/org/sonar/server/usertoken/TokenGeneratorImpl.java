@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,14 +22,27 @@ package org.sonar.server.usertoken;
 import java.security.SecureRandom;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.sonar.db.user.TokenType;
 
 public class TokenGeneratorImpl implements TokenGenerator {
+
+  private static final String SONARQUBE_TOKEN_PREFIX = "sq";
+
   @Override
-  public String generate() {
+  public String generate(TokenType tokenType) {
+    String rawToken = generateRawToken();
+    return buildIdentifiablePartOfToken(tokenType) + rawToken;
+  }
+
+  private static String buildIdentifiablePartOfToken(TokenType tokenType) {
+    return SONARQUBE_TOKEN_PREFIX + tokenType.getIdentifier() + "_";
+  }
+
+  private static String generateRawToken() {
     SecureRandom random = new SecureRandom();
-    byte[] bytes = new byte[20];
-    random.nextBytes(bytes);
-    return Hex.encodeHexString(bytes);
+    byte[] randomBytes = new byte[20];
+    random.nextBytes(randomBytes);
+    return Hex.encodeHexString(randomBytes);
   }
 
   @Override

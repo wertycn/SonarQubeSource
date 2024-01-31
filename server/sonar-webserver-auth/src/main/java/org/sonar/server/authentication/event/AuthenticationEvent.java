@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,23 +22,23 @@ package org.sonar.server.authentication.event;
 import java.io.Serializable;
 import java.util.Objects;
 import javax.annotation.Nullable;
-import javax.servlet.http.HttpServletRequest;
 import org.sonar.api.server.authentication.BaseIdentityProvider;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
+import org.sonar.api.server.http.HttpRequest;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public interface AuthenticationEvent {
 
-  void loginSuccess(HttpServletRequest request, @Nullable String login, Source source);
+  void loginSuccess(HttpRequest request, @Nullable String login, Source source);
 
-  void loginFailure(HttpServletRequest request, AuthenticationException e);
+  void loginFailure(HttpRequest request, AuthenticationException e);
 
-  void logoutSuccess(HttpServletRequest request, @Nullable String login);
+  void logoutSuccess(HttpRequest request, @Nullable String login);
 
-  void logoutFailure(HttpServletRequest request, String errorMessage);
+  void logoutFailure(HttpRequest request, String errorMessage);
 
   enum Method {
     /**
@@ -46,9 +46,9 @@ public interface AuthenticationEvent {
      */
     BASIC,
     /**
-     * HTTP basic authentication with a security token.
+     * Authentication with SonarQube token passed either as basic credentials or bearer token.
      */
-    BASIC_TOKEN,
+    SONARQUBE_TOKEN,
     /**
      * SQ login form authentication with a login and password.
      */
@@ -65,6 +65,10 @@ public interface AuthenticationEvent {
      * JWT authentication (ie. with a session token).
      */
     JWT,
+    /**
+     * Authentication of the GitHub webhook (with shared Nwebhook_secret)
+     */
+    GITHUB_WEBHOOK,
     /**
      * External authentication (ie. fully implemented out of SQ's core code, see {@link BaseIdentityProvider}).
      */
@@ -89,6 +93,10 @@ public interface AuthenticationEvent {
      */
     JWT,
     /**
+     * User authentication done thanks to the signature hash provided by github in the request headers generated with a common secret.
+     */
+    GITHUB_WEBHOOK,
+    /**
      * User authentication made by external provider (see {@link BaseIdentityProvider}).
      */
     EXTERNAL
@@ -98,6 +106,7 @@ public interface AuthenticationEvent {
     private static final String LOCAL_PROVIDER_NAME = "local";
     private static final Source SSO_INSTANCE = new Source(Method.SSO, Provider.SSO, "sso");
     private static final Source JWT_INSTANCE = new Source(Method.JWT, Provider.JWT, "jwt");
+    private static final Source GITHUB_WEBHOOK_INSTANCE = new Source(Method.GITHUB_WEBHOOK, Provider.GITHUB_WEBHOOK, "github");
 
     private final Method method;
     private final Provider provider;
@@ -130,6 +139,10 @@ public interface AuthenticationEvent {
 
     public static Source jwt() {
       return JWT_INSTANCE;
+    }
+
+    public static Source githubWebhook() {
+      return GITHUB_WEBHOOK_INSTANCE;
     }
 
     public static Source external(IdentityProvider identityProvider) {

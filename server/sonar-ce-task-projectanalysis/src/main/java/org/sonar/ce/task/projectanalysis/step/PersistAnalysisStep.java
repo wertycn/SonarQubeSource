@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,8 +46,7 @@ public class PersistAnalysisStep implements ComputationStep {
   private final AnalysisMetadataHolder analysisMetadataHolder;
   private final PeriodHolder periodHolder;
 
-  public PersistAnalysisStep(System2 system2, DbClient dbClient, TreeRootHolder treeRootHolder,
-    AnalysisMetadataHolder analysisMetadataHolder, PeriodHolder periodHolder) {
+  public PersistAnalysisStep(System2 system2, DbClient dbClient, TreeRootHolder treeRootHolder, AnalysisMetadataHolder analysisMetadataHolder, PeriodHolder periodHolder) {
     this.system2 = system2;
     this.dbClient = dbClient;
     this.treeRootHolder = treeRootHolder;
@@ -108,11 +107,11 @@ public class PersistAnalysisStep implements ComputationStep {
         .setUuid(snapshotUuid)
         .setProjectVersion(projectVersion)
         .setBuildString(buildString)
-        .setComponentUuid(componentUuid)
+        .setRootComponentUuid(componentUuid)
         .setLast(false)
         .setStatus(SnapshotDto.STATUS_UNPROCESSED)
         .setCreatedAt(analysisDate)
-        .setBuildDate(system2.now());
+        .setAnalysisDate(system2.now());
 
       if (component.getType() == PROJECT) {
         component.getProjectAttributes().getScmRevisionId().ifPresent(dto::setRevision);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -66,6 +66,7 @@ public class LocalWsConnectorTest {
     assertThat(IOUtils.toString(wsResponse.contentStream())).isEqualTo("{}");
     assertThat(wsResponse.contentType()).isEqualTo(MediaTypes.JSON);
     assertThat(wsResponse.requestUrl()).isEqualTo("api/issues/search");
+    assertThat(wsResponse.headers()).isEmpty();
   }
 
   @Test
@@ -78,9 +79,9 @@ public class LocalWsConnectorTest {
 
     verifyRequested("GET", "api/issues/search", MediaTypes.JSON, Collections.<String, String>emptyMap());
     assertThat(wsResponse.code()).isEqualTo(200);
-    assertThat(wsResponse.content()).isEqualTo("");
-    assertThat(IOUtils.toString(wsResponse.contentReader())).isEqualTo("");
-    assertThat(IOUtils.toString(wsResponse.contentStream())).isEqualTo("");
+    assertThat(wsResponse.content()).isEmpty();
+    assertThat(IOUtils.toString(wsResponse.contentReader())).isEmpty();
+    assertThat(IOUtils.toString(wsResponse.contentStream())).isEmpty();
     assertThat(wsResponse.contentType()).isEqualTo(MediaTypes.JSON);
   }
 

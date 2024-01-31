@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,102 +17,51 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { orderBy, without } from 'lodash';
+import { HelperHintIcon } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import FacetBox from '../../../components/facet/FacetBox';
-import FacetHeader from '../../../components/facet/FacetHeader';
-import FacetItem from '../../../components/facet/FacetItem';
-import FacetItemsList from '../../../components/facet/FacetItemsList';
-import MultipleSelectionHint from '../../../components/facet/MultipleSelectionHint';
-import SeverityHelper from '../../../components/shared/SeverityHelper';
-import { formatFacetStat, Query } from '../utils';
+import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
+import SoftwareImpactSeverityIcon from '../../../components/icons/SoftwareImpactSeverityIcon';
+import { IMPACT_SEVERITIES } from '../../../helpers/constants';
+import { translate } from '../../../helpers/l10n';
+import { SoftwareImpactSeverity } from '../../../types/clean-code-taxonomy';
+import { CommonProps, SimpleListStyleFacet } from './SimpleListStyleFacet';
 
-interface Props {
-  fetching: boolean;
-  onChange: (changes: Partial<Query>) => void;
-  onToggle: (property: string) => void;
-  open: boolean;
-  severities: string[];
-  stats: T.Dict<number> | undefined;
+interface Props extends CommonProps {
+  severities: SoftwareImpactSeverity[];
 }
 
-const SEVERITIES = ['BLOCKER', 'MINOR', 'CRITICAL', 'INFO', 'MAJOR'];
+export function SeverityFacet(props: Props) {
+  const { severities = [], ...rest } = props;
 
-export default class SeverityFacet extends React.PureComponent<Props> {
-  property = 'severities';
-
-  static defaultProps = {
-    open: true
-  };
-
-  handleItemClick = (itemValue: string, multiple: boolean) => {
-    const { severities } = this.props;
-    if (multiple) {
-      const newValue = orderBy(
-        severities.includes(itemValue) ? without(severities, itemValue) : [...severities, itemValue]
-      );
-      this.props.onChange({ [this.property]: newValue });
-    } else {
-      this.props.onChange({
-        [this.property]: severities.includes(itemValue) && severities.length < 2 ? [] : [itemValue]
-      });
-    }
-  };
-
-  handleHeaderClick = () => {
-    this.props.onToggle(this.property);
-  };
-
-  handleClear = () => {
-    this.props.onChange({ [this.property]: [] });
-  };
-
-  getStat(severity: string) {
-    const { stats } = this.props;
-    return stats ? stats[severity] : undefined;
-  }
-
-  renderItem = (severity: string) => {
-    const active = this.props.severities.includes(severity);
-    const stat = this.getStat(severity);
-
-    return (
-      <FacetItem
-        active={active}
-        halfWidth={true}
-        key={severity}
-        name={<SeverityHelper severity={severity} />}
-        onClick={this.handleItemClick}
-        stat={formatFacetStat(stat)}
-        tooltip={translate('severity', severity)}
-        value={severity}
-      />
-    );
-  };
-
-  render() {
-    const { severities, stats = {} } = this.props;
-    const values = severities.map(severity => translate('severity', severity));
-
-    return (
-      <FacetBox property={this.property}>
-        <FacetHeader
-          fetching={this.props.fetching}
-          name={translate('issues.facet', this.property)}
-          onClear={this.handleClear}
-          onClick={this.handleHeaderClick}
-          open={this.props.open}
-          values={values}
-        />
-
-        {this.props.open && (
-          <>
-            <FacetItemsList>{SEVERITIES.map(this.renderItem)}</FacetItemsList>
-            <MultipleSelectionHint options={Object.keys(stats).length} values={severities.length} />
-          </>
-        )}
-      </FacetBox>
-    );
-  }
+  return (
+    <SimpleListStyleFacet
+      property="impactSeverities"
+      itemNamePrefix="severity"
+      listItems={IMPACT_SEVERITIES}
+      selectedItems={severities}
+      renderIcon={(severity: string, disabled: boolean) => (
+        <SoftwareImpactSeverityIcon severity={severity} disabled={disabled} />
+      )}
+      help={
+        <DocumentationTooltip
+          placement="right"
+          content={
+            <>
+              <p>{translate('issues.facet.impactSeverities.help.line1')}</p>
+              <p className="sw-mt-2">{translate('issues.facet.impactSeverities.help.line2')}</p>
+            </>
+          }
+          links={[
+            {
+              href: '/user-guide/clean-code',
+              label: translate('learn_more'),
+            },
+          ]}
+        >
+          <HelperHintIcon />
+        </DocumentationTooltip>
+      }
+      {...rest}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,25 +17,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import { LightLabel, LightPrimary } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../../helpers/l10n';
 import { HotspotStatusOption } from '../../../../types/security-hotspots';
 
 export interface StatusDescriptionProps {
   statusOption: HotspotStatusOption;
-  showTitle?: boolean;
 }
 
 export default function StatusDescription(props: StatusDescriptionProps) {
-  const { statusOption, showTitle } = props;
+  const { statusOption } = props;
 
   return (
     <div>
       <h3>
-        {showTitle && `${translate('status')}: `}
-        {translate('hotspots.status_option', statusOption)}
+        <LightPrimary className="sw-body-sm-highlight">
+          {`${translate('status')}: `}
+          {translate('hotspots.status_option', statusOption)}
+        </LightPrimary>
       </h3>
-      <span>{translate('hotspots.status_option', statusOption, 'description')}</span>
+      <Description className="sw-mt-1">
+        <LightLabel className="sw-body-sm">
+          {translate('hotspots.status_option', statusOption, 'description')}
+        </LightLabel>
+      </Description>
     </div>
   );
 }
+
+const Description = styled.div`
+  max-width: 360px;
+`;

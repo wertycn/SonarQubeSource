@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,17 +19,18 @@
  */
 package org.sonar.server.platform;
 
-import com.google.common.collect.Lists;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.servlet.ServletContext;
+import javax.servlet.ServletRegistration;
 import org.sonar.api.utils.log.Logger;
 import org.sonar.api.utils.log.Loggers;
 import org.sonar.api.utils.log.Profiler;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ExtensionContainer;
+import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.server.app.ProcessCommandWrapper;
 import org.sonar.server.platform.db.migration.version.DatabaseVersion;
 import org.sonar.server.platform.platformlevel.PlatformLevel;
@@ -39,6 +40,9 @@ import org.sonar.server.platform.platformlevel.PlatformLevel3;
 import org.sonar.server.platform.platformlevel.PlatformLevel4;
 import org.sonar.server.platform.platformlevel.PlatformLevelSafeMode;
 import org.sonar.server.platform.platformlevel.PlatformLevelStartup;
+import org.sonar.server.platform.web.ApiV2Servlet;
+
+import static org.sonar.process.ProcessId.WEB_SERVER;
 
 /**
  * @since 2.2
@@ -49,31 +53,20 @@ public class PlatformImpl implements Platform {
 
   private static final PlatformImpl INSTANCE = new PlatformImpl();
 
-  private final Supplier<AutoStarter> autoStarterSupplier;
   private AutoStarter autoStarter = null;
-  private Properties properties;
-  private ServletContext servletContext;
-  private PlatformLevel level1;
-  private PlatformLevel level2;
-  private PlatformLevel levelSafeMode;
-  private PlatformLevel level3;
-  private PlatformLevel level4;
-  private PlatformLevel currentLevel;
+  private Properties properties = null;
+  private ServletContext servletContext = null;
+  private PlatformLevel level1 = null;
+  private PlatformLevel level2 = null;
+  private PlatformLevel levelSafeMode = null;
+  private PlatformLevel level3 = null;
+  private PlatformLevel level4 = null;
+  private PlatformLevel currentLevel = null;
   private boolean dbConnected = false;
   private boolean started = false;
-  private final List<Object> level4AddedComponents = Lists.newArrayList();
+  private final List<Object> level4AddedComponents = new ArrayList<>();
   private final Profiler profiler = Profiler.createIfTrace(Loggers.get(PlatformImpl.class));
-
-  private PlatformImpl() {
-    this.autoStarterSupplier = () -> {
-      ProcessCommandWrapper processCommandWrapper = getContainer().getComponentByType(ProcessCommandWrapper.class);
-      return new AsynchronousAutoStarter(processCommandWrapper);
-    };
-  }
-
-  protected PlatformImpl(Supplier<AutoStarter> autoStarterSupplier) {
-    this.autoStarterSupplier = autoStarterSupplier;
-  }
+  private ApiV2Servlet servlet = null;
 
   public static PlatformImpl getInstance() {
     return INSTANCE;
@@ -90,13 +83,8 @@ public class PlatformImpl implements Platform {
     }
   }
 
-  // Platform is injected in Pico, so do not rename this method "start"
   @Override
   public void doStart() {
-    doStart(Startup.ALL);
-  }
-
-  protected void doStart(Startup startup) {
     if (started && !isInSafeMode()) {
       return;
     }
@@ -104,13 +92,18 @@ public class PlatformImpl implements Platform {
     boolean dbRequiredMigration = dbRequiresMigration();
     startSafeModeContainer();
     currentLevel = levelSafeMode;
+    if (!started) {
+      registerSpringMvcServlet();
+      this.servlet.initDispatcherSafeMode(levelSafeMode);
+    }
     started = true;
 
     // if AutoDbMigration kicked in or no DB migration was required, startup can be resumed in another thread
     if (dbRequiresMigration()) {
-      LOGGER.info("Database needs to be migrated. Please refer to https://docs.sonarqube.org/latest/setup/upgrading");
+      LOGGER.info("Database needs to be migrated. Please refer to https://docs.sonarsource.com/sonarqube/latest/setup/upgrading");
     } else {
-      this.autoStarter = autoStarterSupplier.get();
+      this.autoStarter = createAutoStarter();
+
       this.autoStarter.execute(new AutoStarterRunnable(autoStarter) {
         @Override
         public void doRun() {
@@ -119,11 +112,13 @@ public class PlatformImpl implements Platform {
           }
           runIfNotAborted(PlatformImpl.this::startLevel34Containers);
 
-          runIfNotAborted(() -> executeStartupTasks(startup));
+          runIfNotAborted(()->servlet.initDispatcherLevel4(level4));
+          runIfNotAborted(PlatformImpl.this::executeStartupTasks);
+
           // switch current container last to avoid giving access to a partially initialized container
           runIfNotAborted(() -> {
             currentLevel = level4;
-            LOGGER.info("WebServer is operational");
+            LOGGER.info("{} is operational", WEB_SERVER.getHumanReadableName());
           });
 
           // stop safemode container if it existed
@@ -131,6 +126,18 @@ public class PlatformImpl implements Platform {
         }
       });
     }
+  }
+
+  private void registerSpringMvcServlet() {
+    servlet = new ApiV2Servlet();
+    ServletRegistration.Dynamic app = this.servletContext.addServlet("app", servlet);
+    app.addMapping("/api/v2/*");
+    app.setLoadOnStartup(1);
+  }
+
+  private AutoStarter createAutoStarter() {
+    ProcessCommandWrapper processCommandWrapper = getContainer().getComponentByType(ProcessCommandWrapper.class);
+    return new AsynchronousAutoStarter(processCommandWrapper);
   }
 
   private boolean dbRequiresMigration() {
@@ -187,18 +194,12 @@ public class PlatformImpl implements Platform {
     level4 = start(new PlatformLevel4(level3, level4AddedComponents));
   }
 
-  public void executeStartupTasks() {
-    executeStartupTasks(Startup.ALL);
-  }
 
-  private void executeStartupTasks(Startup startup) {
-    if (startup.ordinal() >= Startup.ALL.ordinal()) {
-      new PlatformLevelStartup(level4)
-        .configure()
-        .start()
-        .stop()
-        .destroy();
-    }
+  private void executeStartupTasks() {
+    new PlatformLevelStartup(level4)
+      .configure()
+      .start()
+      .stop();
   }
 
   private void startSafeModeContainer() {
@@ -230,7 +231,7 @@ public class PlatformImpl implements Platform {
    * Stops level 2, 3 and 4 containers cleanly if they exists.
    * Call this method before {@link #startLevel1Container()} to avoid duplicate attempt to stop safemode container
    * components (since calling stop on a container calls stop on its children too, see
-   * {@link ComponentContainer#stopComponents()}).
+   * {@link SpringComponentContainer#stopComponents()}).
    */
   private void stopLevel234Containers() {
     if (level2 != null) {
@@ -245,7 +246,7 @@ public class PlatformImpl implements Platform {
    * Stops safemode container cleanly if it exists.
    * Call this method before {@link #stopLevel234Containers()} and {@link #stopLevel1Container()} to avoid duplicate
    * attempt to stop safemode container components (since calling stop on a container calls stops on its children too,
-   * see {@link ComponentContainer#stopComponents()}).
+   * see {@link SpringComponentContainer#stopComponents()}).
    */
   private void stopSafeModeContainer() {
     if (levelSafeMode != null) {
@@ -259,7 +260,6 @@ public class PlatformImpl implements Platform {
     return version.getStatus();
   }
 
-  // Do not rename "stop"
   public void doStop() {
     try {
       stopAutoStarter();
@@ -286,16 +286,8 @@ public class PlatformImpl implements Platform {
   }
 
   @Override
-  public ComponentContainer getContainer() {
+  public ExtensionContainer getContainer() {
     return currentLevel.getContainer();
-  }
-
-  public Object getComponent(Object key) {
-    return getContainer().getComponentByKey(key);
-  }
-
-  public enum Startup {
-    NO_STARTUP_TASKS, ALL
   }
 
   public interface AutoStarter {

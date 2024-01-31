@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,12 +29,11 @@ import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualitygate.QualityGateDto;
+import org.sonar.server.qualitygate.QualityGateCaycChecker;
 import org.sonar.server.qualitygate.QualityGateFinder;
 import org.sonarqube.ws.Qualitygates.ListWsResponse;
 import org.sonarqube.ws.Qualitygates.ListWsResponse.QualityGate;
 
-import static java.util.Optional.ofNullable;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class ListAction implements QualityGatesWsAction {
@@ -42,11 +41,13 @@ public class ListAction implements QualityGatesWsAction {
   private final DbClient dbClient;
   private final QualityGatesWsSupport wsSupport;
   private final QualityGateFinder finder;
+  private final QualityGateCaycChecker qualityGateCaycChecker;
 
-  public ListAction(DbClient dbClient, QualityGatesWsSupport wsSupport, QualityGateFinder finder) {
+  public ListAction(DbClient dbClient, QualityGatesWsSupport wsSupport, QualityGateFinder finder, QualityGateCaycChecker qualityGateCaycChecker) {
     this.dbClient = dbClient;
     this.wsSupport = wsSupport;
     this.finder = finder;
+    this.qualityGateCaycChecker = qualityGateCaycChecker;
   }
 
   @Override
@@ -56,6 +57,9 @@ public class ListAction implements QualityGatesWsAction {
       .setSince("4.3")
       .setResponseExample(Resources.getResource(this.getClass(), "list-example.json"))
       .setChangelog(
+        new Change("10.0", "Field 'default' in the response has been removed"),
+        new Change("10.0", "Field 'id' in the response has been removed"),
+        new Change("9.9", "'caycStatus' field is added on quality gate"),
         new Change("8.4", "Field 'id' in the response is deprecated. Format changes from integer to string."),
         new Change("7.0", "'isDefault' field is added on quality gate"),
         new Change("7.0", "'default' field on root level is deprecated"),
@@ -69,24 +73,24 @@ public class ListAction implements QualityGatesWsAction {
     try (DbSession dbSession = dbClient.openSession(false)) {
       QualityGateDto defaultQualityGate = finder.getDefault(dbSession);
       Collection<QualityGateDto> qualityGates = dbClient.qualityGateDao().selectAll(dbSession);
-      writeProtobuf(buildResponse(qualityGates, defaultQualityGate), request, response);
+
+      writeProtobuf(buildResponse(dbSession, qualityGates, defaultQualityGate), request, response);
     }
   }
 
-  private ListWsResponse buildResponse(Collection<QualityGateDto> qualityGates, @Nullable QualityGateDto defaultQualityGate) {
+  private ListWsResponse buildResponse(DbSession dbSession, Collection<QualityGateDto> qualityGates, @Nullable QualityGateDto defaultQualityGate) {
     String defaultUuid = defaultQualityGate == null ? null : defaultQualityGate.getUuid();
     ListWsResponse.Builder builder = ListWsResponse.newBuilder()
       .setActions(ListWsResponse.RootActions.newBuilder().setCreate(wsSupport.isQualityGateAdmin()))
       .addAllQualitygates(qualityGates.stream()
         .map(qualityGate -> QualityGate.newBuilder()
-          .setId(qualityGate.getUuid())
           .setName(qualityGate.getName())
           .setIsDefault(qualityGate.getUuid().equals(defaultUuid))
           .setIsBuiltIn(qualityGate.isBuiltIn())
-          .setActions(wsSupport.getActions(qualityGate, defaultQualityGate))
+          .setCaycStatus(qualityGateCaycChecker.checkCaycCompliant(dbSession, qualityGate.getUuid()).toString())
+          .setActions(wsSupport.getActions(dbSession, qualityGate, defaultQualityGate))
           .build())
-        .collect(toList()));
-    ofNullable(defaultUuid).ifPresent(builder::setDefault);
+        .toList());
     return builder.build();
   }
 

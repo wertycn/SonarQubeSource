@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,6 +50,5 @@ public interface BranchSupportDelegate {
    * @throws IllegalArgumentException if arguments are inconsistent (such as {@code mainComponentDto} not having the same
    *         key as {@code componentKey.getKey()}, ...)
    */
-  ComponentDto createBranchComponent(DbSession dbSession, ComponentKey componentKey, ComponentDto mainComponentDto,
-    BranchDto mainComponentBranchDto);
+  ComponentDto createBranchComponent(DbSession dbSession, ComponentKey componentKey, ComponentDto mainComponentDto, BranchDto mainComponentBranchDto);
 }

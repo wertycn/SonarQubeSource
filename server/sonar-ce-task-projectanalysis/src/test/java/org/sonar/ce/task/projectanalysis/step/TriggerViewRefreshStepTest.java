@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@ import org.sonar.server.project.Project;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class TriggerViewRefreshStepTest {
@@ -39,7 +39,7 @@ public class TriggerViewRefreshStepTest {
 
     underTest.execute(new TestComputationStepContext());
 
-    verifyZeroInteractions(analysisMetadataHolder);
+    verifyNoInteractions(analysisMetadataHolder);
   }
 
   @Test
@@ -48,7 +48,7 @@ public class TriggerViewRefreshStepTest {
 
     underTest.execute(new TestComputationStepContext());
 
-    verifyZeroInteractions(analysisMetadataHolder);
+    verifyNoInteractions(analysisMetadataHolder);
   }
 
   @Test

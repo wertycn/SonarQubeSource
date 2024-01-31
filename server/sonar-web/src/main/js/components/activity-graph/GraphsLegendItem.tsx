@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { useTheme } from '@emotion/react';
+import styled from '@emotion/styled';
+import classNames from 'classnames';
+import {
+  CloseIcon,
+  FlagWarningIcon,
+  InteractiveIcon,
+  Theme,
+  themeBorder,
+  themeColor,
+} from 'design-system';
 import * as React from 'react';
-import { ClearButton } from 'sonar-ui-common/components/controls/buttons';
-import AlertWarnIcon from 'sonar-ui-common/components/icons/AlertWarnIcon';
-import ChartLegendIcon from 'sonar-ui-common/components/icons/ChartLegendIcon';
+import { ChartLegendIcon } from '../../components/icons/ChartLegendIcon';
+import { translateWithParameters } from '../../helpers/l10n';
 
 interface Props {
   className?: string;
@@ -32,35 +41,51 @@ interface Props {
   removeMetric?: (metric: string) => void;
 }
 
-export default class GraphsLegendItem extends React.PureComponent<Props> {
-  handleClick = () => {
-    if (this.props.removeMetric) {
-      this.props.removeMetric(this.props.metric);
-    }
-  };
+export function GraphsLegendItem({
+  className,
+  index,
+  metric,
+  name,
+  removeMetric,
+  showWarning,
+}: Props) {
+  const theme = useTheme() as Theme;
 
-  render() {
-    const isActionable = this.props.removeMetric != null;
-    const legendClass = classNames(
-      { 'activity-graph-legend-actionable': isActionable },
-      this.props.className
-    );
-    return (
-      <span className={legendClass}>
-        {this.props.showWarning ? (
-          <AlertWarnIcon className="spacer-right" />
-        ) : (
-          <ChartLegendIcon className="text-middle spacer-right" index={this.props.index} />
-        )}
-        <span className="text-middle">{this.props.name}</span>
-        {isActionable && (
-          <ClearButton
-            className="button-tiny spacer-left text-middle"
-            iconProps={{ size: 12 }}
-            onClick={this.handleClick}
-          />
-        )}
+  const isActionable = removeMetric !== undefined;
+
+  return (
+    <StyledLegendItem
+      className={classNames('sw-px-2 sw-py-1 sw-rounded-2', className)}
+      isActionable={isActionable}
+    >
+      {showWarning ? (
+        <FlagWarningIcon className="sw-mr-2" />
+      ) : (
+        <ChartLegendIcon className="sw-mr-2" index={index} />
+      )}
+      <span className="sw-body-sm" style={{ color: themeColor('graphCursorLineColor')({ theme }) }}>
+        {name}
       </span>
-    );
-  }
+      {isActionable && (
+        <InteractiveIcon
+          Icon={CloseIcon}
+          aria-label={translateWithParameters('project_activity.graphs.custom.remove_metric', name)}
+          className="sw-ml-2"
+          size="small"
+          onClick={() => removeMetric(metric)}
+        />
+      )}
+    </StyledLegendItem>
+  );
 }
+
+interface GraphPillsProps {
+  isActionable: boolean;
+}
+
+const StyledLegendItem = styled.div<GraphPillsProps>`
+  display: flex;
+  align-items: center;
+  border: ${(props) =>
+    props.isActionable ? themeBorder('default', 'buttonSecondaryBorder') : 'none'};
+`;

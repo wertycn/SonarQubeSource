@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@ public class JvmStateSectionTest {
     ProtobufSystemInfo.Section section = underTest.toProtobuf();
 
     assertThat(section.getName()).isEqualTo(PROCESS_NAME);
-    assertThat(section.getAttributesCount()).isGreaterThan(0);
+    assertThat(section.getAttributesCount()).isPositive();
     assertThat(section.getAttributesList()).extracting("key")
       .contains(
         "Max Memory (MB)", "Free Memory (MB)",

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,6 +25,19 @@
   display: block;
 }
 
+.coding-rules-similar-tag-divider {
+  margin-top: 6px;
+  border-top: 1px solid var(--barBorderColor);
+}
+
+.coding-rules-filter-title {
+  padding: var(--gridSize);
+  font-size: 12px;
+  color: var(--neutral600);
+  white-space: nowrap;
+  line-height: unset;
+}
+
 /*
  * Detail
  */
@@ -33,8 +46,10 @@
   position: relative;
   display: inline-block;
   margin: 16px 0;
-  font-size: var(--bigFontSize);
-  font-weight: 400;
+  font-size: 22px;
+  font-weight: 500;
+  border-bottom: 1px solid #e6e6e6;
+  width: 100%;
 }
 
 .coding-rules-detail-quality-profile-parameter {
@@ -66,6 +81,10 @@
   margin-top: 0;
 }
 
+.coding-rules-detail-header {
+  font-size: var(--veryBigFontSize);
+}
+
 .coding-rules-detail-properties {
   display: flex;
   flex-wrap: wrap;
@@ -80,9 +99,13 @@
 .coding-rules-detail-property {
   display: flex;
   align-items: center;
-  margin-right: calc(2 * var(--gridSize));
+  margin-right: var(--gridSize);
   margin-bottom: var(--gridSize);
   font-size: var(--smallFontSize);
+}
+
+.coding-rules-detail-property.muted {
+  color: var(--neutral200);
 }
 
 .coding-rules-detail-tag + .coding-rules-detail-tag {
@@ -107,10 +130,6 @@
 
 .coding-rules-detail-description {
   margin: 20px 0;
-}
-
-.coding-rules-detail-description-extra {
-  margin-top: -10px;
 }
 
 .coding-rules-detail-extend-description-form {
@@ -236,7 +255,7 @@
 }
 
 .coding-rule-table td {
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .coding-rule-table + .coding-rule-table {
@@ -273,8 +292,11 @@
   padding-left: 20px;
 }
 
-.coding-rule-section-separator {
-  height: 0;
-  margin: 10px 0;
-  border-top: 1px solid var(--barBorderColor);
+.notice-dot {
+  height: var(--gridSize);
+  width: var(--gridSize);
+  background-color: var(--blue);
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: var(--gridSize);
 }

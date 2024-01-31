@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,8 +34,8 @@ import org.sonar.xoo.Xoo;
 
 @Phase(name = Phase.Name.PRE)
 public class NoSonarSensor implements Sensor {
-
-  private NoSonarFilter noSonarFilter;
+  private static final String NO_SONAR_SENSOR_ACTIVATE = "sonar.nosonarsensor.activate";
+  private final NoSonarFilter noSonarFilter;
 
   public NoSonarSensor(NoSonarFilter noSonarFilter) {
     this.noSonarFilter = noSonarFilter;
@@ -44,7 +44,8 @@ public class NoSonarSensor implements Sensor {
   @Override
   public void describe(SensorDescriptor descriptor) {
     descriptor
-      .onlyOnLanguage(Xoo.KEY);
+      .onlyOnLanguage(Xoo.KEY)
+      .onlyWhenConfiguration(c -> c.getBoolean(NO_SONAR_SENSOR_ACTIVATE).orElse(false));
   }
 
   @Override

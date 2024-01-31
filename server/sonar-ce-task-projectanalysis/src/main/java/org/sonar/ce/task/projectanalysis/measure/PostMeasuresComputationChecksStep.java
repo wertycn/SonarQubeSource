@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,10 +23,12 @@ import java.util.Optional;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
+import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
 import org.sonar.ce.task.projectanalysis.metric.Metric;
 import org.sonar.ce.task.projectanalysis.metric.MetricRepository;
 import org.sonar.ce.task.step.ComputationStep;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Execute {@link PostMeasuresComputationCheck} instances in no specific order.
@@ -42,6 +44,7 @@ public class PostMeasuresComputationChecksStep implements ComputationStep {
   private final AnalysisMetadataHolder analysisMetadataHolder;
   private final PostMeasuresComputationCheck[] extensions;
 
+  @Autowired(required = false)
   public PostMeasuresComputationChecksStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository,
     AnalysisMetadataHolder analysisMetadataHolder, PostMeasuresComputationCheck[] extensions) {
     this.treeRootHolder = treeRootHolder;
@@ -54,6 +57,7 @@ public class PostMeasuresComputationChecksStep implements ComputationStep {
   /**
    * Used when zero {@link PostMeasuresComputationCheck} are registered into container.
    */
+  @Autowired(required = false)
   public PostMeasuresComputationChecksStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository,
     AnalysisMetadataHolder analysisMetadataHolder) {
     this(treeRootHolder, metricRepository, measureRepository, analysisMetadataHolder, new PostMeasuresComputationCheck[0]);
@@ -84,6 +88,10 @@ public class PostMeasuresComputationChecksStep implements ComputationStep {
       Metric nclocMetric = metricRepository.getByKey(CoreMetrics.NCLOC_KEY);
       Optional<Measure> nclocMeasure = measureRepository.getRawMeasure(treeRootHolder.getRoot(), nclocMetric);
       return nclocMeasure.map(Measure::getIntValue).orElse(0);
+    }
+
+    @Override public Component getRoot() {
+      return treeRootHolder.getRoot();
     }
 
   }

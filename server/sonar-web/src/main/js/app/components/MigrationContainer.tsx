@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,25 +18,22 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { WithRouterProps } from 'react-router';
+import { Navigate, Outlet } from 'react-router-dom';
 import { getSystemStatus } from '../../helpers/system';
 
-export default class MigrationContainer extends React.PureComponent<WithRouterProps> {
-  componentDidMount() {
-    if (getSystemStatus() !== 'UP') {
-      this.props.router.push({
-        pathname: '/maintenance',
-        query: {
-          return_to: window.location.pathname + window.location.search + window.location.hash
-        }
-      });
-    }
-  }
+export function MigrationContainer() {
+  if (getSystemStatus() !== 'UP') {
+    const returnTo = window.location.pathname + window.location.search + window.location.hash;
+    const to = {
+      pathname: '/maintenance',
+      search: new URLSearchParams({
+        return_to: returnTo,
+      }).toString(),
+    };
 
-  render() {
-    if (getSystemStatus() !== 'UP') {
-      return null;
-    }
-    return this.props.children;
+    return <Navigate to={to} />;
   }
+  return <Outlet />;
 }
+
+export default MigrationContainer;

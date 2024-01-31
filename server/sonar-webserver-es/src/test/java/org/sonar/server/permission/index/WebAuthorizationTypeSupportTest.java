@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.server.permission.index;
 
-import org.elasticsearch.index.query.MatchAllQueryBuilder;
-import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.join.query.HasParentQueryBuilder;
 import org.junit.Rule;
 import org.junit.Test;
@@ -30,7 +28,6 @@ import org.sonar.db.user.UserDto;
 import org.sonar.db.user.UserTesting;
 import org.sonar.server.tester.UserSessionRule;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonar.test.JsonAssert.assertJson;
 
 public class WebAuthorizationTypeSupportTest {
@@ -39,15 +36,6 @@ public class WebAuthorizationTypeSupportTest {
   public UserSessionRule userSession = UserSessionRule.standalone();
 
   private WebAuthorizationTypeSupport underTest = new WebAuthorizationTypeSupport(userSession);
-
-  @Test
-  public void createQueryFilter_does_not_include_permission_filters_if_user_is_flagged_as_root() {
-    userSession.logIn().setRoot();
-
-    QueryBuilder filter = underTest.createQueryFilter();
-
-    assertThat(filter).isInstanceOf(MatchAllQueryBuilder.class);
-  }
 
   @Test
   public void createQueryFilter_sets_filter_on_anyone_group_if_user_is_anonymous() {

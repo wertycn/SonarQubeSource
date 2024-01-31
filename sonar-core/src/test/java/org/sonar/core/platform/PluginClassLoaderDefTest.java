@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,8 +33,9 @@ public class PluginClassLoaderDefTest {
 
     assertThat(one.equals(one)).isTrue();
     assertThat(one.equals(oneBis)).isTrue();
-    assertThat(one.hashCode()).isEqualTo(one.hashCode());
-    assertThat(one.hashCode()).isEqualTo(oneBis.hashCode());
+    assertThat(one)
+      .hasSameHashCodeAs(one)
+      .hasSameHashCodeAs(oneBis);
 
     assertThat(one.equals(two)).isFalse();
     assertThat(one.equals("one")).isFalse();

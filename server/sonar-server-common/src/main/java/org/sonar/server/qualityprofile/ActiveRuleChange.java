@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@ import org.apache.commons.lang.StringUtils;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.ActiveRuleKey;
 import org.sonar.db.qualityprofile.QProfileChangeDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 public class ActiveRuleChange {
 
@@ -45,17 +45,17 @@ public class ActiveRuleChange {
   private ActiveRuleInheritance inheritance = null;
   private final Map<String, String> parameters = new HashMap<>();
 
-  public ActiveRuleChange(Type type, ActiveRuleDto activeRule, RuleDefinitionDto ruleDefinition) {
+  public ActiveRuleChange(Type type, ActiveRuleDto activeRule, RuleDto ruleDto) {
     this.type = type;
     this.key = activeRule.getKey();
-    this.ruleUuid = ruleDefinition.getUuid();
+    this.ruleUuid = ruleDto.getUuid();
     this.activeRule = activeRule;
   }
 
-  public ActiveRuleChange(Type type, ActiveRuleKey key, RuleDefinitionDto ruleDefinition) {
+  public ActiveRuleChange(Type type, ActiveRuleKey key, RuleDto ruleDto) {
     this.type = type;
     this.key = key;
-    this.ruleUuid = ruleDefinition.getUuid();
+    this.ruleUuid = ruleDto.getUuid();
   }
 
   public ActiveRuleKey getKey() {
@@ -115,6 +115,10 @@ public class ActiveRuleChange {
     return this;
   }
 
+  public QProfileChangeDto toSystemChangedDto() {
+    return toDto(null);
+  }
+
   public QProfileChangeDto toDto(@Nullable String userUuid) {
     QProfileChangeDto dto = new QProfileChangeDto();
     dto.setChangeType(type.name());
@@ -129,9 +133,6 @@ public class ActiveRuleChange {
 
     if (StringUtils.isNotEmpty(severity)) {
       data.put("severity", severity);
-    }
-    if (inheritance != null) {
-      data.put("inheritance", inheritance.name());
     }
     dto.setData(data);
     return dto;

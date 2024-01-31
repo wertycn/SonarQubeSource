@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,13 +25,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.exceptions.BadRequestException;
+import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventService;
+import org.sonar.server.qualityprofile.builtin.RuleActivationContext;
+import org.sonar.server.qualityprofile.builtin.RuleActivator;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.rule.index.RuleIndex;
 import org.sonar.server.rule.index.RuleQuery;
@@ -44,25 +47,29 @@ public class QProfileRulesImpl implements QProfileRules {
   private final RuleActivator ruleActivator;
   private final RuleIndex ruleIndex;
   private final ActiveRuleIndexer activeRuleIndexer;
+  private final QualityProfileChangeEventService qualityProfileChangeEventService;
 
-  public QProfileRulesImpl(DbClient db, RuleActivator ruleActivator, RuleIndex ruleIndex, ActiveRuleIndexer activeRuleIndexer) {
+  public QProfileRulesImpl(DbClient db, RuleActivator ruleActivator, RuleIndex ruleIndex, ActiveRuleIndexer activeRuleIndexer,
+    QualityProfileChangeEventService qualityProfileChangeEventService) {
     this.db = db;
     this.ruleActivator = ruleActivator;
     this.ruleIndex = ruleIndex;
     this.activeRuleIndexer = activeRuleIndexer;
+    this.qualityProfileChangeEventService = qualityProfileChangeEventService;
   }
 
   @Override
   public List<ActiveRuleChange> activateAndCommit(DbSession dbSession, QProfileDto profile, Collection<RuleActivation> activations) {
     verifyNotBuiltIn(profile);
 
-    Set<String> ruleUuids = activations.stream().map(RuleActivation::getRuleUuid).collect(MoreCollectors.toHashSet(activations.size()));
+    Set<String> ruleUuids = activations.stream().map(RuleActivation::getRuleUuid).collect(Collectors.toSet());
     RuleActivationContext context = ruleActivator.createContextForUserProfile(dbSession, profile, ruleUuids);
 
     List<ActiveRuleChange> changes = new ArrayList<>();
     for (RuleActivation activation : activations) {
       changes.addAll(ruleActivator.activate(dbSession, activation, context));
     }
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), changes, profile.getLanguage());
     activeRuleIndexer.commitAndIndex(dbSession, changes);
     return changes;
   }
@@ -70,10 +77,12 @@ public class QProfileRulesImpl implements QProfileRules {
   @Override
   public BulkChangeResult bulkActivateAndCommit(DbSession dbSession, QProfileDto profile, RuleQuery ruleQuery, @Nullable String severity) {
     verifyNotBuiltIn(profile);
-    return doBulk(dbSession, profile, ruleQuery, (context, ruleDefinition) -> {
-      RuleActivation activation = RuleActivation.create(ruleDefinition.getUuid(), severity, null);
+    BulkChangeResult bulkChangeResult = doBulk(dbSession, profile, ruleQuery, (context, ruleDto) -> {
+      RuleActivation activation = RuleActivation.create(ruleDto.getUuid(), severity, null);
       return ruleActivator.activate(dbSession, activation, context);
     });
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), bulkChangeResult.getChanges(), profile.getLanguage());
+    return bulkChangeResult;
   }
 
   @Override
@@ -85,6 +94,9 @@ public class QProfileRulesImpl implements QProfileRules {
     for (String ruleUuid : ruleUuids) {
       changes.addAll(ruleActivator.deactivate(dbSession, context, ruleUuid, false));
     }
+
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), changes, profile.getLanguage());
+
     activeRuleIndexer.commitAndIndex(dbSession, changes);
     return changes;
   }
@@ -92,11 +104,15 @@ public class QProfileRulesImpl implements QProfileRules {
   @Override
   public BulkChangeResult bulkDeactivateAndCommit(DbSession dbSession, QProfileDto profile, RuleQuery ruleQuery) {
     verifyNotBuiltIn(profile);
-    return doBulk(dbSession, profile, ruleQuery, (context, ruleDefinition) -> ruleActivator.deactivate(dbSession, context, ruleDefinition.getUuid(), false));
+    BulkChangeResult bulkChangeResult = doBulk(dbSession, profile, ruleQuery, (context, ruleDto) -> ruleActivator.deactivate(dbSession, context, ruleDto.getUuid(), false));
+
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), bulkChangeResult.getChanges(), profile.getLanguage());
+
+    return bulkChangeResult;
   }
 
   @Override
-  public List<ActiveRuleChange> deleteRule(DbSession dbSession, RuleDefinitionDto rule) {
+  public List<ActiveRuleChange> deleteRule(DbSession dbSession, RuleDto rule) {
     List<ActiveRuleChange> changes = new ArrayList<>();
     List<String> activeRuleUuids = new ArrayList<>();
     db.activeRuleDao().selectByRuleUuid(dbSession, rule.getUuid()).forEach(ar -> {
@@ -114,7 +130,7 @@ public class QProfileRulesImpl implements QProfileRules {
     checkArgument(!profile.isBuiltIn(), "The built-in profile %s is read-only and can't be updated", profile.getName());
   }
 
-  private BulkChangeResult doBulk(DbSession dbSession, QProfileDto profile, RuleQuery ruleQuery, BiFunction<RuleActivationContext, RuleDefinitionDto, List<ActiveRuleChange>> fn) {
+  private BulkChangeResult doBulk(DbSession dbSession, QProfileDto profile, RuleQuery ruleQuery, BiFunction<RuleActivationContext, RuleDto, List<ActiveRuleChange>> fn) {
     BulkChangeResult result = new BulkChangeResult();
     Collection<String> ruleUuids = Sets.newHashSet(ruleIndex.searchAll(ruleQuery));
     RuleActivationContext context = ruleActivator.createContextForUserProfile(dbSession, profile, ruleUuids);
@@ -122,8 +138,8 @@ public class QProfileRulesImpl implements QProfileRules {
     for (String ruleUuid : ruleUuids) {
       try {
         context.reset(ruleUuid);
-        RuleDefinitionDto ruleDefinition = context.getRule().get();
-        List<ActiveRuleChange> changes = fn.apply(context, ruleDefinition);
+        RuleDto ruleDto = context.getRule().get();
+        List<ActiveRuleChange> changes = fn.apply(context, ruleDto);
         result.addChanges(changes);
         if (!changes.isEmpty()) {
           result.incrementSucceeded();

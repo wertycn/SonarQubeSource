@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,36 +34,34 @@ import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.server.platform.ServerFileSystem;
 import org.sonar.updatecenter.common.PluginManifest;
 
 import static java.util.jar.Attributes.Name.MANIFEST_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class PluginJarLoaderTest {
   @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-  @Rule
   public TemporaryFolder temp = new TemporaryFolder();
   @Rule
   public LogTester logs = new LogTester();
 
-  private ServerFileSystem fs = mock(ServerFileSystem.class);
-  private Set<String> blacklisted = new HashSet<>();
-  private SonarRuntime runtime = mock(SonarRuntime.class);
-  private PluginJarLoader underTest = new PluginJarLoader(fs, runtime, blacklisted);
+  private final ServerFileSystem fs = mock(ServerFileSystem.class);
+  private final Set<String> blacklisted = new HashSet<>();
+  private final SonarRuntime sonarRuntime = mock(SonarRuntime.class);
+  private final PluginJarLoader underTest = new PluginJarLoader(fs, sonarRuntime, blacklisted);
 
   @Before
   public void setUp() throws IOException {
-    when(runtime.getApiVersion()).thenReturn(org.sonar.api.utils.Version.parse("5.2"));
+    when(sonarRuntime.getApiVersion()).thenReturn(org.sonar.api.utils.Version.parse("5.2"));
     when(fs.getDeployedPluginsDir()).thenReturn(temp.newFolder("deployed"));
     when(fs.getDownloadedPluginsDir()).thenReturn(temp.newFolder("downloaded"));
     when(fs.getHomeDir()).thenReturn(temp.newFolder("home"));
@@ -197,25 +195,16 @@ public class PluginJarLoaderTest {
   }
 
   @Test
-  public void warn_if_external_plugin_has_dependencies() throws IOException {
-    copyTestPluginTo("test-base-plugin", fs.getInstalledExternalPluginsDir());
-    copyTestPluginTo("test-require-plugin", fs.getInstalledExternalPluginsDir());
-
-    underTest.loadPlugins();
-    assertThat(logs.logs()).contains("Use of 'Plugin-Dependencies' mechanism is planned for removal. "
-      + "Update the plugin Test Require Plugin [testrequire] to shade its dependencies instead.");
-  }
-
-  @Test
   public void fail_if_external_plugin_has_same_key_has_bundled_plugin() throws IOException {
     File jar = createJar(fs.getInstalledExternalPluginsDir(), "plugin1", "main", null);
     createJar(fs.getInstalledBundledPluginsDir(), "plugin1", "main", null);
 
     String dir = getDirName(fs.getInstalledExternalPluginsDir());
-    expectedException.expectMessage("Found a plugin 'plugin1' in the directory '" + dir + "' with the same key [plugin1] as a built-in feature 'plugin1'. "
-      + "Please remove '" + new File(dir, jar.getName()) + "'");
-    expectedException.expect(MessageException.class);
-    underTest.loadPlugins();
+
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("Found a plugin 'plugin1' in the directory '" + dir + "' with the same key [plugin1] as a built-in feature 'plugin1'. "
+        + "Please remove '" + new File(dir, jar.getName()) + "'");
   }
 
   @Test
@@ -223,10 +212,11 @@ public class PluginJarLoaderTest {
     File downloaded = createJar(fs.getDownloadedPluginsDir(), "plugin1", "main", null);
     createJar(fs.getInstalledBundledPluginsDir(), "plugin1", "main", null);
     String dir = getDirName(fs.getDownloadedPluginsDir());
-    expectedException.expectMessage("Fail to update plugin: plugin1. Built-in feature with same key already exists: plugin1. "
-      + "Move or delete plugin from " + dir + " directory");
-    expectedException.expect(MessageException.class);
-    underTest.loadPlugins();
+
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Fail to update plugin: plugin1. Built-in feature with same key already exists: plugin1. "
+        + "Move or delete plugin from " + dir + " directory");
   }
 
   @Test
@@ -235,11 +225,12 @@ public class PluginJarLoaderTest {
     File jar2 = createJar(fs.getInstalledExternalPluginsDir(), "plugin1", "main", null);
 
     String dir = getDirName(fs.getInstalledExternalPluginsDir());
-    expectedException.expectMessage("Found two versions of the plugin 'plugin1' [plugin1] in the directory '" + dir + "'. Please remove ");
-    expectedException.expectMessage(jar2.getName());
-    expectedException.expectMessage(jar1.getName());
-    expectedException.expect(MessageException.class);
-    underTest.loadPlugins();
+
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("Found two versions of the plugin 'plugin1' [plugin1] in the directory '" + dir + "'. Please remove ")
+      .hasMessageContaining(jar2.getName())
+      .hasMessageContaining(jar1.getName());
   }
 
   @Test
@@ -247,20 +238,21 @@ public class PluginJarLoaderTest {
     File jar1 = createJar(fs.getInstalledBundledPluginsDir(), "plugin1", "main", null);
     File jar2 = createJar(fs.getInstalledBundledPluginsDir(), "plugin1", "main", null);
     String dir = getDirName(fs.getInstalledBundledPluginsDir());
-    expectedException.expectMessage("Found two versions of the plugin plugin1 [plugin1] in the directory " + dir + ". Please remove one of ");
-    expectedException.expectMessage(jar1.getName());
-    expectedException.expectMessage(jar2.getName());
-    expectedException.expect(MessageException.class);
-    underTest.loadPlugins();
+
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("Found two versions of the plugin plugin1 [plugin1] in the directory " + dir + ". Please remove one of ")
+      .hasMessageContaining(jar2.getName())
+      .hasMessageContaining(jar1.getName());
   }
 
   @Test
   public void fail_when_sqale_plugin_is_installed() throws Exception {
     copyTestPluginTo("fake-sqale-plugin", fs.getInstalledExternalPluginsDir());
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("The following plugin is no longer compatible with this version of SonarQube: 'sqale'");
-    underTest.loadPlugins();
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The following plugin is no longer compatible with this version of SonarQube: 'sqale'");
   }
 
   @Test
@@ -269,36 +261,36 @@ public class PluginJarLoaderTest {
     createJar(fs.getInstalledExternalPluginsDir(), "scmgit", "main", null);
     createJar(fs.getInstalledExternalPluginsDir(), "scmsvn", "main", null);
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("The following plugins are no longer compatible with this version of SonarQube: 'scmgit', 'scmsvn', 'sqale'");
-    underTest.loadPlugins();
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The following plugins are no longer compatible with this version of SonarQube: 'scmgit', 'scmsvn', 'sqale'");
   }
 
   @Test
   public void fail_when_report_is_installed() throws Exception {
     copyTestPluginTo("fake-report-plugin", fs.getInstalledExternalPluginsDir());
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("The following plugin is no longer compatible with this version of SonarQube: 'report'");
-    underTest.loadPlugins();
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The following plugin is no longer compatible with this version of SonarQube: 'report'");
   }
 
   @Test
   public void fail_when_views_is_installed() throws Exception {
     copyTestPluginTo("fake-views-plugin", fs.getInstalledExternalPluginsDir());
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("The following plugin is no longer compatible with this version of SonarQube: 'views'");
-    underTest.loadPlugins();
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .isInstanceOf(MessageException.class)
+      .hasMessage("The following plugin is no longer compatible with this version of SonarQube: 'views'");
   }
 
   @Test
-  public void fail_if_plugin_does_not_support_sq_version() throws Exception {
-    when(runtime.getApiVersion()).thenReturn(org.sonar.api.utils.Version.parse("1.0"));
+  public void fail_if_plugin_does_not_support_plugin_api_version() throws Exception {
+    when(sonarRuntime.getApiVersion()).thenReturn(org.sonar.api.utils.Version.parse("1.0"));
     copyTestPluginTo("test-base-plugin", fs.getInstalledExternalPluginsDir());
 
-    expectedException.expectMessage("Plugin Base Plugin [testbase] requires at least SonarQube 4.5.4");
-    underTest.loadPlugins();
+    assertThatThrownBy(() -> underTest.loadPlugins())
+      .hasMessage("Plugin Base Plugin [testbase] requires at least Sonar Plugin API version 4.5.4 (current: 1.0)");
   }
 
   private static File copyTestPluginTo(String testPluginName, File toDir) throws IOException {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -148,7 +148,7 @@ public class LoggingConfiguratorTest {
     Logger logger = LoggerFactory.getLogger(this.getClass());
     logger.info("info");
 
-    assertThat(new String(out.toByteArray(), StandardCharsets.UTF_8)).contains("info");
+    assertThat(out.toString(StandardCharsets.UTF_8)).contains("info");
   }
 
 }

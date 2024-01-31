@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,8 @@
  */
 package org.sonar.process;
 
-import org.junit.Test;
-
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,6 +50,6 @@ public class SystemExitTest {
     assertThat(systemExit.isInShutdownHook()).isFalse();
     systemExit.exit(1);
 
-    assertThat(got.get()).isEqualTo(1);
+    assertThat(got.get()).isOne();
   }
 }

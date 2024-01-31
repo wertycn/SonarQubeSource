@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,8 +21,11 @@ package org.sonar.db.project;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
+import org.sonar.db.Pagination;
 
 public interface ProjectMapper {
 
@@ -44,9 +47,9 @@ public interface ProjectMapper {
 
   List<ProjectDto> selectByUuids(@Param("uuids") Collection<String> uuids);
 
-  List<ProjectDto> selectAll();
+  List<ProjectDto> selectByUuidsWithPagination(@Param("uuids") Collection<String> uuids, @Param("pagination") Pagination pagination);
 
-  void updateKey(@Param("uuid") String uuid, @Param("newKey") String newKey, @Param("updatedAt") long updatedAt);
+  List<ProjectDto> selectAll();
 
   void updateTags(ProjectDto project);
 
@@ -59,4 +62,18 @@ public interface ProjectMapper {
   List<ProjectDto> selectAllApplications();
 
   List<ProjectDto> selectApplicationsByKeys(@Param("kees") Collection<String> kees);
+
+  @CheckForNull
+  ProjectDto selectByBranchUuid(String branchUuid);
+
+  Set<String> selectProjectUuidsAssociatedToDefaultQualityProfileByLanguage(@Param("languageFilters") Set<String> languageFilters);
+
+  void updateNcloc(@Param("projectUuid") String projectUuid, @Param("ncloc") long ncloc);
+
+  @CheckForNull
+  Long getNclocSum(@Nullable @Param("projectUuidToExclude") String projectUuidToExclude);
+
+  int countIndexedProjects();
+
+  int countProjects();
 }

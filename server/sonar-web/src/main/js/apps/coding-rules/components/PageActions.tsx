@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,37 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { KeyboardHint } from 'design-system';
 import * as React from 'react';
-import ReloadButton from 'sonar-ui-common/components/controls/ReloadButton';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import PageCounter from '../../../components/common/PageCounter';
-import PageShortcutsTooltip from '../../../components/ui/PageShortcutsTooltip';
+import { translate } from '../../../helpers/l10n';
+import { Paging } from '../../../types/types';
 
 export interface PageActionsProps {
-  loading: boolean;
-  onReload: () => void;
-  paging?: T.Paging;
-  selectedIndex?: number;
+  paging?: Paging;
 }
 
-export default function PageActions(props: PageActionsProps) {
+export default function PageActions(props: Readonly<PageActionsProps>) {
   return (
-    <div className="display-flex-center">
-      <PageShortcutsTooltip
-        className="big-spacer-right"
-        leftAndRightLabel={translate('issues.to_navigate')}
-        upAndDownLabel={translate('coding_rules.to_select_rules')}
-      />
-
-      <DeferredSpinner loading={props.loading}>
-        <ReloadButton onClick={props.onReload} />
-      </DeferredSpinner>
+    <div className="sw-body-sm sw-flex sw-items-center sw-gap-6 sw-justify-end sw-flex-1">
+      <KeyboardHint title={translate('coding_rules.to_select_rules')} command="ArrowUp ArrowDown" />
+      <KeyboardHint title={translate('coding_rules.to_navigate')} command="ArrowLeft ArrowRight" />
 
       {props.paging && (
         <PageCounter
-          className="spacer-left"
-          current={props.selectedIndex}
+          className="sw-ml-2"
           label={translate('coding_rules._rules')}
           total={props.paging.total}
         />

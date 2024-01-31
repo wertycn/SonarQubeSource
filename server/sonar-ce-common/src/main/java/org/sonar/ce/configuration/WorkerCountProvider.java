@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,7 @@ import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.server.ServerSide;
 
 /**
- * When an implementation of this interface is available in Pico, the Compute Engine will use the value returned by
+ * When an implementation of this interface is available in the ioc container, the Compute Engine will use the value returned by
  * {@link #get()} as the number of worker the Compute Engine should run on.
  */
 @ComputeEngineSide

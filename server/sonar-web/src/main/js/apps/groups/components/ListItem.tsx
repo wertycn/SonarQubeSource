@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,56 +17,123 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ActionsDropdown,
+  Badge,
+  ContentCell,
+  DestructiveIcon,
+  ItemButton,
+  ItemDangerButton,
+  ItemDivider,
+  NumericalCell,
+  PopupZLevel,
+  Spinner,
+  TableRow,
+  TrashIcon,
+} from 'design-system';
 import * as React from 'react';
-import ActionsDropdown, {
-  ActionsDropdownDivider,
-  ActionsDropdownItem
-} from 'sonar-ui-common/components/controls/ActionsDropdown';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import EditMembers from './EditMembers';
+import { useState } from 'react';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
+import { useGroupMembersCountQuery } from '../../../queries/group-memberships';
+import { Group, Provider } from '../../../types/types';
+import DeleteGroupForm from './DeleteGroupForm';
+import GroupForm from './GroupForm';
+import Members from './Members';
 
 export interface ListItemProps {
-  group: T.Group;
-  onDelete: (group: T.Group) => void;
-  onEdit: (group: T.Group) => void;
-  onEditMembers: () => void;
+  group: Group;
+  manageProvider: Provider | undefined;
 }
 
-export default function ListItem(props: ListItemProps) {
-  const { group } = props;
+export default function ListItem(props: Readonly<ListItemProps>) {
+  const { manageProvider, group } = props;
+  const { name, managed, description } = group;
+
+  const [groupToDelete, setGroupToDelete] = useState<Group | undefined>();
+  const [groupToEdit, setGroupToEdit] = useState<Group | undefined>();
+
+  const { data: membersCount, isLoading, refetch } = useGroupMembersCountQuery(group.id);
+
+  const isManaged = () => {
+    return manageProvider !== undefined;
+  };
+
+  const isGroupLocal = () => {
+    return isManaged() && !managed;
+  };
+
+  const renderIdentityProviderIcon = (identityProvider: Provider | undefined) => {
+    if (identityProvider === undefined || identityProvider === Provider.Scim) {
+      return null;
+    }
+
+    return (
+      <img
+        alt={identityProvider}
+        className="sw-ml-2 sw-mr-2"
+        height={16}
+        src={`${getBaseUrl()}/images/alm/${identityProvider}.svg`}
+      />
+    );
+  };
 
   return (
-    <tr data-id={group.name}>
-      <td className="width-20">
-        <strong className="js-group-name">{group.name}</strong>
-        {group.default && <span className="little-spacer-left">({translate('default')})</span>}
-      </td>
+    <TableRow data-id={name}>
+      <ContentCell>
+        <div className="sw-body-sm-highlight">{name}</div>
+        {group.default && <span className="sw-ml-1">({translate('default')})</span>}
+        {managed && renderIdentityProviderIcon(manageProvider)}
+        {isGroupLocal() && <Badge className="sw-ml-1">{translate('local')}</Badge>}
+      </ContentCell>
 
-      <td className="thin text-middle text-right little-padded-right">{group.membersCount}</td>
-      <td className="little-padded-left">
-        {!group.default && <EditMembers group={group} onEdit={props.onEditMembers} />}
-      </td>
+      <NumericalCell>
+        <Spinner loading={isLoading}>{membersCount}</Spinner>
+        <Members group={group} onEdit={refetch} isManaged={isManaged()} />
+      </NumericalCell>
 
-      <td className="width-40">
-        <span className="js-group-description">{group.description}</span>
-      </td>
+      <ContentCell>{description}</ContentCell>
 
-      <td className="thin nowrap text-right">
-        {!group.default && (
-          <ActionsDropdown>
-            <ActionsDropdownItem className="js-group-update" onClick={() => props.onEdit(group)}>
-              {translate('update_details')}
-            </ActionsDropdownItem>
-            <ActionsDropdownDivider />
-            <ActionsDropdownItem
-              className="js-group-delete"
-              destructive={true}
-              onClick={() => props.onDelete(group)}>
-              {translate('delete')}
-            </ActionsDropdownItem>
-          </ActionsDropdown>
+      <NumericalCell>
+        {!group.default && (!isManaged() || isGroupLocal()) && (
+          <>
+            {isManaged() && isGroupLocal() && (
+              <DestructiveIcon
+                Icon={TrashIcon}
+                className="sw-ml-2"
+                aria-label={translateWithParameters('delete_x', name)}
+                onClick={() => setGroupToDelete(group)}
+                size="small"
+              />
+            )}
+            {!isManaged() && (
+              <ActionsDropdown
+                allowResizing
+                id={`group-actions-${group.name}`}
+                ariaLabel={translateWithParameters('groups.edit', group.name)}
+                zLevel={PopupZLevel.Global}
+              >
+                <ItemButton onClick={() => setGroupToEdit(group)}>
+                  {translate('update_details')}
+                </ItemButton>
+                <ItemDivider />
+                <ItemDangerButton
+                  className="it__quality-profiles__delete"
+                  onClick={() => setGroupToDelete(group)}
+                >
+                  {translate('delete')}
+                </ItemDangerButton>
+              </ActionsDropdown>
+            )}
+          </>
         )}
-      </td>
-    </tr>
+        {groupToDelete && (
+          <DeleteGroupForm group={groupToDelete} onClose={() => setGroupToDelete(undefined)} />
+        )}
+        {groupToEdit && (
+          <GroupForm create={false} group={groupToEdit} onClose={() => setGroupToEdit(undefined)} />
+        )}
+      </NumericalCell>
+    </TableRow>
   );
 }

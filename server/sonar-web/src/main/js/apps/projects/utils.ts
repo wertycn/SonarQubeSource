@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,13 +18,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { invert } from 'lodash';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { RequestData } from 'sonar-ui-common/helpers/request';
-import { Facet, searchProjects } from '../../api/components';
+import { Facet, getScannableProjects, searchProjects } from '../../api/components';
 import { getMeasuresForProjects } from '../../api/measures';
+import { translate, translateWithParameters } from '../../helpers/l10n';
 import { isDiffMetric } from '../../helpers/measures';
+import { RequestData } from '../../helpers/request';
 import { MetricKey } from '../../types/metrics';
-import { convertToFilter, Query } from './query';
+import { Dict } from '../../types/types';
+import { Query, convertToFilter } from './query';
 
 interface SortingOption {
   class?: string;
@@ -38,28 +39,30 @@ export const PROJECTS_ALL = 'all';
 export const SORTING_METRICS: SortingOption[] = [
   { value: 'name' },
   { value: 'analysis_date' },
+  { value: 'creation_date' },
   { value: 'reliability' },
   { value: 'security' },
   { value: 'security_review' },
   { value: 'maintainability' },
   { value: 'coverage' },
   { value: 'duplications' },
-  { value: 'size' }
+  { value: 'size' },
 ];
 
 export const SORTING_LEAK_METRICS: SortingOption[] = [
   { value: 'name' },
   { value: 'analysis_date' },
+  { value: 'creation_date' },
   { value: 'new_reliability', class: 'projects-leak-sorting-option' },
   { value: 'new_security', class: 'projects-leak-sorting-option' },
   { value: 'new_security_review', class: 'projects-leak-sorting-option' },
   { value: 'new_maintainability', class: 'projects-leak-sorting-option' },
   { value: 'new_coverage', class: 'projects-leak-sorting-option' },
   { value: 'new_duplications', class: 'projects-leak-sorting-option' },
-  { value: 'new_lines', class: 'projects-leak-sorting-option' }
+  { value: 'new_lines', class: 'projects-leak-sorting-option' },
 ];
 
-export const SORTING_SWITCH: T.Dict<string> = {
+export const SORTING_SWITCH: Dict<string> = {
   analysis_date: 'analysis_date',
   name: 'name',
   reliability: 'new_reliability',
@@ -75,27 +78,17 @@ export const SORTING_SWITCH: T.Dict<string> = {
   new_maintainability: 'maintainability',
   new_coverage: 'coverage',
   new_duplications: 'duplications',
-  new_lines: 'size'
+  new_lines: 'size',
 };
 
 export const VIEWS = [
   { value: 'overall', label: 'overall' },
-  { value: 'leak', label: 'new_code' }
-];
-
-export const VISUALIZATIONS = [
-  'risk',
-  'reliability',
-  'security',
-  'maintainability',
-  'coverage',
-  'duplications'
+  { value: 'leak', label: 'new_code' },
 ];
 
 const PAGE_SIZE = 50;
-const PAGE_SIZE_VISUALIZATIONS = 99;
 
-const METRICS = [
+export const METRICS = [
   MetricKey.alert_status,
   MetricKey.bugs,
   MetricKey.reliability_rating,
@@ -109,10 +102,10 @@ const METRICS = [
   MetricKey.coverage,
   MetricKey.ncloc,
   MetricKey.ncloc_language_distribution,
-  MetricKey.projects
+  MetricKey.projects,
 ];
 
-const LEAK_METRICS = [
+export const LEAK_METRICS = [
   MetricKey.alert_status,
   MetricKey.new_bugs,
   MetricKey.new_reliability_rating,
@@ -125,39 +118,8 @@ const LEAK_METRICS = [
   MetricKey.new_coverage,
   MetricKey.new_duplicated_lines_density,
   MetricKey.new_lines,
-  MetricKey.projects
+  MetricKey.projects,
 ];
-
-const METRICS_BY_VISUALIZATION: T.Dict<string[]> = {
-  risk: [
-    MetricKey.reliability_rating,
-    MetricKey.security_rating,
-    MetricKey.coverage,
-    MetricKey.ncloc,
-    MetricKey.sqale_index
-  ],
-  // x, y, size, color
-  reliability: [
-    MetricKey.ncloc,
-    MetricKey.reliability_remediation_effort,
-    MetricKey.bugs,
-    MetricKey.reliability_rating
-  ],
-  security: [
-    MetricKey.ncloc,
-    MetricKey.security_remediation_effort,
-    MetricKey.vulnerabilities,
-    MetricKey.security_rating
-  ],
-  maintainability: [
-    MetricKey.ncloc,
-    MetricKey.sqale_index,
-    MetricKey.code_smells,
-    MetricKey.sqale_rating
-  ],
-  coverage: [MetricKey.complexity, MetricKey.coverage, MetricKey.uncovered_lines],
-  duplications: [MetricKey.ncloc, MetricKey.duplicated_lines_density, MetricKey.duplicated_blocks]
-};
 
 export const FACETS = [
   'reliability_rating',
@@ -170,7 +132,7 @@ export const FACETS = [
   'alert_status',
   'languages',
   'tags',
-  'qualifier'
+  'qualifier',
 ];
 
 export const LEAK_FACETS = [
@@ -184,71 +146,103 @@ export const LEAK_FACETS = [
   'alert_status',
   'languages',
   'tags',
-  'qualifier'
+  'qualifier',
 ];
 
 const REVERSED_FACETS = ['coverage', 'new_coverage'];
+let scannableProjectsCached: { key: string; name: string }[] | null = null;
 
 export function localizeSorting(sort?: string): string {
-  return translate('projects.sort', sort || 'name');
+  return translate('projects.sort', sort ?? 'name');
 }
 
 export function parseSorting(sort: string): { sortValue: string; sortDesc: boolean } {
-  const desc = sort[0] === '-';
-  return { sortValue: desc ? sort.substr(1) : sort, sortDesc: desc };
+  const desc = sort.startsWith('-');
+
+  return { sortValue: desc ? sort.substring(1) : sort, sortDesc: desc };
 }
 
-export function fetchProjects(query: Query, isFavorite: boolean, pageIndex = 1) {
-  const ps = query.view === 'visualizations' ? PAGE_SIZE_VISUALIZATIONS : PAGE_SIZE;
+export async function fetchScannableProjects() {
+  if (scannableProjectsCached) {
+    return Promise.resolve({ scannableProjects: scannableProjectsCached });
+  }
+
+  const response = await getScannableProjects().then(({ projects }) => {
+    scannableProjectsCached = projects;
+    return projects;
+  });
+
+  return { scannableProjects: response };
+}
+
+export function fetchProjects({
+  isFavorite,
+  query,
+  pageIndex = 1,
+}: {
+  query: Query;
+  isFavorite: boolean;
+  pageIndex?: number;
+}) {
+  const ps = PAGE_SIZE;
+
   const data = convertToQueryData(query, isFavorite, {
     p: pageIndex > 1 ? pageIndex : undefined,
     ps,
     facets: defineFacets(query).join(),
-    f: 'analysisDate,leakPeriodDate'
+    f: 'analysisDate,leakPeriodDate',
   });
+
   return searchProjects(data)
-    .then(response =>
-      Promise.all([fetchProjectMeasures(response.components, query), Promise.resolve(response)])
+    .then((response) =>
+      Promise.all([
+        fetchProjectMeasures(response.components, query),
+        Promise.resolve(response),
+        fetchScannableProjects(),
+      ]),
     )
-    .then(([measures, { components, facets, paging }]) => {
+    .then(([measures, { components, facets, paging }, { scannableProjects }]) => {
       return {
         facets: getFacetsMap(facets),
-        projects: components.map(component => {
-          const componentMeasures: T.Dict<string> = {};
+        projects: components.map((component) => {
+          const componentMeasures: Dict<string> = {};
           measures
-            .filter(measure => measure.component === component.key)
-            .forEach(measure => {
+            .filter((measure) => measure.component === component.key)
+            .forEach((measure) => {
               const value = isDiffMetric(measure.metric) ? measure.period?.value : measure.value;
               if (value !== undefined) {
                 componentMeasures[measure.metric] = value;
               }
             });
-          return { ...component, measures: componentMeasures };
+
+          return {
+            ...component,
+            measures: componentMeasures,
+            isScannable: scannableProjects.find((p) => p.key === component.key) !== undefined,
+          };
         }),
-        total: paging.total
+        total: paging.total,
       };
     });
 }
 
-function defineMetrics(query: Query): string[] {
-  switch (query.view) {
-    case 'visualizations':
-      return METRICS_BY_VISUALIZATION[query.visualization || 'risk'];
-    case 'leak':
-      return LEAK_METRICS;
-    default:
-      return METRICS;
+export function defineMetrics(query: Query): string[] {
+  if (query.view === 'leak') {
+    return LEAK_METRICS;
   }
+
+  return METRICS;
 }
 
 function defineFacets(query: Query): string[] {
   if (query.view === 'leak') {
     return LEAK_FACETS;
   }
+
   return FACETS;
 }
 
-function convertToQueryData(query: Query, isFavorite: boolean, defaultData = {}) {
+export function convertToQueryData(query: Query, isFavorite: boolean, defaultData = {}) {
   const data: RequestData = { ...defaultData };
   const filter = convertToFilter(query, isFavorite);
   const sort = convertToSorting(query);
@@ -256,12 +250,15 @@ function convertToQueryData(query: Query, isFavorite: boolean, defaultData = {})
   if (filter) {
     data.filter = filter;
   }
+
   if (sort.s) {
     data.s = sort.s;
   }
+
   if (sort.asc !== undefined) {
     data.asc = sort.asc;
   }
+
   return data;
 }
 
@@ -270,20 +267,23 @@ export function fetchProjectMeasures(projects: Array<{ key: string }>, query: Qu
     return Promise.resolve([]);
   }
 
-  const projectKeys = projects.map(project => project.key);
+  const projectKeys = projects.map((project) => project.key);
   const metrics = defineMetrics(query);
+
   return getMeasuresForProjects(projectKeys, metrics);
 }
 
 function mapFacetValues(values: Array<{ val: string; count: number }>) {
-  const map: T.Dict<number> = {};
-  values.forEach(value => {
+  const map: Dict<number> = {};
+
+  values.forEach((value) => {
     map[value.val] = value.count;
   });
+
   return map;
 }
 
-const propertyToMetricMap: T.Dict<string | undefined> = {
+const propertyToMetricMap: Dict<string | undefined> = {
   analysis_date: 'analysisDate',
   reliability: 'reliability_rating',
   new_reliability: 'new_reliability_rating',
@@ -303,29 +303,35 @@ const propertyToMetricMap: T.Dict<string | undefined> = {
   languages: 'languages',
   tags: 'tags',
   search: 'query',
-  qualifier: 'qualifier'
+  qualifier: 'qualifier',
+  creation_date: 'creationDate',
 };
 
 const metricToPropertyMap = invert(propertyToMetricMap);
 
 function getFacetsMap(facets: Facet[]) {
-  const map: T.Dict<T.Dict<number>> = {};
-  facets.forEach(facet => {
+  const map: Dict<Dict<number>> = {};
+
+  facets.forEach((facet) => {
     const property = metricToPropertyMap[facet.property];
     const { values } = facet;
+
     if (REVERSED_FACETS.includes(property)) {
       values.reverse();
     }
+
     map[property] = mapFacetValues(values);
   });
+
   return map;
 }
 
-function convertToSorting({ sort }: Query): { s?: string; asc?: boolean } {
-  if (sort && sort[0] === '-') {
-    return { s: propertyToMetricMap[sort.substr(1)], asc: false };
+export function convertToSorting({ sort }: Query): { s?: string; asc?: boolean } {
+  if (sort?.startsWith('-')) {
+    return { s: propertyToMetricMap[sort.substring(1)], asc: false };
   }
-  return { s: propertyToMetricMap[sort || ''] };
+
+  return { s: propertyToMetricMap[sort ?? ''] };
 }
 
 const ONE_MINUTE = 60000;
@@ -338,15 +344,18 @@ function format(periods: Array<{ value: number; label: string }>) {
   let result = '';
   let count = 0;
   let lastId = -1;
+
   for (let i = 0; i < periods.length && count < 2; i++) {
     if (periods[i].value > 0) {
       count++;
+
       if (lastId < 0 || lastId + 1 === i) {
         lastId = i;
         result += translateWithParameters(periods[i].label, periods[i].value) + ' ';
       }
     }
   }
+
   return result;
 }
 
@@ -354,20 +363,26 @@ export function formatDuration(ms: number) {
   if (ms < ONE_MINUTE) {
     return translate('duration.seconds');
   }
+
   const years = Math.floor(ms / ONE_YEAR);
   ms -= years * ONE_YEAR;
+
   const months = Math.floor(ms / ONE_MONTH);
   ms -= months * ONE_MONTH;
+
   const days = Math.floor(ms / ONE_DAY);
   ms -= days * ONE_DAY;
+
   const hours = Math.floor(ms / ONE_HOUR);
   ms -= hours * ONE_HOUR;
+
   const minutes = Math.floor(ms / ONE_MINUTE);
+
   return format([
     { value: years, label: 'duration.years' },
     { value: months, label: 'duration.months' },
     { value: days, label: 'duration.days' },
     { value: hours, label: 'duration.hours' },
-    { value: minutes, label: 'duration.minutes' }
+    { value: minutes, label: 'duration.minutes' },
   ]);
 }

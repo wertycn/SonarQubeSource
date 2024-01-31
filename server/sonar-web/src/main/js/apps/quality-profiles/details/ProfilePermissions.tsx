@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,24 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ButtonSecondary,
+  CellComponent,
+  Note,
+  Spinner,
+  SubTitle,
+  Table,
+  TableRow,
+} from 'design-system';
 import { sortBy, uniqBy } from 'lodash';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import {
+  SearchUsersGroupsParameters,
   searchGroups,
   searchUsers,
-  SearchUsersGroupsParameters
 } from '../../../api/quality-profiles';
+import { translate } from '../../../helpers/l10n';
+import { UserSelected } from '../../../types/types';
 import { Profile } from '../types';
 import ProfilePermissionsForm from './ProfilePermissionsForm';
 import ProfilePermissionsGroup from './ProfilePermissionsGroup';
@@ -43,7 +52,7 @@ interface State {
   addUserForm: boolean;
   groups?: Group[];
   loading: boolean;
-  users?: T.UserSelected[];
+  users?: UserSelected[];
 }
 
 export default class ProfilePermissions extends React.PureComponent<Props, State> {
@@ -71,7 +80,7 @@ export default class ProfilePermissions extends React.PureComponent<Props, State
     const parameters: SearchUsersGroupsParameters = {
       language: profile.language,
       qualityProfile: profile.name,
-      selected: 'selected'
+      selected: 'selected',
     };
     Promise.all([searchUsers(parameters), searchGroups(parameters)]).then(
       ([usersResponse, groupsResponse]) => {
@@ -79,7 +88,7 @@ export default class ProfilePermissions extends React.PureComponent<Props, State
           this.setState({
             groups: groupsResponse.groups,
             loading: false,
-            users: usersResponse.users
+            users: usersResponse.users,
           });
         }
       },
@@ -87,7 +96,7 @@ export default class ProfilePermissions extends React.PureComponent<Props, State
         if (this.mounted) {
           this.setState({ loading: false });
         }
-      }
+      },
     );
   }
 
@@ -101,79 +110,87 @@ export default class ProfilePermissions extends React.PureComponent<Props, State
     }
   };
 
-  handleUserAdd = (addedUser: T.UserSelected) => {
+  handleUserAdd = (addedUser: UserSelected) => {
     if (this.mounted) {
       this.setState((state: State) => ({
         addUserForm: false,
-        users: state.users && uniqBy([...state.users, addedUser], user => user.login)
+        users: state.users && uniqBy([...state.users, addedUser], (user) => user.login),
       }));
     }
   };
 
-  handleUserDelete = (removedUser: T.UserSelected) => {
+  handleUserDelete = (removedUser: UserSelected) => {
     if (this.mounted) {
       this.setState((state: State) => ({
-        users: state.users && state.users.filter(user => user !== removedUser)
+        users: state.users && state.users.filter((user) => user !== removedUser),
       }));
     }
   };
 
-  handleGroupAdd = (addedGroup: T.Group) => {
+  handleGroupAdd = (addedGroup: Group) => {
     if (this.mounted) {
       this.setState((state: State) => ({
         addUserForm: false,
-        groups: state.groups && uniqBy([...state.groups, addedGroup], group => group.name)
+        groups: state.groups && uniqBy([...state.groups, addedGroup], (group) => group.name),
       }));
     }
   };
 
-  handleGroupDelete = (removedGroup: T.Group) => {
+  handleGroupDelete = (removedGroup: Group) => {
     if (this.mounted) {
       this.setState((state: State) => ({
-        groups: state.groups && state.groups.filter(group => group !== removedGroup)
+        groups: state.groups && state.groups.filter((group) => group !== removedGroup),
       }));
     }
   };
 
   render() {
-    return (
-      <div className="boxed-group">
-        <h2>{translate('permissions.page')}</h2>
-        <div className="boxed-group-inner">
-          <p className="note">{translate('quality_profiles.default_permissions')}</p>
+    const { loading } = this.state;
 
-          {this.state.loading ? (
-            <div className="big-spacer-top">
-              <i className="spinner" />
-            </div>
-          ) : (
-            <div className="big-spacer-top">
-              {this.state.users &&
-                sortBy(this.state.users, 'name').map(user => (
-                  <ProfilePermissionsUser
-                    key={user.login}
-                    onDelete={this.handleUserDelete}
-                    profile={this.props.profile}
-                    user={user}
-                  />
-                ))}
-              {this.state.groups &&
-                sortBy(this.state.groups, 'name').map(group => (
-                  <ProfilePermissionsGroup
-                    group={group}
-                    key={group.name}
-                    onDelete={this.handleGroupDelete}
-                    profile={this.props.profile}
-                  />
-                ))}
-              <div className="text-right">
-                <Button onClick={this.handleAddUserButtonClick}>
-                  {translate('quality_profiles.grant_permissions_to_more_users')}
-                </Button>
-              </div>
-            </div>
-          )}
+    return (
+      <section aria-label={translate('permissions.page')}>
+        <div className="sw-mb-6">
+          <SubTitle className="sw-mb-0">{translate('permissions.page')}</SubTitle>
+          <Note className="sw-mt-6" as="p">
+            {translate('quality_profiles.default_permissions')}
+          </Note>
         </div>
+
+        <Spinner loading={loading}>
+          <Table columnCount={2} columnWidths={['100%', '0%']}>
+            {this.state.users &&
+              sortBy(this.state.users, 'name').map((user) => (
+                <TableRow key={user.login}>
+                  <CellComponent>
+                    <ProfilePermissionsUser
+                      key={user.login}
+                      onDelete={this.handleUserDelete}
+                      profile={this.props.profile}
+                      user={user}
+                    />
+                  </CellComponent>
+                </TableRow>
+              ))}
+            {this.state.groups &&
+              sortBy(this.state.groups, 'name').map((group) => (
+                <TableRow key={group.name}>
+                  <CellComponent>
+                    <ProfilePermissionsGroup
+                      group={group}
+                      key={group.name}
+                      onDelete={this.handleGroupDelete}
+                      profile={this.props.profile}
+                    />
+                  </CellComponent>
+                </TableRow>
+              ))}
+          </Table>
+          <div className="sw-mt-6">
+            <ButtonSecondary onClick={this.handleAddUserButtonClick}>
+              {translate('quality_profiles.grant_permissions_to_more_users')}
+            </ButtonSecondary>
+          </div>
+        </Spinner>
 
         {this.state.addUserForm && (
           <ProfilePermissionsForm
@@ -183,7 +200,7 @@ export default class ProfilePermissions extends React.PureComponent<Props, State
             profile={this.props.profile}
           />
         )}
-      </div>
+      </section>
     );
   }
 }

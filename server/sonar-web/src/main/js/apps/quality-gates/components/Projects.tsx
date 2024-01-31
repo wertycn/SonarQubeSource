@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,30 +17,39 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Note } from 'design-system';
 import { find, without } from 'lodash';
 import * as React from 'react';
-import SelectList, {
-  SelectListFilter,
-  SelectListSearchParams
-} from 'sonar-ui-common/components/controls/SelectList';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import {
   associateGateWithProject,
   dissociateGateWithProject,
-  searchProjects
+  searchProjects,
 } from '../../../api/quality-gates';
+import SelectList, {
+  SelectListFilter,
+  SelectListSearchParams,
+} from '../../../components/controls/SelectList';
+import { translate } from '../../../helpers/l10n';
+import { QualityGate } from '../../../types/types';
 
 interface Props {
   canEdit?: boolean;
-  qualityGate: T.QualityGate;
+  qualityGate: QualityGate;
 }
 
 interface State {
   needToReload: boolean;
   lastSearchParams?: SelectListSearchParams;
-  projects: Array<{ key: string; name: string; selected: boolean }>;
+  projects: Project[];
   projectsTotalCount?: number;
   selectedProjects: string[];
+}
+
+// exported for testing
+export interface Project {
+  key: string;
+  name: string;
+  selected: boolean;
 }
 
 export default class Projects extends React.PureComponent<Props, State> {
@@ -52,7 +61,7 @@ export default class Projects extends React.PureComponent<Props, State> {
     this.state = {
       needToReload: false,
       projects: [],
-      selectedProjects: []
+      selectedProjects: [],
     };
   }
 
@@ -70,16 +79,16 @@ export default class Projects extends React.PureComponent<Props, State> {
       page: searchParams.page,
       pageSize: searchParams.pageSize,
       query: searchParams.query !== '' ? searchParams.query : undefined,
-      selected: searchParams.filter
-    }).then(data => {
+      selected: searchParams.filter,
+    }).then((data) => {
       if (this.mounted) {
-        this.setState(prevState => {
+        this.setState((prevState) => {
           const more = searchParams.page != null && searchParams.page > 1;
 
           const projects = more ? [...prevState.projects, ...data.results] : data.results;
           const newSelectedProjects = data.results
-            .filter(project => project.selected)
-            .map(project => project.key);
+            .filter((project) => project.selected)
+            .map((project) => project.key);
           const selectedProjects = more
             ? [...prevState.selectedProjects, ...newSelectedProjects]
             : newSelectedProjects;
@@ -89,7 +98,7 @@ export default class Projects extends React.PureComponent<Props, State> {
             needToReload: false,
             projects,
             projectsTotalCount: data.paging.total,
-            selectedProjects
+            selectedProjects,
           };
         });
       }
@@ -97,26 +106,25 @@ export default class Projects extends React.PureComponent<Props, State> {
 
   handleSelect = (key: string) =>
     associateGateWithProject({
-      gateId: this.props.qualityGate.id,
-      projectKey: key
+      gateName: this.props.qualityGate.name,
+      projectKey: key,
     }).then(() => {
       if (this.mounted) {
-        this.setState(prevState => ({
+        this.setState((prevState) => ({
           needToReload: true,
-          selectedProjects: [...prevState.selectedProjects, key]
+          selectedProjects: [...prevState.selectedProjects, key],
         }));
       }
     });
 
   handleUnselect = (key: string) =>
     dissociateGateWithProject({
-      gateId: this.props.qualityGate.id,
-      projectKey: key
+      projectKey: key,
     }).then(() => {
       if (this.mounted) {
-        this.setState(prevState => ({
+        this.setState((prevState) => ({
           needToReload: true,
-          selectedProjects: without(prevState.selectedProjects, key)
+          selectedProjects: without(prevState.selectedProjects, key),
         }));
       }
     });
@@ -124,14 +132,14 @@ export default class Projects extends React.PureComponent<Props, State> {
   renderElement = (key: string): React.ReactNode => {
     const project = find(this.state.projects, { key });
     return (
-      <div className="select-list-list-item">
+      <div>
         {project === undefined ? (
           key
         ) : (
           <>
             {project.name}
             <br />
-            <span className="note">{project.key}</span>
+            <Note>{project.key}</Note>
           </>
         )}
       </div>
@@ -139,9 +147,17 @@ export default class Projects extends React.PureComponent<Props, State> {
   };
 
   render() {
+    const { qualityGate } = this.props;
+
+    if (qualityGate.conditions === undefined || qualityGate.conditions.length === 0) {
+      return (
+        <div>{translate('quality_gates.projects.cannot_associate_projects_no_conditions')}</div>
+      );
+    }
+
     return (
       <SelectList
-        elements={this.state.projects.map(project => project.key)}
+        elements={this.state.projects.map((project) => project.key)}
         elementsTotalCount={this.state.projectsTotalCount}
         labelAll={translate('quality_gates.projects.all')}
         labelSelected={translate('quality_gates.projects.with')}
@@ -157,7 +173,8 @@ export default class Projects extends React.PureComponent<Props, State> {
         readOnly={!this.props.canEdit}
         renderElement={this.renderElement}
         selectedElements={this.state.selectedProjects}
-        withPaging={true}
+        withPaging
+        autoFocusSearch={false}
       />
     );
   }

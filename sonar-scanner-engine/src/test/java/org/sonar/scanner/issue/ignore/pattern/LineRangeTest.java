@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -51,22 +51,23 @@ public class LineRangeTest {
 
   @Test
   public void testToString() {
-    assertThat(new LineRange(12, 15).toString()).isEqualTo("[12-15]");
+    assertThat(new LineRange(12, 15)).hasToString("[12-15]");
   }
 
   @Test
   public void testEquals() {
     LineRange range = new LineRange(12, 15);
-    assertThat(range).isEqualTo(range);
-    assertThat(range).isEqualTo(new LineRange(12, 15));
-    assertThat(range).isNotEqualTo(new LineRange(12, 2000));
-    assertThat(range).isNotEqualTo(new LineRange(1000, 2000));
-    assertThat(range).isNotEqualTo(null);
-    assertThat(range).isNotEqualTo(new StringBuffer());
+    assertThat(range)
+      .isEqualTo(range)
+      .isEqualTo(new LineRange(12, 15))
+      .isNotEqualTo(new LineRange(12, 2000))
+      .isNotEqualTo(new LineRange(1000, 2000))
+      .isNotNull()
+      .isNotEqualTo(new StringBuffer());
   }
 
   @Test
   public void testHashCode() {
-    assertThat(new LineRange(12, 15).hashCode()).isEqualTo(new LineRange(12, 15).hashCode());
+    assertThat(new LineRange(12, 15)).hasSameHashCodeAs(new LineRange(12, 15));
   }
 }

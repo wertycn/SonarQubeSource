@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,7 +35,7 @@ public class LdapGroupMappingTest {
     assertThat(groupMapping.getRequest()).isEqualTo("(&(objectClass=groupOfUniqueNames)(uniqueMember={0}))");
     assertThat(groupMapping.getRequiredUserAttributes()).isEqualTo(new String[] {"dn"});
 
-    assertThat(groupMapping.toString()).isEqualTo("LdapGroupMapping{" +
+    assertThat(groupMapping).hasToString("LdapGroupMapping{" +
       "baseDn=null," +
       " idAttribute=cn," +
       " requiredUserAttributes=[dn]," +

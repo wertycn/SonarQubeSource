@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,45 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import { BasicSeparator, Card, Spinner, TextSubdued, themeColor } from 'design-system';
 import * as React from 'react';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { parseDate } from 'sonar-ui-common/helpers/dates';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import GraphsHeader from '../../../components/activity-graph/GraphsHeader';
 import GraphsHistory from '../../../components/activity-graph/GraphsHistory';
 import {
   DEFAULT_GRAPH,
   generateSeries,
   getDisplayedHistoryMetrics,
-  splitSeriesInGraphs
+  splitSeriesInGraphs,
 } from '../../../components/activity-graph/utils';
 import ActivityLink from '../../../components/common/ActivityLink';
+import { parseDate } from '../../../helpers/dates';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { localizeMetric } from '../../../helpers/measures';
 import { BranchLike } from '../../../types/branch-like';
-import { GraphType, MeasureHistory } from '../../../types/project-activity';
+import { MetricKey } from '../../../types/metrics';
+import {
+  Analysis as AnalysisType,
+  GraphType,
+  MeasureHistory,
+} from '../../../types/project-activity';
+import { Component, Metric } from '../../../types/types';
+import { getAnalysisVariations } from '../utils';
 import Analysis from './Analysis';
 
 export interface ActivityPanelProps {
-  analyses?: T.Analysis[];
+  analyses?: AnalysisType[];
   branchLike?: BranchLike;
-  component: Pick<T.Component, 'key' | 'qualifier'>;
+  component: Pick<Component, 'key' | 'qualifier'>;
   graph?: GraphType;
   leakPeriodDate?: Date;
   loading?: boolean;
   measuresHistory: MeasureHistory[];
-  metrics: T.Metric[];
+  metrics: Metric[];
   onGraphChange: (graph: GraphType) => void;
 }
 
-const MAX_ANALYSES_NB = 5;
+export const MAX_ANALYSES_NB = 5;
 const MAX_GRAPH_NB = 2;
 const MAX_SERIES_PER_GRAPH = 3;
 
@@ -59,82 +68,125 @@ export function ActivityPanel(props: ActivityPanelProps) {
     leakPeriodDate,
     loading,
     measuresHistory,
-    metrics
+    metrics,
   } = props;
 
-  const series = generateSeries(
-    measuresHistory,
-    graph,
-    metrics,
-    getDisplayedHistoryMetrics(graph, [])
-  );
+  const displayedMetrics = getDisplayedHistoryMetrics(graph, []);
+  const series = generateSeries(measuresHistory, graph, metrics, displayedMetrics);
   const graphs = splitSeriesInGraphs(series, MAX_GRAPH_NB, MAX_SERIES_PER_GRAPH);
   let shownLeakPeriodDate;
+
   if (leakPeriodDate !== undefined) {
     const startDate = measuresHistory.reduce((oldest: Date, { history }) => {
       if (history.length > 0) {
         const date = parseDate(history[0].date);
+
         return oldest.getTime() > date.getTime() ? date : oldest;
-      } else {
-        return oldest;
       }
+
+      return oldest;
     }, new Date());
+
     shownLeakPeriodDate =
       startDate.getTime() > leakPeriodDate.getTime() ? startDate : leakPeriodDate;
   }
 
-  const filteredAnalyses = analyses.filter(a => a.events.length > 0).slice(0, MAX_ANALYSES_NB);
+  const displayedAnalyses = analyses.slice(0, MAX_ANALYSES_NB);
+
+  const analysisVariations = React.useMemo(
+    () =>
+      getAnalysisVariations(
+        measuresHistory,
+        Math.min(analyses.length, MAX_ANALYSES_NB + 1),
+      ).reverse(),
+    [measuresHistory, analyses.length],
+  );
+
+  const qualityGateStatuses = React.useMemo(
+    () =>
+      measuresHistory
+        .find(({ metric }) => metric === MetricKey.alert_status)
+        ?.history.slice(-MAX_ANALYSES_NB)
+        .reverse(),
+    [measuresHistory],
+  );
 
   return (
-    <div className="overview-panel big-spacer-top" data-test="overview__activity-panel">
-      <h2 className="overview-panel-title">{translate('overview.activity')}</h2>
+    <div className="sw-mt-8">
+      <StyledPanelTitle
+        as="h2"
+        className="sw-w-full sw-flex sw-gap-1/2 sw-items-center sw-uppercase sw-font-semibold sw-text-xs"
+      >
+        {translate('overview.activity')}
+      </StyledPanelTitle>
 
-      <div className="overview-panel-content">
-        <div className="display-flex-row">
-          <div className="display-flex-column flex-1">
-            <div aria-hidden={true} className="overview-panel-padded display-flex-column flex-1">
-              <GraphsHeader graph={graph} metrics={metrics} updateGraph={props.onGraphChange} />
-              <GraphsHistory
-                analyses={[]}
-                graph={graph}
-                graphs={graphs}
-                leakPeriodDate={shownLeakPeriodDate}
-                loading={Boolean(loading)}
-                measuresHistory={measuresHistory}
-                series={series}
-              />
-            </div>
+      <Card className="overview-panel sw-mt-4" data-test="overview__activity-panel">
+        <GraphsHeader graph={graph} metrics={metrics} onUpdateGraph={props.onGraphChange} />
 
-            <div className="overview-panel-padded bordered-top text-right">
-              <ActivityLink branchLike={branchLike} component={component.key} graph={graph} />
-            </div>
-          </div>
+        <GraphsHistory
+          analyses={[]}
+          ariaLabel={translateWithParameters(
+            'overview.activity.graph_shows_data_for_x',
+            displayedMetrics.map((metricKey) => localizeMetric(metricKey)).join(', '),
+          )}
+          canShowDataAsTable={false}
+          graph={graph}
+          graphs={graphs}
+          leakPeriodDate={shownLeakPeriodDate}
+          loading={Boolean(loading)}
+          measuresHistory={measuresHistory}
+          series={series}
+        />
 
-          <div className="overview-panel-padded bordered-left width-30">
-            <div data-test="overview__activity-analyses">
-              <DeferredSpinner
-                className="spacer-top spacer-left"
-                loading={analyses.length === 0 && loading}>
-                {analyses.length === 0 ? (
-                  <p className="spacer-top spacer-left note">{translate('no_results')}</p>
-                ) : (
-                  <ul className="spacer-top spacer-left">
-                    {filteredAnalyses.map(analysis => (
-                      <Analysis
-                        analysis={analysis}
-                        key={analysis.key}
-                        qualifier={component.qualifier}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </DeferredSpinner>
-            </div>
-          </div>
+        <BasicSeparator className="sw-mb-4 sw-mt-16" />
+
+        <Spinner loading={loading}>
+          {displayedAnalyses.length === 0 ? (
+            <p>{translate('no_results')}</p>
+          ) : (
+            displayedAnalyses.map((analysis, index) => (
+              <div key={analysis.key}>
+                <Analysis
+                  analysis={analysis}
+                  isFirstAnalysis={index === analyses.length - 1}
+                  qualifier={component.qualifier}
+                  qualityGateStatus={qualityGateStatuses?.[index]?.value}
+                  variations={analysisVariations[index]}
+                />
+
+                {index !== displayedAnalyses.length - 1 && <BasicSeparator className="sw-my-3" />}
+              </div>
+            ))
+          )}
+        </Spinner>
+
+        <BasicSeparator className="sw-mt-4" />
+
+        <div className="sw-flex sw-justify-center sw-pt-3">
+          <ActivityLink branchLike={branchLike} component={component.key} graph={graph} />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
+
+const StyledPanelTitle = styled(TextSubdued)`
+  &:before,
+  &:after {
+    display: inline-block;
+    height: 1px;
+    background-color: ${themeColor('border')};
+    content: '';
+    vertical-align: middle;
+  }
+
+  &:before {
+    width: 3em;
+  }
+
+  &:after {
+    flex-grow: 1;
+  }
+`;
 
 export default React.memo(ActivityPanel);

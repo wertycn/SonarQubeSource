@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { SettingCategoryDefinition } from '../../../../types/settings';
-import { DefaultSpecializedInputProps } from '../../utils';
+import { ExtendedSettingDefinition } from '../../../../types/settings';
+import { DefaultSpecializedInputProps, getPropertyName } from '../../utils';
 
-type Props = DefaultSpecializedInputProps & Pick<SettingCategoryDefinition, 'options'>;
+type Props = DefaultSpecializedInputProps & Pick<ExtendedSettingDefinition, 'options'>;
 
 export default class InputForSingleSelectList extends React.PureComponent<Props> {
-  handleInputChange = ({ value }: { value: string }) => {
+  handleInputChange = ({ value }: { label: string; value: string }) => {
     this.props.onChange(value);
   };
 
   render() {
-    const options = this.props.options.map(option => ({
+    const { options: opts, name, value, setting } = this.props;
+
+    const options = opts.map((option) => ({
       label: option,
-      value: option
+      value: option,
     }));
 
     return (
-      <Select
-        className="settings-large-input"
-        clearable={false}
-        name={this.props.name}
+      <InputSelect
+        name={name}
         onChange={this.handleInputChange}
+        aria-label={getPropertyName(setting.definition)}
         options={options}
-        value={this.props.value}
+        value={options.find((option) => option.value === value)}
       />
     );
   }

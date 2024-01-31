@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,11 +28,11 @@ import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.Plugin;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.core.platform.PluginInfo;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.server.platform.ServerFileSystem;
 import org.sonar.updatecenter.common.Version;
 
@@ -40,14 +40,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.server.plugins.PluginType.BUNDLED;
-import static org.sonar.server.plugins.PluginType.EXTERNAL;
+import static org.sonar.core.plugin.PluginType.BUNDLED;
+import static org.sonar.core.plugin.PluginType.EXTERNAL;
 
 public class PluginUninstallerTest {
   @Rule
   public TemporaryFolder testFolder = new TemporaryFolder();
-  @Rule
-  public ExpectedException exception = ExpectedException.none();
   @Rule
   public LogTester logs = new LogTester();
 
@@ -164,7 +162,7 @@ public class PluginUninstallerTest {
 
   private static ServerPlugin newPlugin(ServerPluginInfo pluginInfo) {
     return new ServerPlugin(pluginInfo, pluginInfo.getType(), mock(Plugin.class),
-      mock(PluginFilesAndMd5.FileAndMd5.class), mock(PluginFilesAndMd5.FileAndMd5.class), mock(ClassLoader.class));
+      mock(PluginFilesAndMd5.FileAndMd5.class), mock(ClassLoader.class));
   }
 
   private File copyTestPluginTo(String testPluginName, File toDir) throws IOException {

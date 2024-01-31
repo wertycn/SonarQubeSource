@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,29 +17,42 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { differenceWith, map, sortBy, uniqBy } from 'lodash';
+import {
+  ButtonSecondary,
+  FlagMessage,
+  HeadingDark,
+  HelperHintIcon,
+  HighlightedSection,
+  LightPrimary,
+  Link,
+  Note,
+  Spinner,
+  SubHeading,
+} from 'design-system';
+import { differenceWith, map, uniqBy } from 'lodash';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ModalButton from 'sonar-ui-common/components/controls/ModalButton';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { getLocalizedMetricName, translate } from 'sonar-ui-common/helpers/l10n';
-import { isDiffMetric } from 'sonar-ui-common/helpers/measures';
+import { FormattedMessage } from 'react-intl';
+import { useAvailableFeatures } from '../../../app/components/available-features/withAvailableFeatures';
+import { useMetrics } from '../../../app/components/metrics/withMetricsContext';
 import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
-import { withAppState } from '../../../components/hoc/withAppState';
+import ModalButton, { ModalProps } from '../../../components/controls/ModalButton';
+import { useDocUrl } from '../../../helpers/docs';
+import { getLocalizedMetricName, translate } from '../../../helpers/l10n';
+import { Feature } from '../../../types/features';
 import { MetricKey } from '../../../types/metrics';
-import Condition from './Condition';
-import ConditionModal from './ConditionModal';
+import { CaycStatus, Condition as ConditionType, QualityGate } from '../../../types/types';
+import { groupAndSortByPriorityConditions, isQualityGateOptimized } from '../utils';
+import AddConditionModal from './AddConditionModal';
+import CaYCConditionsSimplificationGuide from './CaYCConditionsSimplificationGuide';
+import CaycCompliantBanner from './CaycCompliantBanner';
+import CaycCondition from './CaycCondition';
+import CaycFixOptimizeBanner from './CaycFixOptimizeBanner';
+import CaycReviewUpdateConditionsModal from './ConditionReviewAndUpdateModal';
+import ConditionsTable from './ConditionsTable';
 
 interface Props {
-  appState: Pick<T.AppState, 'branchesEnabled'>;
-  canEdit: boolean;
-  conditions: T.Condition[];
-  metrics: T.Dict<T.Metric>;
-  onAddCondition: (condition: T.Condition) => void;
-  onRemoveCondition: (Condition: T.Condition) => void;
-  onSaveCondition: (newCondition: T.Condition, oldCondition: T.Condition) => void;
-  qualityGate: T.QualityGate;
-  updatedConditionId?: number;
+  qualityGate: QualityGate;
+  isFetching?: boolean;
 }
 
 const FORBIDDEN_METRIC_TYPES = ['DATA', 'DISTRIB', 'STRING', 'BOOL'];
@@ -47,177 +60,254 @@ const FORBIDDEN_METRICS: string[] = [
   MetricKey.alert_status,
   MetricKey.releasability_rating,
   MetricKey.security_hotspots,
-  MetricKey.new_security_hotspots
+  MetricKey.new_security_hotspots,
 ];
 
-export class Conditions extends React.PureComponent<Props> {
-  renderConditionsTable = (conditions: T.Condition[], scope: 'new' | 'overall') => {
-    const {
-      qualityGate,
-      metrics,
-      canEdit,
-      onRemoveCondition,
-      onSaveCondition,
-      updatedConditionId
-    } = this.props;
-    return (
-      <table className="data zebra" data-test={`quality-gates__conditions-${scope}`}>
-        <thead>
-          <tr>
-            <th className="nowrap" style={{ width: 300 }}>
-              {translate('quality_gates.conditions.metric')}
-            </th>
-            <th className="nowrap">{translate('quality_gates.conditions.operator')}</th>
-            <th className="nowrap">{translate('quality_gates.conditions.value')}</th>
-            {canEdit && (
-              <>
-                <th className="thin">{translate('edit')}</th>
-                <th className="thin">{translate('delete')}</th>
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {conditions.map(condition => (
-            <Condition
-              canEdit={canEdit}
-              condition={condition}
-              key={condition.id}
-              metric={metrics[condition.metric]}
-              onRemoveCondition={onRemoveCondition}
-              onSaveCondition={onSaveCondition}
-              qualityGate={qualityGate}
-              updated={condition.id === updatedConditionId}
-            />
-          ))}
-        </tbody>
-      </table>
-    );
-  };
+export default function Conditions({ qualityGate, isFetching }: Readonly<Props>) {
+  const [editing, setEditing] = React.useState<boolean>(
+    qualityGate.caycStatus === CaycStatus.NonCompliant,
+  );
+  const { name } = qualityGate;
+  const metrics = useMetrics();
+  const canEdit = Boolean(qualityGate.actions?.manageConditions);
+  const { conditions = [] } = qualityGate;
+  const existingConditions = conditions.filter((condition) => metrics[condition.metric]);
+  const { overallCodeConditions, newCodeConditions, caycConditions } =
+    groupAndSortByPriorityConditions(existingConditions, metrics, qualityGate.isBuiltIn);
 
-  render() {
-    const { appState, conditions, metrics, canEdit } = this.props;
+  const duplicates: ConditionType[] = [];
+  const savedConditions = existingConditions.filter((condition) => condition.id != null);
+  savedConditions.forEach((condition) => {
+    const sameCount = savedConditions.filter((sample) => sample.metric === condition.metric).length;
+    if (sameCount > 1) {
+      duplicates.push(condition);
+    }
+  });
+  const { hasFeature } = useAvailableFeatures();
 
-    const existingConditions = conditions.filter(condition => metrics[condition.metric]);
-    const sortedConditions = sortBy(
-      existingConditions,
-      condition => metrics[condition.metric] && metrics[condition.metric].name
-    );
+  const uniqDuplicates = uniqBy(duplicates, (d) => d.metric).map((condition) => ({
+    ...condition,
+    metric: metrics[condition.metric],
+  }));
 
-    const sortedConditionsOnOverallMetrics = sortedConditions.filter(
-      condition => !isDiffMetric(condition.metric)
-    );
-    const sortedConditionsOnNewMetrics = sortedConditions.filter(condition =>
-      isDiffMetric(condition.metric)
-    );
+  // set edit only when the name is change
+  // i.e when user changes the quality gate
+  React.useEffect(() => {
+    setEditing(qualityGate.caycStatus === CaycStatus.NonCompliant);
+  }, [name]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const duplicates: T.Condition[] = [];
-    const savedConditions = existingConditions.filter(condition => condition.id != null);
-    savedConditions.forEach(condition => {
-      const sameCount = savedConditions.filter(sample => sample.metric === condition.metric).length;
-      if (sameCount > 1) {
-        duplicates.push(condition);
-      }
-    });
+  const renderConditionModal = React.useCallback(
+    ({ onClose }: ModalProps) => {
+      const { conditions = [] } = qualityGate;
+      const availableMetrics = differenceWith(
+        map(metrics, (metric) => metric).filter(
+          (metric) =>
+            !metric.hidden &&
+            !FORBIDDEN_METRIC_TYPES.includes(metric.type) &&
+            !FORBIDDEN_METRICS.includes(metric.key),
+        ),
+        conditions,
+        (metric, condition) => metric.key === condition.metric,
+      );
+      return (
+        <AddConditionModal metrics={availableMetrics} onClose={onClose} qualityGate={qualityGate} />
+      );
+    },
+    [metrics, qualityGate],
+  );
 
-    const uniqDuplicates = uniqBy(duplicates, d => d.metric).map(condition => ({
-      ...condition,
-      metric: metrics[condition.metric]
-    }));
+  const getDocUrl = useDocUrl();
+  const isCompliantCustomQualityGate =
+    qualityGate.caycStatus !== CaycStatus.NonCompliant && !qualityGate.isBuiltIn;
+  const isOptimizing = isCompliantCustomQualityGate && !isQualityGateOptimized(qualityGate);
 
-    const availableMetrics = differenceWith(
-      map(metrics, metric => metric).filter(
-        metric =>
-          !metric.hidden &&
-          !FORBIDDEN_METRIC_TYPES.includes(metric.type) &&
-          !FORBIDDEN_METRICS.includes(metric.key)
-      ),
-      conditions,
-      (metric, condition) => metric.key === condition.metric
-    );
+  const renderCaycModal = React.useCallback(
+    ({ onClose }: ModalProps) => {
+      const { conditions = [] } = qualityGate;
+      const canEdit = Boolean(qualityGate.actions?.manageConditions);
+      return (
+        <CaycReviewUpdateConditionsModal
+          qualityGate={qualityGate}
+          metrics={metrics}
+          canEdit={canEdit}
+          lockEditing={() => setEditing(false)}
+          conditions={conditions}
+          scope="new-cayc"
+          onClose={onClose}
+          isOptimizing={isOptimizing}
+        />
+      );
+    },
+    [qualityGate, metrics, isOptimizing],
+  );
 
-    return (
-      <div className="quality-gate-section">
-        {canEdit && (
-          <div className="pull-right">
-            <ModalButton
-              modal={({ onClose }) => (
-                <ConditionModal
-                  header={translate('quality_gates.add_condition')}
-                  metrics={availableMetrics}
-                  onAddCondition={this.props.onAddCondition}
-                  onClose={onClose}
-                  qualityGate={this.props.qualityGate}
-                />
-              )}>
+  return (
+    <div>
+      <CaYCConditionsSimplificationGuide qualityGate={qualityGate} />
+
+      {isCompliantCustomQualityGate && !isOptimizing && <CaycCompliantBanner />}
+      {isCompliantCustomQualityGate && isOptimizing && canEdit && (
+        <CaycFixOptimizeBanner renderCaycModal={renderCaycModal} isOptimizing />
+      )}
+      {qualityGate.caycStatus === CaycStatus.NonCompliant && canEdit && (
+        <CaycFixOptimizeBanner renderCaycModal={renderCaycModal} />
+      )}
+
+      <header className="sw-flex sw-items-center sw-mb-4 sw-justify-between">
+        <div className="sw-flex">
+          <HeadingDark className="sw-body-md-highlight sw-m-0">
+            {translate('quality_gates.conditions')}
+          </HeadingDark>
+          {!qualityGate.isBuiltIn && (
+            <DocumentationTooltip
+              className="sw-ml-2"
+              content={translate('quality_gates.conditions.help')}
+              links={[
+                {
+                  href: '/user-guide/clean-as-you-code/',
+                  label: translate('quality_gates.conditions.help.link'),
+                },
+              ]}
+            >
+              <HelperHintIcon />
+            </DocumentationTooltip>
+          )}
+          <Spinner loading={isFetching} className="it__spinner sw-ml-4 sw-mt-1" />
+        </div>
+        <div>
+          {(qualityGate.caycStatus === CaycStatus.NonCompliant || editing) && canEdit && (
+            <ModalButton modal={renderConditionModal}>
               {({ onClick }) => (
-                <Button data-test="quality-gates__add-condition" onClick={onClick}>
+                <ButtonSecondary data-test="quality-gates__add-condition" onClick={onClick}>
                   {translate('quality_gates.add_condition')}
-                </Button>
+                </ButtonSecondary>
               )}
             </ModalButton>
-          </div>
-        )}
+          )}
+        </div>
+      </header>
 
-        <header className="display-flex-center spacer-bottom">
-          <h3>{translate('quality_gates.conditions')}</h3>
-          <DocumentationTooltip
-            className="spacer-left"
-            content={translate('quality_gates.conditions.help')}
-            links={[
-              {
-                href: '/documentation/user-guide/clean-as-you-code/',
-                label: translate('quality_gates.conditions.help.link')
-              }
-            ]}
-          />
-        </header>
-
-        {uniqDuplicates.length > 0 && (
-          <Alert variant="warning">
+      {uniqDuplicates.length > 0 && (
+        <FlagMessage variant="warning" className="sw-flex sw-mb-4">
+          <p>
             <p>{translate('quality_gates.duplicated_conditions')}</p>
-            <ul className="list-styled spacer-top">
-              {uniqDuplicates.map(d => (
+            <ul className="sw-my-2 sw-list-disc sw-pl-10">
+              {uniqDuplicates.map((d) => (
                 <li key={d.metric.key}>{getLocalizedMetricName(d.metric)}</li>
               ))}
             </ul>
-          </Alert>
-        )}
+          </p>
+        </FlagMessage>
+      )}
 
-        {sortedConditionsOnNewMetrics.length > 0 && (
-          <div className="big-spacer-top">
-            <h4>{translate('quality_gates.conditions.new_code.long')}</h4>
+      <div className="sw-flex sw-flex-col sw-gap-8">
+        {caycConditions.length > 0 && (
+          <div>
+            <div className="sw-flex sw-items-center sw-gap-2 sw-mb-2">
+              <HeadingDark as="h3">{translate('quality_gates.conditions.cayc')}</HeadingDark>
+              <DocumentationTooltip
+                content={translate('quality_gates.conditions.cayc.hint')}
+                placement="right"
+              >
+                <HelperHintIcon />
+              </DocumentationTooltip>
+            </div>
 
-            {appState.branchesEnabled && (
-              <p className="spacer-top spacer-bottom">
-                {translate('quality_gates.conditions.new_code.description')}
-              </p>
+            <HighlightedSection className="sw-p-0 sw-my-2 sw-w-3/4" id="cayc-highlight">
+              <ul
+                className="sw-my-2"
+                aria-label={translate('quality_gates.cayc.condition_simplification_list')}
+              >
+                {caycConditions.map((condition) => (
+                  <CaycCondition
+                    key={condition.id}
+                    condition={condition}
+                    metric={metrics[condition.metric]}
+                  />
+                ))}
+              </ul>
+            </HighlightedSection>
+
+            {hasFeature(Feature.BranchSupport) && (
+              <Note className="sw-mb-2 sw-body-sm">
+                {translate('quality_gates.conditions.cayc', 'description')}
+              </Note>
             )}
-
-            {this.renderConditionsTable(sortedConditionsOnNewMetrics, 'new')}
           </div>
         )}
 
-        {sortedConditionsOnOverallMetrics.length > 0 && (
-          <div className="big-spacer-top">
-            <h4>{translate('quality_gates.conditions.overall_code.long')}</h4>
+        {newCodeConditions.length > 0 && (
+          <div>
+            <HeadingDark as="h3" className="sw-mb-2">
+              {translate('quality_gates.conditions.new_code', 'long')}
+            </HeadingDark>
 
-            {appState.branchesEnabled && (
-              <p className="spacer-top spacer-bottom">
-                {translate('quality_gates.conditions.overall_code.description')}
-              </p>
+            <ConditionsTable
+              qualityGate={qualityGate}
+              metrics={metrics}
+              canEdit={canEdit}
+              conditions={newCodeConditions}
+              showEdit={editing}
+              scope="new"
+            />
+
+            {hasFeature(Feature.BranchSupport) && (
+              <Note className="sw-mb-2 sw-body-sm">
+                {translate('quality_gates.conditions.new_code', 'description')}
+              </Note>
             )}
-
-            {this.renderConditionsTable(sortedConditionsOnOverallMetrics, 'overall')}
           </div>
         )}
 
-        {existingConditions.length === 0 && (
-          <div className="big-spacer-top">{translate('quality_gates.no_conditions')}</div>
+        {overallCodeConditions.length > 0 && (
+          <div className="sw-mt-5">
+            <HeadingDark as="h3" className="sw-mb-2">
+              {translate('quality_gates.conditions.overall_code', 'long')}
+            </HeadingDark>
+
+            <ConditionsTable
+              qualityGate={qualityGate}
+              metrics={metrics}
+              canEdit={canEdit}
+              conditions={overallCodeConditions}
+              scope="overall"
+            />
+
+            {hasFeature(Feature.BranchSupport) && (
+              <Note className="sw-mb-2 sw-body-sm">
+                {translate('quality_gates.conditions.overall_code', 'description')}
+              </Note>
+            )}
+          </div>
         )}
       </div>
-    );
-  }
-}
 
-export default withAppState(Conditions);
+      {qualityGate.caycStatus !== CaycStatus.NonCompliant && !editing && canEdit && (
+        <div className="sw-mt-4 it__qg-unfollow-cayc">
+          <SubHeading as="p" className="sw-mb-2 sw-body-sm">
+            <FormattedMessage
+              id="quality_gates.cayc_unfollow.description"
+              defaultMessage={translate('quality_gates.cayc_unfollow.description')}
+              values={{
+                cayc_link: (
+                  <Link to={getDocUrl('/user-guide/clean-as-you-code/')}>
+                    {translate('quality_gates.cayc')}
+                  </Link>
+                ),
+              }}
+            />
+          </SubHeading>
+          <ButtonSecondary className="sw-mt-2" onClick={() => setEditing(true)}>
+            {translate('quality_gates.cayc.unlock_edit')}
+          </ButtonSecondary>
+        </div>
+      )}
+
+      {existingConditions.length === 0 && (
+        <div className="sw-mt-4 sw-body-sm">
+          <LightPrimary as="p">{translate('quality_gates.no_conditions')}</LightPrimary>
+        </div>
+      )}
+    </div>
+  );
+}

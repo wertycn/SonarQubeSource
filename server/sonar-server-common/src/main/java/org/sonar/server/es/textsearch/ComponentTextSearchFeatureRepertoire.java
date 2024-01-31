@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.server.es.newindex.DefaultIndexSettings;
 import org.sonar.server.es.newindex.DefaultIndexSettingsElement;
 import org.sonar.server.es.textsearch.ComponentTextSearchQueryFactory.ComponentTextSearchQuery;
@@ -49,7 +48,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
     @Override
     public QueryBuilder getQuery(ComponentTextSearchQuery query) {
       return matchQuery(SORTABLE_ANALYZER.subField(query.getFieldName()), query.getQueryText())
-        .boost(2.5f);
+        .boost(2.5F);
     }
   },
   PREFIX(CHANGE_ORDER_OF_RESULTS) {
@@ -60,7 +59,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
         return Stream.empty();
       }
       BoolQueryBuilder queryBuilder = prefixAndPartialQuery(tokens, query.getFieldName(), SEARCH_PREFIX_ANALYZER)
-        .boost(3f);
+        .boost(3F);
       return Stream.of(queryBuilder);
     }
   },
@@ -71,9 +70,9 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
       if (tokens.isEmpty()) {
         return Stream.empty();
       }
-      List<String> lowerCaseTokens = tokens.stream().map(t -> t.toLowerCase(Locale.ENGLISH)).collect(MoreCollectors.toList());
+      List<String> lowerCaseTokens = tokens.stream().map(t -> t.toLowerCase(Locale.ENGLISH)).toList();
       BoolQueryBuilder queryBuilder = prefixAndPartialQuery(lowerCaseTokens, query.getFieldName(), SEARCH_PREFIX_CASE_INSENSITIVE_ANALYZER)
-        .boost(2f);
+        .boost(2F);
       return Stream.of(queryBuilder);
     }
   },
@@ -84,7 +83,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
       if (tokens.isEmpty()) {
         return Stream.empty();
       }
-      BoolQueryBuilder queryBuilder = boolQuery().boost(0.5f);
+      BoolQueryBuilder queryBuilder = boolQuery().boost(0.5F);
       tokens.stream()
         .map(text -> tokenQuery(text, query.getFieldName(), SEARCH_GRAMS_ANALYZER))
         .forEach(queryBuilder::must);
@@ -95,7 +94,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
     @Override
     public QueryBuilder getQuery(ComponentTextSearchQuery query) {
       return matchQuery(SORTABLE_ANALYZER.subField(query.getFieldKey()), query.getQueryText())
-        .boost(50f);
+        .boost(50F);
     }
   },
   RECENTLY_BROWSED(CHANGE_ORDER_OF_RESULTS) {
@@ -105,7 +104,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
       if (recentlyBrowsedKeys.isEmpty()) {
         return Stream.empty();
       }
-      return Stream.of(termsQuery(query.getFieldKey(), recentlyBrowsedKeys).boost(100f));
+      return Stream.of(termsQuery(query.getFieldKey(), recentlyBrowsedKeys).boost(100F));
     }
   },
   FAVORITE(CHANGE_ORDER_OF_RESULTS) {
@@ -115,7 +114,7 @@ public enum ComponentTextSearchFeatureRepertoire implements ComponentTextSearchF
       if (favoriteKeys.isEmpty()) {
         return Stream.empty();
       }
-      return Stream.of(termsQuery(query.getFieldKey(), favoriteKeys).boost(1000f));
+      return Stream.of(termsQuery(query.getFieldKey(), favoriteKeys).boost(1000F));
     }
   };
 

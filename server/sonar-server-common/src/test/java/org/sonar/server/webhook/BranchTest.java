@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,24 +20,20 @@
 package org.sonar.server.webhook;
 
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class BranchTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private Branch underTest = new Branch(true, "b", Branch.Type.BRANCH);
 
   @Test
   public void constructor_throws_NPE_if_type_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("type can't be null");
-
-    new Branch(new Random().nextBoolean(), "s", null);
+    assertThatThrownBy(() -> new Branch(new Random().nextBoolean(), "s", null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("type can't be null");
   }
 
   @Test

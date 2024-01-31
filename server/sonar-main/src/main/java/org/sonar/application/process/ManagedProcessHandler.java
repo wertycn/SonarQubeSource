@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sonar.application.config.AppSettings;
 import org.sonar.process.ProcessId;
 
 import static java.lang.String.format;
@@ -43,6 +44,7 @@ public class ManagedProcessHandler {
   private final Timeout stopTimeout;
   private final Timeout hardStopTimeout;
   private final long watcherDelayMs;
+  private final AppSettings appSettings;
 
   private ManagedProcess process;
   private StreamGobbler stdOutGobbler;
@@ -62,6 +64,7 @@ public class ManagedProcessHandler {
     this.watcherDelayMs = builder.watcherDelayMs;
     this.stopWatcher = new StopWatcher();
     this.eventWatcher = new EventWatcher();
+    this.appSettings = builder.settings;
   }
 
   public boolean start(Supplier<ManagedProcess> commandLauncher) {
@@ -72,14 +75,14 @@ public class ManagedProcessHandler {
     try {
       this.process = commandLauncher.get();
     } catch (RuntimeException e) {
-      LOG.error("Fail to launch process [{}]", processId.getKey(), e);
+      LOG.error("Failed to launch process [{}]", processId.getHumanReadableName(), e);
       lifecycle.tryToMoveTo(ManagedProcessLifecycle.State.STOPPING);
       finalizeStop();
       throw e;
     }
-    this.stdOutGobbler = new StreamGobbler(process.getInputStream(), processId.getKey());
+    this.stdOutGobbler = new StreamGobbler(process.getInputStream(), appSettings, processId.getKey());
     this.stdOutGobbler.start();
-    this.stdErrGobbler = new StreamGobbler(process.getErrorStream(), processId.getKey());
+    this.stdErrGobbler = new StreamGobbler(process.getErrorStream(), appSettings, processId.getKey());
     this.stdErrGobbler.start();
     this.stopWatcher.start();
     this.eventWatcher.start();
@@ -101,7 +104,7 @@ public class ManagedProcessHandler {
     if (lifecycle.tryToMoveTo(ManagedProcessLifecycle.State.STOPPING)) {
       stopImpl();
       if (process != null && process.isAlive()) {
-        LOG.info("{} failed to stop in a graceful fashion. Hard stopping it.", processId.getKey());
+        LOG.info("{} failed to stop in a graceful fashion. Hard stopping it.", processId.getHumanReadableName());
         hardStop();
       } else {
         // enforce stop and clean-up even if process has been quickly stopped
@@ -121,7 +124,7 @@ public class ManagedProcessHandler {
     if (lifecycle.tryToMoveTo(ManagedProcessLifecycle.State.HARD_STOPPING)) {
       hardStopImpl();
       if (process != null && process.isAlive()) {
-        LOG.info("{} failed to stop in a quick fashion. Killing it.", processId.getKey());
+        LOG.info("{} failed to stop in a quick fashion. Killing it.", processId.getHumanReadableName());
       }
       // enforce stop and clean-up even if process has been quickly stopped
       finalizeStop();
@@ -230,7 +233,7 @@ public class ManagedProcessHandler {
 
   @Override
   public String toString() {
-    return format("Process[%s]", processId.getKey());
+    return format("Process[%s]", processId.getHumanReadableName());
   }
 
   /**
@@ -247,7 +250,7 @@ public class ManagedProcessHandler {
       // this name is different than Thread#toString(), which includes name, priority
       // and thread group
       // -> do not override toString()
-      super(format("StopWatcher[%s]", processId.getKey()));
+      super(format("StopWatcher[%s]", processId.getHumanReadableName()));
     }
 
     @Override
@@ -264,7 +267,7 @@ public class ManagedProcessHandler {
       try {
         hardStop();
       } catch (InterruptedException e) {
-        LOG.debug("Interrupted while stopping [{}] after process ended", processId.getKey(), e);
+        LOG.debug("Interrupted while stopping [{}] after process ended", processId.getHumanReadableName(), e);
         Thread.currentThread().interrupt();
       }
     }
@@ -275,7 +278,7 @@ public class ManagedProcessHandler {
       // this name is different than Thread#toString(), which includes name, priority
       // and thread group
       // -> do not override toString()
-      super(format("EventWatcher[%s]", processId.getKey()));
+      super(format("EventWatcher[%s]", processId.getHumanReadableName()));
     }
 
     @Override
@@ -302,6 +305,7 @@ public class ManagedProcessHandler {
     private long watcherDelayMs = DEFAULT_WATCHER_DELAY_MS;
     private Timeout stopTimeout;
     private Timeout hardStopTimeout;
+    private AppSettings settings;
 
     private Builder(ProcessId processId) {
       this.processId = processId;
@@ -347,6 +351,11 @@ public class ManagedProcessHandler {
       ensureStopTimeoutNonNull(this.stopTimeout);
       ensureHardStopTimeoutNonNull(this.hardStopTimeout);
       return new ManagedProcessHandler(this);
+    }
+
+    public Builder setAppSettings(AppSettings settings) {
+      this.settings = settings;
+      return this;
     }
   }
 

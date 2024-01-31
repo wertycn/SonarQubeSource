@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,12 +23,19 @@ import java.util.List;
 import java.util.Optional;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
+import org.sonar.db.audit.AuditPersister;
+import org.sonar.db.audit.model.PermissionTemplateNewValue;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 
 public class PermissionTemplateCharacteristicDao implements Dao {
+  private final AuditPersister auditPersister;
+
+  public PermissionTemplateCharacteristicDao(AuditPersister auditPersister) {
+    this.auditPersister = auditPersister;
+  }
 
   public List<PermissionTemplateCharacteristicDto> selectByTemplateUuids(DbSession dbSession, List<String> templateUuids) {
     return executeLargeInputs(templateUuids, partitionOfTemplateUuids -> mapper(dbSession).selectByTemplateUuids(partitionOfTemplateUuids));
@@ -39,15 +46,24 @@ public class PermissionTemplateCharacteristicDao implements Dao {
     return Optional.ofNullable(dto);
   }
 
-  public PermissionTemplateCharacteristicDto insert(DbSession dbSession, PermissionTemplateCharacteristicDto dto) {
+  public PermissionTemplateCharacteristicDto insert(DbSession dbSession, PermissionTemplateCharacteristicDto dto, String templateName) {
     checkArgument(dto.getCreatedAt() != 0L && dto.getUpdatedAt() != 0L);
     mapper(dbSession).insert(dto);
+
+    auditPersister.addCharacteristicToPermissionTemplate(dbSession, new PermissionTemplateNewValue(dto.getTemplateUuid(),
+      dto.getPermission(), templateName, dto.getWithProjectCreator()));
+
     return dto;
   }
 
-  public PermissionTemplateCharacteristicDto update(DbSession dbSession, PermissionTemplateCharacteristicDto templatePermissionDto) {
+  public PermissionTemplateCharacteristicDto update(DbSession dbSession, PermissionTemplateCharacteristicDto templatePermissionDto,
+    String templateName) {
     requireNonNull(templatePermissionDto.getUuid());
     mapper(dbSession).update(templatePermissionDto);
+
+    auditPersister.updateCharacteristicInPermissionTemplate(dbSession, new PermissionTemplateNewValue(templatePermissionDto.getTemplateUuid(),
+      templatePermissionDto.getPermission(), templateName, templatePermissionDto.getWithProjectCreator()));
+
     return templatePermissionDto;
   }
 

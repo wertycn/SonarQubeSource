@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,46 +19,43 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.Lists;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.container.TaskContainerImpl;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.ce.task.step.ComputationStep;
+import org.sonar.core.platform.SpringComponentContainer;
 
+import static com.google.common.collect.Lists.newArrayList;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class ReportComputationStepsTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void instances_throws_ISE_if_container_does_not_have_any_step() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Component not found: " + ExtractReportStep.class);
-
-    TaskContainerImpl computeEngineContainer = new TaskContainerImpl(new ComponentContainer(), container -> {
+    TaskContainerImpl computeEngineContainer = new TaskContainerImpl(new SpringComponentContainer(), container -> {
       // do nothing
     });
-
-    Lists.newArrayList(new ReportComputationSteps(computeEngineContainer).instances());
+    Iterable<ComputationStep> instances = new ReportComputationSteps(computeEngineContainer).instances();
+    assertThatThrownBy(() -> newArrayList(instances))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining(ExtractReportStep.class.getName());
   }
 
   @Test
   public void instances_throws_ISE_if_container_does_not_have_second_step() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Component not found: class org.sonar.ce.task.projectanalysis.step.PersistScannerContextStep");
-
-    final ExtractReportStep reportExtractionStep = mock(ExtractReportStep.class);
-    ComponentContainer componentContainer = new ComponentContainer() {
+    ExtractReportStep reportExtractionStep = mock(ExtractReportStep.class);
+    SpringComponentContainer componentContainer = new SpringComponentContainer() {
       {
-        addSingleton(reportExtractionStep);
+        add(reportExtractionStep);
       }
-    };
+    }.startComponents();
     TaskContainerImpl computeEngineContainer = new TaskContainerImpl(componentContainer, container -> {
       // do nothing
     });
-
-    Lists.newArrayList(new ReportComputationSteps(computeEngineContainer).instances());
+    computeEngineContainer.startComponents();
+    Iterable<ComputationStep> instances = new ReportComputationSteps(computeEngineContainer).instances();
+    assertThatThrownBy(() -> newArrayList(instances))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("org.sonar.ce.task.projectanalysis.step.PersistScannerContextStep");
   }
 }

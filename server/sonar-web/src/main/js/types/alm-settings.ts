@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,39 +22,47 @@ export const enum AlmKeys {
   BitbucketServer = 'bitbucket',
   BitbucketCloud = 'bitbucketcloud',
   GitHub = 'github',
-  GitLab = 'gitlab'
+  GitLab = 'gitlab',
 }
 
-export interface AlmBindingDefinition {
+export type AlmBindingDefinition =
+  | AzureBindingDefinition
+  | GithubBindingDefinition
+  | GitlabBindingDefinition
+  | BitbucketServerBindingDefinition
+  | BitbucketCloudBindingDefinition;
+
+export interface AlmBindingDefinitionBase {
   key: string;
   url?: string;
 }
 
-export interface AzureBindingDefinition extends AlmBindingDefinition {
+export interface AzureBindingDefinition extends AlmBindingDefinitionBase {
   personalAccessToken: string;
   url?: string;
 }
 
-export interface BitbucketBindingDefinition extends AlmBindingDefinition {
+export interface BitbucketServerBindingDefinition extends AlmBindingDefinitionBase {
   personalAccessToken: string;
   url: string;
 }
 
-export interface BitbucketCloudBindingDefinition extends AlmBindingDefinition {
+export interface BitbucketCloudBindingDefinition extends AlmBindingDefinitionBase {
   clientId: string;
   clientSecret: string;
   workspace: string;
 }
 
-export interface GithubBindingDefinition extends AlmBindingDefinition {
+export interface GithubBindingDefinition extends AlmBindingDefinitionBase {
   appId: string;
   clientId: string;
   clientSecret: string;
   privateKey: string;
   url: string;
+  webhookSecret: string;
 }
 
-export interface GitlabBindingDefinition extends AlmBindingDefinition {
+export interface GitlabBindingDefinition extends AlmBindingDefinitionBase {
   personalAccessToken: string;
   url?: string;
 }
@@ -62,33 +70,34 @@ export interface GitlabBindingDefinition extends AlmBindingDefinition {
 export interface ProjectAlmBindingResponse {
   alm: AlmKeys;
   key: string;
-  repository?: string;
+  repository: string;
   slug?: string;
+  url?: string;
   summaryCommentEnabled?: boolean;
   monorepo: boolean;
 }
 
 export interface ProjectAzureBindingResponse extends ProjectAlmBindingResponse {
   alm: AlmKeys.Azure;
-  repository: string;
   slug: string;
   url: string;
 }
 
 export interface ProjectBitbucketBindingResponse extends ProjectAlmBindingResponse {
   alm: AlmKeys.BitbucketServer;
-  repository: string;
   slug: string;
+}
+
+export interface ProjectBitbucketCloudBindingResponse extends ProjectAlmBindingResponse {
+  alm: AlmKeys.BitbucketCloud;
 }
 
 export interface ProjectGitHubBindingResponse extends ProjectAlmBindingResponse {
   alm: AlmKeys.GitHub;
-  repository: string;
 }
 
 export interface ProjectGitLabBindingResponse extends ProjectAlmBindingResponse {
   alm: AlmKeys.GitLab;
-  repository: string;
   url: string;
 }
 
@@ -129,7 +138,7 @@ export interface AlmSettingsInstance {
 
 export interface AlmSettingsBindingDefinitions {
   [AlmKeys.Azure]: AzureBindingDefinition[];
-  [AlmKeys.BitbucketServer]: BitbucketBindingDefinition[];
+  [AlmKeys.BitbucketServer]: BitbucketServerBindingDefinition[];
   [AlmKeys.BitbucketCloud]: BitbucketCloudBindingDefinition[];
   [AlmKeys.GitHub]: GithubBindingDefinition[];
   [AlmKeys.GitLab]: GitlabBindingDefinition[];
@@ -145,53 +154,70 @@ export enum AlmSettingsBindingStatusType {
   Validating,
   Success,
   Failure,
-  Warning
+  Warning,
+}
+
+export enum ProjectAlmBindingConfigurationErrorScope {
+  Global = 'GLOBAL',
+  Project = 'PROJECT',
+  Unknown = 'UNKNOWN',
+}
+
+export interface ProjectAlmBindingConfigurationErrors {
+  scope: ProjectAlmBindingConfigurationErrorScope;
+  errors: { msg: string }[];
 }
 
 export function isProjectBitbucketBindingResponse(
-  binding: ProjectAlmBindingResponse
+  binding: ProjectAlmBindingResponse,
 ): binding is ProjectBitbucketBindingResponse {
   return binding.alm === AlmKeys.BitbucketServer;
 }
 
+export function isProjectBitbucketCloudBindingResponse(
+  binding: ProjectAlmBindingResponse,
+): binding is ProjectBitbucketBindingResponse {
+  return binding.alm === AlmKeys.BitbucketCloud;
+}
+
 export function isProjectGitHubBindingResponse(
-  binding: ProjectAlmBindingResponse
+  binding: ProjectAlmBindingResponse,
 ): binding is ProjectGitHubBindingResponse {
   return binding.alm === AlmKeys.GitHub;
 }
 
 export function isProjectGitLabBindingResponse(
-  binding: ProjectAlmBindingResponse
+  binding: ProjectAlmBindingResponse,
 ): binding is ProjectGitLabBindingResponse {
   return binding.alm === AlmKeys.GitLab;
 }
 
 export function isProjectAzureBindingResponse(
-  binding: ProjectAlmBindingResponse
+  binding: ProjectAlmBindingResponse,
 ): binding is ProjectAzureBindingResponse {
   return binding.alm === AlmKeys.Azure;
 }
 
 export function isBitbucketBindingDefinition(
-  binding?: AlmBindingDefinition & { url?: string }
-): binding is BitbucketBindingDefinition {
+  binding?: AlmBindingDefinitionBase & { url?: string },
+): binding is BitbucketServerBindingDefinition {
   return binding !== undefined && binding.url !== undefined;
 }
 
 export function isBitbucketCloudBindingDefinition(
-  binding?: AlmBindingDefinition & { clientId?: string; workspace?: string }
+  binding?: AlmBindingDefinitionBase & { clientId?: string; workspace?: string },
 ): binding is BitbucketCloudBindingDefinition {
   return binding !== undefined && binding.clientId !== undefined && binding.workspace !== undefined;
 }
 
 export function isGithubBindingDefinition(
-  binding?: AlmBindingDefinition & { appId?: string; url?: string }
+  binding?: AlmBindingDefinitionBase & { appId?: string; url?: string },
 ): binding is GithubBindingDefinition {
   return binding !== undefined && binding.appId !== undefined && binding.url !== undefined;
 }
 
 export function isGitLabBindingDefinition(
-  binding?: AlmBindingDefinition | GithubBindingDefinition | BitbucketCloudBindingDefinition
+  binding?: AlmBindingDefinitionBase | GithubBindingDefinition | BitbucketCloudBindingDefinition,
 ): binding is GitlabBindingDefinition {
   // There's too much overlap with the others. We must not only validate that certain fields are
   // present, we must also validate that others are NOT present. And even so, we cannot be 100%

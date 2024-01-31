@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Note, UnorderedList } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { SysInfoAppNode, SysInfoCluster, SysInfoSearchNode } from '../../../types/types';
 import {
   getAppNodes,
   getClusterMainCardSection,
@@ -27,22 +29,25 @@ import {
   getHealthCauses,
   getNodeName,
   getSearchNodes,
-  ignoreInfoFields
+  ignoreInfoFields,
 } from '../utils';
 import HealthCard from './info-items/HealthCard';
 
 interface Props {
   expandedCards: string[];
-  sysInfoData: T.SysInfoCluster;
+  sysInfoData: SysInfoCluster;
   toggleCard: (toggledCard: string) => void;
 }
 
-export default function ClusterSysInfos({ expandedCards, sysInfoData, toggleCard }: Props) {
+export default function ClusterSysInfos({
+  expandedCards,
+  sysInfoData,
+  toggleCard,
+}: Readonly<Props>) {
   const mainCardName = 'System';
   return (
-    <>
+    <UnorderedList className="sw-flex sw-flex-col sw-gap-4">
       <HealthCard
-        biggerHealth={true}
         health={getHealth(sysInfoData)}
         healthCauses={getHealthCauses(sysInfoData)}
         name={mainCardName}
@@ -50,10 +55,10 @@ export default function ClusterSysInfos({ expandedCards, sysInfoData, toggleCard
         open={expandedCards.includes(mainCardName)}
         sysInfoData={ignoreInfoFields(getClusterMainCardSection(sysInfoData))}
       />
-      <li className="note system-info-health-title">
-        {translate('system.application_nodes_title')}
+      <li>
+        <Note>{translate('system.application_nodes_title')}</Note>
       </li>
-      {sortBy(getAppNodes(sysInfoData), getNodeName).map((node: T.SysInfoAppNode) => (
+      {sortBy(getAppNodes(sysInfoData), getNodeName).map((node: SysInfoAppNode) => (
         <HealthCard
           health={getHealth(node)}
           healthCauses={getHealthCauses(node)}
@@ -64,8 +69,10 @@ export default function ClusterSysInfos({ expandedCards, sysInfoData, toggleCard
           sysInfoData={ignoreInfoFields(node)}
         />
       ))}
-      <li className="note system-info-health-title">{translate('system.search_nodes_title')}</li>
-      {sortBy(getSearchNodes(sysInfoData), getNodeName).map((node: T.SysInfoSearchNode) => (
+      <li>
+        <Note>{translate('system.search_nodes_title')}</Note>
+      </li>
+      {sortBy(getSearchNodes(sysInfoData), getNodeName).map((node: SysInfoSearchNode) => (
         <HealthCard
           key={getNodeName(node)}
           name={getNodeName(node)}
@@ -74,6 +81,6 @@ export default function ClusterSysInfos({ expandedCards, sysInfoData, toggleCard
           sysInfoData={ignoreInfoFields(node)}
         />
       ))}
-    </>
+    </UnorderedList>
   );
 }

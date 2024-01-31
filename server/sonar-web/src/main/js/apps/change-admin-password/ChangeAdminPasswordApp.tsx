@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,16 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
 import { changePassword } from '../../api/users';
+import withAppStateContext from '../../app/components/app-state/withAppStateContext';
 import { Location, withRouter } from '../../components/hoc/withRouter';
-import { getAppState, Store } from '../../store/rootReducer';
+import { AppState } from '../../types/appstate';
 import ChangeAdminPasswordAppRenderer from './ChangeAdminPasswordAppRenderer';
 import { DEFAULT_ADMIN_LOGIN, DEFAULT_ADMIN_PASSWORD } from './constants';
 
 interface Props {
-  canAdmin?: boolean;
-  instanceUsesDefaultAdminCredentials?: boolean;
+  appState: AppState;
   location: Location;
 }
 
@@ -49,7 +48,7 @@ export class ChangeAdminPasswordApp extends React.PureComponent<Props, State> {
       passwordValue: '',
       confirmPasswordValue: '',
       submitting: false,
-      success: !props.instanceUsesDefaultAdminCredentials
+      success: !props.appState.instanceUsesDefaultAdminCredentials,
     };
   }
 
@@ -75,10 +74,10 @@ export class ChangeAdminPasswordApp extends React.PureComponent<Props, State> {
       this.setState({ submitting: true });
       const success = await changePassword({
         login: DEFAULT_ADMIN_LOGIN,
-        password: passwordValue
+        password: passwordValue,
       }).then(
         () => true,
-        () => false
+        () => false,
       );
       if (this.mounted) {
         this.setState({ submitting: false, success });
@@ -88,12 +87,15 @@ export class ChangeAdminPasswordApp extends React.PureComponent<Props, State> {
 
   checkCanSubmit = () => {
     this.setState(({ passwordValue, confirmPasswordValue }) => ({
-      canSubmit: passwordValue === confirmPasswordValue && passwordValue !== DEFAULT_ADMIN_PASSWORD
+      canSubmit: passwordValue === confirmPasswordValue && passwordValue !== DEFAULT_ADMIN_PASSWORD,
     }));
   };
 
   render() {
-    const { canAdmin, location } = this.props;
+    const {
+      appState: { canAdmin },
+      location,
+    } = this.props;
     const { canSubmit, confirmPasswordValue, passwordValue, submitting, success } = this.state;
     return (
       <ChangeAdminPasswordAppRenderer
@@ -112,9 +114,4 @@ export class ChangeAdminPasswordApp extends React.PureComponent<Props, State> {
   }
 }
 
-export const mapStateToProps = (state: Store) => {
-  const { canAdmin, instanceUsesDefaultAdminCredentials } = getAppState(state);
-  return { canAdmin, instanceUsesDefaultAdminCredentials };
-};
-
-export default connect(mapStateToProps)(withRouter(ChangeAdminPasswordApp));
+export default withRouter(withAppStateContext(ChangeAdminPasswordApp));

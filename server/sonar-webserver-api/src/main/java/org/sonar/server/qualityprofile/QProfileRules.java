@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,11 +25,11 @@ import javax.annotation.Nullable;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.rule.index.RuleQuery;
 
 /**
- * Operations related to activation and deactivation of rules on user profiles.
+ * Operations related to activation and deactivation of rules on Quality profiles.
  */
 @ServerSide
 public interface QProfileRules {
@@ -60,5 +60,5 @@ public interface QProfileRules {
    * Delete a rule from all Quality profiles. Db session is not committed. As a
    * consequence Elasticsearch indices are NOT updated.
    */
-  List<ActiveRuleChange> deleteRule(DbSession dbSession, RuleDefinitionDto rule);
+  List<ActiveRuleChange> deleteRule(DbSession dbSession, RuleDto rule);
 }

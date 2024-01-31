@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,17 +73,17 @@ public class TestRequest extends ValidatingRequest {
   }
 
   @Override
-  protected String readParam(String key) {
+  public String readParam(String key) {
     return params.get(key);
   }
 
   @Override
-  protected List<String> readMultiParam(String key) {
+  public List<String> readMultiParam(String key) {
     return multiParams.get(key);
   }
 
   @Override
-  protected InputStream readInputStreamParam(String key) {
+  public InputStream readInputStreamParam(String key) {
     String value = readParam(key);
     if (value == null) {
       return null;
@@ -92,7 +92,7 @@ public class TestRequest extends ValidatingRequest {
   }
 
   @Override
-  protected Part readPart(String key) {
+  public Part readPart(String key) {
     return parts.get(key);
   }
 

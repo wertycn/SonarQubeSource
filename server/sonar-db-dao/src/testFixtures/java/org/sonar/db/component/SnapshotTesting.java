@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ public class SnapshotTesting {
 
   public static SnapshotDto newAnalysis(ComponentDto rootComponent) {
     checkNotNull(rootComponent.uuid(), "Project UUID must be set");
-    checkArgument(rootComponent.uuid().equals(rootComponent.projectUuid()), "Component is not a tree root");
+    checkArgument(rootComponent.uuid().equals(rootComponent.branchUuid()), "Component is not a tree root");
     return newAnalysis(rootComponent.uuid());
   }
 
@@ -44,10 +44,10 @@ public class SnapshotTesting {
   public static SnapshotDto newAnalysis(String uuid) {
     return new SnapshotDto()
       .setUuid(randomAlphanumeric(40))
-      .setComponentUuid(uuid)
+      .setRootComponentUuid(uuid)
       .setStatus(SnapshotDto.STATUS_PROCESSED)
       .setCreatedAt(System.currentTimeMillis())
-      .setBuildDate(System.currentTimeMillis())
+      .setAnalysisDate(System.currentTimeMillis())
       .setRevision(randomAlphanumeric(50))
       .setLast(true);
   }
@@ -55,10 +55,10 @@ public class SnapshotTesting {
   public static SnapshotDto newSnapshot() {
     return new SnapshotDto()
       .setUuid(randomAlphanumeric(40))
-      .setComponentUuid(randomAlphanumeric(40))
+      .setRootComponentUuid(randomAlphanumeric(40))
       .setStatus(randomAscii(1))
       .setCreatedAt(System.currentTimeMillis())
-      .setBuildDate(System.currentTimeMillis())
+      .setAnalysisDate(System.currentTimeMillis())
       .setLast(true);
   }
 }

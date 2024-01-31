@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, RequestData } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post } from '../helpers/request';
 import { IndexationStatus } from '../types/indexation';
-import { Task, TaskWarning } from '../types/tasks';
+import { ActivityRequestParameters, Task, TaskWarning } from '../types/tasks';
+import { Paging } from '../types/types';
 
 export function getAnalysisStatus(data: {
   component: string;
@@ -38,24 +39,26 @@ export function getAnalysisStatus(data: {
   return getJSON('/api/ce/analysis_status', data).catch(throwGlobalError);
 }
 
-export function getActivity(data: RequestData): Promise<{ tasks: Task[] }> {
+export function getActivity(
+  data: ActivityRequestParameters,
+): Promise<{ tasks: Task[]; paging: Paging }> {
   return getJSON('/api/ce/activity', data);
 }
 
 export function getStatus(
-  component?: string
+  component?: string,
 ): Promise<{ failing: number; inProgress: number; pending: number; pendingTime?: number }> {
   return getJSON('/api/ce/activity_status', { component });
 }
 
 export function getTask(id: string, additionalFields?: string[]): Promise<Task> {
-  return getJSON('/api/ce/task', { id, additionalFields }).then(r => r.task);
+  return getJSON('/api/ce/task', { id, additionalFields }).then((r) => r.task);
 }
 
 export function cancelTask(id: string): Promise<any> {
   return post('/api/ce/cancel', { id }).then(
     () => getTask(id),
-    () => getTask(id)
+    () => getTask(id),
   );
 }
 
@@ -63,12 +66,14 @@ export function cancelAllTasks(): Promise<any> {
   return post('/api/ce/cancel_all');
 }
 
-export function getTasksForComponent(component: string): Promise<{ queue: Task[]; current: Task }> {
+export function getTasksForComponent(
+  component: string,
+): Promise<{ queue: Task[]; current?: Task }> {
   return getJSON('/api/ce/component', { component }).catch(throwGlobalError);
 }
 
 export function getTypes(): Promise<string[]> {
-  return getJSON('/api/ce/task_types').then(r => r.taskTypes);
+  return getJSON('/api/ce/task_types').then((r) => r.taskTypes);
 }
 
 export function getWorkers(): Promise<{ canSetWorkerCount: boolean; value: number }> {

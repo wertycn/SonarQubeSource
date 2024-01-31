@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,40 +18,45 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { InjectedIntl, injectIntl } from 'react-intl';
-import { longFormatterOption } from 'sonar-ui-common/components/intl/DateFormatter';
-import DateFromNow from 'sonar-ui-common/components/intl/DateFromNow';
-import { formatterOption } from 'sonar-ui-common/components/intl/DateTimeFormatter';
-import { translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { getPeriodDate, getPeriodLabel } from '../../../helpers/periods';
+import { injectIntl, WrappedComponentProps } from 'react-intl';
+import { longFormatterOption } from '../../../components/intl/DateFormatter';
+import DateFromNow from '../../../components/intl/DateFromNow';
+import { formatterOption } from '../../../components/intl/DateTimeFormatter';
+import { translateWithParameters } from '../../../helpers/l10n';
+import { getNewCodePeriodDate, getNewCodePeriodLabel } from '../../../helpers/new-code-period';
+import { NewCodeDefinitionType } from '../../../types/new-code-definition';
+import { Period } from '../../../types/types';
 
-export interface ProjectLeakPeriodInfoProps {
-  intl: Pick<InjectedIntl, 'formatDate' | 'formatTime'>;
-  leakPeriod: T.Period;
+export interface ProjectLeakPeriodInfoProps extends WrappedComponentProps {
+  leakPeriod: Period;
 }
 
 export function ProjectLeakPeriodInfo(props: ProjectLeakPeriodInfoProps) {
   const {
     intl: { formatDate, formatTime },
-    leakPeriod
+    leakPeriod,
   } = props;
 
-  const leakPeriodLabel = getPeriodLabel(
+  const leakPeriodLabel = getNewCodePeriodLabel(
     leakPeriod,
-    ['manual_baseline', 'SPECIFIC_ANALYSIS'].includes(leakPeriod.mode)
+    ['manual_baseline', NewCodeDefinitionType.SpecificAnalysis].includes(leakPeriod.mode)
       ? (date: string) => formatTime(date, formatterOption)
-      : (date: string) => formatDate(date, longFormatterOption)
+      : (date: string) => formatDate(date, longFormatterOption),
   );
 
   if (!leakPeriodLabel) {
     return null;
   }
 
-  if (leakPeriod.mode === 'days' || leakPeriod.mode === 'NUMBER_OF_DAYS') {
-    return <div className="note spacer-top">{leakPeriodLabel} </div>;
+  if (
+    leakPeriod.mode === 'days' ||
+    leakPeriod.mode === NewCodeDefinitionType.NumberOfDays ||
+    leakPeriod.mode === NewCodeDefinitionType.ReferenceBranch
+  ) {
+    return <div>{leakPeriodLabel} </div>;
   }
 
-  const leakPeriodDate = getPeriodDate(leakPeriod);
+  const leakPeriodDate = getNewCodePeriodDate(leakPeriod);
 
   if (!leakPeriodDate) {
     return null;
@@ -59,18 +64,19 @@ export function ProjectLeakPeriodInfo(props: ProjectLeakPeriodInfoProps) {
 
   return (
     <>
-      <div className="note spacer-top">{leakPeriodLabel}</div>
+      <div className="sw-mr-2 sw-text-ellipsis" title={leakPeriodLabel}>
+        {leakPeriodLabel}
+      </div>
+
       <DateFromNow date={leakPeriodDate}>
-        {fromNow => (
-          <div className="note little-spacer-top">
-            {translateWithParameters(
-              leakPeriod.mode === 'previous_analysis'
-                ? 'overview.previous_analysis_x'
-                : 'overview.started_x',
-              fromNow
-            )}
-          </div>
-        )}
+        {(fromNow) =>
+          translateWithParameters(
+            leakPeriod.mode === 'previous_analysis'
+              ? 'overview.previous_analysis_x'
+              : 'overview.started_x',
+            fromNow,
+          )
+        }
       </DateFromNow>
     </>
   );

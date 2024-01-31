@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ButtonPrimary,
+  ButtonSecondary,
+  ChevronDownIcon,
+  Dropdown,
+  ItemButton,
+  PopupPlacement,
+  PopupZLevel,
+} from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Dropdown from 'sonar-ui-common/components/controls/Dropdown';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { PopupPlacement } from 'sonar-ui-common/components/ui/popups';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { Profile } from '../../../api/quality-profiles';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate } from '../../../helpers/l10n';
+import { Dict } from '../../../types/types';
 import { Query } from '../query';
 import BulkChangeModal from './BulkChangeModal';
 
 interface Props {
-  languages: T.Languages;
+  onSubmit?: () => void;
   query: Query;
-  referencedProfiles: T.Dict<Profile>;
+  referencedProfiles: Dict<Profile>;
   total: number;
 }
 
@@ -50,41 +57,31 @@ export default class BulkChange extends React.PureComponent<Props, State> {
 
   closeModal = () => this.setState({ action: undefined, modal: false, profile: undefined });
 
-  handleActivateClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
+  handleActivateClick = () => {
     this.setState({ action: 'activate', modal: true, profile: undefined });
   };
 
-  handleActivateInProfileClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
+  handleActivateInProfileClick = () => {
     this.setState({ action: 'activate', modal: true, profile: this.getSelectedProfile() });
   };
 
-  handleDeactivateClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
+  handleDeactivateClick = () => {
     this.setState({ action: 'deactivate', modal: true, profile: undefined });
   };
 
-  handleDeactivateInProfileClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
+  handleDeactivateInProfileClick = () => {
     this.setState({ action: 'deactivate', modal: true, profile: this.getSelectedProfile() });
   };
 
   render() {
     // show "Bulk Change" button only if user is admin of at least one QP
-    const canBulkChange = Object.values(this.props.referencedProfiles).some(profile =>
-      Boolean(profile.actions && profile.actions.edit)
+    const canBulkChange = Object.values(this.props.referencedProfiles).some((profile) =>
+      Boolean(profile.actions?.edit),
     );
     if (!canBulkChange) {
       return (
         <Tooltip overlay={translate('coding_rules.can_not_bulk_change')}>
-          <Button className="js-bulk-change" disabled={true}>
-            {translate('bulk_change')}
-          </Button>
+          <ButtonPrimary disabled>{translate('bulk_change')}</ButtonPrimary>
         </Tooltip>
       );
     }
@@ -92,7 +89,7 @@ export default class BulkChange extends React.PureComponent<Props, State> {
     const { activation } = this.props.query;
     const profile = this.getSelectedProfile();
     const canChangeProfile = Boolean(
-      profile && !profile.isBuiltIn && profile.actions && profile.actions.edit
+      profile && !profile.isBuiltIn && profile.actions && profile.actions.edit,
     );
     const allowActivateOnProfile = canChangeProfile && activation === false;
     const allowDeactivateOnProfile = canChangeProfile && activation === true;
@@ -100,42 +97,47 @@ export default class BulkChange extends React.PureComponent<Props, State> {
     return (
       <>
         <Dropdown
-          overlayPlacement={PopupPlacement.BottomLeft}
+          id="issue-bulkaction-menu"
+          size="auto"
+          placement={PopupPlacement.BottomRight}
+          zLevel={PopupZLevel.Global}
+          allowResizing
           overlay={
-            <ul className="menu">
-              <li>
-                <a href="#" onClick={this.handleActivateClick}>
-                  {translate('coding_rules.activate_in')}…
-                </a>
-              </li>
+            <>
+              <ItemButton onClick={this.handleActivateClick}>
+                {translate('coding_rules.activate_in')}
+              </ItemButton>
+
               {allowActivateOnProfile && profile && (
-                <li>
-                  <a href="#" onClick={this.handleActivateInProfileClick}>
-                    {translate('coding_rules.activate_in')} <strong>{profile.name}</strong>
-                  </a>
-                </li>
+                <ItemButton onClick={this.handleActivateInProfileClick}>
+                  {translate('coding_rules.activate_in')}{' '}
+                  <strong className="sw-ml-1">{profile.name}</strong>
+                </ItemButton>
               )}
-              <li>
-                <a href="#" onClick={this.handleDeactivateClick}>
-                  {translate('coding_rules.deactivate_in')}…
-                </a>
-              </li>
+
+              <ItemButton onClick={this.handleDeactivateClick}>
+                {translate('coding_rules.deactivate_in')}
+              </ItemButton>
+
               {allowDeactivateOnProfile && profile && (
-                <li>
-                  <a href="#" onClick={this.handleDeactivateInProfileClick}>
-                    {translate('coding_rules.deactivate_in')} <strong>{profile.name}</strong>
-                  </a>
-                </li>
+                <ItemButton onClick={this.handleDeactivateInProfileClick}>
+                  {translate('coding_rules.deactivate_in')}{' '}
+                  <strong className="sw-ml-1">{profile.name}</strong>
+                </ItemButton>
               )}
-            </ul>
-          }>
-          <Button className="js-bulk-change">{translate('bulk_change')}</Button>
+            </>
+          }
+        >
+          <ButtonSecondary>
+            {translate('bulk_change')}
+            <ChevronDownIcon className="sw-ml-1" />
+          </ButtonSecondary>
         </Dropdown>
         {this.state.modal && this.state.action && (
           <BulkChangeModal
             action={this.state.action}
-            languages={this.props.languages}
             onClose={this.closeModal}
+            onSubmit={this.props.onSubmit}
             profile={this.state.profile}
             query={this.props.query}
             referencedProfiles={this.props.referencedProfiles}

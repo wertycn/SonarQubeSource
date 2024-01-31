@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,30 +20,26 @@
 package org.sonar.server.authentication;
 
 import java.util.List;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.server.authentication.IdentityProvider;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class IdentityProviderRepositoryTest {
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
-  static IdentityProvider GITHUB = new TestIdentityProvider()
+  private static IdentityProvider GITHUB = new TestIdentityProvider()
     .setKey("github")
     .setName("Github")
     .setEnabled(true);
 
-  static IdentityProvider BITBUCKET = new TestIdentityProvider()
+  private static IdentityProvider BITBUCKET = new TestIdentityProvider()
     .setKey("bitbucket")
     .setName("Bitbucket")
     .setEnabled(true);
 
-  static IdentityProvider DISABLED = new TestIdentityProvider()
+  private static IdentityProvider DISABLED = new TestIdentityProvider()
     .setKey("disabled")
     .setName("Disabled")
     .setEnabled(false);
@@ -60,9 +56,18 @@ public class IdentityProviderRepositoryTest {
   public void fail_on_disabled_provider() {
     IdentityProviderRepository underTest = new IdentityProviderRepository(asList(GITHUB, BITBUCKET, DISABLED));
 
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Identity provider disabled does not exist or is not enabled");
-    underTest.getEnabledByKey(DISABLED.getKey());
+    assertThatThrownBy(() -> underTest.getEnabledByKey(DISABLED.getKey()))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Identity provider disabled does not exist or is not enabled");
+  }
+
+  @Test
+  public void fail_on_non_exist_provider() {
+    IdentityProviderRepository underTest = new IdentityProviderRepository(asList(GITHUB, BITBUCKET, DISABLED));
+
+    assertThatThrownBy(() -> underTest.getEnabledByKey("NotExist"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Identity provider NotExist does not exist or is not enabled");
   }
 
   @Test
@@ -83,7 +88,7 @@ public class IdentityProviderRepositoryTest {
 
   @Test
   public void return_nothing_when_no_identity_provider() {
-    IdentityProviderRepository underTest = new IdentityProviderRepository();
+    IdentityProviderRepository underTest = new IdentityProviderRepository(null);
 
     assertThat(underTest.getAllEnabledAndSorted()).isEmpty();
   }

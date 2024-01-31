@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,26 +19,22 @@
  */
 package org.sonar.api.batch.sensor.issue.internal;
 
+import java.util.Collections;
+import java.util.List;
 import org.apache.commons.lang.StringUtils;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeMatcher;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
-import org.sonar.api.batch.sensor.issue.internal.DefaultIssueLocation;
+import org.sonar.api.batch.sensor.issue.MessageFormatting;
+import org.sonar.api.batch.sensor.issue.NewMessageFormatting;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.rules.ExpectedException.none;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.AssertionsForClassTypes.tuple;
 
 public class DefaultIssueLocationTest {
 
-  @Rule
-  public ExpectedException thrown = none();
-
-  private InputFile inputFile = new TestInputFileBuilder("foo", "src/Foo.php")
+  private final InputFile inputFile = new TestInputFileBuilder("foo", "src/Foo.php")
     .initMetadata("Foo\nBar\n")
     .build();
 
@@ -53,56 +49,82 @@ public class DefaultIssueLocationTest {
 
   @Test
   public void not_allowed_to_call_on_twice() {
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("on() already called");
-    new DefaultIssueLocation()
+    assertThatThrownBy(() -> new DefaultIssueLocation()
       .on(inputFile)
       .on(inputFile)
-      .message("Wrong way!");
+      .message("Wrong way!"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("on() already called");
   }
 
   @Test
   public void prevent_too_long_messages() {
     assertThat(new DefaultIssueLocation()
       .on(inputFile)
-      .message(StringUtils.repeat("a", 4000)).message()).hasSize(4000);
+      .message(StringUtils.repeat("a", 1333)).message()).hasSize(1333);
 
     assertThat(new DefaultIssueLocation()
       .on(inputFile)
-      .message(StringUtils.repeat("a", 4001)).message()).hasSize(4000);
+      .message(StringUtils.repeat("a", 1334)).message()).hasSize(1333);
   }
 
   @Test
-  public void prevent_null_character_in_message_text() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Character \\u0000 is not supported in issue message");
+  public void should_ignore_messageFormatting_if_message_is_trimmed() {
+    DefaultMessageFormatting messageFormatting = new DefaultMessageFormatting()
+      .start(1500)
+      .end(1501)
+      .type(MessageFormatting.Type.CODE);
 
-    new DefaultIssueLocation()
-      .message("pipo " + '\u0000' + " bimbo");
+    DefaultIssueLocation location = new DefaultIssueLocation()
+      .message(StringUtils.repeat("a", 2000), List.of(messageFormatting));
+
+    assertThat(location.messageFormattings()).isEmpty();
   }
 
   @Test
-  public void prevent_null_character_in_message_text_when_builder_has_been_initialized() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage(customMatcher("Character \\u0000 is not supported in issue message", ", on component: src/Foo.php"));
+  public void should_truncate_messageFormatting_if_necessary() {
+    DefaultMessageFormatting messageFormatting = new DefaultMessageFormatting()
+      .start(1300)
+      .end(1501)
+      .type(MessageFormatting.Type.CODE);
 
-    new DefaultIssueLocation()
-      .on(inputFile)
-      .message("pipo " + '\u0000' + " bimbo");
+    DefaultIssueLocation location = new DefaultIssueLocation()
+      .message(StringUtils.repeat("a", 2000), List.of(messageFormatting));
+
+    assertThat(location.messageFormattings())
+      .extracting(MessageFormatting::start, MessageFormatting::end)
+      .containsOnly(tuple(1300, 1333));
   }
 
-  private Matcher<String> customMatcher(String startWith, String endWith) {
-    return new TypeSafeMatcher<String>() {
-      @Override
-      public void describeTo(Description description) {
-        description.appendText("Invalid message");
-      }
+  @Test
+  public void should_validate_message_formatting() {
+    List<NewMessageFormatting> messageFormattings = List.of(new DefaultMessageFormatting()
+      .start(1)
+      .end(3)
+      .type(MessageFormatting.Type.CODE));
+    DefaultIssueLocation location = new DefaultIssueLocation();
 
-      @Override
-      protected boolean matchesSafely(final String item) {
-        return item.startsWith(startWith) && item.endsWith(endWith);
-      }
-    };
+    assertThatThrownBy(() -> location.message("aa", messageFormattings))
+      .isInstanceOf(IllegalArgumentException.class);
   }
 
+  @Test
+  public void message_whenSettingMessage_shouldReplaceNullChar() {
+    assertThat(new DefaultIssueLocation().message("test " + '\u0000' + "123").message()).isEqualTo("test [NULL]123");
+  }
+
+  @Test
+  public void message_whenSettingMessageWithFormattings_shouldReplaceNullChar() {
+    assertThat(new DefaultIssueLocation().message("test " + '\u0000' + "123", Collections.emptyList()).message()).isEqualTo("test [NULL]123");
+  }
+
+  @Test
+  public void should_trim_on_default_message_method(){
+    assertThat(new DefaultIssueLocation().message(" message ").message()).isEqualTo("message");
+  }
+
+  @Test
+  public void should_not_trim_on_messageFormattings_message_method(){
+    assertThat(new DefaultIssueLocation().message(" message ", Collections.emptyList()).message()).isEqualTo(" message ");
+  }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  */
 package org.sonar.server.platform.db.migration;
 
-import org.picocontainer.Startable;
-import org.sonar.api.utils.log.Loggers;
+import org.sonar.api.Startable;
+import org.slf4j.LoggerFactory;
 import org.sonar.server.platform.DefaultServerUpgradeStatus;
 import org.sonar.server.platform.db.migration.engine.MigrationEngine;
 
@@ -36,10 +36,10 @@ public class AutoDbMigration implements Startable {
   @Override
   public void start() {
     if (serverUpgradeStatus.isFreshInstall()) {
-      Loggers.get(getClass()).info("Automatically perform DB migration on fresh install");
+      LoggerFactory.getLogger(getClass()).info("Automatically perform DB migration on fresh install");
       migrationEngine.execute();
-    } else if (serverUpgradeStatus.isUpgraded() && serverUpgradeStatus.isBlueGreen()) {
-      Loggers.get(getClass()).info("Automatically perform DB migration on blue/green deployment");
+    } else if (serverUpgradeStatus.isUpgraded() && serverUpgradeStatus.isAutoDbUpgrade()) {
+      LoggerFactory.getLogger(getClass()).info("Automatically perform DB migration, as automatic database upgrade is enabled");
       migrationEngine.execute();
     }
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,5 +48,10 @@ public class Xoo implements Language {
   @Override
   public String[] getFileSuffixes() {
     return config.getStringArray(FILE_SUFFIXES_KEY);
+  }
+
+  @Override
+  public boolean publishAllFiles() {
+    return true;
   }
 }

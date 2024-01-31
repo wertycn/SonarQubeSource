@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,27 +23,27 @@ import com.google.common.base.Joiner;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.Startable;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.utils.Version;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.core.platform.SonarQubeVersion;
 
 @ServerSide
 public class LogServerVersion implements Startable {
 
-  private static final Logger LOG = Loggers.get(LogServerVersion.class);
-  private final SonarRuntime runtime;
+  private static final Logger LOG = LoggerFactory.getLogger(LogServerVersion.class);
+  private final SonarQubeVersion sonarQubeVersion;
 
-  public LogServerVersion(SonarRuntime runtime) {
-    this.runtime = runtime;
+  public LogServerVersion(SonarQubeVersion sonarQubeVersion) {
+    this.sonarQubeVersion = sonarQubeVersion;
   }
 
   @Override
   public void start() {
     String scmRevision = read("/build.properties").getProperty("Implementation-Build");
-    Version version = runtime.getApiVersion();
+    Version version = sonarQubeVersion.get();
     LOG.info("SonarQube {}", Joiner.on(" / ").skipNulls().join("Server", version, scmRevision));
   }
 

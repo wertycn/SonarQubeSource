@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { OpenAPIV3 } from 'openapi-types';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON } from '../helpers/request';
+import { WebApi } from '../types/types';
 
 interface RawDomain {
-  actions: T.WebApi.Action[];
+  actions: WebApi.Action[];
   deprecatedSince?: string;
   description: string;
   internal: boolean;
@@ -31,12 +33,16 @@ interface RawDomain {
 
 export function fetchWebApi(showInternal = true): Promise<RawDomain[]> {
   return getJSON('/api/webservices/list', { include_internals: showInternal })
-    .then(r => r.webServices)
+    .then((r) => r.webServices)
     .catch(throwGlobalError);
 }
 
-export function fetchResponseExample(domain: string, action: string): Promise<T.WebApi.Example> {
+export function fetchResponseExample(domain: string, action: string): Promise<WebApi.Example> {
   return getJSON('/api/webservices/response_example', { controller: domain, action }).catch(
-    throwGlobalError
+    throwGlobalError,
   );
+}
+
+export function fetchOpenAPI(): Promise<OpenAPIV3.Document> {
+  return getJSON('/api/v2/api-docs').catch(throwGlobalError);
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.xoo.coverage;
 
-import org.sonar.api.batch.sensor.coverage.CoverageType;
-
 /**
  * Parse files *.xoo.itcoverage
  */
@@ -29,11 +27,6 @@ public class ItCoverageSensor extends AbstractCoverageSensor {
   @Override
   protected String getCoverageExtension() {
     return ".itcoverage";
-  }
-
-  @Override
-  protected CoverageType getCoverageType() {
-    return CoverageType.IT;
   }
 
   @Override

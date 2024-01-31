@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,30 +18,32 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { addIssueComment } from '../../../api/issues';
+import { addIssueComment, deleteIssueComment, editIssueComment } from '../../../api/issues';
+import Toggler from '../../../components/controls/Toggler';
+import { Issue } from '../../../types/types';
 import { updateIssue } from '../actions';
 import CommentPopup from '../popups/CommentPopup';
 
 interface Props {
-  commentAutoTriggered?: boolean;
   commentPlaceholder: string;
-  currentPopup?: string;
+  currentPopup?: boolean;
   issueKey: string;
-  onChange: (issue: T.Issue) => void;
-  toggleComment: (open?: boolean, placeholder?: string, autoTriggered?: boolean) => void;
+  onChange: (issue: Issue) => void;
+  toggleComment: (open: boolean, placeholder?: string, autoTriggered?: boolean) => void;
 }
 
 export default class IssueCommentAction extends React.PureComponent<Props> {
   addComment = (text: string) => {
     updateIssue(this.props.onChange, addIssueComment({ issue: this.props.issueKey, text }));
-    this.props.toggleComment(false);
+    this.handleClose();
   };
 
-  handleCommentClick = () => {
-    this.props.toggleComment();
+  handleEditComment = (comment: string, text: string) => {
+    updateIssue(this.props.onChange, editIssueComment({ comment, text }));
+  };
+
+  handleDeleteComment = (comment: string) => {
+    updateIssue(this.props.onChange, deleteIssueComment({ comment }));
   };
 
   handleClose = () => {
@@ -50,28 +52,20 @@ export default class IssueCommentAction extends React.PureComponent<Props> {
 
   render() {
     return (
-      <li className="issue-meta dropdown">
+      <div className="issue-meta dropdown">
         <Toggler
           closeOnClickOutside={false}
           onRequestClose={this.handleClose}
-          open={this.props.currentPopup === 'comment'}
+          open={!!this.props.currentPopup}
           overlay={
             <CommentPopup
-              autoTriggered={this.props.commentAutoTriggered}
               onComment={this.addComment}
               placeholder={this.props.commentPlaceholder}
               toggleComment={this.props.toggleComment}
             />
-          }>
-          <ButtonLink
-            aria-expanded={this.props.currentPopup === 'comment'}
-            aria-label={translate('issue.comment.add_comment')}
-            className="issue-action js-issue-comment"
-            onClick={this.handleCommentClick}>
-            <span className="issue-meta-label">{translate('issue.comment.formlink')}</span>
-          </ButtonLink>
-        </Toggler>
-      </li>
+          }
+        />
+      </div>
     );
   }
 }

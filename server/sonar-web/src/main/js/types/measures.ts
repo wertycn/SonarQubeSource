@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ComponentMeasure, Metric, Period, PeriodMeasure } from './types';
+
 export interface MeasuresForProjects {
   component: string;
   metric: string;
-  period?: T.PeriodMeasure;
+  period?: PeriodMeasure;
   value?: string;
 }
 
 export interface MeasuresAndMetaWithMetrics {
-  component: T.ComponentMeasure;
-  metrics: T.Metric[];
+  component: ComponentMeasure;
+  metrics: Metric[];
 }
 
 export interface MeasuresAndMetaWithPeriod {
-  component: T.ComponentMeasure;
-  period: T.Period;
+  component: ComponentMeasure;
+  period: Period;
+}
+
+export enum MeasurePageView {
+  list = 'list',
+  tree = 'tree',
+  treemap = 'treemap',
 }

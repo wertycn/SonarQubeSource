@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,8 +39,9 @@ public class SearchRequest {
   private String ps;
   private String pullRequest;
   private String resolution;
-  private String sinceLeakPeriod;
+  private String inNewCodePeriod;
   private String status;
+  private String files;
 
   /**
    * This is part of the internal API.
@@ -56,7 +57,7 @@ public class SearchRequest {
   }
 
   /**
-   * Example value: "my_project"
+   * Example value: "AWhXpLoInp4On-Y3xc8x"
    */
   public SearchRequest setHotspots(List<String> hotspots) {
     this.hotspots = hotspots;
@@ -159,13 +160,13 @@ public class SearchRequest {
    *   <li>"no"</li>
    * </ul>
    */
-  public SearchRequest setSinceLeakPeriod(String sinceLeakPeriod) {
-    this.sinceLeakPeriod = sinceLeakPeriod;
+  public SearchRequest setInNewCodePeriod(String inNewCodePeriod) {
+    this.inNewCodePeriod = inNewCodePeriod;
     return this;
   }
 
-  public String getSinceLeakPeriod() {
-    return sinceLeakPeriod;
+  public String getInNewCodePeriod() {
+    return inNewCodePeriod;
   }
 
   /**
@@ -182,5 +183,13 @@ public class SearchRequest {
 
   public String getStatus() {
     return status;
+  }
+
+  public String getFiles() {
+    return files;
+  }
+
+  public void setFiles(String files) {
+    this.files = files;
   }
 }

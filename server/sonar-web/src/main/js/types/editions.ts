@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,7 @@ export enum EditionKey {
   community = 'community',
   developer = 'developer',
   enterprise = 'enterprise',
-  datacenter = 'datacenter'
+  datacenter = 'datacenter',
 }
 
 export interface Edition {
@@ -31,4 +31,24 @@ export interface Edition {
   homeUrl: string;
   key: EditionKey;
   name: string;
+}
+
+export interface License {
+  contactEmail: string;
+  edition: string;
+  expiresAt: string;
+  isExpired: boolean;
+  isOfficialDistribution: boolean;
+  isSupported: boolean;
+  isValidEdition: boolean;
+  isValidServerId: boolean;
+  loc: number;
+  maxLoc: number;
+  plugins: string[];
+  remainingLocThreshold: number;
+  serverId: string;
+  type: string;
+  canActivateGracePeriod: boolean;
+  gracePeriodEndDate?: string;
+  gracePeriodExpired?: boolean;
 }

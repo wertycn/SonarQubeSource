@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,8 @@
  */
 package org.sonar.db.profiling;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -27,15 +29,19 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
-import org.apache.commons.dbcp2.BasicDataSource;
+import java.util.Properties;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import org.junit.Rule;
 import org.junit.Test;
-import org.sonar.api.utils.log.LogTester;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.log.LoggerLevel;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ProfiledDataSourceTest {
@@ -43,7 +49,7 @@ public class ProfiledDataSourceTest {
   @Rule
   public LogTester logTester = new LogTester();
 
-  BasicDataSource originDataSource = mock(BasicDataSource.class);
+  HikariDataSource originDataSource = mock(HikariDataSource.class);
 
   @Test
   public void execute_and_log_statement() throws Exception {
@@ -59,14 +65,14 @@ public class ProfiledDataSourceTest {
 
     ProfiledDataSource underTest = new ProfiledDataSource(originDataSource, ProfiledConnectionInterceptor.INSTANCE);
 
-    assertThat(underTest.getUrl()).isNull();
+    assertThat(underTest.getJdbcUrl()).isNull();
     assertThat(underTest.getConnection().getClientInfo()).isNull();
     final Statement statementProxy = underTest.getConnection().createStatement();
     assertThat(statementProxy.getConnection()).isNull();
     assertThat(statementProxy.execute(sql)).isTrue();
 
-    assertThat(logTester.logs(LoggerLevel.TRACE)).hasSize(1);
-    assertThat(logTester.logs(LoggerLevel.TRACE).get(0))
+    assertThat(logTester.logs(Level.TRACE)).hasSize(1);
+    assertThat(logTester.logs(Level.TRACE).get(0))
       .contains("sql=select from dual");
   }
 
@@ -90,7 +96,7 @@ public class ProfiledDataSourceTest {
 
     ProfiledDataSource ds = new ProfiledDataSource(originDataSource, ProfiledConnectionInterceptor.INSTANCE);
 
-    assertThat(ds.getUrl()).isNull();
+    assertThat(ds.getJdbcUrl()).isNull();
     assertThat(ds.getConnection().getClientInfo()).isNull();
     PreparedStatement preparedStatementProxy = ds.getConnection().prepareStatement(sqlWithParams);
     preparedStatementProxy.setInt(1, param1);
@@ -101,8 +107,8 @@ public class ProfiledDataSourceTest {
     assertThat(preparedStatementProxy.getConnection()).isNull();
     assertThat(preparedStatementProxy.execute()).isTrue();
 
-    assertThat(logTester.logs(LoggerLevel.TRACE)).hasSize(1);
-    assertThat(logTester.logs(LoggerLevel.TRACE).get(0))
+    assertThat(logTester.logs(Level.TRACE)).hasSize(1);
+    assertThat(logTester.logs(Level.TRACE).get(0))
       .contains("sql=insert into polop (col1, col2, col3, col4) values (?, ?, ?, ?, ?)")
       .contains("params=42, plouf");
   }
@@ -121,14 +127,14 @@ public class ProfiledDataSourceTest {
 
     ProfiledDataSource ds = new ProfiledDataSource(originDataSource, ProfiledConnectionInterceptor.INSTANCE);
 
-    assertThat(ds.getUrl()).isNull();
+    assertThat(ds.getJdbcUrl()).isNull();
     assertThat(ds.getConnection().getClientInfo()).isNull();
     PreparedStatement preparedStatementProxy = ds.getConnection().prepareStatement(sqlWithParams);
     assertThat(preparedStatementProxy.getConnection()).isNull();
     assertThat(preparedStatementProxy.execute()).isTrue();
 
-    assertThat(logTester.logs(LoggerLevel.TRACE)).hasSize(1);
-    assertThat(logTester.logs(LoggerLevel.TRACE).get(0))
+    assertThat(logTester.logs(Level.TRACE)).hasSize(1);
+    assertThat(logTester.logs(Level.TRACE).get(0))
       .contains("sql=select from dual")
       .doesNotContain("params=");
   }
@@ -144,7 +150,38 @@ public class ProfiledDataSourceTest {
     for (Method method : ProfiledDataSource.class.getDeclaredMethods()) {
       if (method.getParameterTypes().length == 0 && Modifier.isPublic(method.getModifiers())) {
         method.invoke(proxy);
+      } else if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(String.class) && Modifier.isPublic(method.getModifiers())) {
+        method.invoke(proxy, "test");
+      } else if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Boolean.TYPE) && Modifier.isPublic(method.getModifiers())) {
+        method.invoke(proxy, true);
+      } else if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Long.TYPE) && Modifier.isPublic(method.getModifiers())) {
+        method.invoke(proxy, 1L);
+      } else if (method.getParameterTypes().length == 1 && method.getParameterTypes()[0].equals(Integer.TYPE) && Modifier.isPublic(method.getModifiers())) {
+        method.invoke(proxy, 1);
       }
     }
+
+    proxy.addHealthCheckProperty("test", "test");
+    verify(originDataSource).addHealthCheckProperty("test", "test");
+
+    var schedulerMock = mock(ScheduledExecutorService.class);
+    proxy.setScheduledExecutor(schedulerMock);
+    verify(originDataSource).setScheduledExecutor(schedulerMock);
+
+    var hikariConfigMock = mock(HikariConfig.class);
+    proxy.copyStateTo(hikariConfigMock);
+    verify(originDataSource).copyStateTo(hikariConfigMock);
+
+    var threadFactoryMock = mock(ThreadFactory.class);
+    proxy.setThreadFactory(threadFactoryMock);
+    verify(originDataSource).setThreadFactory(threadFactoryMock);
+
+    var properties = new Properties();
+    proxy.setHealthCheckProperties(properties);
+    verify(originDataSource).setHealthCheckProperties(properties);
+
+    proxy.setDataSourceProperties(properties);
+    verify(originDataSource).setDataSourceProperties(properties);
+
   }
 }

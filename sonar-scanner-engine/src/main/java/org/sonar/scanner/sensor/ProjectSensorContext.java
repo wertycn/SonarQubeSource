@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,8 @@ import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.sensor.SensorContext;
+import org.sonar.api.batch.sensor.cache.ReadCache;
+import org.sonar.api.batch.sensor.cache.WriteCache;
 import org.sonar.api.batch.sensor.code.NewSignificantCode;
 import org.sonar.api.batch.sensor.code.internal.DefaultSignificantCode;
 import org.sonar.api.batch.sensor.coverage.NewCoverage;
@@ -38,7 +40,6 @@ import org.sonar.api.batch.sensor.cpd.internal.DefaultCpdTokens;
 import org.sonar.api.batch.sensor.error.NewAnalysisError;
 import org.sonar.api.batch.sensor.highlighting.NewHighlighting;
 import org.sonar.api.batch.sensor.highlighting.internal.DefaultHighlighting;
-import org.sonar.api.batch.sensor.internal.SensorStorage;
 import org.sonar.api.batch.sensor.issue.NewExternalIssue;
 import org.sonar.api.batch.sensor.issue.NewIssue;
 import org.sonar.api.batch.sensor.issue.internal.DefaultExternalIssue;
@@ -53,6 +54,8 @@ import org.sonar.api.config.Configuration;
 import org.sonar.api.config.Settings;
 import org.sonar.api.scanner.fs.InputProject;
 import org.sonar.api.utils.Version;
+import org.sonar.scanner.cache.AnalysisCacheEnabled;
+import org.sonar.scanner.scan.branch.BranchConfiguration;
 import org.sonar.scanner.sensor.noop.NoOpNewAnalysisError;
 
 @ThreadSafe
@@ -63,13 +66,19 @@ public class ProjectSensorContext implements SensorContext {
   private final Settings mutableSettings;
   private final FileSystem fs;
   private final ActiveRules activeRules;
-  private final SensorStorage sensorStorage;
+  private final DefaultSensorStorage sensorStorage;
   private final DefaultInputProject project;
   private final SonarRuntime sonarRuntime;
   private final Configuration config;
+  private final boolean skipUnchangedFiles;
+  private final UnchangedFilesHandler unchangedFilesHandler;
+  private final WriteCache writeCache;
+  private final ReadCache readCache;
+  private final AnalysisCacheEnabled analysisCacheEnabled;
 
   public ProjectSensorContext(DefaultInputProject project, Configuration config, Settings mutableSettings, FileSystem fs, ActiveRules activeRules,
-    SensorStorage sensorStorage, SonarRuntime sonarRuntime) {
+    DefaultSensorStorage sensorStorage, SonarRuntime sonarRuntime, BranchConfiguration branchConfiguration, WriteCache writeCache, ReadCache readCache,
+    AnalysisCacheEnabled analysisCacheEnabled, UnchangedFilesHandler unchangedFilesHandler) {
     this.project = project;
     this.config = config;
     this.mutableSettings = mutableSettings;
@@ -77,6 +86,11 @@ public class ProjectSensorContext implements SensorContext {
     this.activeRules = activeRules;
     this.sensorStorage = sensorStorage;
     this.sonarRuntime = sonarRuntime;
+    this.writeCache = writeCache;
+    this.readCache = readCache;
+    this.analysisCacheEnabled = analysisCacheEnabled;
+    this.skipUnchangedFiles = branchConfiguration.isPullRequest();
+    this.unchangedFilesHandler = unchangedFilesHandler;
   }
 
   @Override
@@ -181,7 +195,32 @@ public class ProjectSensorContext implements SensorContext {
   }
 
   @Override
+  public void markAsUnchanged(InputFile inputFile) {
+    unchangedFilesHandler.markAsUnchanged((DefaultInputFile) inputFile);
+  }
+
+  @Override
+  public WriteCache nextCache() {
+    return writeCache;
+  }
+
+  @Override
+  public ReadCache previousCache() {
+    return readCache;
+  }
+
+  @Override
+  public boolean isCacheEnabled() {
+    return analysisCacheEnabled.isEnabled();
+  }
+
+  @Override
   public NewSignificantCode newSignificantCode() {
     return new DefaultSignificantCode(sensorStorage);
+  }
+
+  @Override
+  public boolean canSkipUnchangedFiles() {
+    return this.skipUnchangedFiles;
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ package org.sonar.server.health;
 
 public class TestStandaloneHealthChecker implements HealthChecker {
 
-  private Health health = Health.newHealthCheckBuilder().setStatus(Health.Status.GREEN).build();
+  private Health health = Health.builder().setStatus(Health.Status.GREEN).build();
 
   public void setHealth(Health h) {
     this.health = h;

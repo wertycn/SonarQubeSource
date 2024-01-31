@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,78 +17,117 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { mount } from 'enzyme';
+import { render, screen } from '@testing-library/react';
 import * as React from 'react';
-import { get } from 'sonar-ui-common/helpers/storage';
-import { doAsync } from 'sonar-ui-common/helpers/testUtils';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { searchProjects } from '../../../../api/components';
+import { useLocation } from '../../../../components/hoc/withRouter';
+import { get } from '../../../../helpers/storage';
+import { mockCurrentUser, mockLoggedInUser } from '../../../../helpers/testMocks';
+import { hasGlobalPermission } from '../../../../helpers/users';
+import { CurrentUser } from '../../../../types/users';
 import { DefaultPageSelector } from '../DefaultPageSelector';
 
-jest.mock('../AllProjectsContainer', () => ({
-  // eslint-disable-next-line
-  default: function AllProjectsContainer() {
-    return null;
-  }
+jest.mock(
+  '../AllProjects',
+  () =>
+    // eslint-disable-next-line
+    function AllProjects() {
+      return <div>All Projects</div>;
+    },
+);
+
+jest.mock('../../../../helpers/storage', () => ({
+  get: jest.fn().mockReturnValue(undefined),
 }));
 
-jest.mock('sonar-ui-common/helpers/storage', () => ({
-  get: jest.fn()
+jest.mock('../../../../helpers/users', () => ({
+  hasGlobalPermission: jest.fn().mockReturnValue(false),
+  isLoggedIn: jest.fn((u: CurrentUser) => u.isLoggedIn),
 }));
 
 jest.mock('../../../../api/components', () => ({
-  searchProjects: jest.fn()
+  searchProjects: jest.fn().mockResolvedValue({ paging: { total: 0 } }),
 }));
 
-beforeEach(() => {
-  (get as jest.Mock).mockImplementation(() => '').mockClear();
+beforeEach(jest.clearAllMocks);
+
+it("1.1 doesn't redirect for anonymous users", async () => {
+  renderDefaultPageSelector({ currentUser: mockCurrentUser() });
+
+  expect(await screen.findByText('All Projects')).toBeInTheDocument();
 });
 
-it('shows all projects with existing filter', () => {
-  const replace = jest.fn();
-  mountRender(undefined, { size: '1' }, replace);
-  expect(replace).not.toBeCalled();
+it("1.2 doesn't redirect if there's an existing filter in location", async () => {
+  renderDefaultPageSelector({ path: '/projects?size=1' });
+
+  expect(await screen.findByText('All Projects')).toBeInTheDocument();
 });
 
-it('shows all projects sorted by analysis date for anonymous', () => {
-  const replace = jest.fn();
-  mountRender({ isLoggedIn: false }, undefined, replace);
-  expect(replace).lastCalledWith({ pathname: '/projects', query: { sort: '-analysis_date' } });
+it("1.3 doesn't redirect if the user previously used the 'all' filter", async () => {
+  (get as jest.Mock).mockReturnValueOnce('all');
+  renderDefaultPageSelector();
+
+  expect(await screen.findByText('All Projects')).toBeInTheDocument();
 });
 
-it('shows favorite projects', () => {
-  (get as jest.Mock).mockImplementation(() => 'favorite');
-  const replace = jest.fn();
-  mountRender(undefined, undefined, replace);
-  expect(replace).lastCalledWith({ pathname: '/projects/favorite', query: {} });
+it('2.1 redirects to favorites if the user previously used the "favorites" filter', async () => {
+  (get as jest.Mock).mockReturnValueOnce('favorite');
+  renderDefaultPageSelector();
+
+  expect(await screen.findByText('/projects/favorite')).toBeInTheDocument();
 });
 
-it('shows all projects', () => {
-  (get as jest.Mock).mockImplementation(() => 'all');
-  const replace = jest.fn();
-  mountRender(undefined, undefined, replace);
-  expect(replace).not.toBeCalled();
+it('2.2 redirects to favorites if the user has starred projects', async () => {
+  (searchProjects as jest.Mock).mockResolvedValueOnce({ paging: { total: 3 } });
+  renderDefaultPageSelector();
+
+  expect(searchProjects).toHaveBeenLastCalledWith({ filter: 'isFavorite', ps: 1 });
+  expect(await screen.findByText('/projects/favorite')).toBeInTheDocument();
 });
 
-it('fetches favorites', () => {
-  (searchProjects as jest.Mock).mockImplementation(() => Promise.resolve({ paging: { total: 3 } }));
-  const replace = jest.fn();
-  mountRender(undefined, undefined, replace);
-  return doAsync().then(() => {
-    expect(searchProjects).toHaveBeenLastCalledWith({ filter: 'isFavorite', ps: 1 });
-    expect(replace).toBeCalledWith({ pathname: '/projects/favorite', query: {} });
-  });
+it('3.1 redirects to create project page, if user has correct permissions AND there are 0 projects', async () => {
+  (hasGlobalPermission as jest.Mock).mockReturnValueOnce(true);
+  renderDefaultPageSelector();
+
+  expect(await screen.findByText('/projects/create')).toBeInTheDocument();
 });
 
-function mountRender(
-  currentUser: T.CurrentUser = { isLoggedIn: true },
-  query: any = {},
-  replace: any = jest.fn()
-) {
-  return mount(
-    <DefaultPageSelector
-      currentUser={currentUser}
-      location={{ pathname: '/projects', query }}
-      router={{ replace }}
-    />
+it("3.1 doesn't redirect to create project page, if user has no permissions", async () => {
+  renderDefaultPageSelector();
+
+  expect(await screen.findByText('All Projects')).toBeInTheDocument();
+});
+
+it("3.1 doesn't redirect to create project page, if there's existing projects", async () => {
+  (searchProjects as jest.Mock)
+    .mockResolvedValueOnce({ paging: { total: 0 } }) // no favorites
+    .mockResolvedValueOnce({ paging: { total: 3 } }); // existing projects
+  renderDefaultPageSelector();
+
+  expect(await screen.findByText('All Projects')).toBeInTheDocument();
+});
+
+function RouteDisplayer() {
+  const location = useLocation();
+  return <div>{location.pathname}</div>;
+}
+
+function renderDefaultPageSelector({
+  path = '/projects',
+  currentUser = mockLoggedInUser(),
+}: {
+  path?: string;
+  currentUser?: CurrentUser;
+} = {}) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="projects">
+          <Route index element={<DefaultPageSelector currentUser={currentUser} />} />
+          <Route path="*" element={<RouteDisplayer />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
   );
 }

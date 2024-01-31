@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.db.measure;
 
 import org.apache.commons.lang.math.RandomUtils;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.metric.MetricDto;
@@ -35,13 +36,17 @@ public class MeasureTesting {
   }
 
   public static MeasureDto newMeasureDto(MetricDto metricDto, ComponentDto component, SnapshotDto analysis) {
+    return newMeasureDto(metricDto, component.uuid(), analysis);
+  }
+
+  public static MeasureDto newMeasureDto(MetricDto metricDto, String branchUuid, SnapshotDto analysis) {
     checkNotNull(metricDto.getUuid());
     checkNotNull(metricDto.getKey());
-    checkNotNull(component.uuid());
+    checkNotNull(branchUuid);
     checkNotNull(analysis.getUuid());
     return new MeasureDto()
       .setMetricUuid(metricDto.getUuid())
-      .setComponentUuid(component.uuid())
+      .setComponentUuid(branchUuid)
       .setAnalysisUuid(analysis.getUuid());
   }
 
@@ -62,17 +67,24 @@ public class MeasureTesting {
       .setComponentUuid(String.valueOf(cursor++))
       .setProjectUuid(String.valueOf(cursor++))
       .setData(String.valueOf(cursor++))
-      .setValue((double) cursor++)
-      .setVariation((double) cursor++);
+      .setValue((double) cursor++);
   }
 
   public static LiveMeasureDto newLiveMeasure(ComponentDto component, MetricDto metric) {
     return new LiveMeasureDto()
       .setMetricUuid(metric.getUuid())
       .setComponentUuid(component.uuid())
-      .setProjectUuid(component.projectUuid())
+      .setProjectUuid(component.branchUuid())
       .setData(String.valueOf(cursor++))
-      .setValue((double) cursor++)
-      .setVariation((double) cursor++);
+      .setValue((double) cursor++);
+  }
+
+  public static LiveMeasureDto newLiveMeasure(BranchDto branchDto, MetricDto metric) {
+    return new LiveMeasureDto()
+      .setMetricUuid(metric.getUuid())
+      .setComponentUuid(branchDto.getUuid())
+      .setProjectUuid(branchDto.getProjectUuid())
+      .setData(String.valueOf(cursor++))
+      .setValue((double) cursor++);
   }
 }

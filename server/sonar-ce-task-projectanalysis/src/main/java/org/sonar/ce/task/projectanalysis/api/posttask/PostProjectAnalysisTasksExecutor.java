@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.ce.posttask.Analysis;
 import org.sonar.api.ce.posttask.Branch;
 import org.sonar.api.ce.posttask.CeTask;
@@ -34,9 +36,6 @@ import org.sonar.api.ce.posttask.PostProjectAnalysisTask;
 import org.sonar.api.ce.posttask.Project;
 import org.sonar.api.ce.posttask.QualityGate;
 import org.sonar.api.ce.posttask.ScannerContext;
-import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.batch.BatchReportReader;
 import org.sonar.ce.task.projectanalysis.qualitygate.Condition;
@@ -46,7 +45,6 @@ import org.sonar.ce.task.projectanalysis.qualitygate.QualityGateStatus;
 import org.sonar.ce.task.projectanalysis.qualitygate.QualityGateStatusHolder;
 import org.sonar.ce.task.step.ComputationStepExecutor;
 import org.sonar.core.util.logs.Profiler;
-import org.sonar.core.util.stream.MoreCollectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
@@ -64,7 +62,7 @@ import static org.sonar.db.component.BranchType.PULL_REQUEST;
 public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor.Listener {
   private static final PostProjectAnalysisTask[] NO_POST_PROJECT_ANALYSIS_TASKS = new PostProjectAnalysisTask[0];
 
-  private static final Logger LOG = Loggers.get(PostProjectAnalysisTasksExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PostProjectAnalysisTasksExecutor.class);
 
   private final org.sonar.ce.task.CeTask ceTask;
   private final AnalysisMetadataHolder analysisMetadataHolder;
@@ -72,30 +70,15 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
   private final QualityGateStatusHolder qualityGateStatusHolder;
   private final PostProjectAnalysisTask[] postProjectAnalysisTasks;
   private final BatchReportReader reportReader;
-  private final System2 system2;
 
-  /**
-   * Constructor used by Pico when there is no {@link PostProjectAnalysisTask} in the container.
-   */
-  public PostProjectAnalysisTasksExecutor(org.sonar.ce.task.CeTask ceTask,
-    AnalysisMetadataHolder analysisMetadataHolder,
-    QualityGateHolder qualityGateHolder, QualityGateStatusHolder qualityGateStatusHolder,
-    BatchReportReader reportReader, System2 system2) {
-    this(ceTask, analysisMetadataHolder, qualityGateHolder, qualityGateStatusHolder, reportReader, system2, null);
-  }
-
-  public PostProjectAnalysisTasksExecutor(org.sonar.ce.task.CeTask ceTask,
-    AnalysisMetadataHolder analysisMetadataHolder,
-    QualityGateHolder qualityGateHolder, QualityGateStatusHolder qualityGateStatusHolder,
-    BatchReportReader reportReader, System2 system2,
-    @Nullable PostProjectAnalysisTask[] postProjectAnalysisTasks) {
+  public PostProjectAnalysisTasksExecutor(org.sonar.ce.task.CeTask ceTask, AnalysisMetadataHolder analysisMetadataHolder, QualityGateHolder qualityGateHolder,
+    QualityGateStatusHolder qualityGateStatusHolder, BatchReportReader reportReader, @Nullable PostProjectAnalysisTask[] postProjectAnalysisTasks) {
     this.analysisMetadataHolder = analysisMetadataHolder;
     this.qualityGateHolder = qualityGateHolder;
     this.qualityGateStatusHolder = qualityGateStatusHolder;
     this.ceTask = ceTask;
     this.reportReader = reportReader;
     this.postProjectAnalysisTasks = postProjectAnalysisTasks == null ? NO_POST_PROJECT_ANALYSIS_TASKS : postProjectAnalysisTasks;
-    this.system2 = system2;
   }
 
   @Override
@@ -169,7 +152,6 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
       new CeTaskImpl(this.ceTask.getUuid(), status),
       createProject(this.ceTask),
       getAnalysis().orElse(null),
-      getAnalysis().map(a -> a.getDate().getTime()).orElse(system2.now()),
       ScannerContextImpl.from(reportReader.readContextProperties()),
       status == SUCCESS ? createQualityGate() : null,
       createBranch(),
@@ -177,29 +159,19 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
   }
 
   private Optional<Analysis> getAnalysis() {
-    Long analysisDate = getAnalysisDate();
-
-    if (analysisDate != null) {
-      return of(new AnalysisImpl(analysisMetadataHolder.getUuid(), analysisDate, analysisMetadataHolder.getScmRevision()));
+    if (analysisMetadataHolder.hasAnalysisDateBeenSet()) {
+      return of(new AnalysisImpl(analysisMetadataHolder.getUuid(), analysisMetadataHolder.getAnalysisDate(), analysisMetadataHolder.getScmRevision()));
     }
     return empty();
   }
 
   private static Project createProject(org.sonar.ce.task.CeTask ceTask) {
-    return ceTask.getMainComponent()
+    return ceTask.getEntity()
       .map(c -> new ProjectImpl(
         c.getUuid(),
         c.getKey().orElseThrow(() -> new IllegalStateException("Missing project key")),
         c.getName().orElseThrow(() -> new IllegalStateException("Missing project name"))))
       .orElseThrow(() -> new IllegalStateException("Report processed for a task of a deleted component"));
-  }
-
-  @CheckForNull
-  private Long getAnalysisDate() {
-    if (this.analysisMetadataHolder.hasAnalysisDateBeenSet()) {
-      return this.analysisMetadataHolder.getAnalysisDate();
-    }
-    return null;
   }
 
   @CheckForNull
@@ -239,14 +211,13 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
 
   private static Collection<QualityGate.Condition> convert(Set<Condition> conditions, Map<Condition, ConditionStatus> statusPerConditions) {
     return conditions.stream()
-      .map(new ConditionToCondition(statusPerConditions)::apply)
-      .collect(MoreCollectors.toList(statusPerConditions.size()));
+      .map(new ConditionToCondition(statusPerConditions))
+      .toList();
   }
 
   private static class ProjectAnalysisImpl implements PostProjectAnalysisTask.ProjectAnalysis {
     private final CeTask ceTask;
     private final Project project;
-    private final long date;
     private final ScannerContext scannerContext;
     @Nullable
     private final QualityGate qualityGate;
@@ -257,12 +228,10 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
     private final String scmRevisionId;
 
     private ProjectAnalysisImpl(CeTask ceTask, Project project,
-      @Nullable Analysis analysis, long date,
-      ScannerContext scannerContext, @Nullable QualityGate qualityGate, @Nullable Branch branch, String scmRevisionId) {
+      @Nullable Analysis analysis, ScannerContext scannerContext, @Nullable QualityGate qualityGate, @Nullable Branch branch, String scmRevisionId) {
       this.ceTask = requireNonNull(ceTask, "ceTask can not be null");
       this.project = requireNonNull(project, "project can not be null");
       this.analysis = analysis;
-      this.date = date;
       this.scannerContext = requireNonNull(scannerContext, "scannerContext can not be null");
       this.qualityGate = qualityGate;
       this.branch = branch;
@@ -301,16 +270,6 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
     }
 
     @Override
-    public Date getDate() {
-      return new Date(date);
-    }
-
-    @Override
-    public Optional<Date> getAnalysisDate() {
-      return analysis == null ? empty() : ofNullable(analysis.getDate());
-    }
-
-    @Override
     public Optional<Analysis> getAnalysis() {
       return ofNullable(analysis);
     }
@@ -330,7 +289,6 @@ public class PostProjectAnalysisTasksExecutor implements ComputationStepExecutor
       return "ProjectAnalysis{" +
         "ceTask=" + ceTask +
         ", project=" + project +
-        ", date=" + date +
         ", scannerContext=" + scannerContext +
         ", qualityGate=" + qualityGate +
         ", analysis=" + analysis +

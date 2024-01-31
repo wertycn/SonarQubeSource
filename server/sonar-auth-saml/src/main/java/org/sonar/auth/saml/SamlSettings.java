@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,22 +32,25 @@ import static org.sonar.api.PropertyType.PASSWORD;
 
 @ServerSide
 public class SamlSettings {
+  public static final String ENABLED = "sonar.auth.saml.enabled";
+  public static final String PROVIDER_ID = "sonar.auth.saml.providerId";
+  public static final String PROVIDER_NAME = "sonar.auth.saml.providerName";
 
-  private static final String ENABLED = "sonar.auth.saml.enabled";
-  private static final String PROVIDER_ID = "sonar.auth.saml.providerId";
-  private static final String PROVIDER_NAME = "sonar.auth.saml.providerName";
+  public static final String APPLICATION_ID = "sonar.auth.saml.applicationId";
+  public static final String LOGIN_URL = "sonar.auth.saml.loginUrl";
+  public static final String CERTIFICATE = "sonar.auth.saml.certificate.secured";
 
-  private static final String APPLICATION_ID = "sonar.auth.saml.applicationId";
-  private static final String LOGIN_URL = "sonar.auth.saml.loginUrl";
-  private static final String CERTIFICATE = "sonar.auth.saml.certificate.secured";
+  public static final String USER_LOGIN_ATTRIBUTE = "sonar.auth.saml.user.login";
+  public static final String USER_NAME_ATTRIBUTE = "sonar.auth.saml.user.name";
+  public static final String USER_EMAIL_ATTRIBUTE = "sonar.auth.saml.user.email";
+  public static final String GROUP_NAME_ATTRIBUTE = "sonar.auth.saml.group.name";
 
-  private static final String USER_LOGIN_ATTRIBUTE = "sonar.auth.saml.user.login";
-  private static final String USER_NAME_ATTRIBUTE = "sonar.auth.saml.user.name";
-  private static final String USER_EMAIL_ATTRIBUTE = "sonar.auth.saml.user.email";
-  private static final String GROUP_NAME_ATTRIBUTE = "sonar.auth.saml.group.name";
+  public static final String SIGN_REQUESTS_ENABLED = "sonar.auth.saml.signature.enabled";
+  public static final String SERVICE_PROVIDER_CERTIFICATE = "sonar.auth.saml.sp.certificate.secured";
+  public static final String SERVICE_PROVIDER_PRIVATE_KEY = "sonar.auth.saml.sp.privateKey.secured";
 
-  private static final String CATEGORY = "security";
-  private static final String SUBCATEGORY = "saml";
+  public static final String CATEGORY = "authentication";
+  public static final String SUBCATEGORY = "saml";
 
   private final Configuration configuration;
 
@@ -72,7 +75,7 @@ public class SamlSettings {
   }
 
   String getCertificate() {
-    return configuration.get(CERTIFICATE).orElseThrow(() -> new IllegalArgumentException("Certificate is missing"));
+    return configuration.get(CERTIFICATE).orElseThrow(() -> new IllegalArgumentException("Identity provider certificate is missing"));
   }
 
   String getUserLogin() {
@@ -83,6 +86,18 @@ public class SamlSettings {
     return configuration.get(USER_NAME_ATTRIBUTE).orElseThrow(() -> new IllegalArgumentException("User name attribute is missing"));
   }
 
+  boolean isSignRequestsEnabled() {
+    return configuration.getBoolean(SIGN_REQUESTS_ENABLED).orElse(false);
+  }
+
+  Optional<String> getServiceProviderPrivateKey() {
+    return configuration.get(SERVICE_PROVIDER_PRIVATE_KEY);
+  }
+
+  String getServiceProviderCertificate() {
+    return configuration.get(SERVICE_PROVIDER_CERTIFICATE).orElseThrow(() -> new IllegalArgumentException("Service provider certificate is missing"));
+  }
+
   Optional<String> getUserEmail() {
     return configuration.get(USER_EMAIL_ATTRIBUTE);
   }
@@ -91,7 +106,7 @@ public class SamlSettings {
     return configuration.get(GROUP_NAME_ATTRIBUTE);
   }
 
-  boolean isEnabled() {
+  public boolean isEnabled() {
     return configuration.getBoolean(ENABLED).orElse(false) &&
       configuration.get(PROVIDER_ID).isPresent() &&
       configuration.get(APPLICATION_ID).isPresent() &&
@@ -101,7 +116,7 @@ public class SamlSettings {
       configuration.get(USER_NAME_ATTRIBUTE).isPresent();
   }
 
-  static List<PropertyDefinition> definitions() {
+  public static List<PropertyDefinition> definitions() {
     return Arrays.asList(
       PropertyDefinition.builder(ENABLED)
         .name("Enabled")
@@ -114,7 +129,7 @@ public class SamlSettings {
         .build(),
       PropertyDefinition.builder(APPLICATION_ID)
         .name("Application ID")
-        .description("Identifier of the application.")
+        .description("The identifier used on the Identity Provider for registering SonarQube.")
         .defaultValue("sonarqube")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
@@ -122,7 +137,7 @@ public class SamlSettings {
         .build(),
       PropertyDefinition.builder(PROVIDER_NAME)
         .name("Provider Name")
-        .description("Name displayed for the provider in the login page.")
+        .description("Name of the Identity Provider displayed in the login page when SAML authentication is active.")
         .defaultValue("SAML")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
@@ -130,21 +145,21 @@ public class SamlSettings {
         .build(),
       PropertyDefinition.builder(PROVIDER_ID)
         .name("Provider ID")
-        .description("Identifier of the identity provider, the entity that provides SAML authentication.")
+        .description("Identifier of the Identity Provider, the entity that provides SAML authentication.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(4)
         .build(),
       PropertyDefinition.builder(LOGIN_URL)
         .name("SAML login url")
-        .description("SAML login URL for the identity provider.")
+        .description("The URL where the Identity Provider expects to receive SAML requests.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(5)
         .build(),
       PropertyDefinition.builder(CERTIFICATE)
-        .name("Provider certificate")
-        .description("X.509 certificate for the identity provider.")
+        .name("Identity provider certificate")
+        .description("The public X.509 certificate used by the Identity Provider to authenticate SAML messages.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .type(PASSWORD)
@@ -152,32 +167,57 @@ public class SamlSettings {
         .build(),
       PropertyDefinition.builder(USER_LOGIN_ATTRIBUTE)
         .name("SAML user login attribute")
-        .description("Attribute defining the user login in SAML.")
+        .description("The name of the attribute where the SAML Identity Provider will put the login of the authenticated user.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(7)
         .build(),
       PropertyDefinition.builder(USER_NAME_ATTRIBUTE)
         .name("SAML user name attribute")
-        .description("Attribute defining the user name in SAML.")
+        .description("The name of the attribute where the SAML Identity Provider will put the name of the authenticated user.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(8)
         .build(),
       PropertyDefinition.builder(USER_EMAIL_ATTRIBUTE)
         .name("SAML user email attribute")
-        .description("Attribute defining the user email in SAML.")
+        .description("The name of the attribute where the SAML Identity Provider will put the email of the authenticated user.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(9)
         .build(),
       PropertyDefinition.builder(GROUP_NAME_ATTRIBUTE)
         .name("SAML group attribute")
-        .description("Attribute defining the user groups in SAML. " +
-          "Users are associated to the default group only if no attribute is defined.")
+        .description("Attribute defining the user groups in SAML, used to synchronize group memberships. If you leave this field empty, " +
+          "group memberships will not be synced when users log in.")
         .category(CATEGORY)
         .subCategory(SUBCATEGORY)
         .index(10)
+        .build(),
+      PropertyDefinition.builder(SIGN_REQUESTS_ENABLED)
+        .name("Sign requests")
+        .description("Enables signature of SAML requests. It requires both service provider private key and certificate to be set.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(BOOLEAN)
+        .defaultValue(valueOf(false))
+        .index(11)
+        .build(),
+      PropertyDefinition.builder(SERVICE_PROVIDER_PRIVATE_KEY)
+        .name("Service provider private key")
+        .description("PKCS8 stored private key used for signing the requests and decrypting responses from the identity provider. ")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(PASSWORD)
+        .index(12)
+        .build(),
+      PropertyDefinition.builder(SERVICE_PROVIDER_CERTIFICATE)
+        .name("Service provider certificate")
+        .description("X.509 certificate for the service provider, used for signing the requests.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(PASSWORD)
+        .index(13)
         .build());
   }
 }

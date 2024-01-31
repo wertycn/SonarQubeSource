@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,21 +26,21 @@ import org.sonar.api.resources.Qualifiers;
 
 import static java.util.Arrays.asList;
 import static org.sonar.api.PropertyType.BOOLEAN;
+import static org.sonar.api.PropertyType.INTEGER;
 
 public class ScannerProperties {
 
-  public static final String BRANCHES_DOC_LINK = "https://redirect.sonarsource.com/doc/branches.html";
+  public static final String BRANCHES_DOC_LINK_SUFFIX = "/analyzing-source-code/branches/branch-analysis/";
 
   public static final String BRANCH_NAME = "sonar.branch.name";
-  @Deprecated
-  public static final String BRANCH_TARGET = "sonar.branch.target";
 
   public static final String PULL_REQUEST_KEY = "sonar.pullrequest.key";
   public static final String PULL_REQUEST_BRANCH = "sonar.pullrequest.branch";
   public static final String PULL_REQUEST_BASE = "sonar.pullrequest.base";
-
+  public static final String FILE_SIZE_LIMIT = "sonar.filesize.limit";
   public static final String LINKS_SOURCES_DEV = "sonar.links.scm_dev";
   public static final String DISABLE_PROJECT_AND_ORG_AUTODETECTION = "sonar.keys_autodetection.disabled";
+  public static final String PLUGIN_LOADING_OPTIMIZATION_KEY = "sonar.plugins.downloadOnlyRequired";
 
   private ScannerProperties() {
     // only static stuff
@@ -84,6 +84,22 @@ public class ScannerProperties {
         .description("Disables auto-detection of project keys from scanner execution environment.")
         .type(BOOLEAN)
         .hidden()
+        .build(),
+      PropertyDefinition.builder(FILE_SIZE_LIMIT)
+        .name("Limit of a file size excluded from analysis in MB")
+        .type(INTEGER)
+        .defaultValue("20")
+        .description(
+          "Allows discarding files from analysis exceeding certain sizes.")
+        .hidden()
+        .build(),
+      PropertyDefinition.builder(PLUGIN_LOADING_OPTIMIZATION_KEY)
+        .name("Analyzers loading optimization")
+        .description("When enabled, scanners will only download analyzers required for detected languages.")
+        .category(CoreProperties.CATEGORY_GENERAL)
+        .subCategory("Performance")
+        .type(BOOLEAN)
+        .defaultValue("false")
         .build());
   }
 }

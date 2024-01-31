@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -104,6 +104,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
         .setWatcherDelayMs(processWatcherDelayMs)
         .setStopTimeout(stopTimeoutFor(processId, settings))
         .setHardStopTimeout(HARD_STOP_TIMEOUT)
+        .setAppSettings(settings)
         .build();
       processesById.put(process.getProcessId(), process);
     }
@@ -113,17 +114,12 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
   }
 
   private static ManagedProcessHandler.Timeout stopTimeoutFor(ProcessId processId, AppSettings settings) {
-    switch (processId) {
-      case ELASTICSEARCH:
-        return HARD_STOP_TIMEOUT;
-      case WEB_SERVER:
-        return newTimeout(getStopTimeoutMs(settings, WEB_GRACEFUL_STOP_TIMEOUT), TimeUnit.MILLISECONDS);
-      case COMPUTE_ENGINE:
-        return newTimeout(getStopTimeoutMs(settings, CE_GRACEFUL_STOP_TIMEOUT), TimeUnit.MILLISECONDS);
-      case APP:
-      default:
-        throw new IllegalArgumentException("Unsupported processId " + processId);
-    }
+    return switch (processId) {
+      case ELASTICSEARCH -> HARD_STOP_TIMEOUT;
+      case WEB_SERVER -> newTimeout(getStopTimeoutMs(settings, WEB_GRACEFUL_STOP_TIMEOUT), TimeUnit.MILLISECONDS);
+      case COMPUTE_ENGINE -> newTimeout(getStopTimeoutMs(settings, CE_GRACEFUL_STOP_TIMEOUT), TimeUnit.MILLISECONDS);
+      default -> throw new IllegalArgumentException("Unsupported processId " + processId);
+    };
   }
 
   private static long getStopTimeoutMs(AppSettings settings, ProcessProperties.Property property) {
@@ -152,7 +148,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
     if (process == null) {
       return;
     }
-    if (!isEsClientStartable()) {
+    if (!isEsOperational()) {
       if (firstWaitingEsLog.getAndSet(false)) {
         LOG.info("Waiting for Elasticsearch to be up and running");
       }
@@ -174,12 +170,12 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
 
   private void tryToStartCe() throws InterruptedException {
     ManagedProcessHandler process = processesById.get(ProcessId.COMPUTE_ENGINE);
-    if (process != null && appState.isOperational(ProcessId.WEB_SERVER, true) && isEsClientStartable()) {
+    if (process != null && appState.isOperational(ProcessId.WEB_SERVER, true) && isEsOperational()) {
       tryToStartProcess(process, commandFactory::createCeCommand);
     }
   }
 
-  private boolean isEsClientStartable() {
+  private boolean isEsOperational() {
     boolean requireLocalEs = ClusterSettings.isLocalElasticsearchEnabled(settings);
     return appState.isOperational(ProcessId.ELASTICSEARCH, requireLocalEs);
   }
@@ -201,7 +197,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
       // this early stop of the process will be picked up by onProcessStop (which calls hardStopAsync)
       // through interface ProcessLifecycleListener#onProcessState implemented by SchedulerImpl
       LOG.trace("Failed to start process [{}] (currentThread={})",
-        processHandler.getProcessId().getKey(), Thread.currentThread().getName(), e);
+        processHandler.getProcessId().getHumanReadableName(), Thread.currentThread().getName(), e);
     }
   }
 
@@ -225,6 +221,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
 
   private void stopAll() throws InterruptedException {
     // order is important for non-cluster mode
+    LOG.info("Sonarqube has been requested to stop");
     stopProcess(ProcessId.COMPUTE_ENGINE);
     stopProcess(ProcessId.WEB_SERVER);
     stopProcess(ProcessId.ELASTICSEARCH);
@@ -239,7 +236,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
   private void stopProcess(ProcessId processId) throws InterruptedException {
     ManagedProcessHandler process = processesById.get(processId);
     if (process != null) {
-      LOG.debug("Stopping [{}]...", process.getProcessId().getKey());
+      LOG.info("Stopping [{}] process...", process.getProcessId().getHumanReadableName());
       process.stop();
     }
   }
@@ -258,12 +255,13 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
   private void hardStopImpl() {
     try {
       hardStopAll();
-      finalizeStop();
     } catch (InterruptedException e) {
       // ignore and assume SQ stop is handled by another thread
       LOG.debug("Stopping all processes was interrupted in the middle of a hard stop" +
         " (current thread name is \"{}\")", Thread.currentThread().getName());
       Thread.currentThread().interrupt();
+    } finally {
+      finalizeStop();
     }
   }
 
@@ -330,7 +328,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
     if (type == Type.OPERATIONAL) {
       onProcessOperational(processId);
     } else if (type == Type.ASK_FOR_RESTART && nodeLifecycle.tryToMoveTo(RESTARTING)) {
-      LOG.info("SQ restart requested by Process[{}]", processId.getKey());
+      LOG.info("SQ restart requested by Process[{}]", processId.getHumanReadableName());
       stopAsyncForRestart();
     }
   }
@@ -340,7 +338,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
     appState.setOperational(processId);
     boolean lastProcessStarted = operationalCountDown.decrementAndGet() == 0;
     if (lastProcessStarted && nodeLifecycle.tryToMoveTo(NodeLifecycle.State.OPERATIONAL)) {
-      LOG.info("SonarQube is up");
+      LOG.info("SonarQube is operational");
     }
   }
 
@@ -351,7 +349,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
         tryToStartAll();
       } catch (InterruptedException e) {
         // startup process was interrupted, let's assume it means shutdown was requested
-        LOG.debug("Startup process was interrupted on notification that process [{}] was operation", processId.getKey(), e);
+        LOG.debug("Startup process was interrupted on notification that process [{}] was operational", processId.getHumanReadableName(), e);
         hardStopAsync();
         Thread.currentThread().interrupt();
       }
@@ -374,7 +372,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
   }
 
   private void onProcessStop(ProcessId processId) {
-    LOG.info("Process[{}] is stopped", processId.getKey());
+    LOG.info("Process[{}] is stopped", processId.getHumanReadableName());
     boolean lastProcessStopped = stopCountDown.decrementAndGet() == 0;
     switch (nodeLifecycle.getState()) {
       case RESTARTING:
@@ -383,8 +381,7 @@ public class SchedulerImpl implements Scheduler, ManagedProcessEventListener, Pr
           restartAsync();
         }
         break;
-      case HARD_STOPPING:
-      case STOPPING:
+      case HARD_STOPPING, STOPPING:
         if (lastProcessStopped) {
           finalizeStop();
         }

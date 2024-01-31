@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,7 +73,7 @@ class JsonComparison {
     return compare(expectedJson, actualJson);
   }
 
-  private Object parse(String s) {
+  private static Object parse(String s) {
     try {
       JSONParser parser = new JSONParser();
       return parser.parse(s);
@@ -93,26 +93,26 @@ class JsonComparison {
     if (expectedObject.getClass() != actualObject.getClass()) {
       return false;
     }
-    if (expectedObject instanceof JSONArray) {
-      return compareArrays((JSONArray) expectedObject, (JSONArray) actualObject);
+    if (expectedObject instanceof JSONArray jsonArray) {
+      return compareArrays(jsonArray, (JSONArray) actualObject);
     }
-    if (expectedObject instanceof JSONObject) {
-      return compareObjects((JSONObject) expectedObject, (JSONObject) actualObject);
+    if (expectedObject instanceof JSONObject jsonObject) {
+      return compareObjects(jsonObject, (JSONObject) actualObject);
     }
-    if (expectedObject instanceof String) {
-      return compareStrings((String) expectedObject, (String) actualObject);
+    if (expectedObject instanceof String string) {
+      return compareStrings(string, (String) actualObject);
     }
-    if (expectedObject instanceof Number) {
-      return compareNumbers((Number) expectedObject, (Number) actualObject);
+    if (expectedObject instanceof Number number) {
+      return compareNumbers(number, (Number) actualObject);
     }
     return compareBooleans((Boolean) expectedObject, (Boolean) actualObject);
   }
 
-  private boolean compareBooleans(Boolean expected, Boolean actual) {
+  private static boolean compareBooleans(Boolean expected, Boolean actual) {
     return expected.equals(actual);
   }
 
-  private boolean compareNumbers(Number expected, Number actual) {
+  private static boolean compareNumbers(Number expected, Number actual) {
     double d1 = expected.doubleValue();
     double d2 = actual.doubleValue();
     if (Double.compare(d1, d2) == 0) {

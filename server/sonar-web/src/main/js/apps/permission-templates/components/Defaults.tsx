@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,26 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Badge } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { PermissionTemplate } from '../../../types/types';
 
 interface Props {
-  template: T.PermissionTemplate;
+  template: PermissionTemplate;
 }
 
 export default function Defaults({ template }: Props) {
   const qualifiersToDisplay = template.defaultFor;
 
   const qualifiers = sortBy(qualifiersToDisplay)
-    .map(qualifier => translate('qualifiers', qualifier))
+    .map((qualifier) => translate('qualifiers', qualifier))
     .join(', ');
 
-  return (
-    <div>
-      <span className="badge spacer-right">
-        {translateWithParameters('permission_template.default_for', qualifiers)}
-      </span>
-    </div>
-  );
+  return <Badge>{translateWithParameters('permission_template.default_for', qualifiers)}</Badge>;
 }

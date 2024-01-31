@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,7 @@ public class MetricsWs implements WebService {
   @Override
   public void define(Context context) {
     NewController controller = context.createController(ENDPOINT);
-    controller.setDescription("Get information on automatic metrics, and manage custom metrics. See also api/custom_measures.");
+    controller.setDescription("Get information on automatic metrics");
     controller.setSince("2.6");
 
     for (MetricsWsAction action : actions) {

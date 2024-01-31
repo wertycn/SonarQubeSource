@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,39 +18,44 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
-import { connect } from 'react-redux';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getSettingsNavigation } from '../../api/nav';
+import { Outlet } from 'react-router-dom';
+import { getSettingsNavigation } from '../../api/navigation';
 import { getPendingPlugins } from '../../api/plugins';
 import { getSystemStatus, waitSystemUPStatus } from '../../api/system';
 import handleRequiredAuthorization from '../../app/utils/handleRequiredAuthorization';
-import { setAdminPages } from '../../store/appState';
-import { getAppState, Store } from '../../store/rootReducer';
+import { translate, translateWithParameters } from '../../helpers/l10n';
+import { AdminPagesContext } from '../../types/admin';
+import { AppState } from '../../types/appstate';
 import { PendingPluginResult } from '../../types/plugins';
+import { Extension, SysStatus } from '../../types/types';
 import AdminContext, { defaultPendingPlugins, defaultSystemStatus } from './AdminContext';
+import withAppStateContext from './app-state/withAppStateContext';
 import SettingsNav from './nav/settings/SettingsNav';
 
-interface Props {
-  appState: Pick<T.AppState, 'adminPages' | 'canAdmin'>;
-  location: {};
-  setAdminPages: (adminPages: T.Extension[]) => void;
+export interface AdminContainerProps {
+  appState: AppState;
 }
 
 interface State {
   pendingPlugins: PendingPluginResult;
-  systemStatus: T.SysStatus;
+  systemStatus: SysStatus;
+  adminPages: Extension[];
 }
 
-export class AdminContainer extends React.PureComponent<Props, State> {
+export class AdminContainer extends React.PureComponent<AdminContainerProps, State> {
   mounted = false;
+  portalAnchor: Element | null = null;
   state: State = {
     pendingPlugins: defaultPendingPlugins,
-    systemStatus: defaultSystemStatus
+    systemStatus: defaultSystemStatus,
+    adminPages: [],
   };
 
   componentDidMount() {
     this.mounted = true;
+    this.portalAnchor = document.getElementById('component-nav-portal');
     if (!this.props.appState.canAdmin) {
       handleRequiredAuthorization();
     } else {
@@ -66,19 +71,19 @@ export class AdminContainer extends React.PureComponent<Props, State> {
 
   fetchNavigationSettings = () => {
     getSettingsNavigation().then(
-      r => this.props.setAdminPages(r.extensions),
-      () => {}
+      (r) => this.setState({ adminPages: r.extensions }),
+      () => {},
     );
   };
 
   fetchPendingPlugins = () => {
     getPendingPlugins().then(
-      pendingPlugins => {
+      (pendingPlugins) => {
         if (this.mounted) {
           this.setState({ pendingPlugins });
         }
       },
-      () => {}
+      () => {},
     );
   };
 
@@ -92,7 +97,7 @@ export class AdminContainer extends React.PureComponent<Props, State> {
           }
         }
       },
-      () => {}
+      () => {},
     );
   };
 
@@ -101,15 +106,15 @@ export class AdminContainer extends React.PureComponent<Props, State> {
       ({ status }) => {
         if (this.mounted) {
           this.setState({ systemStatus: status });
-          document.location.reload();
+          window.location.reload();
         }
       },
-      () => {}
+      () => {},
     );
   };
 
   render() {
-    const { adminPages } = this.props.appState;
+    const { adminPages } = this.state;
 
     // Check that the adminPages are loaded
     if (!adminPages) {
@@ -117,35 +122,42 @@ export class AdminContainer extends React.PureComponent<Props, State> {
     }
 
     const { pendingPlugins, systemStatus } = this.state;
-    const defaultTitle = translate('layout.settings');
+    const adminPagesContext: AdminPagesContext = { adminPages };
 
     return (
-      <div>
-        <Helmet defaultTitle={defaultTitle} defer={false} titleTemplate={`%s - ${defaultTitle}`} />
-        <SettingsNav
-          extensions={adminPages}
-          fetchPendingPlugins={this.fetchPendingPlugins}
-          fetchSystemStatus={this.fetchSystemStatus}
-          location={this.props.location}
-          pendingPlugins={pendingPlugins}
-          systemStatus={systemStatus}
+      <>
+        <Helmet
+          defer={false}
+          titleTemplate={translateWithParameters(
+            'page_title.template.with_category',
+            translate('layout.settings'),
+          )}
         />
+        {this.portalAnchor &&
+          createPortal(
+            <SettingsNav
+              extensions={adminPages}
+              fetchPendingPlugins={this.fetchPendingPlugins}
+              fetchSystemStatus={this.fetchSystemStatus}
+              pendingPlugins={pendingPlugins}
+              systemStatus={systemStatus}
+            />,
+            this.portalAnchor,
+          )}
+
         <AdminContext.Provider
           value={{
             fetchSystemStatus: this.fetchSystemStatus,
             fetchPendingPlugins: this.fetchPendingPlugins,
             pendingPlugins,
-            systemStatus
-          }}>
-          {this.props.children}
+            systemStatus,
+          }}
+        >
+          <Outlet context={adminPagesContext} />
         </AdminContext.Provider>
-      </div>
+      </>
     );
   }
 }
 
-const mapStateToProps = (state: Store) => ({ appState: getAppState(state) });
-
-const mapDispatchToProps = { setAdminPages };
-
-export default connect(mapStateToProps, mapDispatchToProps)(AdminContainer);
+export default withAppStateContext(AdminContainer);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,9 +20,12 @@
 package org.sonar.server.project;
 
 import org.junit.Test;
+import org.sonar.db.entity.EntityDto;
 
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ProjectTest {
   @Test
@@ -55,25 +58,45 @@ public class ProjectTest {
   }
 
   @Test
+  public void from_whenPortfolioPassed_shouldNotReturnNullFields() {
+    EntityDto entity = mock(EntityDto.class);
+
+    when(entity.getUuid()).thenReturn("U1");
+    when(entity.getKey()).thenReturn("K1");
+    when(entity.getName()).thenReturn("N1");
+    when(entity.getDescription()).thenReturn("D1");
+
+    Project underTest = Project.from(entity);
+
+    assertThat(underTest.getUuid()).isEqualTo("U1");
+    assertThat(underTest.getKey()).isEqualTo("K1");
+    assertThat(underTest.getName()).isEqualTo("N1");
+    assertThat(underTest.getDescription()).isEqualTo("D1");
+
+    assertThat(underTest.toString())
+      .isEqualTo(underTest.toString())
+      .isEqualTo("Project{uuid='U1', key='K1', name='N1', description='D1'}");
+  }
+
+  @Test
   public void test_equals_and_hashCode() {
     Project project1 = new Project("U1", "K1", "N1", null, emptyList());
     Project project2 = new Project("U1", "K1", "N1", "D1", emptyList());
 
-    assertThat(project1).isEqualTo(project1);
-    assertThat(project1).isNotEqualTo(null);
-    assertThat(project1).isNotEqualTo(new Object());
-    assertThat(project1).isEqualTo(new Project("U1", "K1", "N1", null, emptyList()));
-    assertThat(project1).isNotEqualTo(new Project("U1", "K2", "N1", null, emptyList()));
-    assertThat(project1).isNotEqualTo(new Project("U1", "K1", "N2", null, emptyList()));
-    assertThat(project1).isEqualTo(project2);
+    assertThat(project1).isEqualTo(project1)
+      .isNotNull()
+      .isNotEqualTo(new Object())
+      .isEqualTo(new Project("U1", "K1", "N1", null, emptyList()))
+      .isNotEqualTo(new Project("U1", "K2", "N1", null, emptyList()))
+      .isNotEqualTo(new Project("U1", "K1", "N2", null, emptyList()))
+      .isEqualTo(project2);
 
-    assertThat(project1.hashCode()).isEqualTo(project1.hashCode());
-    assertThat(project1.hashCode()).isNotEqualTo(null);
+    assertThat(project1).hasSameHashCodeAs(project1);
     assertThat(project1.hashCode()).isNotEqualTo(new Object().hashCode());
-    assertThat(project1.hashCode()).isEqualTo(new Project("U1", "K1", "N1", null, emptyList()).hashCode());
+    assertThat(project1).hasSameHashCodeAs(new Project("U1", "K1", "N1", null, emptyList()));
     assertThat(project1.hashCode()).isNotEqualTo(new Project("U1", "K2", "N1", null, emptyList()).hashCode());
     assertThat(project1.hashCode()).isNotEqualTo(new Project("U1", "K1", "N2", null, emptyList()).hashCode());
-    assertThat(project1.hashCode()).isEqualTo(project2.hashCode());
+    assertThat(project1).hasSameHashCodeAs(project2);
   }
 
 }

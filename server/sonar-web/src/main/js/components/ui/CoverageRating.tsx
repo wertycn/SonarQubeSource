@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,39 +18,37 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
 import { colors } from '../../app/theme';
+import DonutChart from '../../components/charts/DonutChart';
 
-const DonutChart = lazyLoadComponent(
-  () => import('sonar-ui-common/components/charts/DonutChart'),
-  'DonutChart'
-);
+const SIZE_TO_WIDTH_MAPPING = { small: 20, normal: 24, big: 40, huge: 60 };
+const SIZE_TO_THICKNESS_MAPPING = { small: 3, normal: 3, big: 3, huge: 4 };
 
-const SIZE_TO_WIDTH_MAPPING = { small: 16, normal: 24, big: 40, huge: 60 };
+const FULL_PERCENT = 100;
 
-const SIZE_TO_THICKNESS_MAPPING = { small: 2, normal: 3, big: 3, huge: 4 };
+type SIZE = 'small' | 'normal' | 'big' | 'huge';
 
 export interface CoverageRatingProps {
   muted?: boolean;
-  size?: 'small' | 'normal' | 'big' | 'huge';
-  value: number | string | null | undefined;
+  size?: SIZE;
+  value?: number | string;
 }
 
 export default function CoverageRating({
   muted = false,
   size = 'normal',
-  value
+  value,
 }: CoverageRatingProps) {
-  let data = [{ value: 100, fill: '#ccc ' }];
+  let data = [{ value: FULL_PERCENT, fill: colors.gray71 }];
   let padAngle = 0;
 
   if (value != null) {
     const numberValue = Number(value);
     data = [
-      { value: numberValue, fill: muted ? colors.gray71 : colors.green },
-      { value: 100 - numberValue, fill: muted ? colors.barBackgroundColor : colors.lineCoverageRed }
+      { value: numberValue, fill: muted ? colors.gray71 : colors.success500 },
+      { value: FULL_PERCENT - numberValue, fill: muted ? 'transparent' : colors.error500 },
     ];
-    if (numberValue !== 0 && numberValue < 100) {
+    if (numberValue !== 0 && numberValue < FULL_PERCENT) {
       padAngle = 0.1; // Same for all sizes, because it scales automatically
     }
   }

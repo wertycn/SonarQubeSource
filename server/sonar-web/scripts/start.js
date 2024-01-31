@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,113 +22,113 @@ process.env.NODE_ENV = 'development';
 
 const fs = require('fs');
 const chalk = require('chalk');
-const webpack = require('webpack');
-const WebpackDevServer = require('webpack-dev-server');
-const clearConsole = require('react-dev-utils/clearConsole');
-const formatWebpackMessages = require('react-dev-utils/formatWebpackMessages');
-const errorOverlayMiddleware = require('react-error-overlay/middleware');
-const getMessages = require('./utils/getMessages');
-const getConfigs = require('../config/webpack.config');
+const chokidar = require('chokidar');
+const esbuild = require('esbuild');
+const http = require('http');
+const httpProxy = require('http-proxy');
+const getConfig = require('../config/esbuild-config');
+const { handleL10n } = require('./utils');
 const paths = require('../config/paths');
+const { spawn } = require('child_process');
+const { buildDesignSystem } = require('./build-design-system');
 
-const configs = getConfigs({ production: false });
-const config = configs.find(config => config.name === 'modern');
+const STATUS_OK = 200;
+const STATUS_ERROR = 500;
 
 const port = process.env.PORT || 3000;
 const protocol = process.env.HTTPS === 'true' ? 'https' : 'http';
 const host = process.env.HOST || 'localhost';
-const proxy = process.env.PROXY || 'http://localhost:9000';
+const proxyTarget = process.env.PROXY || 'http://localhost:9000';
 
-// Force start script to proxy l10n request to the server (can be useful when working with plugins/extensions)
-const l10nCompiledFlag = process.argv.findIndex(val => val === 'l10nCompiled') >= 0;
-const l10nExtensions = process.argv.findIndex(val => val === 'l10nExtensions') >= 0;
+const config = getConfig(false);
 
-const compiler = setupCompiler(host, port, protocol);
-runDevServer(compiler, host, port, protocol);
-
-function setupCompiler(host, port, protocol) {
-  const compiler = webpack(config);
-
-  compiler.plugin('invalid', () => {
-    clearConsole();
-    console.log('Compiling...');
-  });
-
-  compiler.plugin('done', stats => {
-    clearConsole();
-
-    const jsonStats = stats.toJson({}, true);
-    const messages = formatWebpackMessages(jsonStats);
-    const seconds = jsonStats.time / 1000;
-    if (!messages.errors.length && !messages.warnings.length) {
-      console.log(chalk.green('Compiled successfully!'));
-      console.log('Duration: ' + seconds.toFixed(2) + 's');
-      console.log();
-      console.log('The app is running at:');
-      console.log();
-      console.log('  ' + chalk.cyan(protocol + '://' + host + ':' + port + '/'));
-      console.log();
-    }
-
-    if (messages.errors.length) {
-      console.log(chalk.red('Failed to compile.'));
-      console.log();
-      messages.errors.forEach(message => {
-        console.log(message);
-        console.log();
-      });
-    }
-  });
-
-  return compiler;
-}
-
-function runDevServer(compiler, host, port, protocol) {
-  const devServer = new WebpackDevServer(compiler, {
-    before(app) {
-      app.use(errorOverlayMiddleware());
-      if (!l10nCompiledFlag) {
-        app.get('/api/l10n/index', (req, res) => {
-          getMessages(l10nExtensions)
-            .then(messages => res.json({ effectiveLocale: 'en', messages }))
-            .catch(() => res.status(500));
-        });
-      }
-    },
-    compress: true,
-    clientLogLevel: 'none',
-    contentBase: [paths.appPublic, paths.docRoot],
-    disableHostCheck: true,
-    hot: true,
-    publicPath: config.output.publicPath,
-    quiet: true,
-    watchOptions: {
-      ignored: /node_modules/
-    },
-    https: protocol === 'https',
-    host,
-    overlay: false,
-    historyApiFallback: {
-      disableDotRule: true
-    },
-    proxy: {
-      '/api': { target: proxy, changeOrigin: true },
-      '/static': { target: proxy, changeOrigin: true },
-      '/integration': { target: proxy, changeOrigin: true },
-      '/sessions/init': { target: proxy, changeOrigin: true },
-      '/oauth2': { target: proxy, changeOrigin: true },
-      '/batch': { target: proxy, changeOrigin: true }
-    }
-  });
-
-  devServer.listen(port, err => {
+function handleStaticFileRequest(req, res) {
+  fs.readFile(paths.appBuild + req.url, (err, data) => {
     if (err) {
-      console.log(err);
-      return;
-    }
+      // Any unknown path should go to the index.html
+      const htmlTemplate = require('../config/indexHtmlTemplate');
 
-    clearConsole();
-    console.log(chalk.cyan('Starting the development server...'));
-    console.log();
+      // Replace hash placeholders as well as all the
+      // tags that are usually replaced by the server
+      const content = htmlTemplate('', '')
+        .replace(/%WEB_CONTEXT%/g, '')
+        .replace(/%SERVER_STATUS%/g, 'UP')
+        .replace(/%INSTANCE%/g, 'SonarQube')
+        .replace(/%OFFICIAL%/g, 'true');
+
+      res.writeHead(STATUS_OK);
+      res.end(content);
+    } else {
+      res.writeHead(STATUS_OK);
+      res.end(data);
+    }
   });
 }
+
+const forceBuildDesignSystem = process.argv.includes('--force-build-design-system');
+
+async function run() {
+  console.log('starting...');
+  const esbuildContext = await esbuild.context(config);
+  esbuildContext
+    .serve({
+      servedir: 'build/webapp',
+    })
+    .then((result) => {
+      const { port: esbuildport } = result;
+
+      const proxy = httpProxy.createProxyServer();
+      const esbuildProxy = httpProxy.createProxyServer({
+        target: `http://localhost:${esbuildport}`,
+      });
+
+      proxy.on('error', (error) => {
+        console.error(chalk.blue('Backend'));
+        console.error('\t', chalk.red(error.message));
+        console.error('\t', error.stack);
+      });
+
+      esbuildProxy.on('error', (error) => {
+        console.error(chalk.cyan('Frontend'));
+        console.error('\t', chalk.red(error.message));
+        console.error('\t', error.stack);
+      });
+
+      http
+        .createServer((req, res) => {
+          if (req.url.match(/js\/out/)) {
+            esbuildProxy.web(req, res);
+          } else if (req.url.match(/l10n\/index/)) {
+            handleL10n(res);
+          } else if (
+            (req.url.includes('api/') && !req.url.includes('/web_api')) ||
+            req.url.includes('images/') ||
+            req.url.includes('static/')
+          ) {
+            proxy.web(
+              req,
+              res,
+              {
+                target: proxyTarget,
+              },
+              (e) => console.error('req error', e)
+            );
+          } else {
+            handleStaticFileRequest(req, res);
+          }
+        })
+        .listen(port);
+
+      console.log(`server started: http://localhost:${port}`);
+    })
+    .catch((e) => console.error(e));
+}
+
+buildDesignSystem({ callback: run, force: forceBuildDesignSystem });
+
+chokidar
+  .watch('./design-system/src', {
+    ignored: /(^|[/\\])\../, // ignore dotfiles
+    persistent: true,
+  })
+  .on('change', () => buildDesignSystem({ force: true }));

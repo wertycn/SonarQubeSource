@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,20 @@
  */
 package org.sonar.alm.client;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.util.OptionalLong;
 import org.sonar.api.config.Configuration;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of {@link TimeoutConfiguration} reading values from configuration properties.
  */
 public class TimeoutConfigurationImpl implements TimeoutConfiguration {
-  private static final String CONNECT_TIMEOUT_PROPERTY = "sonar.alm.timeout.connect";
-  private static final String READ_TIMEOUT_PROPERTY = "sonar.alm.timeout.read";
+
+  @VisibleForTesting
+  public static final String CONNECT_TIMEOUT_PROPERTY = "sonar.alm.timeout.connect";
+  @VisibleForTesting
+  public static final String READ_TIMEOUT_PROPERTY = "sonar.alm.timeout.read";
 
   private static final long DEFAULT_TIMEOUT = 30_000;
   private final Configuration configuration;
@@ -48,7 +52,7 @@ public class TimeoutConfigurationImpl implements TimeoutConfiguration {
         try {
           return OptionalLong.of(Long.parseLong(value));
         } catch (NumberFormatException e) {
-          Loggers.get(TimeoutConfigurationImpl.class)
+          LoggerFactory.getLogger(TimeoutConfigurationImpl.class)
             .warn("Value of property {} can not be parsed to a long: {}", property, value);
           return OptionalLong.empty();
         }

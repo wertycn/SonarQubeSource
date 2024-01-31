@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,8 +21,12 @@ package org.sonar.db.ce;
 
 public final class CeTaskTypes {
   
-  public static final String REPORT = "REPORT";
+  public static final String AUDIT_PURGE = "AUDIT_PURGE";
   public static final String BRANCH_ISSUE_SYNC = "ISSUE_SYNC";
+  public static final String REPORT = "REPORT";
+  public static final String PROJECT_EXPORT = "PROJECT_EXPORT";
+
+  public static final String GITHUB_PROJECT_PERMISSIONS_PROVISIONING = "GITHUB_PROJECT_PERMISSIONS_PROVISIONING";
 
   private CeTaskTypes() {
     // only statics

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,24 +18,27 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
 import withIndexationContext, {
-  WithIndexationContextProps
+  WithIndexationContextProps,
 } from '../../../components/hoc/withIndexationContext';
-import { hasGlobalPermission, isLoggedIn } from '../../../helpers/users';
+import { hasGlobalPermission } from '../../../helpers/users';
 import { IndexationNotificationType } from '../../../types/indexation';
 import { Permissions } from '../../../types/permissions';
+import { CurrentUser, isLoggedIn } from '../../../types/users';
+import withCurrentUserContext from '../current-user/withCurrentUserContext';
 import './IndexationNotification.css';
 import IndexationNotificationHelper from './IndexationNotificationHelper';
 import IndexationNotificationRenderer from './IndexationNotificationRenderer';
 
 interface Props extends WithIndexationContextProps {
-  currentUser: T.CurrentUser;
+  currentUser: CurrentUser;
 }
 
 interface State {
   notificationType?: IndexationNotificationType;
 }
+
+const COMPLETED_NOTIFICATION_DISPLAY_DURATION = 5000;
 
 export class IndexationNotification extends React.PureComponent<Props, State> {
   state: State = {};
@@ -64,18 +67,25 @@ export class IndexationNotification extends React.PureComponent<Props, State> {
 
     if (!isCompleted) {
       IndexationNotificationHelper.markCompletedNotificationAsToDisplay();
+
       this.setState({
         notificationType: hasFailures
           ? IndexationNotificationType.InProgressWithFailure
-          : IndexationNotificationType.InProgress
+          : IndexationNotificationType.InProgress,
       });
     } else if (hasFailures) {
       this.setState({ notificationType: IndexationNotificationType.CompletedWithFailure });
     } else if (IndexationNotificationHelper.shouldDisplayCompletedNotification()) {
       this.setState({
-        notificationType: IndexationNotificationType.Completed
+        notificationType: IndexationNotificationType.Completed,
       });
+
       IndexationNotificationHelper.markCompletedNotificationAsDisplayed();
+
+      // Hide after some time
+      setTimeout(() => {
+        this.refreshNotification();
+      }, COMPLETED_NOTIFICATION_DISPLAY_DURATION);
     } else {
       this.setState({ notificationType: undefined });
     }
@@ -83,24 +93,21 @@ export class IndexationNotification extends React.PureComponent<Props, State> {
 
   render() {
     const { notificationType } = this.state;
+
     const {
       indexationContext: {
-        status: { percentCompleted }
-      }
+        status: { completedCount, total },
+      },
     } = this.props;
 
-    if (notificationType === undefined) {
-      return null;
-    }
-
-    return (
+    return !this.isSystemAdmin ? null : (
       <IndexationNotificationRenderer
+        completedCount={completedCount}
+        total={total}
         type={notificationType}
-        percentCompleted={percentCompleted}
-        isSystemAdmin={this.isSystemAdmin}
       />
     );
   }
 }
 
-export default withCurrentUser(withIndexationContext(IndexationNotification));
+export default withCurrentUserContext(withIndexationContext(IndexationNotification));

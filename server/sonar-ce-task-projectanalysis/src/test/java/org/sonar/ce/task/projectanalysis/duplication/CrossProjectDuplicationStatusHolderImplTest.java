@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,28 +19,32 @@
  */
 package org.sonar.ce.task.projectanalysis.duplication;
 
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class CrossProjectDuplicationStatusHolderImplTest {
 
   @Rule
-  public ExpectedException thrown = ExpectedException.none();
-  @Rule
   public LogTester logTester = new LogTester();
   @Rule
   public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule();
 
   private CrossProjectDuplicationStatusHolderImpl underTest = new CrossProjectDuplicationStatusHolderImpl(analysisMetadataHolder);
+
+  @Before
+  public void before() {
+    logTester.setLevel(Level.DEBUG);
+  }
 
   @Test
   public void cross_project_duplication_is_enabled_when_enabled_in_report_and_no_branch() {
@@ -50,7 +54,7 @@ public class CrossProjectDuplicationStatusHolderImplTest {
     underTest.start();
 
     assertThat(underTest.isEnabled()).isTrue();
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).containsOnly("Cross project duplication is enabled");
+    assertThat(logTester.logs(Level.DEBUG)).containsOnly("Cross project duplication is enabled");
   }
 
   @Test
@@ -61,7 +65,7 @@ public class CrossProjectDuplicationStatusHolderImplTest {
     underTest.start();
 
     assertThat(underTest.isEnabled()).isFalse();
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).containsOnly("Cross project duplication is disabled because it's disabled in the analysis report");
+    assertThat(logTester.logs(Level.DEBUG)).containsOnly("Cross project duplication is disabled because it's disabled in the analysis report");
   }
 
   @Test
@@ -72,7 +76,7 @@ public class CrossProjectDuplicationStatusHolderImplTest {
     underTest.start();
 
     assertThat(underTest.isEnabled()).isFalse();
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).containsOnly("Cross project duplication is disabled because of a branch is used");
+    assertThat(logTester.logs(Level.DEBUG)).containsOnly("Cross project duplication is disabled because of a branch is used");
   }
 
   @Test
@@ -83,7 +87,7 @@ public class CrossProjectDuplicationStatusHolderImplTest {
     underTest.start();
 
     assertThat(underTest.isEnabled()).isFalse();
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).containsOnly("Cross project duplication is disabled because it's disabled in the analysis report");
+    assertThat(logTester.logs(Level.DEBUG)).containsOnly("Cross project duplication is disabled because it's disabled in the analysis report");
   }
 
   @Test
@@ -101,10 +105,9 @@ public class CrossProjectDuplicationStatusHolderImplTest {
 
   @Test
   public void isEnabled_throws_ISE_when_start_have_not_been_called_before() {
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Flag hasn't been initialized, the start() should have been called before");
-
-    underTest.isEnabled();
+    assertThatThrownBy(() -> underTest.isEnabled())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("Flag hasn't been initialized, the start() should have been called before");
   }
 
   private static Branch newBranch(boolean supportsCrossProjectCpd) {

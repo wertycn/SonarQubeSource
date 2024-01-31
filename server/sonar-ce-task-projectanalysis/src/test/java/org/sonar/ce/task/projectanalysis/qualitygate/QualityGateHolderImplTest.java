@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,28 +24,34 @@ import org.sonar.server.qualitygate.EvaluatedQualityGate;
 
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class QualityGateHolderImplTest {
 
   private static final QualityGate QUALITY_GATE = new QualityGate("4612", "name", emptyList());
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void getQualityGate_throws_ISE_if_QualityGate_not_set() {
-    new QualityGateHolderImpl().getQualityGate();
+    assertThatThrownBy(() -> new QualityGateHolderImpl().getQualityGate())
+      .isInstanceOf(IllegalStateException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void setQualityGate_throws_NPE_if_argument_is_null() {
-    new QualityGateHolderImpl().setQualityGate(null);
+    assertThatThrownBy(() -> new QualityGateHolderImpl().setQualityGate(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void setQualityGate_throws_ISE_if_called_twice() {
-    QualityGateHolderImpl holder = new QualityGateHolderImpl();
+    assertThatThrownBy(() -> {
+      QualityGateHolderImpl holder = new QualityGateHolderImpl();
 
-    holder.setQualityGate(QUALITY_GATE);
-    holder.setQualityGate(QUALITY_GATE);
+      holder.setQualityGate(QUALITY_GATE);
+      holder.setQualityGate(QUALITY_GATE);
+    })
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -54,26 +60,31 @@ public class QualityGateHolderImplTest {
 
     holder.setQualityGate(QUALITY_GATE);
 
-    assertThat(holder.getQualityGate().get()).isSameAs(QUALITY_GATE);
+    assertThat(holder.getQualityGate()).containsSame(QUALITY_GATE);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void getEvaluation_throws_ISE_if_QualityGate_not_set() {
-    new QualityGateHolderImpl().getEvaluation();
+    assertThatThrownBy(() -> new QualityGateHolderImpl().getEvaluation())
+      .isInstanceOf(IllegalStateException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void setEvaluation_throws_NPE_if_argument_is_null() {
-    new QualityGateHolderImpl().setEvaluation(null);
+    assertThatThrownBy(() -> new QualityGateHolderImpl().setEvaluation(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void setEvaluation_throws_ISE_if_called_twice() {
-    QualityGateHolderImpl holder = new QualityGateHolderImpl();
+    assertThatThrownBy(() -> {
+      QualityGateHolderImpl holder = new QualityGateHolderImpl();
 
-    EvaluatedQualityGate evaluation = mock(EvaluatedQualityGate.class);
-    holder.setEvaluation(evaluation);
-    holder.setEvaluation(evaluation);
+      EvaluatedQualityGate evaluation = mock(EvaluatedQualityGate.class);
+      holder.setEvaluation(evaluation);
+      holder.setEvaluation(evaluation);
+    })
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -83,7 +94,7 @@ public class QualityGateHolderImplTest {
     EvaluatedQualityGate evaluation = mock(EvaluatedQualityGate.class);
     holder.setEvaluation(evaluation);
 
-    assertThat(holder.getEvaluation().get()).isSameAs(evaluation);
+    assertThat(holder.getEvaluation()).containsSame(evaluation);
   }
 
 }

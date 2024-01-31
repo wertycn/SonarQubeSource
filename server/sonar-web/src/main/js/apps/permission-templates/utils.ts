@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,6 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { sortBy } from 'lodash';
+import { Permission, PermissionTemplate } from '../../types/types';
 
 export const PERMISSIONS_ORDER = [
   'user',
@@ -25,25 +26,25 @@ export const PERMISSIONS_ORDER = [
   'issueadmin',
   'securityhotspotadmin',
   'admin',
-  'scan'
+  'scan',
 ];
 
-export const PERMISSION_TEMPLATES_PATH = '/permission_templates';
+export const PERMISSION_TEMPLATES_PATH = '/admin/permission_templates';
 
-export function sortPermissions(permissions: T.Permission[]) {
-  return sortBy(permissions, p => PERMISSIONS_ORDER.indexOf(p.key));
+export function sortPermissions(permissions: Permission[]) {
+  return sortBy(permissions, (p) => PERMISSIONS_ORDER.indexOf(p.key));
 }
 
 export function mergePermissionsToTemplates(
-  permissionTemplates: T.PermissionTemplate[],
-  basePermissions: T.Permission[]
-): T.PermissionTemplate[] {
-  return permissionTemplates.map(permissionTemplate => {
+  permissionTemplates: PermissionTemplate[],
+  basePermissions: Permission[],
+): PermissionTemplate[] {
+  return permissionTemplates.map((permissionTemplate) => {
     // it's important to keep the order of the permission template's permissions
     // the same as the order of base permissions
-    const permissions = basePermissions.map(basePermission => {
+    const permissions = basePermissions.map((basePermission) => {
       const projectPermission = permissionTemplate.permissions.find(
-        p => p.key === basePermission.key
+        (p) => p.key === basePermission.key,
       );
       return { usersCount: 0, groupsCount: 0, ...basePermission, ...projectPermission };
     });
@@ -53,13 +54,13 @@ export function mergePermissionsToTemplates(
 }
 
 export function mergeDefaultsToTemplates(
-  permissionTemplates: T.PermissionTemplate[],
-  defaultTemplates: Array<{ templateId: string; qualifier: string }> = []
-): T.PermissionTemplate[] {
-  return permissionTemplates.map(permissionTemplate => {
+  permissionTemplates: PermissionTemplate[],
+  defaultTemplates: Array<{ templateId: string; qualifier: string }> = [],
+): PermissionTemplate[] {
+  return permissionTemplates.map((permissionTemplate) => {
     const defaultFor: string[] = [];
 
-    defaultTemplates.forEach(defaultTemplate => {
+    defaultTemplates.forEach((defaultTemplate) => {
       if (defaultTemplate.templateId === permissionTemplate.id) {
         defaultFor.push(defaultTemplate.qualifier);
       }

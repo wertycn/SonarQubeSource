@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,29 +20,16 @@
 package org.sonar.server.user.ws;
 
 import org.junit.Test;
-import org.sonar.api.config.internal.ConfigurationBridge;
-import org.sonar.api.config.internal.MapSettings;
-import org.sonar.core.platform.ComponentContainer;
-import org.sonar.process.ProcessProperties;
+import org.sonar.core.platform.ListContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class UsersWsModuleTest {
-  private MapSettings settings = new MapSettings();
 
   @Test
-  public void verify_count_of_added_components() {
-    ComponentContainer container = new ComponentContainer();
-    new UsersWsModule(new ConfigurationBridge(settings)).configure(container);
-    assertThat(container.size()).isEqualTo(2 + 15);
-  }
-
-  @Test
-  public void verify_count_of_added_components_in_sonarcloud() {
-    settings.setProperty(ProcessProperties.Property.SONARCLOUD_ENABLED.getKey(), true);
-
-    ComponentContainer container = new ComponentContainer();
-    new UsersWsModule(new ConfigurationBridge(settings)).configure(container);
-    assertThat(container.size()).isEqualTo(2 + 16);
+  public void verify_container_is_not_empty() {
+    ListContainer container = new ListContainer();
+    new UsersWsModule().configure(container);
+    assertThat(container.getAddedObjects()).isNotEmpty();
   }
 }

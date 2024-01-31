@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,25 +19,25 @@
  */
 package org.sonar.db.dialect;
 
-import com.google.common.collect.ImmutableList;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.List;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.utils.Version;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.Preconditions.checkState;
 
 public class PostgreSql extends AbstractDialect {
-
   public static final String ID = "postgresql";
-  static final List<String> INIT_STATEMENTS = ImmutableList.of("SET standard_conforming_strings=on", "SET backslash_quote=off");
+  static final List<String> INIT_STATEMENTS = List.of("SET standard_conforming_strings=on", "SET backslash_quote=off");
   private static final Version MIN_SUPPORTED_VERSION = Version.create(9, 3, 0);
   private static final Version MIN_UPSERT_VERSION = Version.create(9, 5, 0);
+  private static final Version MIN_NULL_NOT_DISTINCT_VERSION = Version.create(15, 0, 0);
 
   private boolean initialized = false;
   private boolean supportsUpsert = false;
+  private boolean supportsNullNotDistinct = false;
 
   public PostgreSql() {
     super(ID, "org.postgresql.Driver", "true", "false", "SELECT 1");
@@ -65,14 +65,21 @@ public class PostgreSql extends AbstractDialect {
   }
 
   @Override
+  public boolean supportsNullNotDistinct() {
+    checkState(initialized, "onInit() must be called before calling supportsNullNotDistinct()");
+    return supportsNullNotDistinct;
+  }
+
+  @Override
   public void init(DatabaseMetaData metaData) throws SQLException {
     checkState(!initialized, "onInit() must be called once");
 
     Version version = checkDbVersion(metaData, MIN_SUPPORTED_VERSION);
 
     supportsUpsert = version.compareTo(MIN_UPSERT_VERSION) >= 0;
+    supportsNullNotDistinct = version.compareTo(MIN_NULL_NOT_DISTINCT_VERSION) >= 0;
     if (!supportsUpsert) {
-      Loggers.get(getClass()).warn("Upgrading PostgreSQL to {} or greater is recommended for better performances", MIN_UPSERT_VERSION);
+      LoggerFactory.getLogger(getClass()).warn("Upgrading PostgreSQL to {} or greater is recommended for better performances", MIN_UPSERT_VERSION);
     }
 
     initialized = true;

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -49,10 +49,6 @@ public class WebAuthorizationTypeSupport {
    * user has read access.
    */
   public QueryBuilder createQueryFilter() {
-    if (userSession.isRoot()) {
-      return QueryBuilders.matchAllQuery();
-    }
-
     BoolQueryBuilder filter = boolQuery();
 
     // anyone

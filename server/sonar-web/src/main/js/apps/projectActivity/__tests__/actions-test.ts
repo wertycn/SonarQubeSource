@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,8 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { parseDate } from 'sonar-ui-common/helpers/dates';
 import { DEFAULT_GRAPH } from '../../../components/activity-graph/utils';
+import { parseDate } from '../../../helpers/dates';
+import { ProjectAnalysisEventCategory } from '../../../types/project-activity';
 import * as actions from '../actions';
 
 const ANALYSES = [
@@ -28,15 +29,15 @@ const ANALYSES = [
     events: [
       {
         key: 'E1',
-        category: 'VERSION',
-        name: '6.5-SNAPSHOT'
-      }
-    ]
+        category: ProjectAnalysisEventCategory.Version,
+        name: '6.5-SNAPSHOT',
+      },
+    ],
   },
   {
     key: 'A2',
     date: parseDate('2016-10-27T12:21:15+0200'),
-    events: []
+    events: [],
   },
   {
     key: 'A3',
@@ -44,22 +45,22 @@ const ANALYSES = [
     events: [
       {
         key: 'E2',
-        category: 'OTHER',
-        name: 'foo'
+        category: ProjectAnalysisEventCategory.Other,
+        name: 'foo',
       },
       {
         key: 'E3',
-        category: 'OTHER',
-        name: 'foo'
-      }
-    ]
-  }
+        category: ProjectAnalysisEventCategory.Other,
+        name: 'foo',
+      },
+    ],
+  },
 ];
 
 const newEvent = {
   key: 'Enew',
   name: 'Foo',
-  category: 'Custom'
+  category: ProjectAnalysisEventCategory.Other,
 };
 
 const emptyState = {
@@ -70,7 +71,7 @@ const emptyState = {
   measuresHistory: [],
   measures: [],
   metrics: [],
-  query: { category: '', graph: DEFAULT_GRAPH, project: '', customMetrics: [] }
+  query: { category: '', graph: DEFAULT_GRAPH, project: '', customMetrics: [] },
 };
 
 const state = { ...emptyState, analyses: ANALYSES };
@@ -100,12 +101,18 @@ describe('deleteEvent', () => {
 describe('changeEvent', () => {
   it('should correctly update an event', () => {
     expect(
-      actions.changeEvent('A1', { key: 'E1', name: 'changed', category: 'VERSION' })(state)
-        .analyses[0]
+      actions.changeEvent('A1', {
+        key: 'E1',
+        name: 'changed',
+        category: ProjectAnalysisEventCategory.Version,
+      })(state).analyses[0],
     ).toMatchSnapshot();
     expect(
-      actions.changeEvent('A2', { key: 'E2', name: 'foo', category: 'VERSION' })(state).analyses[1]
-        .events
+      actions.changeEvent('A2', {
+        key: 'E2',
+        name: 'foo',
+        category: ProjectAnalysisEventCategory.Version,
+      })(state).analyses[1].events,
     ).toHaveLength(0);
   });
 });

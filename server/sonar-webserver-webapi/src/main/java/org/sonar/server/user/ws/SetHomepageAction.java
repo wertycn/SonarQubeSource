@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -116,18 +116,11 @@ public class SetHomepageAction implements UsersWsAction {
       case PROJECT:
         checkArgument(isNotBlank(componentParameter), PARAMETER_REQUIRED, type.name(), PARAM_COMPONENT);
         ProjectDto projectDto = componentFinder.getProjectByKey(dbSession, componentParameter);
-        if (branchParameter != null) {
-          return componentFinder.getBranchOrPullRequest(dbSession, projectDto, branchParameter, null).getUuid();
-        } else {
-          return projectDto.getUuid();
-        }
-      case PORTFOLIO:
-      case APPLICATION:
+        return componentFinder.getBranchOrPullRequest(dbSession, projectDto, branchParameter, null).getUuid();
+      case PORTFOLIO, APPLICATION:
         checkArgument(isNotBlank(componentParameter), PARAMETER_REQUIRED, type.name(), PARAM_COMPONENT);
         return componentFinder.getByKey(dbSession, componentParameter).uuid();
-      case PORTFOLIOS:
-      case PROJECTS:
-      case ISSUES:
+      case PORTFOLIOS, PROJECTS, ISSUES:
         return null;
       default:
         throw new IllegalArgumentException(format("Unknown type '%s'", type.name()));

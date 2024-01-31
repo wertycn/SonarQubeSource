@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,74 +17,103 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import classNames from 'classnames';
+import {
+  ButtonSecondary,
+  ChevronDownIcon,
+  Dropdown,
+  ItemButton,
+  PopupPlacement,
+  PopupZLevel,
+  TextMuted,
+} from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../helpers/l10n';
 import { GraphType } from '../../types/project-activity';
+import { Metric } from '../../types/types';
 import AddGraphMetric from './AddGraphMetric';
-import './styles.css';
 import { getGraphTypes, isCustomGraph } from './utils';
 
 interface Props {
-  addCustomMetric?: (metric: string) => void;
+  onAddCustomMetric?: (metric: string) => void;
   className?: string;
-  removeCustomMetric?: (metric: string) => void;
+  onRemoveCustomMetric?: (metric: string) => void;
   graph: GraphType;
-  metrics: T.Metric[];
+  metrics: Metric[];
   metricsTypeFilter?: string[];
   selectedMetrics?: string[];
-  updateGraph: (graphType: string) => void;
+  onUpdateGraph: (graphType: string) => void;
 }
 
-export default class GraphsHeader extends React.PureComponent<Props> {
-  handleGraphChange = (option: { value: string }) => {
-    if (option.value !== this.props.graph) {
-      this.props.updateGraph(option.value);
-    }
-  };
+export default function GraphsHeader(props: Props) {
+  const {
+    className,
+    graph,
+    metrics,
+    metricsTypeFilter,
+    onUpdateGraph,
+    selectedMetrics = [],
+  } = props;
 
-  render() {
-    const {
-      addCustomMetric,
-      className,
-      graph,
-      metrics,
-      metricsTypeFilter,
-      removeCustomMetric,
-      selectedMetrics = []
-    } = this.props;
+  const handleGraphChange = React.useCallback(
+    (value: GraphType) => {
+      if (value !== graph) {
+        onUpdateGraph(value);
+      }
+    },
+    [graph, onUpdateGraph],
+  );
 
-    const types = getGraphTypes(addCustomMetric === undefined || removeCustomMetric === undefined);
+  const noCustomGraph =
+    props.onAddCustomMetric === undefined || props.onRemoveCustomMetric === undefined;
 
-    const selectOptions = types.map(type => ({
-      label: translate('project_activity.graphs', type),
-      value: type
-    }));
+  const options = React.useMemo(() => {
+    const types = getGraphTypes(noCustomGraph);
 
-    return (
-      <div className={classNames(className, 'position-relative')}>
-        <Select
-          className="pull-left input-medium"
-          clearable={false}
-          onChange={this.handleGraphChange}
-          options={selectOptions}
-          searchable={false}
-          value={graph}
-        />
+    return types.map((type) => {
+      const label = translate('project_activity.graphs', type);
+
+      return (
+        <ItemButton key={label} onClick={() => handleGraphChange(type)}>
+          {label}
+        </ItemButton>
+      );
+    });
+  }, [noCustomGraph, handleGraphChange]);
+
+  return (
+    <div className={className}>
+      <div className="sw-flex">
+        <Dropdown
+          id="activity-graph-type"
+          size="auto"
+          placement={PopupPlacement.BottomLeft}
+          zLevel={PopupZLevel.Content}
+          overlay={options}
+        >
+          <ButtonSecondary
+            aria-label={translate('project_activity.graphs.choose_type')}
+            className={
+              'sw-body-sm sw-flex sw-flex-row sw-justify-between sw-pl-3 sw-pr-2 sw-w-32 ' +
+              'sw-z-normal' // needed because the legends overlap part of the button
+            }
+          >
+            <TextMuted text={translate('project_activity.graphs', graph)} />
+            <ChevronDownIcon className="sw-ml-1 sw-mr-0 sw-pr-0" />
+          </ButtonSecondary>
+        </Dropdown>
+
         {isCustomGraph(graph) &&
-          addCustomMetric !== undefined &&
-          removeCustomMetric !== undefined && (
+          props.onAddCustomMetric !== undefined &&
+          props.onRemoveCustomMetric !== undefined && (
             <AddGraphMetric
-              addMetric={addCustomMetric}
-              className="pull-left spacer-left"
+              onAddMetric={props.onAddCustomMetric}
               metrics={metrics}
               metricsTypeFilter={metricsTypeFilter}
-              removeMetric={removeCustomMetric}
+              onRemoveMetric={props.onRemoveCustomMetric}
               selectedMetrics={selectedMetrics}
             />
           )}
       </div>
-    );
-  }
+    </div>
+  );
 }

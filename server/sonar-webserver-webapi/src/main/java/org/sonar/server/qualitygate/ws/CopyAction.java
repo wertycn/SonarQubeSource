@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,11 +29,8 @@ import org.sonar.db.qualitygate.QualityGateDto;
 import org.sonar.server.qualitygate.QualityGateUpdater;
 import org.sonar.server.user.UserSession;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static org.sonar.core.util.Uuids.UUID_EXAMPLE_01;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_GATES;
 import static org.sonar.server.qualitygate.ws.CreateAction.NAME_MAXIMUM_LENGTH;
-import static org.sonar.server.qualitygate.ws.QualityGatesWsParameters.PARAM_ID;
 import static org.sonar.server.qualitygate.ws.QualityGatesWsParameters.PARAM_NAME;
 import static org.sonar.server.qualitygate.ws.QualityGatesWsParameters.PARAM_SOURCE_NAME;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
@@ -58,23 +55,19 @@ public class CopyAction implements QualityGatesWsAction {
   public void define(WebService.NewController controller) {
     WebService.NewAction action = controller.createAction("copy")
       .setDescription("Copy a Quality Gate.<br>" +
-        "Either 'sourceName' or 'id' must be provided. Requires the 'Administer Quality Gates' permission.")
+        "'sourceName' must be provided. Requires the 'Administer Quality Gates' permission.")
       .setPost(true)
       .setChangelog(
+        new Change("10.0", "Field 'id' in the response is deprecated"),
+        new Change("10.0", "Parameter 'id' is removed. Use 'sourceName' instead."),
         new Change("8.4", "Parameter 'id' is deprecated. Format changes from integer to string. Use 'sourceName' instead."),
         new Change("8.4", "Parameter 'sourceName' added"))
       .setSince("4.3")
       .setHandler(this);
 
-    action.createParam(PARAM_ID)
-      .setDescription("The ID of the source quality gate. This parameter is deprecated. Use 'sourceName' instead.")
-      .setRequired(false)
-      .setDeprecatedSince("8.4")
-      .setExampleValue(UUID_EXAMPLE_01);
-
     action.createParam(PARAM_SOURCE_NAME)
       .setDescription("The name of the quality gate to copy")
-      .setRequired(false)
+      .setRequired(true)
       .setMaximumLength(NAME_MAXIMUM_LENGTH)
       .setSince("8.4")
       .setExampleValue("My Quality Gate");
@@ -87,21 +80,14 @@ public class CopyAction implements QualityGatesWsAction {
 
   @Override
   public void handle(Request request, Response response) {
-    String uuid = request.param(PARAM_ID);
-    String sourceName = request.param(PARAM_SOURCE_NAME);
-    checkArgument(sourceName != null ^ uuid != null, "Either 'id' or 'sourceName' must be provided, and not both");
+    String sourceName = request.mandatoryParam(PARAM_SOURCE_NAME);
 
     String destinationName = request.mandatoryParam(PARAM_NAME);
 
     try (DbSession dbSession = dbClient.openSession(false)) {
 
       userSession.checkPermission(ADMINISTER_QUALITY_GATES);
-      QualityGateDto qualityGate;
-      if (uuid != null) {
-        qualityGate = wsSupport.getByUuid(dbSession, uuid);
-      } else {
-        qualityGate = wsSupport.getByName(dbSession, sourceName);
-      }
+      QualityGateDto qualityGate = wsSupport.getByName(dbSession, sourceName);
       QualityGateDto copy = qualityGateUpdater.copy(dbSession, qualityGate, destinationName);
       dbSession.commit();
 

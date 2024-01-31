@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -57,6 +57,7 @@ public class TestInputFileBuilder {
 
   private final int id;
   private final String relativePath;
+  private String oldRelativePath;
   private final String projectKey;
   @CheckForNull
   private Path projectBaseDir;
@@ -98,6 +99,14 @@ public class TestInputFileBuilder {
     this.projectKey = projectKey;
     setModuleBaseDir(Paths.get(projectKey));
     this.relativePath = PathUtils.sanitize(relativePath);
+    this.id = id;
+  }
+
+  public TestInputFileBuilder(String projectKey, String relativePath, String oldRelativePath, int id) {
+    this.projectKey = projectKey;
+    setModuleBaseDir(Paths.get(projectKey));
+    this.relativePath = PathUtils.sanitize(relativePath);
+    this.oldRelativePath = oldRelativePath;
     this.id = id;
   }
 
@@ -208,7 +217,7 @@ public class TestInputFileBuilder {
   }
 
   public TestInputFileBuilder initMetadata(String content) {
-    AnalysisWarnings analysisWarnings = (warning) -> {};
+    AnalysisWarnings analysisWarnings = warning -> {};
     return setMetadata(new FileMetadata(analysisWarnings).readMetadata(new StringReader(content)));
   }
 
@@ -218,10 +227,10 @@ public class TestInputFileBuilder {
       projectBaseDir = moduleBaseDir;
     }
     String projectRelativePath = projectBaseDir.relativize(absolutePath).toString();
-    DefaultIndexedFile indexedFile = new DefaultIndexedFile(absolutePath, projectKey, projectRelativePath, relativePath, type, language, id, new SensorStrategy());
+    DefaultIndexedFile indexedFile = new DefaultIndexedFile(absolutePath, projectKey, projectRelativePath, relativePath, type, language, id, new SensorStrategy(), oldRelativePath);
     DefaultInputFile inputFile = new DefaultInputFile(indexedFile,
       f -> f.setMetadata(new Metadata(lines, nonBlankLines, hash, originalLineStartOffsets, originalLineEndOffsets, lastValidOffset)),
-      contents);
+      contents, f -> {});
     inputFile.setStatus(status);
     inputFile.setCharset(charset);
     inputFile.setPublished(publish);

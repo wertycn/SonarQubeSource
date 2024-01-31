@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,55 +17,46 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { mount, shallow } from 'enzyme';
 import * as React from 'react';
+import { Route } from 'react-router-dom';
 import handleRequiredAuthorization from '../../../app/utils/handleRequiredAuthorization';
-import { mockComponent } from '../../../helpers/testMocks';
-import ProjectAdminContainer from '../ProjectAdminContainer';
+import { mockComponent } from '../../../helpers/mocks/component';
+import { renderAppRoutes } from '../../../helpers/testReactTestingUtils';
+import { byText } from '../../../helpers/testSelector';
+import { ProjectAdminContainer } from '../ProjectAdminContainer';
 
 jest.mock('../../utils/handleRequiredAuthorization', () => {
-  return { default: jest.fn() };
+  return jest.fn();
 });
 
-class ChildComponent extends React.Component {
-  render() {
-    return null;
-  }
-}
-
 it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
+  renderProjectAdminContainer();
+
+  expect(byText('children').get()).toBeInTheDocument();
 });
 
 it('should redirect for authorization if needed', () => {
-  mountRender({ component: mockComponent({ configuration: { showSettings: false } }) });
-  expect(handleRequiredAuthorization).toBeCalled();
+  jest.useFakeTimers();
+  renderProjectAdminContainer({
+    component: mockComponent({ configuration: { showSettings: false } }),
+  });
+  jest.runAllTimers();
+  expect(handleRequiredAuthorization).toHaveBeenCalled();
+  jest.useRealTimers();
 });
 
-it('should pass props to its children', () => {
-  const child = shallowRender().find(ChildComponent);
-  // No need to check all...
-  expect(child.prop('component')).toBeDefined();
-  expect(child.prop('onBranchesChange')).toBeDefined();
-});
-
-function mountRender(props: Partial<ProjectAdminContainer['props']> = {}) {
-  return mount(createComponent(props));
-}
-
-function shallowRender(props: Partial<ProjectAdminContainer['props']> = {}) {
-  return shallow(createComponent(props));
-}
-
-function createComponent(props: Partial<ProjectAdminContainer['props']> = {}) {
-  return (
-    <ProjectAdminContainer
-      branchLikes={[]}
-      component={mockComponent({ configuration: { showSettings: true } })}
-      onBranchesChange={jest.fn()}
-      onComponentChange={jest.fn()}
-      {...props}>
-      <ChildComponent />
-    </ProjectAdminContainer>
-  );
+function renderProjectAdminContainer(props: Partial<ProjectAdminContainer['props']> = {}) {
+  return renderAppRoutes('project/settings', () => (
+    <Route
+      path="project/settings"
+      element={
+        <ProjectAdminContainer
+          component={mockComponent({ configuration: { showSettings: true } })}
+          {...props}
+        />
+      }
+    >
+      <Route index element={<div>children</div>} />
+    </Route>
+  ));
 }

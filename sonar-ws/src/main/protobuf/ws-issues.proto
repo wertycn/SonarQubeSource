@@ -29,9 +29,9 @@ option optimize_for = SPEED;
 // Response of GET api/issues/search
 message SearchWsResponse {
   reserved 5;
-  optional int64 total = 1;
-  optional int64 p = 2;
-  optional int32 ps = 3;
+  optional int64 total = 1 [deprecated=true];
+  optional int64 p = 2 [deprecated=true];
+  optional int32 ps = 3 [deprecated=true];
   optional sonarqube.ws.commons.Paging paging = 4;
 
   // Total amount of effort, only when the facet "total" is enabled
@@ -109,7 +109,7 @@ message Issue {
   optional string component = 4;
   optional int64 unusedComponentId = 5;
   optional string project = 6;
-  optional string subProject = 7;
+  reserved 7; // drop subProject
   optional int32 line = 8;
   optional string hash = 31;
   optional sonarqube.ws.commons.TextRange textRange = 9;
@@ -154,8 +154,19 @@ message Issue {
   optional string pullRequest = 32;
 
   optional string externalRuleEngine = 33;
-  optional bool fromHotspot = 34;
+  reserved 34; //drop fromHotspot
   optional string scope = 35;
+
+  optional bool quickFixAvailable = 36;
+  optional string ruleDescriptionContextKey = 37;
+
+  repeated sonarqube.ws.commons.MessageFormatting messageFormattings = 38;
+
+  repeated string codeVariants = 39;
+  optional sonarqube.ws.commons.CleanCodeAttribute cleanCodeAttribute = 40;
+  optional sonarqube.ws.commons.CleanCodeAttributeCategory cleanCodeAttributeCategory = 41;
+  repeated sonarqube.ws.commons.Impact impacts = 42;
+  optional string issueStatus = 43;
 }
 
 message Transitions {
@@ -233,5 +244,69 @@ message AuthorsResponse {
   repeated string authors = 1;
 }
 
+// Response of GET api/issues/pull
+message IssuesPullQueryTimestamp {
+  required int64 queryTimestamp = 1;
+}
+
+message TextRange {
+  optional int32 startLine = 1;
+  optional int32 startLineOffset = 2;
+  optional int32 endLine = 3;
+  optional int32 endLineOffset = 4;
+  optional string hash = 5;
+}
+
+message Location {
+  optional string filePath = 1;
+  optional string message = 2;
+  optional TextRange textRange = 3;
+  repeated sonarqube.ws.commons.MessageFormatting messageFormattings = 4;
+}
+
+message IssueLite {
+  required string key = 1;
+  optional int64 creationDate = 2;
+  optional bool resolved = 3;
+  optional string ruleKey = 4;
+  optional sonarqube.ws.commons.Severity userSeverity = 5;
+  optional sonarqube.ws.commons.RuleType type = 6;
+  optional Location mainLocation = 7;
+  optional bool closed = 8;
+}
 
 
+// Response of GET api/issues/pull_taint
+message TaintVulnerabilityPullQueryTimestamp {
+  required int64 queryTimestamp = 1;
+}
+
+message TaintVulnerabilityLite {
+  required string key = 1;
+  optional int64 creationDate = 2;
+  optional bool resolved = 3;
+  optional string ruleKey = 4;
+  optional sonarqube.ws.commons.Severity severity = 5;
+  optional sonarqube.ws.commons.RuleType type = 6;
+  optional Location mainLocation = 7;
+  optional bool closed = 8;
+  repeated Flow flows = 9;
+  optional bool assignedToSubscribedUser = 10;
+  optional string ruleDescriptionContextKey = 11;
+  optional sonarqube.ws.commons.CleanCodeAttribute cleanCodeAttribute = 12;
+  optional sonarqube.ws.commons.CleanCodeAttributeCategory cleanCodeAttributeCategory = 13;
+  repeated sonarqube.ws.commons.Impact impacts = 14;
+}
+
+message Flow {
+  repeated Location locations = 1;
+  optional string description = 2;
+  optional sonarqube.ws.commons.FlowType type = 3;
+}
+
+// Response of GET api/issues/list
+message ListWsResponse {
+  optional sonarqube.ws.commons.Paging paging = 1;
+  repeated Issue issues = 2;
+  repeated Component components = 3;
+}

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import org.apache.commons.lang.builder.ReflectionToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.ActiveRule;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.SeverityUtil;
 
 import static java.util.Objects.requireNonNull;
@@ -50,6 +50,7 @@ public class ActiveRuleDto {
   private String ruleField;
   private String ruleProfileUuid;
   private String securityStandards;
+  private boolean isExternal;
 
   public ActiveRuleDto() {
     // nothing to do here
@@ -160,7 +161,16 @@ public class ActiveRuleDto {
     return this;
   }
 
-  public static ActiveRuleDto createFor(QProfileDto profile, RuleDefinitionDto ruleDto) {
+  public boolean isExternal() {
+    return this.isExternal;
+  }
+
+  public ActiveRuleDto setIsExternal(boolean isExternal) {
+    this.isExternal = isExternal;
+    return this;
+  }
+
+  public static ActiveRuleDto createFor(QProfileDto profile, RuleDto ruleDto) {
     requireNonNull(profile.getRulesProfileUuid(), "Profile is not persisted");
     requireNonNull(ruleDto.getUuid(), "Rule is not persisted");
     ActiveRuleDto dto = new ActiveRuleDto();

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,12 +26,7 @@ public class MetricsWsModule extends Module {
   protected void configureModule() {
     add(
       MetricsWs.class,
-      CreateAction.class,
-      DeleteAction.class,
-      DomainsAction.class,
       SearchAction.class,
-      UpdateAction.class,
-      UserMetricsAction.class,
       TypesAction.class);
   }
 }

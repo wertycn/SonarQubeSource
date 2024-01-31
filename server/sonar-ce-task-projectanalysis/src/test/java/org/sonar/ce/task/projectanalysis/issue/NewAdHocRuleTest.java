@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,22 +19,24 @@
  */
 package org.sonar.ce.task.projectanalysis.issue;
 
+import java.util.Map;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
+import org.sonar.api.rules.RuleType;
+import org.sonar.scanner.protocol.Constants;
 import org.sonar.scanner.protocol.output.ScannerReport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class NewAdHocRuleTest {
-  @org.junit.Rule
-  public ExpectedException exception = ExpectedException.none();
 
   @Test
   public void fail_if_engine_id_is_not_set() {
-    exception.expect(IllegalArgumentException.class);
-    exception.expectMessage("'engine id' not expected to be null for an ad hoc rule");
-
-    new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder().build());
+    assertThatThrownBy(() -> new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder().build()))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("'engine id' not expected to be null for an ad hoc rule");
   }
 
   @Test
@@ -43,13 +45,100 @@ public class NewAdHocRuleTest {
     NewAdHocRule adHocRule2 = new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder().setEngineId("eslint").setRuleId("no-cond-assign").build());
     NewAdHocRule anotherAdHocRule = new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder().setEngineId("eslint").setRuleId("another").build());
 
-    assertThat(adHocRule1).isEqualTo(adHocRule1);
-    assertThat(adHocRule1).isEqualTo(adHocRule2);
-    assertThat(adHocRule1).isNotEqualTo(null);
-    assertThat(adHocRule1).isNotEqualTo(anotherAdHocRule);
-
-    assertThat(adHocRule1.hashCode()).isEqualTo(adHocRule1.hashCode());
-    assertThat(adHocRule1.hashCode()).isEqualTo(adHocRule2.hashCode());
+    assertThat(adHocRule1)
+      .isEqualTo(adHocRule1)
+      .isEqualTo(adHocRule2)
+      .isNotNull()
+      .isNotEqualTo(anotherAdHocRule)
+      .hasSameHashCodeAs(adHocRule1)
+      .hasSameHashCodeAs(adHocRule2);
     assertThat(adHocRule1.hashCode()).isNotEqualTo(anotherAdHocRule.hashCode());
   }
+
+  @Test
+  public void constructor_whenAdhocRuleHasProvidedImpact_shouldMapTypeAndSeverityAccordingly() {
+    NewAdHocRule adHocRule = new NewAdHocRule(ScannerReport.AdHocRule.newBuilder()
+      .setEngineId("eslint").setRuleId("no-cond-assign").setName("name")
+      .addDefaultImpacts(ScannerReport.Impact.newBuilder().setSoftwareQuality(SoftwareQuality.MAINTAINABILITY.name()).setSeverity(Severity.LOW.name()).build())
+      .build());
+
+    assertThat(adHocRule.getRuleType()).isEqualTo(RuleType.CODE_SMELL);
+    assertThat(adHocRule.getSeverity()).isEqualTo(org.sonar.api.batch.rule.Severity.MINOR.name());
+  }
+
+  @Test
+  public void constructor_whenAdhocRuleHasNoProvidedImpact_shouldMapDefaultImpactAccordingly() {
+    NewAdHocRule adHocRule = new NewAdHocRule(ScannerReport.AdHocRule.newBuilder()
+      .setEngineId("eslint").setRuleId("no-cond-assign").setName("name")
+      .setType(ScannerReport.IssueType.CODE_SMELL)
+      .setSeverity(Constants.Severity.MINOR)
+      .build());
+
+    assertThat(adHocRule.getDefaultImpacts())
+      .containsExactlyEntriesOf(Map.of(SoftwareQuality.MAINTAINABILITY, Severity.LOW));
+  }
+
+  @Test
+  public void constructor_whenAdhocRuleHasBothTypeAndSeverityAndProvidedImpact_shouldKeepSeverityAndTypeAndImpacts() {
+    NewAdHocRule adHocRule = new NewAdHocRule(ScannerReport.AdHocRule.newBuilder()
+      .setEngineId("eslint").setRuleId("no-cond-assign").setName("name")
+      .setType(ScannerReport.IssueType.CODE_SMELL)
+      .setSeverity(Constants.Severity.MINOR)
+      .addDefaultImpacts(ScannerReport.Impact.newBuilder().setSoftwareQuality(SoftwareQuality.RELIABILITY.name())
+        .setSeverity(Severity.HIGH.name()).build())
+      .build());
+
+    assertThat(adHocRule.getDefaultImpacts())
+      .containsExactlyEntriesOf(Map.of(SoftwareQuality.RELIABILITY, Severity.HIGH));
+
+    assertThat(adHocRule.getRuleType()).isEqualTo(RuleType.CODE_SMELL);
+    assertThat(adHocRule.getSeverity()).isEqualTo(org.sonar.api.batch.rule.Severity.MINOR.name());
+
+  }
+
+  @Test
+  public void constructor_whenNoSeverityNorImpactsAreProvided_shouldThrowIllegalArgumentException() {
+    ScannerReport.AdHocRule scannerReport = ScannerReport.AdHocRule.newBuilder()
+      .setEngineId("eslint").setRuleId("no-cond-assign").setName("name")
+      .build();
+
+    assertThatThrownBy(() -> new NewAdHocRule(scannerReport))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("'severity' not expected to be null for an ad hoc rule, or impacts should be provided instead");
+  }
+
+  @Test
+  public void constructor_whenNoTypeNorImpactsAreProvided_shouldThrowIllegalArgumentException() {
+    ScannerReport.AdHocRule scannerReport = ScannerReport.AdHocRule.newBuilder()
+      .setSeverity(Constants.Severity.MINOR)
+      .setEngineId("eslint").setRuleId("no-cond-assign").setName("name")
+      .build();
+
+    assertThatThrownBy(() -> new NewAdHocRule(scannerReport))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("'issue type' not expected to be null for an ad hoc rule, or impacts should be provided instead");
+  }
+
+  @Test
+  public void constructor_whenRuleHotspot_shouldNotPopulateImpactsNorAttribute() {
+    NewAdHocRule adHocRule1 = new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder()
+      .setEngineId("eslint")
+      .setType(ScannerReport.IssueType.SECURITY_HOTSPOT)
+      .setSeverity(Constants.Severity.BLOCKER)
+      .setRuleId("no-cond-assign").build());
+    assertThat(adHocRule1.getDefaultImpacts()).isEmpty();
+    assertThat(adHocRule1.getCleanCodeAttribute()).isNull();
+  }
+
+  @Test
+  public void constructor_whenIssueHotspot_shouldNotPopulateImpactsNorAttribute() {
+    NewAdHocRule adHocRule1 = new NewAdHocRule(ScannerReport.ExternalIssue.newBuilder()
+      .setType(ScannerReport.IssueType.SECURITY_HOTSPOT)
+      .setSeverity(Constants.Severity.BLOCKER)
+      .setEngineId("eslint")
+      .setRuleId("no-cond-assign").build());
+    assertThat(adHocRule1.getDefaultImpacts()).isEmpty();
+    assertThat(adHocRule1.getCleanCodeAttribute()).isNull();
+  }
+
 }

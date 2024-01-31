@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,12 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { NewCodeDefinition } from './new-code-definition';
+import { QualityGateStatusCondition } from './quality-gates';
+import { Status } from './types';
+
 export interface Branch {
   analysisDate?: string;
   excludedFromPurge: boolean;
   isMain: boolean;
   name: string;
-  status?: { qualityGateStatus: T.Status };
+  status?: { qualityGateStatus: Status };
 }
 
 export interface MainBranch extends Branch {
@@ -35,7 +39,7 @@ export interface PullRequest {
   branch: string;
   key: string;
   isOrphan?: true;
-  status?: { qualityGateStatus: T.Status };
+  status?: { qualityGateStatus: Status };
   target: string;
   title: string;
   url?: string;
@@ -58,5 +62,11 @@ export interface BranchLikeTree {
 export type BranchParameters = { branch?: string } | { pullRequest?: string };
 
 export interface BranchWithNewCodePeriod extends Branch {
-  newCodePeriod?: T.NewCodePeriod;
+  newCodePeriod?: NewCodeDefinition;
+}
+
+export interface BranchStatusData {
+  conditions?: QualityGateStatusCondition[];
+  ignoredConditions?: boolean;
+  status?: Status;
 }

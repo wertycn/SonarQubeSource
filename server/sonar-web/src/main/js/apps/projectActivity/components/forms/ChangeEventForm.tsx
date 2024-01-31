@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, InputField, Modal } from 'design-system';
 import * as React from 'react';
-import ConfirmModal from 'sonar-ui-common/components/controls/ConfirmModal';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../../helpers/l10n';
+import { AnalysisEvent } from '../../../../types/project-activity';
 
 interface Props {
   changeEvent: (event: string, name: string) => Promise<void>;
-  event: T.AnalysisEvent;
+  event: AnalysisEvent;
   header: string;
   onClose: () => void;
 }
@@ -43,24 +44,43 @@ export default class ChangeEventForm extends React.PureComponent<Props, State> {
   };
 
   handleSubmit = () => {
-    return this.props.changeEvent(this.props.event.key, this.state.name);
+    this.props.changeEvent(this.props.event.key, this.state.name);
+    this.props.onClose();
   };
 
   render() {
     const { name } = this.state;
     return (
-      <ConfirmModal
-        confirmButtonText={translate('change_verb')}
-        confirmDisable={!name || name === this.props.event.name}
-        header={this.props.header}
+      <Modal
+        headerTitle={this.props.header}
         onClose={this.props.onClose}
-        onConfirm={this.handleSubmit}
-        size="small">
-        <div className="modal-field">
-          <label>{translate('name')}</label>
-          <input autoFocus={true} onChange={this.changeInput} type="text" value={name} />
-        </div>
-      </ConfirmModal>
+        body={
+          <form id="change-event-form">
+            <label htmlFor="name">{translate('name')}</label>
+            <InputField
+              id="name"
+              className="sw-my-2"
+              autoFocus
+              onChange={this.changeInput}
+              type="text"
+              value={name}
+              size="full"
+            />
+          </form>
+        }
+        primaryButton={
+          <ButtonPrimary
+            id="change-event-submit"
+            form="change-event-form"
+            type="submit"
+            disabled={!name || name === this.props.event.name}
+            onClick={this.handleSubmit}
+          >
+            {translate('change_verb')}
+          </ButtonPrimary>
+        }
+        secondaryButtonLabel={translate('cancel')}
+      />
     );
   }
 }

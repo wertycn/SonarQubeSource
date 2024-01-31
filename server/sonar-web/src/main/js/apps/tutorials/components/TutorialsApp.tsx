@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { LargeCenteredLayout, PageContentFontWrapper } from 'design-system';
 import * as React from 'react';
-import handleRequiredAuthentication from 'sonar-ui-common/helpers/handleRequiredAuthentication';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
+import withComponentContext from '../../../app/components/componentContext/withComponentContext';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
 import TutorialSelection from '../../../components/tutorials/TutorialSelection';
-import { isLoggedIn } from '../../../helpers/users';
-import { ProjectAlmBindingResponse } from '../../../types/alm-settings';
+import handleRequiredAuthentication from '../../../helpers/handleRequiredAuthentication';
+import { Component } from '../../../types/types';
+import { CurrentUser, isLoggedIn } from '../../../types/users';
 
 export interface TutorialsAppProps {
-  component: T.Component;
-  currentUser: T.CurrentUser;
-  projectBinding?: ProjectAlmBindingResponse;
+  component: Component;
+  currentUser: CurrentUser;
 }
 
 export function TutorialsApp(props: TutorialsAppProps) {
-  const { component, currentUser, projectBinding } = props;
+  const { component, currentUser } = props;
 
   if (!isLoggedIn(currentUser)) {
     handleRequiredAuthentication();
@@ -39,14 +40,12 @@ export function TutorialsApp(props: TutorialsAppProps) {
   }
 
   return (
-    <div className="page page-limited">
-      <TutorialSelection
-        component={component}
-        currentUser={currentUser}
-        projectBinding={projectBinding}
-      />
-    </div>
+    <LargeCenteredLayout className="sw-pt-8">
+      <PageContentFontWrapper>
+        <TutorialSelection component={component} currentUser={currentUser} />
+      </PageContentFontWrapper>
+    </LargeCenteredLayout>
   );
 }
 
-export default withCurrentUser(TutorialsApp);
+export default withComponentContext(withCurrentUserContext(TutorialsApp));

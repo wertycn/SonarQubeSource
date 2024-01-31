@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -41,8 +41,6 @@ import org.sonar.scanner.protocol.output.ScannerReportWriter;
 import org.sonar.scanner.scan.ProjectServerSettings;
 import org.sonar.scanner.scan.filesystem.InputComponentStore;
 
-import static java.util.stream.Collectors.toList;
-
 public class AnalysisContextReportPublisher {
 
   private static final String KEY_VALUE_FORMAT = "  - %s=%s";
@@ -71,6 +69,7 @@ public class AnalysisContextReportPublisher {
     File analysisLog = writer.getFileStructure().analysisLog();
     try (BufferedWriter fileWriter = Files.newBufferedWriter(analysisLog.toPath(), StandardCharsets.UTF_8)) {
       writePlugins(fileWriter);
+      writeBundledAnalyzers(fileWriter);
       writeGlobalSettings(fileWriter);
       writeProjectSettings(fileWriter);
       writeModulesSettings(fileWriter);
@@ -80,8 +79,15 @@ public class AnalysisContextReportPublisher {
   }
 
   private void writePlugins(BufferedWriter fileWriter) throws IOException {
-    fileWriter.write("SonarQube plugins:\n");
-    for (PluginInfo p : pluginRepo.getPluginInfos()) {
+    fileWriter.write("Plugins:\n");
+    for (PluginInfo p : pluginRepo.getExternalPluginsInfos()) {
+      fileWriter.append(String.format("  - %s %s (%s)", p.getName(), p.getVersion(), p.getKey())).append('\n');
+    }
+  }
+
+  private void writeBundledAnalyzers(BufferedWriter fileWriter) throws IOException {
+    fileWriter.write("Bundled analyzers:\n");
+    for (PluginInfo p : pluginRepo.getBundledPluginsInfos()) {
       fileWriter.append(String.format("  - %s %s (%s)", p.getName(), p.getVersion(), p.getKey())).append('\n');
     }
   }
@@ -116,7 +122,7 @@ public class AnalysisContextReportPublisher {
   }
 
   private void writeScannerProps(BufferedWriter fileWriter, Map<String, String> props) throws IOException {
-    for (Map.Entry<String, String> prop : props.entrySet().stream().sorted(Comparator.comparing(Map.Entry::getKey)).collect(toList())) {
+    for (Map.Entry<String, String> prop : props.entrySet().stream().sorted(Comparator.comparing(Map.Entry::getKey)).toList()) {
       if (isSystemProp(prop.getKey()) || isEnvVariable(prop.getKey()) || !isSqProp(prop.getKey())) {
         continue;
       }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,25 +19,31 @@
  */
 package org.sonar.ce.httpd;
 
-import fi.iki.elonen.NanoHTTPD;
 import java.io.File;
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Properties;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.HttpVersion;
+import org.apache.http.entity.StringEntity;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.process.sharedmemoryfile.DefaultProcessCommands;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.process.ProcessEntryPoint.PROPERTY_PROCESS_INDEX;
 import static org.sonar.process.ProcessEntryPoint.PROPERTY_SHARED_PATH;
 
@@ -45,8 +51,6 @@ public class CeHttpServerTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private static final RuntimeException FAILING_ACTION = new IllegalStateException("Simulating the action failed");
   private CeHttpServer underTest;
@@ -80,7 +84,6 @@ public class CeHttpServerTest {
     Response response = call(underTest.getUrl() + action);
 
     assertThat(response.code()).isEqualTo(404);
-    assertThat(response.body().string()).isEqualTo("Error 404, '" + action + "' not found.");
   }
 
   @Test
@@ -92,7 +95,7 @@ public class CeHttpServerTest {
   @Test
   public void action_is_matched_on_URL_ignoring_case() throws IOException {
     Response response = call(underTest.getUrl() + "/pOMpoM");
-    assertIsPomPomResponse(response);
+    assertThat(response.code()).isEqualTo(404);
   }
 
   @Test
@@ -108,10 +111,11 @@ public class CeHttpServerTest {
   }
 
   @Test
-  public void stop_stops_http_server() throws Exception {
+  public void stop_stops_http_server() {
     underTest.stop();
-    expectedException.expect(ConnectException.class);
-    call(underTest.getUrl());
+    
+    assertThatThrownBy(() -> call(underTest.getUrl()))
+      .isInstanceOfAny(ConnectException.class, SocketTimeoutException.class);
   }
 
   @Test
@@ -133,26 +137,28 @@ public class CeHttpServerTest {
   }
 
   private static class PomPomAction implements HttpAction {
+
     @Override
-    public void register(ActionRegistry registry) {
-      registry.register("pompom", this);
+    public String getContextPath() {
+      return "/pompom";
     }
 
     @Override
-    public NanoHTTPD.Response serve(NanoHTTPD.IHTTPSession session) {
-      return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, NanoHTTPD.MIME_PLAINTEXT, "ok");
+    public void handle(HttpRequest request, HttpResponse response) {
+      response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+      response.setEntity(new StringEntity("ok", StandardCharsets.UTF_8));
     }
   }
 
   private static class FailingAction implements HttpAction {
 
     @Override
-    public void register(ActionRegistry registry) {
-      registry.register("failing", this);
+    public String getContextPath() {
+      return "/failing";
     }
 
     @Override
-    public NanoHTTPD.Response serve(NanoHTTPD.IHTTPSession session) {
+    public void handle(HttpRequest request, HttpResponse response) {
       throw FAILING_ACTION;
     }
   }

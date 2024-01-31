@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Badge, SearchSelectDropdown } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { useIntl } from 'react-intl';
+import { OptionProps, Options, components } from 'react-select';
+import Tooltip from '../../../components/controls/Tooltip';
 import { Profile } from '../types';
 
 interface Props {
@@ -29,29 +31,62 @@ interface Props {
   withKey?: string;
 }
 
-export default class ComparisonForm extends React.PureComponent<Props> {
-  handleChange = (option: { value: string }) => {
-    this.props.onCompare(option.value);
-  };
+interface Option {
+  value: string;
+  label: string;
+  isDefault: boolean | undefined;
+}
 
-  render() {
-    const { profile, profiles, withKey } = this.props;
-    const options = profiles
-      .filter(p => p.language === profile.language && p !== profile)
-      .map(p => ({ value: p.key, label: p.name }));
+export default function ComparisonForm(props: Readonly<Props>) {
+  const { profile, profiles, withKey } = props;
+  const intl = useIntl();
 
-    return (
-      <div className="display-inline-block">
-        <label className="spacer-right">{translate('quality_profiles.compare_with')}</label>
-        <Select
-          className="input-large"
-          clearable={false}
-          onChange={this.handleChange}
-          options={options}
-          placeholder={translate('select_verb')}
-          value={withKey}
-        />
-      </div>
-    );
-  }
+  const options = profiles
+    .filter((p) => p.language === profile.language && p !== profile)
+    .map((p) => ({ value: p.key, label: p.name, isDefault: p.isDefault }));
+
+  const handleProfilesSearch = React.useCallback(
+    (query: string, cb: (options: Options<Option>) => void) => {
+      cb(options.filter((option) => option.label.toLowerCase().includes(query.toLowerCase())));
+    },
+    [options],
+  );
+
+  return (
+    <>
+      <span className="sw-mr-2">{intl.formatMessage({ id: 'quality_profiles.compare_with' })}</span>
+      <SearchSelectDropdown
+        controlPlaceholder={intl.formatMessage({ id: 'select_verb' })}
+        controlAriaLabel={intl.formatMessage({ id: 'quality_profiles.compare_with' })}
+        options={options}
+        onChange={(option: Option) => props.onCompare(option.value)}
+        defaultOptions={options}
+        loadOptions={handleProfilesSearch}
+        components={{
+          Option: OptionRenderer,
+        }}
+        autoFocus
+        controlSize="medium"
+        value={options.find((o) => o.value === withKey)}
+      />
+    </>
+  );
+}
+
+function OptionRenderer(props: Readonly<OptionProps<Option, false>>) {
+  const { isDefault, label } = props.data;
+  const intl = useIntl();
+
+  return (
+    <components.Option {...props}>
+      <span>{label}</span>
+      {isDefault && (
+        <Tooltip overlay={intl.formatMessage({ id: 'quality_profiles.list.default.help' })}>
+          <span>
+            <Badge className="sw-ml-1">{intl.formatMessage({ id: 'default' })}</Badge>
+          </span>
+        </Tooltip>
+      )}
+    </components.Option>
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,8 +38,7 @@ public class ComponentQuery {
   private final Set<String> componentUuids;
   private final Set<String> componentKeys;
   private final Long analyzedBefore;
-  private final Long anyBranchAnalyzedBefore;
-  private final Long anyBranchAnalyzedAfter;
+  private final Long allBranchesAnalyzedBefore;
   private final Date createdAfter;
   private final boolean onProvisionedOnly;
 
@@ -51,8 +50,7 @@ public class ComponentQuery {
     this.componentKeys = builder.componentKeys;
     this.isPrivate = builder.isPrivate;
     this.analyzedBefore = builder.analyzedBefore;
-    this.anyBranchAnalyzedBefore = builder.anyBranchAnalyzedBefore;
-    this.anyBranchAnalyzedAfter = builder.anyBranchAnalyzedAfter;
+    this.allBranchesAnalyzedBefore = builder.allBranchesAnalyzedBefore;
     this.createdAfter = builder.createdAfter;
     this.onProvisionedOnly = builder.onProvisionedOnly;
   }
@@ -102,13 +100,8 @@ public class ComponentQuery {
   }
 
   @CheckForNull
-  public Long getAnyBranchAnalyzedBefore() {
-    return anyBranchAnalyzedBefore;
-  }
-
-  @CheckForNull
-  public Long getAnyBranchAnalyzedAfter() {
-    return anyBranchAnalyzedAfter;
+  public Long getAllBranchesAnalyzedBefore() {
+    return allBranchesAnalyzedBefore;
   }
 
   @CheckForNull
@@ -137,8 +130,7 @@ public class ComponentQuery {
     private Set<String> componentUuids;
     private Set<String> componentKeys;
     private Long analyzedBefore;
-    private Long anyBranchAnalyzedBefore;
-    private Long anyBranchAnalyzedAfter;
+    private Long allBranchesAnalyzedBefore;
     private Date createdAfter;
     private boolean onProvisionedOnly = false;
 
@@ -180,18 +172,8 @@ public class ComponentQuery {
       return this;
     }
 
-    public Builder setAnyBranchAnalyzedBefore(@Nullable Long l) {
-      this.anyBranchAnalyzedBefore = l;
-      return this;
-    }
-
-    /**
-     * Filter on date of last analysis. On projects, all branches and pull requests are taken into
-     * account. For example the analysis of a branch is included in the filter
-     * even if the main branch has never been analyzed.
-     */
-    public Builder setAnyBranchAnalyzedAfter(@Nullable Long l) {
-      this.anyBranchAnalyzedAfter = l;
+    public Builder setAllBranchesAnalyzedBefore(@Nullable Long l) {
+      this.allBranchesAnalyzedBefore = l;
       return this;
     }
 

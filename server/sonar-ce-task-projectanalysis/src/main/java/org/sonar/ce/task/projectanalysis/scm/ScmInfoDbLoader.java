@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,36 +20,46 @@
 package org.sonar.ce.task.projectanalysis.scm;
 
 import java.util.Optional;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.ReferenceBranchComponentUuids;
 import org.sonar.ce.task.projectanalysis.filemove.MovedFilesRepository;
+import org.sonar.ce.task.projectanalysis.period.NewCodeReferenceBranchComponentUuids;
+import org.sonar.ce.task.projectanalysis.period.PeriodHolder;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.newcodeperiod.NewCodePeriodType;
 import org.sonar.db.source.FileSourceDto;
 
 public class ScmInfoDbLoader {
-  private static final Logger LOGGER = Loggers.get(ScmInfoDbLoader.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ScmInfoDbLoader.class);
 
   private final AnalysisMetadataHolder analysisMetadataHolder;
   private final MovedFilesRepository movedFilesRepository;
   private final DbClient dbClient;
   private final ReferenceBranchComponentUuids referenceBranchComponentUuid;
+  private final NewCodeReferenceBranchComponentUuids newCodeReferenceBranchComponentUuids;
+  private final PeriodHolder periodHolder;
 
-  public ScmInfoDbLoader(AnalysisMetadataHolder analysisMetadataHolder, MovedFilesRepository movedFilesRepository, DbClient dbClient,
-    ReferenceBranchComponentUuids referenceBranchComponentUuid) {
+  public ScmInfoDbLoader(AnalysisMetadataHolder analysisMetadataHolder, MovedFilesRepository movedFilesRepository,
+      DbClient dbClient,
+      ReferenceBranchComponentUuids referenceBranchComponentUuid,
+      NewCodeReferenceBranchComponentUuids newCodeReferenceBranchComponentUuids,
+      PeriodHolder periodHolder) {
     this.analysisMetadataHolder = analysisMetadataHolder;
     this.movedFilesRepository = movedFilesRepository;
     this.dbClient = dbClient;
     this.referenceBranchComponentUuid = referenceBranchComponentUuid;
+    this.newCodeReferenceBranchComponentUuids = newCodeReferenceBranchComponentUuids;
+    this.periodHolder = periodHolder;
   }
 
   public Optional<DbScmInfo> getScmInfo(Component file) {
     Optional<String> uuid = getFileUUid(file);
-    if (!uuid.isPresent()) {
+    if (uuid.isEmpty()) {
       return Optional.empty();
     }
 
@@ -64,21 +74,34 @@ public class ScmInfoDbLoader {
   }
 
   private Optional<String> getFileUUid(Component file) {
-    if (!analysisMetadataHolder.isFirstAnalysis() && !analysisMetadataHolder.isPullRequest()) {
+    if (!analysisMetadataHolder.isFirstAnalysis() && !analysisMetadataHolder.isPullRequest() && !isReferenceBranch()) {
       Optional<MovedFilesRepository.OriginalFile> originalFile = movedFilesRepository.getOriginalFile(file);
       if (originalFile.isPresent()) {
-        return originalFile.map(MovedFilesRepository.OriginalFile::getUuid);
+        return originalFile.map(MovedFilesRepository.OriginalFile::uuid);
       }
+      return Optional.of(file.getUuid());
+    }
+
+    if (isReferenceBranch()) {
+      var referencedBranchComponentUuid = newCodeReferenceBranchComponentUuids.getComponentUuid(file.getKey());
+      if (referencedBranchComponentUuid != null) {
+        return Optional.of(referencedBranchComponentUuid);
+      }
+      // no file to diff was found or missing reference branch changeset - use existing file
       return Optional.of(file.getUuid());
     }
 
     // at this point, it's the first analysis of a branch with copyFromPrevious flag true or any analysis of a PR
     Branch branch = analysisMetadataHolder.getBranch();
     if (!branch.isMain()) {
-      return Optional.ofNullable(referenceBranchComponentUuid.getComponentUuid(file.getDbKey()));
+      return Optional.ofNullable(referenceBranchComponentUuid.getComponentUuid(file.getKey()));
     }
 
     return Optional.empty();
+  }
+
+  private boolean isReferenceBranch() {
+    return periodHolder.hasPeriod() && periodHolder.getPeriod().getMode().equals(NewCodePeriodType.REFERENCE_BRANCH.name());
   }
 
 }

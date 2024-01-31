@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,41 +17,31 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { CenteredLayout, PageContentFontWrapper } from 'design-system';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
-import GlobalMessagesContainer from '../../../app/components/GlobalMessagesContainer';
+import { logOut } from '../../../api/auth';
 import RecentHistory from '../../../app/components/RecentHistory';
-import { doLogout } from '../../../store/rootActions';
+import { addGlobalErrorMessage } from '../../../helpers/globalMessages';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
 
-interface Props {
-  doLogout: () => Promise<void>;
-}
-
-export class Logout extends React.PureComponent<Props> {
-  componentDidMount() {
-    this.props.doLogout().then(
-      () => {
+export default function Logout() {
+  React.useEffect(() => {
+    logOut()
+      .then(() => {
         RecentHistory.clear();
         window.location.replace(getBaseUrl() + '/');
-      },
-      () => {}
-    );
-  }
+      })
+      .catch(() => {
+        addGlobalErrorMessage(translate('login.logout_failed'));
+      });
+  }, []);
 
-  render() {
-    return (
-      <div className="page page-limited">
-        <GlobalMessagesContainer />
-        <div className="text-center">{translate('logging_out')}</div>
-      </div>
-    );
-  }
+  return (
+    <CenteredLayout>
+      <PageContentFontWrapper className="sw-body-md sw-mt-14 sw-text-center">
+        {translate('logging_out')}
+      </PageContentFontWrapper>
+    </CenteredLayout>
+  );
 }
-
-const mapStateToProps = () => ({});
-
-const mapDispatchToProps = { doLogout };
-
-export default connect(mapStateToProps, mapDispatchToProps)(Logout as any);

@@ -25,29 +25,11 @@
     WHERE uuid = #{uuid}
   </delete>
 
-  <delete id="deleteByUuids" parameterType="String">
-    delete from
-      permission_templates
-    where
-      uuid in <foreach collection="templateUuids" open="(" close=")" item="uuid" separator=",">
-        #{uuid,jdbcType=BIGINT}
-      </foreach>
-  </delete>
-
   <delete id="deleteUserPermissionsByTemplateUuid" parameterType="string">
     delete from
       perm_templates_users
     where
       template_uuid = #{templateUuid,jdbcType=VARCHAR}
-  </delete>
-
-  <delete id="deleteUserPermissionsByTemplateUuids">
-    delete from
-      perm_templates_users
-    where
-      template_uuid in <foreach collection="templateUuids" open="(" close=")" item="templateUuid" separator=",">
-        #{templateUuid,jdbcType=BIGINT}
-      </foreach>
   </delete>
 
   <delete id="deleteUserPermission" parameterType="PermissionTemplateUser">
@@ -68,15 +50,6 @@
       perm_templates_groups
     where
       template_uuid = #{templateUuid,jdbcType=VARCHAR}
-  </delete>
-
-  <delete id="deleteGroupPermissionsByTemplateUuids">
-    delete from
-      perm_templates_groups
-    where
-      template_uuid in <foreach collection="templateUuids" open="(" close=")" item="templateUuid" separator=",">
-        #{templateUuid,jdbcType=VARCHAR}
-      </foreach>
   </delete>
 
   <delete id="deleteGroupPermission" parameterType="PermissionTemplateGroup">
@@ -116,11 +89,12 @@
     where group_uuid = #{groupUuid,jdbcType=VARCHAR}
   </delete>
 
-  <select id="selectUserLoginsByQueryAndTemplate" parameterType="map" resultType="string">
+  <select id="selectUserLoginsByQueryAndTemplate" resultType="string">
     select u.login as login
       <include refid="userLoginsByQueryAndTemplate"/>
     group by u.login, u.name
     order by case when (count(ptu.permission_reference) > 0) then 1 else 2 end asc, u.name
+    <include refid="org.sonar.db.common.Common.pagination"/>
   </select>
 
   <select id="countUserLoginsByQueryAndTemplate" parameterType="map" resultType="int">
@@ -136,7 +110,9 @@
     <where>
       u.active = ${_true}
       <if test="query.getSearchQueryToSql() != null">
-        AND lower(u.name) like #{query.searchQueryToSqlLowercase} ESCAPE '/'
+        AND (lower(u.name) like #{query.searchQueryToSqlLowercase} ESCAPE '/'
+        OR lower(u.login) like #{query.searchQueryToSqlLowercase} ESCAPE '/'
+        OR lower(u.email) like #{query.searchQueryToSqlLowercase} ESCAPE '/')
       </if>
       <if test="query.withAtLeastOnePermission()">
         and ptu.permission_reference is not null
@@ -147,11 +123,12 @@
     </where>
   </sql>
 
-  <select id="selectGroupNamesByQueryAndTemplate" parameterType="map" resultType="string">
+  <select id="selectGroupNamesByQueryAndTemplate" resultType="string">
     select groups.name, lower(groups.name), groups.group_uuid
     <include refid="groupNamesByQueryAndTemplate"/>
     group by groups.name, lower(groups.name), groups.group_uuid
     order by case when (count(groups.permission) > 0) then 1 else 2 end asc, lower(groups.name), groups.name, groups.group_uuid
+    <include refid="org.sonar.db.common.Common.pagination"/>
   </select>
 
   <select id="countGroupNamesByQueryAndTemplate" parameterType="map" resultType="int">
@@ -385,13 +362,6 @@
     <if test="groupUuid != null">
       ptg.group_uuid = #{groupUuid}
     </if>
-  </select>
-
-  <select id="selectTemplateUuidsn" resultType="String">
-    select
-      uuid
-    from
-      permission_templates
   </select>
 
   <select id="selectAllGroupPermissionTemplatesByGroupUuid" parameterType="string" resultType="PermissionTemplateGroup">

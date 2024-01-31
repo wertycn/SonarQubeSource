@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,7 +46,7 @@ public class TrackerReferenceBranchInputFactory {
   }
 
   public Input<DefaultIssue> create(Component component) {
-    String referenceBranchComponentUuid = referenceBranchComponentUuids.getComponentUuid(component.getDbKey());
+    String referenceBranchComponentUuid = referenceBranchComponentUuids.getComponentUuid(component.getKey());
     return new ReferenceLazyInput(component.getType(), referenceBranchComponentUuid);
   }
 

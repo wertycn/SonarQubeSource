@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.ExternalResource;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.formula.CounterInitializationContext;
@@ -33,8 +32,8 @@ import org.sonar.ce.task.projectanalysis.measure.Measure;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.ce.task.projectanalysis.formula.coverage.CoverageUtils.getLongMeasureValue;
-import static org.sonar.ce.task.projectanalysis.formula.coverage.CoverageUtils.getMeasureVariations;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilder;
 
 public class CoverageUtilsTest {
@@ -44,8 +43,6 @@ public class CoverageUtilsTest {
 
   @Rule
   public CounterInitializationContextRule fileAggregateContext = new CounterInitializationContextRule();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void verify_calculate_coverage() {
@@ -54,14 +51,14 @@ public class CoverageUtilsTest {
 
   @Test
   public void getLongMeasureValue_returns_0_if_measure_does_not_exist() {
-    assertThat(getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY)).isEqualTo(0L);
+    assertThat(getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY)).isZero();
   }
 
   @Test
   public void getLongMeasureValue_returns_0_if_measure_is_NO_VALUE() {
     fileAggregateContext.put(SOME_METRIC_KEY, newMeasureBuilder().createNoValue());
 
-    assertThat(getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY)).isEqualTo(0L);
+    assertThat(getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY)).isZero();
   }
 
   @Test
@@ -80,31 +77,12 @@ public class CoverageUtilsTest {
 
   @Test
   public void getLongMeasureValue_throws_ISE_if_measure_is_DOUBLE() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("value can not be converted to long because current value type is a DOUBLE");
-
-    fileAggregateContext.put(SOME_METRIC_KEY, newMeasureBuilder().create(152d, 1));
-
-    getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY);
-  }
-
-  @Test
-  public void getMeasureVariations_returns_0_in_all_MeasureVariations_if_there_is_no_measure() {
-    assertThat(getMeasureVariations(fileAggregateContext, SOME_METRIC_KEY)).isEqualTo(DEFAULT_VARIATION);
-  }
-
-  @Test
-  public void getMeasureVariations_returns_0_in_all_MeasureVariations_if_there_is_measure_has_no_variations() {
-    fileAggregateContext.put(SOME_METRIC_KEY, newMeasureBuilder().createNoValue());
-
-    assertThat(getMeasureVariations(fileAggregateContext, SOME_METRIC_KEY)).isEqualTo(DEFAULT_VARIATION);
-  }
-
-  @Test
-  public void getMeasureVariations_returns_MeasureVariations_of_measure_when_it_has_one() {
-    fileAggregateContext.put(SOME_METRIC_KEY, newMeasureBuilder().setVariation(5d).createNoValue());
-
-    assertThat(getMeasureVariations(fileAggregateContext, SOME_METRIC_KEY)).isEqualTo(5d);
+    assertThatThrownBy(() -> {
+      fileAggregateContext.put(SOME_METRIC_KEY, newMeasureBuilder().create(152d, 1));
+      getLongMeasureValue(fileAggregateContext, SOME_METRIC_KEY);
+    })
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("value can not be converted to long because current value type is a DOUBLE");
   }
 
   private static class CounterInitializationContextRule extends ExternalResource implements CounterInitializationContext {

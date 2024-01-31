@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,84 +17,88 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { get, remove, save } from 'sonar-ui-common/helpers/storage';
+import { get, remove, save } from '../../../helpers/storage';
+import { ComponentQualifier } from '../../../types/component';
 import RecentHistory, { History } from '../RecentHistory';
 
-jest.mock('sonar-ui-common/helpers/storage', () => ({
+jest.mock('../../../helpers/storage', () => ({
   get: jest.fn(),
   remove: jest.fn(),
-  save: jest.fn()
+  save: jest.fn(),
 }));
 
 beforeEach(() => {
-  (get as jest.Mock).mockClear();
-  (remove as jest.Mock).mockClear();
-  (save as jest.Mock).mockClear();
+  jest.mocked(get).mockClear();
+  jest.mocked(remove).mockClear();
+  jest.mocked(save).mockClear();
 });
 
 it('should get existing history', () => {
-  const history = [{ key: 'foo', name: 'Foo', icon: 'TRK' }];
-  (get as jest.Mock).mockReturnValueOnce(JSON.stringify(history));
+  const history = [{ key: 'foo', name: 'Foo', icon: ComponentQualifier.Project }];
+  jest.mocked(get).mockReturnValueOnce(JSON.stringify(history));
   expect(RecentHistory.get()).toEqual(history);
-  expect(get).toBeCalledWith('sonar_recent_history');
+  expect(get).toHaveBeenCalledWith('sonar_recent_history');
 });
 
 it('should get empty history', () => {
-  (get as jest.Mock).mockReturnValueOnce(null);
+  jest.mocked(get).mockReturnValueOnce(null);
   expect(RecentHistory.get()).toEqual([]);
-  expect(get).toBeCalledWith('sonar_recent_history');
+  expect(get).toHaveBeenCalledWith('sonar_recent_history');
 });
 
 it('should return [] and clear history in case of failure', () => {
-  (get as jest.Mock).mockReturnValueOnce('not a json');
+  jest.mocked(get).mockReturnValueOnce('not a json');
   expect(RecentHistory.get()).toEqual([]);
-  expect(get).toBeCalledWith('sonar_recent_history');
-  expect(remove).toBeCalledWith('sonar_recent_history');
+  expect(get).toHaveBeenCalledWith('sonar_recent_history');
+  expect(remove).toHaveBeenCalledWith('sonar_recent_history');
 });
 
 it('should save history', () => {
-  const history = [{ key: 'foo', name: 'Foo', icon: 'TRK' }];
+  const history = [{ key: 'foo', name: 'Foo', icon: ComponentQualifier.Project }];
   RecentHistory.set(history);
-  expect(save).toBeCalledWith('sonar_recent_history', JSON.stringify(history));
+  expect(save).toHaveBeenCalledWith('sonar_recent_history', JSON.stringify(history));
 });
 
 it('should clear history', () => {
   RecentHistory.clear();
-  expect(remove).toBeCalledWith('sonar_recent_history');
+  expect(remove).toHaveBeenCalledWith('sonar_recent_history');
 });
 
 it('should add item to history', () => {
-  const history = [{ key: 'foo', name: 'Foo', icon: 'TRK' }];
-  (get as jest.Mock).mockReturnValueOnce(JSON.stringify(history));
-  RecentHistory.add('bar', 'Bar', 'VW');
-  expect(save).toBeCalledWith(
+  const history = [{ key: 'foo', name: 'Foo', icon: ComponentQualifier.Project }];
+  jest.mocked(get).mockReturnValueOnce(JSON.stringify(history));
+  RecentHistory.add('bar', 'Bar', ComponentQualifier.Portfolio);
+  expect(save).toHaveBeenCalledWith(
     'sonar_recent_history',
-    JSON.stringify([{ key: 'bar', name: 'Bar', icon: 'VW' }, ...history])
+    JSON.stringify([{ key: 'bar', name: 'Bar', icon: ComponentQualifier.Portfolio }, ...history]),
   );
 });
 
 it('should keep 10 items maximum', () => {
   const history: History = [];
   for (let i = 0; i < 10; i++) {
-    history.push({ key: `key-${i}`, name: `name-${i}`, icon: 'TRK' });
+    history.push({ key: `key-${i}`, name: `name-${i}`, icon: ComponentQualifier.Project });
   }
-  (get as jest.Mock).mockReturnValueOnce(JSON.stringify(history));
-  RecentHistory.add('bar', 'Bar', 'VW');
-  expect(save).toBeCalledWith(
+  jest.mocked(get).mockReturnValueOnce(JSON.stringify(history));
+  RecentHistory.add('bar', 'Bar', ComponentQualifier.Portfolio);
+  expect(save).toHaveBeenCalledWith(
     'sonar_recent_history',
-    JSON.stringify([{ key: 'bar', name: 'Bar', icon: 'VW' }, ...history.slice(0, 9)])
+    JSON.stringify([
+      { key: 'bar', name: 'Bar', icon: ComponentQualifier.Portfolio },
+      ...history.slice(0, 9),
+    ]),
   );
 });
 
 it('should remove component from history', () => {
   const history: History = [];
   for (let i = 0; i < 10; i++) {
-    history.push({ key: `key-${i}`, name: `name-${i}`, icon: 'TRK' });
+    history.push({ key: `key-${i}`, name: `name-${i}`, icon: ComponentQualifier.Project });
   }
-  (get as jest.Mock).mockReturnValueOnce(JSON.stringify(history));
+  jest.mocked(get).mockReturnValueOnce(JSON.stringify(history));
   RecentHistory.remove('key-5');
-  expect(save).toBeCalledWith(
+  expect(save).toHaveBeenCalledWith(
     'sonar_recent_history',
-    JSON.stringify([...history.slice(0, 5), ...history.slice(6)])
+    JSON.stringify([...history.slice(0, 5), ...history.slice(6)]),
   );
 });

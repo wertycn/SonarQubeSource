@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,37 +32,41 @@ import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.joran.spi.JoranException;
 import com.google.common.collect.ImmutableList;
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
 import org.sonar.process.Props;
 import org.sonar.process.logging.LogbackHelper;
 import org.sonar.process.logging.LogbackJsonLayout;
 import org.sonar.process.logging.PatternLayoutEncoder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 import static org.sonar.process.ProcessProperties.Property.PATH_LOGS;
 
+@RunWith(DataProviderRunner.class)
 public class WebServerProcessLoggingTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private File logDir;
-  private Props props = new Props(new Properties());
-  private WebServerProcessLogging underTest = new WebServerProcessLogging();
+  private final Props props = new Props(new Properties());
+  private final WebServerProcessLogging underTest = new WebServerProcessLogging();
 
   @Before
   public void setUp() throws IOException {
@@ -130,6 +134,24 @@ public class WebServerProcessLoggingTest {
     assertThat(fileAppender.getEncoder()).isInstanceOf(PatternLayoutEncoder.class);
     PatternLayoutEncoder encoder = (PatternLayoutEncoder) fileAppender.getEncoder();
     assertThat(encoder.getPattern()).isEqualTo("%d{yyyy.MM.dd HH:mm:ss} %-5level web[%X{HTTP_REQUEST_ID}][%logger{20}] %msg%n");
+  }
+
+  @Test
+  public void log_for_cluster_changes_layout_in_file_and_console() {
+    props.set("sonar.cluster.enabled", "true");
+    props.set("sonar.cluster.node.name", "my-node");
+    LoggerContext ctx = underTest.configure(props);
+
+    Logger root = ctx.getLogger(Logger.ROOT_LOGGER_NAME);
+    FileAppender fileAppender = (FileAppender) root.getAppender("file_web");
+    PatternLayoutEncoder encoder = (PatternLayoutEncoder) fileAppender.getEncoder();
+
+    assertThat(encoder.getPattern()).isEqualTo("%d{yyyy.MM.dd HH:mm:ss} %-5level my-node web[%X{HTTP_REQUEST_ID}][%logger{20}] %msg%n");
+
+    Logger startup = ctx.getLogger("startup");
+    ConsoleAppender<ILoggingEvent> consoleAppender = (ConsoleAppender<ILoggingEvent>) startup.getAppender("CONSOLE");
+    PatternLayoutEncoder patternEncoder = (PatternLayoutEncoder) consoleAppender.getEncoder();
+    assertThat(patternEncoder.getPattern()).isEqualTo("%d{yyyy.MM.dd HH:mm:ss} %-5level my-node app[][%logger{20}] %msg%n");
   }
 
   @Test
@@ -383,50 +405,45 @@ public class WebServerProcessLoggingTest {
   public void fail_with_IAE_if_global_property_unsupported_level() {
     props.set("sonar.log.level", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure(props);
+    assertThatThrownBy(() -> underTest.configure(props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void fail_with_IAE_if_web_property_unsupported_level() {
     props.set("sonar.log.level.web", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure(props);
+    assertThatThrownBy(() -> underTest.configure(props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void fail_with_IAE_if_web_sql_property_unsupported_level() {
     props.set("sonar.log.level.web.sql", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web.sql is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure(props);
+    assertThatThrownBy(() -> underTest.configure(props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web.sql is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void fail_with_IAE_if_web_es_property_unsupported_level() {
     props.set("sonar.log.level.web.es", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web.es is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure(props);
+    assertThatThrownBy(() -> underTest.configure(props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web.es is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void fail_with_IAE_if_web_jmx_property_unsupported_level() {
     props.set("sonar.log.level.web.jmx", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web.jmx is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure(props);
+    assertThatThrownBy(() -> underTest.configure(props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web.jmx is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
@@ -503,7 +520,7 @@ public class WebServerProcessLoggingTest {
 
   @Test
   public void use_json_output() {
-    props.set("sonar.log.useJsonOutput", "true");
+    props.set("sonar.log.jsonOutput", "true");
 
     LoggerContext context = underTest.configure(props);
 
@@ -512,6 +529,59 @@ public class WebServerProcessLoggingTest {
     Encoder<ILoggingEvent> encoder = appender.getEncoder();
     assertThat(encoder).isInstanceOf(LayoutWrappingEncoder.class);
     assertThat(((LayoutWrappingEncoder) encoder).getLayout()).isInstanceOf(LogbackJsonLayout.class);
+  }
+
+  @DataProvider
+  public static Object[][] configuration() {
+    return new Object[][] {
+      {Map.of("sonar.deprecationLogs.loginEnabled", "true"), "%d{yyyy.MM.dd HH:mm:ss} %-5level web[%X{HTTP_REQUEST_ID}] %X{LOGIN} %X{ENTRYPOINT} %msg%n"},
+      {Map.of("sonar.deprecationLogs.loginEnabled", "false"), "%d{yyyy.MM.dd HH:mm:ss} %-5level web[%X{HTTP_REQUEST_ID}] %X{ENTRYPOINT} %msg%n"},
+      {Map.of(), "%d{yyyy.MM.dd HH:mm:ss} %-5level web[%X{HTTP_REQUEST_ID}] %X{ENTRYPOINT} %msg%n"},
+    };
+  }
+
+  @Test
+  @UseDataProvider("configuration")
+  public void configure_whenJsonPropFalse_shouldConfigureDeprecatedLoggerWithPatternLayout(Map<String, String> additionalProps, String expectedPattern) {
+    props.set("sonar.log.jsonOutput", "false");
+    additionalProps.forEach(props::set);
+
+    LoggerContext context = underTest.configure(props);
+
+    Logger logger = context.getLogger("SONAR_DEPRECATION");
+    assertThat(logger.isAdditive()).isFalse();
+    Appender<ILoggingEvent> appender = logger.getAppender("file_deprecation");
+    assertThat(appender).isNotNull()
+      .isInstanceOf(FileAppender.class);
+    FileAppender<ILoggingEvent> fileAppender = (FileAppender<ILoggingEvent>) appender;
+    Encoder<ILoggingEvent> encoder = fileAppender.getEncoder();
+    assertThat(encoder).isInstanceOf(PatternLayoutEncoder.class);
+    PatternLayoutEncoder patternLayoutEncoder = (PatternLayoutEncoder) encoder;
+    assertThat(patternLayoutEncoder.getPattern()).isEqualTo(expectedPattern);
+  }
+
+  @Test
+  public void configure_whenJsonPropTrue_shouldConfigureDeprecatedLoggerWithJsonLayout() {
+    props.set("sonar.log.jsonOutput", "true");
+
+    LoggerContext context = underTest.configure(props);
+
+    Logger logger = context.getLogger("SONAR_DEPRECATION");
+    assertThat(logger.isAdditive()).isFalse();
+    Appender<ILoggingEvent> appender = logger.getAppender("file_deprecation");
+    assertThat(appender).isNotNull()
+      .isInstanceOf(FileAppender.class);
+    FileAppender<ILoggingEvent> fileAppender = (FileAppender<ILoggingEvent>) appender;
+    assertThat(fileAppender.getEncoder()).isInstanceOf(LayoutWrappingEncoder.class);
+  }
+
+  @Test
+  public void configure_shouldConfigureDeprecatedLoggerWithConsoleAppender() {
+    LoggerContext ctx = underTest.configure(props);
+
+    Logger root = ctx.getLogger("SONAR_DEPRECATION");
+    Appender<ILoggingEvent> appender = root.getAppender("CONSOLE");
+    assertThat(appender).isNotNull();
   }
 
   private void verifyRootLogLevel(LoggerContext ctx, Level expected) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,7 @@
  */
 import {
   getDuplicationBlocksForIndex,
-  isDuplicationBlockInRemovedComponent
+  isDuplicationBlockInRemovedComponent,
 } from '../duplications';
 
 describe('getDuplicationBlocksForIndex', () => {
@@ -36,14 +36,14 @@ describe('isDuplicationBlockInRemovedComponent', () => {
     expect(
       isDuplicationBlockInRemovedComponent([
         { _ref: '0', from: 2, size: 2 },
-        { _ref: '0', from: 3, size: 1 }
-      ])
+        { _ref: '0', from: 3, size: 1 },
+      ]),
     ).toBe(false);
     expect(
       isDuplicationBlockInRemovedComponent([
         { _ref: undefined, from: 2, size: 2 },
-        { _ref: '0', from: 3, size: 1 }
-      ])
+        { _ref: '0', from: 3, size: 1 },
+      ]),
     ).toBe(true);
   });
 });

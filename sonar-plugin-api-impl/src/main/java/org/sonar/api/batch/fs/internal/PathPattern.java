@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,18 +20,19 @@
 package org.sonar.api.batch.fs.internal;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import javax.annotation.concurrent.ThreadSafe;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.utils.PathUtils;
 import org.sonar.api.utils.WildcardPattern;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @ThreadSafe
 public abstract class PathPattern {
 
-  private static final Logger LOG = Loggers.get(PathPattern.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PathPattern.class);
 
   /**
    * @deprecated since 6.6
@@ -58,11 +59,7 @@ public abstract class PathPattern {
   }
 
   public static PathPattern[] create(String[] s) {
-    PathPattern[] result = new PathPattern[s.length];
-    for (int i = 0; i < s.length; i++) {
-      result[i] = create(s[i]);
-    }
-    return result;
+    return Arrays.stream(s).map(PathPattern::create).toArray(PathPattern[]::new);
   }
 
   /**

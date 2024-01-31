@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import org.sonar.api.utils.System2;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.dialect.Dialect;
 
@@ -43,18 +42,21 @@ public class LiveMeasureDao implements Dao {
     this.system2 = system2;
   }
 
-  public List<LiveMeasureDto> selectByComponentUuidsAndMetricUuids(DbSession dbSession, Collection<String> largeComponentUuids, Collection<String> metricUuis) {
-    if (largeComponentUuids.isEmpty() || metricUuis.isEmpty()) {
+  public List<LiveMeasureDto> selectByComponentUuidsAndMetricUuids(DbSession dbSession, Collection<String> largeComponentUuids, Collection<String> metricUuids) {
+    if (largeComponentUuids.isEmpty() || metricUuids.isEmpty()) {
       return Collections.emptyList();
     }
 
     return executeLargeInputs(
       largeComponentUuids,
-      componentUuids -> mapper(dbSession).selectByComponentUuidsAndMetricUuids(componentUuids, metricUuis));
+      componentUuids -> mapper(dbSession).selectByComponentUuidsAndMetricUuids(componentUuids, metricUuids));
   }
 
-  public void scrollSelectByComponentUuidAndMetricKeys(DbSession dbSession, String componentUuid, Collection<String> metricKeys,
-    ResultHandler<LiveMeasureDto> handler) {
+  public List<ProjectMainBranchLiveMeasureDto> selectForProjectMainBranchesByMetricUuids(DbSession dbSession, Collection<String> metricUuids) {
+    return mapper(dbSession).selectForProjectMainBranchesByMetricUuids(metricUuids);
+  }
+
+  public void scrollSelectByComponentUuidAndMetricKeys(DbSession dbSession, String componentUuid, Collection<String> metricKeys, ResultHandler<LiveMeasureDto> handler) {
     if (metricKeys.isEmpty()) {
       return;
     }
@@ -92,16 +94,17 @@ public class LiveMeasureDao implements Dao {
     mapper(dbSession).selectTreeByQuery(query, baseComponent.uuid(), query.getUuidPath(baseComponent), resultHandler);
   }
 
-  /**
-   * Example:
-   * If Main Branch = 0 LOCs (provisioned but never analyzed) and the "largest branch" is 120 LOCs, I'm expecting to consider the value 120.
-   * If Main Branch = 100 LOCs and the "largest branch" is 120 LOCs, I'm expecting to consider the value 120.
-   * If Main Branch = 100 LOCs and the "largest branch" is 80 LOCs, I'm expecting to consider the value 100.
-   */
-  public long sumNclocOfBiggestBranch(DbSession dbSession, SumNclocDbQuery dbQuery) {
-    Long ncloc = mapper(dbSession).sumNclocOfBiggestBranch(
-      NCLOC_KEY, BranchType.BRANCH, dbQuery.getOnlyPrivateProjects(), dbQuery.getProjectUuidToExclude());
+  public long sumNclocOfBiggestBranchForProject(DbSession dbSession, String projectUuid){
+    Long ncloc = mapper(dbSession).sumNclocOfBiggestBranchForProject(projectUuid, NCLOC_KEY);
     return ncloc == null ? 0L : ncloc;
+  }
+
+  public List<LargestBranchNclocDto> getLargestBranchNclocPerProject(DbSession dbSession, String nclocMetricUuid) {
+    return mapper(dbSession).getLargestBranchNclocPerProject(nclocMetricUuid);
+  }
+
+  public List<ProjectLocDistributionDto> selectLargestBranchesLocDistribution(DbSession session, String nclocUuid, String nclocDistributionUuid) {
+    return mapper(session).selectLargestBranchesLocDistribution(nclocUuid, nclocDistributionUuid);
   }
 
   public long countProjectsHavingMeasure(DbSession dbSession, String metric) {
@@ -110,10 +113,6 @@ public class LiveMeasureDao implements Dao {
 
   public void insert(DbSession dbSession, LiveMeasureDto dto) {
     mapper(dbSession).insert(dto, Uuids.create(), system2.now());
-  }
-
-  public void update(DbSession dbSession, LiveMeasureDto dto) {
-    mapper(dbSession).update(dto, system2.now());
   }
 
   public void insertOrUpdate(DbSession dbSession, LiveMeasureDto dto) {

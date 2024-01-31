@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -54,9 +54,14 @@ public class RuleQuery {
   private String ruleKey;
   private boolean includeExternal;
   private Collection<String> owaspTop10;
+  private Collection<String> owaspTop10For2021;
   private Collection<String> sansTop25;
   private Collection<String> cwe;
   private Collection<String> sonarsourceSecurity;
+  private Collection<String> impactSeverities;
+  private Collection<String> impactSoftwareQualities;
+  private Collection<String> cleanCodeAttributesCategories;
+
 
   @CheckForNull
   public QProfileDto getQProfile() {
@@ -308,6 +313,16 @@ public class RuleQuery {
   }
 
   @CheckForNull
+  public Collection<String> getOwaspTop10For2021() {
+    return owaspTop10For2021;
+  }
+
+  public RuleQuery setOwaspTop10For2021(@Nullable Collection<String> owaspTop10For2021) {
+    this.owaspTop10For2021 = owaspTop10For2021;
+    return this;
+  }
+
+  @CheckForNull
   public Collection<String> getSansTop25() {
     return sansTop25;
   }
@@ -326,4 +341,32 @@ public class RuleQuery {
     this.sonarsourceSecurity = sonarsourceSecurity;
     return this;
   }
+
+  public Collection<String> getImpactSeverities() {
+    return impactSeverities;
+  }
+
+  public RuleQuery setImpactSeverities(@Nullable Collection<String> impactSeverities) {
+    this.impactSeverities = impactSeverities;
+    return this;
+  }
+
+  public Collection<String> getImpactSoftwareQualities() {
+    return impactSoftwareQualities;
+  }
+
+  public RuleQuery setImpactSoftwareQualities(@Nullable Collection<String> impactSoftwareQualities) {
+    this.impactSoftwareQualities = impactSoftwareQualities;
+    return this;
+  }
+
+  public Collection<String> getCleanCodeAttributesCategories() {
+    return cleanCodeAttributesCategories;
+  }
+
+  public RuleQuery setCleanCodeAttributesCategories(@Nullable Collection<String> cleanCodeAttributesCategories) {
+    this.cleanCodeAttributesCategories = cleanCodeAttributesCategories;
+    return this;
+  }
+
 }

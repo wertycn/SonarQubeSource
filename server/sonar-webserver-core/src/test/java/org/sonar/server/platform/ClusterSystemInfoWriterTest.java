@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import java.io.StringWriter;
 import java.util.Collections;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo.Attribute;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo.Section;
@@ -34,8 +33,6 @@ import org.sonar.server.platform.monitoring.cluster.AppNodesInfoLoader;
 import org.sonar.server.platform.monitoring.cluster.GlobalInfoLoader;
 import org.sonar.server.platform.monitoring.cluster.NodeInfo;
 import org.sonar.server.platform.monitoring.cluster.SearchNodesInfoLoader;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -46,17 +43,15 @@ public class ClusterSystemInfoWriterTest {
   private final AppNodesInfoLoader appNodesInfoLoader = mock(AppNodesInfoLoader.class);
   private final SearchNodesInfoLoader searchNodesInfoLoader = mock(SearchNodesInfoLoader.class);
   private final HealthChecker healthChecker = mock(HealthChecker.class);
-  private final TelemetryDataLoader telemetry = mock(TelemetryDataLoader.class, Mockito.RETURNS_MOCKS);
-  private final TelemetryDataJsonWriter dataJsonWriter = new TelemetryDataJsonWriter();
   private final ClusterSystemInfoWriter underTest = new ClusterSystemInfoWriter(globalInfoLoader, appNodesInfoLoader,
-    searchNodesInfoLoader, healthChecker, telemetry, dataJsonWriter);
+    searchNodesInfoLoader, healthChecker);
 
   @Before
   public void before() throws InterruptedException {
     when(globalInfoLoader.load()).thenReturn(Collections.singletonList(createSection("globalInfo")));
     when(appNodesInfoLoader.load()).thenReturn(Collections.singletonList(createNodeInfo("appNodes")));
     when(searchNodesInfoLoader.load()).thenReturn(Collections.singletonList(createNodeInfo("searchNodes")));
-    Health health = Health.newHealthCheckBuilder().setStatus(Health.Status.GREEN).build();
+    Health health = Health.builder().setStatus(Health.Status.GREEN).build();
     when(healthChecker.checkCluster()).thenReturn(new ClusterHealth(health, Collections.emptySet()));
   }
 
@@ -71,11 +66,7 @@ public class ClusterSystemInfoWriterTest {
     assertThat(writer).hasToString("{\"Health\":\"GREEN\","
       + "\"Health Causes\":[],\"\":{\"name\":\"globalInfo\"},"
       + "\"Application Nodes\":[{\"Name\":\"appNodes\",\"\":{\"name\":\"appNodes\"}}],"
-      + "\"Search Nodes\":[{\"Name\":\"searchNodes\",\"\":{\"name\":\"searchNodes\"}}],"
-      + "\"Statistics\":{\"id\":\"\",\"version\":\"\",\"database\":{\"name\":\"\",\"version\":\"\"},\"plugins\":[],"
-      + "\"userCount\":0,\"projectCount\":0,\"usingBranches\":false,\"ncloc\":0,\"projectCountByLanguage\":[],"
-      + "\"nclocByLanguage\":[],\"almIntegrationCount\":[],\"externalAuthProviders\":[],\"projectCountByScm\":[],\"projectCountByCI\":[],\"sonarlintWeeklyUsers\":0,"
-      + "\"installationDate\":0,\"installationVersion\":\"\",\"docker\":false}}");
+      + "\"Search Nodes\":[{\"Name\":\"searchNodes\",\"\":{\"name\":\"searchNodes\"}}]}");
   }
 
   private static NodeInfo createNodeInfo(String name) {

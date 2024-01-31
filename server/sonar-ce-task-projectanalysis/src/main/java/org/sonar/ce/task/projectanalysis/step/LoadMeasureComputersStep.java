@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,17 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import org.sonar.api.ce.measure.MeasureComputer;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
@@ -40,6 +39,7 @@ import org.sonar.ce.task.projectanalysis.api.measurecomputer.MeasureComputerDefi
 import org.sonar.ce.task.projectanalysis.api.measurecomputer.MeasureComputerWrapper;
 import org.sonar.ce.task.projectanalysis.measure.MutableMeasureComputersHolder;
 import org.sonar.ce.task.step.ComputationStep;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.FluentIterable.from;
@@ -47,45 +47,48 @@ import static org.sonar.api.ce.measure.MeasureComputer.MeasureComputerDefinition
 
 public class LoadMeasureComputersStep implements ComputationStep {
 
-  private static final Set<String> CORE_METRIC_KEYS = from(CoreMetrics.getMetrics()).transform(MetricToKey.INSTANCE).toSet();
-  private Set<String> pluginMetricKeys;
-
+  private static final Set<String> CORE_METRIC_KEYS = CoreMetrics.getMetrics().stream().map(Metric::getKey).collect(Collectors.toSet());
+  private final Set<String> pluginMetricKeys;
   private final MutableMeasureComputersHolder measureComputersHolder;
   private final MeasureComputer[] measureComputers;
 
+  @Autowired(required = false)
   public LoadMeasureComputersStep(MutableMeasureComputersHolder measureComputersHolder, Metrics[] metricsRepositories, MeasureComputer[] measureComputers) {
     this.measureComputersHolder = measureComputersHolder;
     this.measureComputers = measureComputers;
-    this.pluginMetricKeys = from(Arrays.asList(metricsRepositories))
-      .transformAndConcat(MetricsToMetricList.INSTANCE)
-      .transform(MetricToKey.INSTANCE)
-      .toSet();
+    this.pluginMetricKeys = Arrays.stream(metricsRepositories)
+      .flatMap(m -> m.getMetrics().stream())
+      .map(Metric::getKey)
+      .collect(Collectors.toSet());
   }
 
   /**
-   * Constructor override used by Pico to instantiate the class when no plugin is defining metrics
+   * Constructor override used by the ioc container to instantiate the class when no plugin is defining metrics
    */
+  @Autowired(required = false)
   public LoadMeasureComputersStep(MutableMeasureComputersHolder measureComputersHolder, MeasureComputer[] measureComputers) {
     this(measureComputersHolder, new Metrics[] {}, measureComputers);
   }
 
   /**
-   * Constructor override used by Pico to instantiate the class when no plugin is defining measure computers
+   * Constructor override used by the ioc container to instantiate the class when no plugin is defining measure computers
    */
+  @Autowired(required = false)
   public LoadMeasureComputersStep(MutableMeasureComputersHolder measureComputersHolder, Metrics[] metricsRepositories) {
     this(measureComputersHolder, metricsRepositories, new MeasureComputer[] {});
   }
 
   /**
-   * Constructor override used by Pico to instantiate the class when no plugin is defining metrics neither measure computers
+   * Constructor override used by the ioc container to instantiate the class when no plugin is defining metrics neither measure computers
    */
+  @Autowired(required = false)
   public LoadMeasureComputersStep(MutableMeasureComputersHolder measureComputersHolder) {
     this(measureComputersHolder, new Metrics[] {}, new MeasureComputer[] {});
   }
 
   @Override
-  public void execute(ComputationStep.Context context) {
-    List<MeasureComputerWrapper> wrappers = from(Arrays.asList(measureComputers)).transform(ToMeasureWrapper.INSTANCE).toList();
+  public void execute(Context context) {
+    List<MeasureComputerWrapper> wrappers = Arrays.stream(measureComputers).map(ToMeasureWrapper.INSTANCE).toList();
     validateMetrics(wrappers);
     measureComputersHolder.setMeasureComputers(sortComputers(wrappers));
   }
@@ -123,18 +126,24 @@ public class LoadMeasureComputersStep implements ComputationStep {
   }
 
   private void validateMetrics(List<MeasureComputerWrapper> wrappers) {
-    from(wrappers).transformAndConcat(ToInputMetrics.INSTANCE).filter(new ValidateInputMetric()).size();
-    from(wrappers).transformAndConcat(ToOutputMetrics.INSTANCE).filter(new ValidateOutputMetric()).size();
-    from(wrappers).filter(new ValidateUniqueOutputMetric()).size();
+    wrappers.stream().flatMap(s -> ToInputMetrics.INSTANCE.apply(s).stream()).forEach(this::validateInputMetric);
+    wrappers.stream().flatMap(s -> ToOutputMetrics.INSTANCE.apply(s).stream()).forEach(this::validateOutputMetric);
+    ValidateUniqueOutputMetric validateUniqueOutputMetric = new ValidateUniqueOutputMetric();
+    wrappers.forEach(validateUniqueOutputMetric::validate);
   }
 
-  private static Iterable<MeasureComputerWrapper> getDependencies(MeasureComputerWrapper measureComputer, ToComputerByKey toComputerByOutputMetricKey) {
+  private static Collection<MeasureComputerWrapper> getDependencies(MeasureComputerWrapper measureComputer, ToComputerByKey toComputerByOutputMetricKey) {
     // Remove null computer because a computer can depend on a metric that is only generated by a sensor or on a core metrics
-    return from(measureComputer.getDefinition().getInputMetrics()).transform(toComputerByOutputMetricKey).filter(Predicates.notNull());
+    return measureComputer.getDefinition().getInputMetrics().stream()
+      .map(toComputerByOutputMetricKey)
+      .filter(Objects::nonNull)
+      .toList();
   }
 
-  private static Iterable<MeasureComputerWrapper> getDependents(MeasureComputerWrapper measureComputer, ToComputerByKey toComputerByInputMetricKey) {
-    return from(measureComputer.getDefinition().getInputMetrics()).transform(toComputerByInputMetricKey);
+  private static Collection<MeasureComputerWrapper> getDependents(MeasureComputerWrapper measureComputer, ToComputerByKey toComputerByInputMetricKey) {
+    return measureComputer.getDefinition().getInputMetrics().stream()
+      .map(toComputerByInputMetricKey)
+      .toList();
   }
 
   private static class ToComputerByKey implements Function<String, MeasureComputerWrapper> {
@@ -147,25 +156,6 @@ public class LoadMeasureComputersStep implements ComputationStep {
     @Override
     public MeasureComputerWrapper apply(@Nonnull String metricKey) {
       return computersByMetric.get(metricKey);
-    }
-  }
-
-  private enum MetricToKey implements Function<Metric, String> {
-    INSTANCE;
-
-    @Nullable
-    @Override
-    public String apply(@Nonnull Metric input) {
-      return input.key();
-    }
-  }
-
-  private enum MetricsToMetricList implements Function<Metrics, List<Metric>> {
-    INSTANCE;
-
-    @Override
-    public List<Metric> apply(@Nonnull Metrics input) {
-      return input.getMetrics();
     }
   }
 
@@ -201,13 +191,9 @@ public class LoadMeasureComputersStep implements ComputationStep {
     }
   }
 
-  private class ValidateInputMetric implements Predicate<String> {
-    @Override
-    public boolean apply(@Nonnull String metric) {
-      checkState(pluginMetricKeys.contains(metric) || CORE_METRIC_KEYS.contains(metric),
-        "Metric '%s' cannot be used as an input metric as it's not a core metric and no plugin declare this metric", metric);
-      return true;
-    }
+  private void validateInputMetric(String metric) {
+    checkState(pluginMetricKeys.contains(metric) || CORE_METRIC_KEYS.contains(metric),
+      "Metric '%s' cannot be used as an input metric as it's not a core metric and no plugin declare this metric", metric);
   }
 
   private enum ToOutputMetrics implements Function<MeasureComputerWrapper, Collection<String>> {
@@ -219,20 +205,15 @@ public class LoadMeasureComputersStep implements ComputationStep {
     }
   }
 
-  private class ValidateOutputMetric implements Predicate<String> {
-    @Override
-    public boolean apply(@Nonnull String metric) {
-      checkState(!CORE_METRIC_KEYS.contains(metric), "Metric '%s' cannot be used as an output metric because it's a core metric", metric);
-      checkState(pluginMetricKeys.contains(metric), "Metric '%s' cannot be used as an output metric because no plugins declare this metric", metric);
-      return true;
-    }
+  private void validateOutputMetric(String metric) {
+    checkState(!CORE_METRIC_KEYS.contains(metric), "Metric '%s' cannot be used as an output metric because it's a core metric", metric);
+    checkState(pluginMetricKeys.contains(metric), "Metric '%s' cannot be used as an output metric because no plugins declare this metric", metric);
   }
 
-  private static class ValidateUniqueOutputMetric implements Predicate<MeasureComputerWrapper> {
-    private Set<String> allOutputMetrics = new HashSet<>();
+  private static class ValidateUniqueOutputMetric {
+    private final Set<String> allOutputMetrics = new HashSet<>();
 
-    @Override
-    public boolean apply(@Nonnull MeasureComputerWrapper wrapper) {
+    public boolean validate(@Nonnull MeasureComputerWrapper wrapper) {
       for (String outputMetric : wrapper.getDefinition().getOutputMetrics()) {
         checkState(!allOutputMetrics.contains(outputMetric),
           "Output metric '%s' is already defined by another measure computer '%s'", outputMetric, wrapper.getComputer());

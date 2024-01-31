@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,29 +23,27 @@ import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Optional;
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Answers;
+import org.slf4j.event.Level;
 import org.sonar.api.CoreProperties;
-import org.sonar.api.batch.AnalysisMode;
 import org.sonar.api.batch.scm.ScmProvider;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.core.config.ScannerProperties;
 import org.sonar.scanner.fs.InputModuleHierarchy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 import static org.sonar.scanner.scm.ScmConfiguration.MESSAGE_SCM_EXCLUSIONS_IS_DISABLED_BY_CONFIGURATION;
@@ -55,7 +53,6 @@ import static org.sonar.scanner.scm.ScmConfiguration.MESSAGE_SCM_STEP_IS_DISABLE
 public class ScmConfigurationTest {
 
   private final InputModuleHierarchy inputModuleHierarchy = mock(InputModuleHierarchy.class, withSettings().defaultAnswer(Answers.RETURNS_MOCKS));
-  private final AnalysisMode analysisMode = mock(AnalysisMode.class);
   private final AnalysisWarnings analysisWarnings = mock(AnalysisWarnings.class);
   private final Configuration settings = mock(Configuration.class);
 
@@ -67,14 +64,10 @@ public class ScmConfigurationTest {
   @Rule
   public LogTester logTester = new LogTester();
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
-
   public ScmConfigurationTest() {
-    when(analysisMode.isIssues()).thenReturn(false);
     when(scmProvider.key()).thenReturn(scmProviderKey);
 
-    underTest = new ScmConfiguration(inputModuleHierarchy, analysisMode, settings, analysisWarnings, scmProvider);
+    underTest = new ScmConfiguration(inputModuleHierarchy, settings, analysisWarnings, scmProvider);
   }
 
   @Test
@@ -84,7 +77,14 @@ public class ScmConfigurationTest {
     underTest.start();
 
     assertThat(underTest.provider()).isNotNull();
-    verifyZeroInteractions(analysisWarnings);
+    verifyNoInteractions(analysisWarnings);
+  }
+
+  @Test
+  public void no_provider_if_no_provider_is_available() {
+    ScmConfiguration underTest = new ScmConfiguration(inputModuleHierarchy, settings, analysisWarnings);
+    assertThat(underTest.provider()).isNull();
+    verifyNoInteractions(analysisWarnings);
   }
 
   @Test
@@ -97,6 +97,7 @@ public class ScmConfigurationTest {
 
   @Test
   public void log_when_disabled() {
+    logTester.setLevel(Level.DEBUG);
     when(settings.getBoolean(CoreProperties.SCM_DISABLED_KEY)).thenReturn(Optional.of(true));
 
     underTest.start();
@@ -135,51 +136,27 @@ public class ScmConfigurationTest {
   }
 
   @Test
-  public void return_early_from_start_in_issues_mode() {
-    // return early = doesn't reach the logging when disabled
-    when(settings.getBoolean(CoreProperties.SCM_DISABLED_KEY)).thenReturn(Optional.of(true));
-    when(analysisMode.isIssues()).thenReturn(true);
-
-    underTest.start();
-
-    assertThat(logTester.logs()).isEmpty();
-  }
-
-  @Test
   public void fail_when_multiple_scm_providers_claim_support() {
     when(scmProvider.supports(any())).thenReturn(true);
     when(scmProvider.key()).thenReturn("key1", "key2");
 
     ScmProvider[] providers = {scmProvider, scmProvider};
-    ScmConfiguration underTest = new ScmConfiguration(inputModuleHierarchy, analysisMode, settings, analysisWarnings, providers);
+    ScmConfiguration underTest = new ScmConfiguration(inputModuleHierarchy, settings, analysisWarnings, providers);
 
-    thrown.expect(MessageException.class);
-    thrown.expectMessage(
-      new BaseMatcher<String>() {
-        @Override
-        public void describeTo(Description description) {
-
-        }
-
-        @Override
-        public boolean matches(Object item) {
-          return ((String) item).matches("SCM provider autodetection failed. "
-            + "Both .* and .* claim to support this project. "
-            + "Please use \"sonar.scm.provider\" to define SCM of your project.");
-        }
-      });
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(MessageException.class)
+      .hasMessageContaining("SCM provider autodetection failed. "
+        + "Both key2 and key2 claim to support this project. "
+        + "Please use \"sonar.scm.provider\" to define SCM of your project.");
   }
 
   @Test
   public void fail_when_considerOldScmUrl_finds_invalid_provider_in_link() {
     when(settings.get(ScannerProperties.LINKS_SOURCES_DEV)).thenReturn(Optional.of("scm:invalid"));
 
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("no SCM provider found for this key");
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("no SCM provider found for this key");
   }
 
   @Test

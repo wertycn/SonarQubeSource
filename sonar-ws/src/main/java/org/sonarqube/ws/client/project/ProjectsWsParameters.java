@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,15 +26,14 @@ public class ProjectsWsParameters {
   public static final String CONTROLLER = "api/projects";
 
   public static final String ACTION_CREATE = "create";
-  public static final String ACTION_INDEX = "index";
   public static final String ACTION_SEARCH = "search";
   public static final String ACTION_UPDATE_KEY = "update_key";
-  public static final String ACTION_BULK_UPDATE_KEY = "bulk_update_key";
   public static final String ACTION_UPDATE_VISIBILITY = "update_visibility";
 
   public static final String PARAM_PROJECT = "project";
   public static final String PARAM_PROJECT_ID = "projectId";
   public static final String PARAM_NAME = "name";
+  public static final String PARAM_MAIN_BRANCH = "mainBranch";
   public static final String PARAM_BRANCH = "branch";
   public static final String PARAM_QUALIFIERS = "qualifiers";
   public static final String PARAM_FROM = "from";
@@ -47,10 +46,13 @@ public class ProjectsWsParameters {
   public static final String PARAM_PROJECTS = "projects";
   public static final String PARAM_ALM_ID = "almId";
   public static final String PARAM_ALM_REPOSITORY_ID = "almRepoId";
+  public static final String PARAM_NEW_CODE_DEFINITION_VALUE = "newCodeDefinitionValue";
+  public static final String PARAM_NEW_CODE_DEFINITION_TYPE = "newCodeDefinitionType";
 
   public static final String FILTER_LANGUAGES = "languages";
   public static final String FILTER_TAGS = "tags";
   public static final String FILTER_QUALIFIER = "qualifier";
+
 
   private ProjectsWsParameters() {
     // static utils only

@@ -1,7 +1,6 @@
 {
   "qualitygates": [
     {
-      "id": "AU-Tpxb--iU5OvuD2FLy",
       "name": "Sonar way",
       "isDefault": true,
       "isBuiltIn": true,
@@ -11,11 +10,12 @@
         "copy": true,
         "associateProjects": false,
         "delete": false,
-        "manageConditions": false
-      }
+        "manageConditions": false,
+        "delegate": false
+      },
+      "caycStatus": "compliant"
     },
     {
-      "id": "AU-Tpxb--iU5OvuD2FLz",
       "name": "Sonar way - Without Coverage",
       "isDefault": false,
       "isBuiltIn": false,
@@ -25,11 +25,12 @@
         "copy": true,
         "associateProjects": true,
         "delete": true,
-        "manageConditions": true
-      }
+        "manageConditions": true,
+        "delegate": true
+      },
+      "caycStatus": "non-compliant"
     }
   ],
-  "default": 8,
   "actions": {
     "create": true
   }

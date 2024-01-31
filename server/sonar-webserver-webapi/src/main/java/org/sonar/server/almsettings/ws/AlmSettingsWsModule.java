@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,7 +44,10 @@ public class AlmSettingsWsModule extends Module {
       UpdateGitlabAction.class,
       //Bitbucket alm settings
       CreateBitBucketAction.class,
-      UpdateBitbucketAction.class
+      UpdateBitbucketAction.class,
+      //BitbucketCloud alm settings
+      CreateBitbucketCloudAction.class,
+      UpdateBitbucketCloudAction.class
     );
   }
 }

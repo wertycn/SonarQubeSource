@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,6 @@ import org.apache.ibatis.exceptions.PersistenceException;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.Property;
 import org.sonar.api.config.PropertyDefinitions;
@@ -53,8 +52,6 @@ public class ThreadLocalSettingsTest {
 
   private static final String A_KEY = "a_key";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
 
@@ -124,7 +121,7 @@ public class ThreadLocalSettingsTest {
     underTest = create(system, ImmutableMap.of("foo", "from_system"));
 
     assertThat(underTest.get("foo")).hasValue("from_system");
-    assertThat(underTest.getProperties().get("foo")).isEqualTo("from_system");
+    assertThat(underTest.getProperties()).containsEntry("foo", "from_system");
   }
 
   @Test

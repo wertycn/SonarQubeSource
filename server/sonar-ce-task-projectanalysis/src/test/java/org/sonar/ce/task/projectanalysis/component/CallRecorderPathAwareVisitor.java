@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,12 @@
  */
 package org.sonar.ce.task.projectanalysis.component;
 
-import com.google.common.base.Function;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
-import javax.annotation.Nonnull;
+import java.util.stream.StreamSupport;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.collect.FluentIterable.from;
 
 class CallRecorderPathAwareVisitor extends PathAwareVisitorAdapter<Integer> {
   final List<PathAwareCallRecord> callsRecords = new ArrayList<>();
@@ -35,7 +33,7 @@ class CallRecorderPathAwareVisitor extends PathAwareVisitorAdapter<Integer> {
     super(maxDepth, order, new SimpleStackElementFactory<Integer>() {
       @Override
       public Integer createForAny(Component component) {
-        return component.getType().isReportType() ? component.getReportAttributes().getRef() : Integer.valueOf(component.getDbKey());
+        return component.getType().isReportType() ? component.getReportAttributes().getRef() : Integer.valueOf(component.getKey());
       }
     });
   }
@@ -81,18 +79,12 @@ class CallRecorderPathAwareVisitor extends PathAwareVisitorAdapter<Integer> {
   }
 
   private static PathAwareCallRecord viewsCallRecord(Component component, Path<Integer> path, String method) {
-    return PathAwareCallRecord.viewsCallRecord(method, component.getDbKey(), path.current(), getParent(path), path.root(),
+    return PathAwareCallRecord.viewsCallRecord(method, component.getKey(), path.current(), getParent(path), path.root(),
       toValueList(path));
   }
 
   private static List<Integer> toValueList(Path<Integer> path) {
-    return from(path.getCurrentPath()).transform(new Function<PathElement<Integer>, Integer>() {
-      @Nonnull
-      @Override
-      public Integer apply(@Nonnull PathElement<Integer> input) {
-        return input.getElement();
-      }
-    }).toList();
+    return StreamSupport.stream(path.getCurrentPath().spliterator(), false).map(PathElement::element).toList();
   }
 
   private static Integer getParent(Path<Integer> path) {

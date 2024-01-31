@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DangerButtonPrimary } from 'design-system/lib';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ConfirmButton from 'sonar-ui-common/components/controls/ConfirmButton';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
 import { deleteApplication } from '../../api/application';
-import { deletePortfolio, deleteProject } from '../../api/components';
-import addGlobalSuccessMessage from '../../app/utils/addGlobalSuccessMessage';
+import { deletePortfolio, deleteProject } from '../../api/project-management';
+import ConfirmButton from '../../components/controls/ConfirmButton';
 import { Router, withRouter } from '../../components/hoc/withRouter';
+import { addGlobalSuccessMessage } from '../../helpers/globalMessages';
+import { translate, translateWithParameters } from '../../helpers/l10n';
 import { isApplication, isPortfolioLike } from '../../types/component';
+import { Component } from '../../types/types';
 
 interface Props {
-  component: Pick<T.Component, 'key' | 'name' | 'qualifier'>;
-  router: Pick<Router, 'replace'>;
+  component: Pick<Component, 'key' | 'name' | 'qualifier'>;
+  router: Router;
 }
 
 export class Form extends React.PureComponent<Props> {
@@ -47,7 +48,7 @@ export class Form extends React.PureComponent<Props> {
     await deleteMethod(component.key);
 
     addGlobalSuccessMessage(
-      translateWithParameters('project_deletion.resource_deleted', component.name)
+      translateWithParameters('project_deletion.resource_deleted', component.name),
     );
     this.props.router.replace(redirectTo);
   };
@@ -57,17 +58,18 @@ export class Form extends React.PureComponent<Props> {
     return (
       <ConfirmButton
         confirmButtonText={translate('delete')}
-        isDestructive={true}
+        isDestructive
         modalBody={translateWithParameters(
           'project_deletion.delete_resource_confirmation',
-          component.name
+          component.name,
         )}
         modalHeader={translate('qualifier.delete', component.qualifier)}
-        onConfirm={this.handleDelete}>
+        onConfirm={this.handleDelete}
+      >
         {({ onClick }) => (
-          <Button className="button-red" id="delete-project" onClick={onClick}>
+          <DangerButtonPrimary id="delete-project" onClick={onClick}>
             {translate('delete')}
-          </Button>
+          </DangerButtonPrimary>
         )}
       </ConfirmButton>
     );

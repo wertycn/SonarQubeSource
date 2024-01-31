@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,7 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("update_azure")
-      .setDescription("Update Azure ALM instance Setting. <br/>" +
+      .setDescription("Update Azure instance Setting. <br/>" +
         "Requires the 'Administer System' permission")
       .setPost(true)
       .setSince("8.1")
@@ -94,10 +94,15 @@ public class UpdateAzureAction implements AlmSettingsWsAction {
       if (isNotBlank(newKey) && !newKey.equals(key)) {
         almSettingsSupport.checkAlmSettingDoesNotAlreadyExist(dbSession, newKey);
       }
+
+      if (isNotBlank(pat)) {
+        almSettingDto.setPersonalAccessToken(pat);
+      }
+
       dbClient.almSettingDao().update(dbSession, almSettingDto
         .setKey(isNotBlank(newKey) ? newKey : key)
-        .setPersonalAccessToken(isNotBlank(pat) ? pat : almSettingDto.getPersonalAccessToken())
-        .setUrl(url));
+        .setUrl(url),
+        pat != null);
       dbSession.commit();
     }
   }

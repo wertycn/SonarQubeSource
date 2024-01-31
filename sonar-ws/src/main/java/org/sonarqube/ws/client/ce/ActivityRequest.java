@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,26 +32,14 @@ import javax.annotation.Generated;
 public class ActivityRequest {
 
   private String component;
-  private String componentId;
   private String maxExecutedAt;
   private String minSubmittedAt;
   private String onlyCurrents;
+  private String p;
   private String ps;
   private String q;
   private List<String> status;
   private String type;
-
-  /**
-   * Example value: "AU-TpxcA-iU5OvuD2FL0"
-   */
-  public ActivityRequest setComponentId(String componentId) {
-    this.componentId = componentId;
-    return this;
-  }
-
-  public String getComponentId() {
-    return componentId;
-  }
 
   /**
    * Example value: "sample:src/main/xoo/sample/Sample2.xoo"
@@ -105,6 +93,18 @@ public class ActivityRequest {
 
   public String getOnlyCurrents() {
     return onlyCurrents;
+  }
+
+  /**
+   * Example value: "1"
+   */
+  public ActivityRequest setP(String p) {
+    this.p = p;
+    return this;
+  }
+
+  public String getP() {
+    return p;
   }
 
   /**

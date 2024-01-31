@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,40 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { PopupPlacement, Tags } from 'design-system';
 import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { setIssueTags } from '../../../api/issues';
-import TagsList from '../../tags/TagsList';
+import withComponentContext from '../../../app/components/componentContext/withComponentContext';
+import { translate } from '../../../helpers/l10n';
+import { ComponentContextShape } from '../../../types/component';
+import { Issue } from '../../../types/types';
+import Tooltip from '../../controls/Tooltip';
 import { updateIssue } from '../actions';
-import SetIssueTagsPopup from '../popups/SetIssueTagsPopup';
+import IssueTagsPopup from '../popups/IssueTagsPopup';
 
-interface Props {
-  canSetTags: boolean;
-  isOpen: boolean;
-  issue: Pick<T.Issue, 'key' | 'tags'>;
-  onChange: (issue: T.Issue) => void;
+interface Props extends ComponentContextShape {
+  canSetTags?: boolean;
+  issue: Pick<Issue, 'key' | 'tags'>;
+  onChange: (issue: Issue) => void;
+  open?: boolean;
   togglePopup: (popup: string, show?: boolean) => void;
+  tagsToDisplay?: number;
 }
 
-export default class IssueTags extends React.PureComponent<Props> {
-  toggleSetTags = (open?: boolean) => {
+export class IssueTags extends React.PureComponent<Props> {
+  toggleSetTags = (open = false) => {
     this.props.togglePopup('edit-tags', open);
   };
 
   setTags = (tags: string[]) => {
     const { issue } = this.props;
     const newIssue = { ...issue, tags };
+
     updateIssue(
       this.props.onChange,
       setIssueTags({ issue: issue.key, tags: tags.join(',') }),
-      issue as T.Issue,
-      newIssue as T.Issue
+      issue as Issue,
+      newIssue as Issue,
     );
   };
 
@@ -55,38 +59,27 @@ export default class IssueTags extends React.PureComponent<Props> {
   };
 
   render() {
-    const { issue } = this.props;
+    const { component, issue, open, tagsToDisplay = 2 } = this.props;
     const { tags = [] } = issue;
 
-    if (this.props.canSetTags) {
-      return (
-        <div className="dropdown">
-          <Toggler
-            onRequestClose={this.handleClose}
-            open={this.props.isOpen}
-            overlay={<SetIssueTagsPopup selectedTags={tags} setTags={this.setTags} />}>
-            <ButtonLink
-              aria-expanded={this.props.isOpen}
-              className="issue-action issue-action-with-options js-issue-edit-tags"
-              onClick={this.toggleSetTags}>
-              <TagsList
-                allowUpdate={this.props.canSetTags}
-                tags={
-                  issue.tags && issue.tags.length > 0 ? issue.tags : [translate('issue.no_tag')]
-                }
-              />
-            </ButtonLink>
-          </Toggler>
-        </div>
-      );
-    }
-
     return (
-      <TagsList
-        allowUpdate={this.props.canSetTags}
-        className="note"
-        tags={issue.tags && issue.tags.length > 0 ? issue.tags : [translate('issue.no_tag')]}
+      <Tags
+        allowUpdate={this.props.canSetTags && !component?.needIssueSync}
+        ariaTagsListLabel={translate('issue.tags')}
+        className="js-issue-edit-tags sw-body-xs"
+        tagsClassName="sw-body-xs"
+        emptyText={translate('issue.no_tag')}
+        menuId="issue-tags-menu"
+        onClose={this.handleClose}
+        open={open}
+        overlay={<IssueTagsPopup selectedTags={tags} setTags={this.setTags} />}
+        popupPlacement={PopupPlacement.Bottom}
+        tags={tags}
+        tagsToDisplay={tagsToDisplay}
+        tooltip={Tooltip}
       />
     );
   }
 }
+
+export default withComponentContext(IssueTags);

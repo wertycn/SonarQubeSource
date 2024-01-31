@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -42,6 +43,7 @@ public class ShowResponseBuilder {
 
   private final ComponentDao componentDao;
 
+  @Inject
   public ShowResponseBuilder(DbClient dbClient) {
     this.componentDao = dbClient.componentDao();
   }
@@ -90,16 +92,14 @@ public class ShowResponseBuilder {
 
   private void writeFileRefs(DbSession session, Map<String, Reference> refByComponentKey, ShowResponse.Builder response, @Nullable String branch, @Nullable String pullRequest) {
     Map<String, ComponentDto> projectsByUuid = new HashMap<>();
-    Map<String, ComponentDto> parentModulesByUuid = new HashMap<>();
 
     for (Map.Entry<String, Reference> entry : refByComponentKey.entrySet()) {
       Reference ref = entry.getValue();
       ComponentDto file = ref.getDto();
 
       if (file != null) {
-        ComponentDto project = getProject(file.projectUuid(), projectsByUuid, session);
-        ComponentDto parentModule = getParentProject(file.moduleUuid(), parentModulesByUuid, session);
-        response.putFiles(ref.getId(), toWsFile(file, project, parentModule, branch, pullRequest));
+        ComponentDto project = getProject(file.branchUuid(), projectsByUuid, session);
+        response.putFiles(ref.getId(), toWsFile(file, project, branch, pullRequest));
       } else {
         response.putFiles(ref.getId(), toWsFile(ref.getComponentKey(), branch, pullRequest));
       }
@@ -108,32 +108,23 @@ public class ShowResponseBuilder {
 
   private static Duplications.File toWsFile(String componentKey, @Nullable String branch, @Nullable String pullRequest) {
     Duplications.File.Builder wsFile = Duplications.File.newBuilder();
-    String keyWithoutBranch = ComponentDto.removeBranchAndPullRequestFromKey(componentKey);
-    wsFile.setKey(keyWithoutBranch);
-    wsFile.setName(StringUtils.substringAfterLast(keyWithoutBranch, ":"));
+    wsFile.setKey(componentKey);
+    wsFile.setName(StringUtils.substringAfterLast(componentKey, ":"));
     ofNullable(branch).ifPresent(wsFile::setBranch);
     ofNullable(pullRequest).ifPresent(wsFile::setPullRequest);
     return wsFile.build();
   }
 
-  private static Duplications.File toWsFile(ComponentDto file, @Nullable ComponentDto project, @Nullable ComponentDto subProject,
+  private static Duplications.File toWsFile(ComponentDto file, @Nullable ComponentDto project,
     @Nullable String branch, @Nullable String pullRequest) {
     Duplications.File.Builder wsFile = Duplications.File.newBuilder();
     wsFile.setKey(file.getKey());
     wsFile.setUuid(file.uuid());
     wsFile.setName(file.longName());
-    // Do not return sub project if sub project and project are the same
     ofNullable(project).ifPresent(p -> {
       wsFile.setProject(p.getKey());
       wsFile.setProjectUuid(p.uuid());
       wsFile.setProjectName(p.longName());
-      // Do not return sub project if sub project and project are the same
-      boolean displaySubProject = subProject != null && !subProject.uuid().equals(project.uuid());
-      if (displaySubProject) {
-        wsFile.setSubProject(subProject.getKey());
-        wsFile.setSubProjectUuid(subProject.uuid());
-        wsFile.setSubProjectName(subProject.longName());
-      }
       ofNullable(branch).ifPresent(wsFile::setBranch);
       ofNullable(pullRequest).ifPresent(wsFile::setPullRequest);
     });
@@ -147,18 +138,6 @@ public class ShowResponseBuilder {
       if (projectOptional.isPresent()) {
         project = projectOptional.get();
         projectsByUuid.put(project.uuid(), project);
-      }
-    }
-    return project;
-  }
-
-  private ComponentDto getParentProject(String rootUuid, Map<String, ComponentDto> subProjectsByUuid, DbSession session) {
-    ComponentDto project = subProjectsByUuid.get(rootUuid);
-    if (project == null) {
-      Optional<ComponentDto> projectOptional = componentDao.selectByUuid(session, rootUuid);
-      if (projectOptional.isPresent()) {
-        project = projectOptional.get();
-        subProjectsByUuid.put(project.uuid(), project);
       }
     }
     return project;

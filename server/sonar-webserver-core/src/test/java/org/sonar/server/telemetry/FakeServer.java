@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.telemetry;
 
-import java.io.File;
 import java.util.Date;
 import javax.annotation.CheckForNull;
 import org.sonar.api.platform.Server;
@@ -45,12 +44,6 @@ class FakeServer extends Server {
     return this;
   }
 
-  @CheckForNull
-  @Override
-  public String getPermanentServerId() {
-    return null;
-  }
-
   @Override
   public String getVersion() {
     return this.version;
@@ -67,32 +60,12 @@ class FakeServer extends Server {
   }
 
   @Override
-  public File getRootDir() {
-    return null;
-  }
-
-  @Override
   public String getContextPath() {
     return null;
   }
 
   @Override
   public String getPublicRootUrl() {
-    return null;
-  }
-
-  @Override
-  public boolean isDev() {
-    return false;
-  }
-
-  @Override
-  public boolean isSecured() {
-    return false;
-  }
-
-  @Override
-  public String getURL() {
     return null;
   }
 }

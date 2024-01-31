@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,18 +30,14 @@ import javax.annotation.Generated;
 @Generated("sonar-ws-generator")
 public class SetAsDefaultRequest {
 
-  private String id;
+  private String name;
 
-  /**
-   * This is a mandatory parameter.
-   * Example value: "1"
-   */
-  public SetAsDefaultRequest setId(String id) {
-    this.id = id;
-    return this;
+  public String getName() {
+    return name;
   }
 
-  public String getId() {
-    return id;
+  public SetAsDefaultRequest setName(String name) {
+    this.name = name;
+    return this;
   }
 }

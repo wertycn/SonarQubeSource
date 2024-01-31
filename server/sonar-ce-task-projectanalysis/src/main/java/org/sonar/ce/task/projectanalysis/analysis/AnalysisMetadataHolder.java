@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,13 +37,6 @@ public interface AnalysisMetadataHolder {
    * @throws IllegalStateException if no analysis date has been set
    */
   long getAnalysisDate();
-
-  /**
-   * @throws IllegalStateException if no fork date has been set
-   */
-  @CheckForNull
-  Long getForkDate();
-
 
   /**
    * Tell whether the analysisDate has been set.
@@ -100,16 +93,8 @@ public interface AnalysisMetadataHolder {
   String getPullRequestKey();
 
   /**
-   * The project as represented by the main branch. It is used to load settings
-   * like Quality gates, webhooks and configuration.
-   *
-   * In case of analysis of main branch, the returned value is the main branch,
-   * so its uuid and key are the same in
-   * {@link org.sonar.ce.task.projectanalysis.component.TreeRootHolder#getRoot().
-   *
-   * In case of analysis of non-main branch or pull request, the returned value
-   * is the main branch. Its uuid and key are different than
-   * {@link org.sonar.ce.task.projectanalysis.component.TreeRootHolder#getRoot().
+   * The project being analyzed. It can be a project, application or portfolio.
+   * It is used to load settings like Quality gates, webhooks and configuration.
    *
    * @throws IllegalStateException if project has not been set
    */
@@ -131,4 +116,9 @@ public interface AnalysisMetadataHolder {
    * Scm Revision of the analysed code
    */
   Optional<String> getScmRevision();
+
+  /**
+   * Reference branch for the new code period, set by scanner parameter sonar.newCode.referenceBranch
+   */
+  Optional<String> getNewCodeReferenceBranch();
 }

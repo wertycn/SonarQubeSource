@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,11 +26,13 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.slf4j.event.Level;
 import org.sonar.api.batch.fs.InputFile;
-import org.sonar.api.utils.MessageException;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.batch.sensor.internal.SensorContextTester;
+import org.sonar.api.utils.MessageException;
+import org.sonar.api.testfixtures.log.LogTester;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,7 +40,8 @@ public class GenericCoverageReportParserTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
+  @Rule
+  public LogTester logs = new LogTester();
   private DefaultInputFile fileWithBranches;
   private DefaultInputFile fileWithoutBranch;
   private DefaultInputFile emptyFile;
@@ -46,6 +49,7 @@ public class GenericCoverageReportParserTest {
 
   @Before
   public void before() {
+    logs.setLevel(Level.DEBUG);
     context = SensorContextTester.create(new File(""));
     fileWithBranches = setupFile("src/main/java/com/example/ClassWithBranches.java");
     fileWithoutBranch = setupFile("src/main/java/com/example/ClassWithoutBranch.java");
@@ -57,9 +61,27 @@ public class GenericCoverageReportParserTest {
     addFileToFs(emptyFile);
     GenericCoverageReportParser parser = new GenericCoverageReportParser();
     parser.parse(new File(this.getClass().getResource("coverage.xml").toURI()), context);
-    assertThat(parser.numberOfMatchedFiles()).isEqualTo(1);
+    assertThat(parser.numberOfMatchedFiles()).isOne();
     assertThat(parser.numberOfUnknownFiles()).isEqualTo(3);
     assertThat(parser.firstUnknownFiles()).hasSize(3);
+  }
+
+  @Test
+  public void file_without_language_should_be_skipped() throws Exception {
+    String filePath = "src/main/java/com/example/ClassWithBranches.java";
+    DefaultInputFile file = new TestInputFileBuilder(context.module().key(), filePath)
+      .setLanguage(null)
+      .setType(InputFile.Type.TEST)
+      .initMetadata("1\n2\n3\n4\n5\n6")
+      .build();
+    addFileToFs(file);
+    GenericCoverageReportParser parser = new GenericCoverageReportParser();
+    parser.parse(new File(this.getClass().getResource("coverage.xml").toURI()), context);
+    assertThat(parser.numberOfMatchedFiles()).isZero();
+    assertThat(parser.numberOfUnknownFiles()).isEqualTo(4);
+    assertThat(parser.firstUnknownFiles()).hasSize(4);
+    assertThat(logs.logs())
+      .contains("Skipping file 'src/main/java/com/example/ClassWithBranches.java' in the generic coverage report because it doesn't have a known language");
   }
 
   @Test
@@ -67,12 +89,12 @@ public class GenericCoverageReportParserTest {
     addFileToFs(fileWithoutBranch);
     GenericCoverageReportParser parser = new GenericCoverageReportParser();
     parser.parse(new File(this.getClass().getResource("coverage.xml").toURI()), context);
-    assertThat(parser.numberOfMatchedFiles()).isEqualTo(1);
+    assertThat(parser.numberOfMatchedFiles()).isOne();
 
     assertThat(context.lineHits(fileWithoutBranch.key(), 2)).isZero();
-    assertThat(context.lineHits(fileWithoutBranch.key(), 3)).isEqualTo(1);
+    assertThat(context.lineHits(fileWithoutBranch.key(), 3)).isOne();
     assertThat(context.lineHits(fileWithoutBranch.key(), 4)).isNull();
-    assertThat(context.lineHits(fileWithoutBranch.key(), 5)).isEqualTo(1);
+    assertThat(context.lineHits(fileWithoutBranch.key(), 5)).isOne();
     assertThat(context.lineHits(fileWithoutBranch.key(), 6)).isZero();
   }
 
@@ -81,10 +103,10 @@ public class GenericCoverageReportParserTest {
     addFileToFs(fileWithBranches);
     GenericCoverageReportParser parser = new GenericCoverageReportParser();
     parser.parse(new File(this.getClass().getResource("coverage.xml").toURI()), context);
-    assertThat(parser.numberOfMatchedFiles()).isEqualTo(1);
+    assertThat(parser.numberOfMatchedFiles()).isOne();
 
-    assertThat(context.lineHits(fileWithBranches.key(), 3)).isEqualTo(1);
-    assertThat(context.lineHits(fileWithBranches.key(), 4)).isEqualTo(1);
+    assertThat(context.lineHits(fileWithBranches.key(), 3)).isOne();
+    assertThat(context.lineHits(fileWithBranches.key(), 4)).isOne();
 
     assertThat(context.conditions(fileWithBranches.key(), 3)).isEqualTo(8);
     assertThat(context.conditions(fileWithBranches.key(), 4)).isEqualTo(2);
@@ -208,7 +230,7 @@ public class GenericCoverageReportParserTest {
   }
 
   @Test(expected = MessageException.class)
-  public void testUnknownFile() throws Exception {
+  public void testUnknownFile() {
     parseCoverageReportFile("xxx.xml");
   }
 
@@ -229,7 +251,7 @@ public class GenericCoverageReportParserTest {
   private DefaultInputFile setupFile(String path) {
     return new TestInputFileBuilder(context.module().key(), path)
       .setLanguage("bla")
-      .setType(InputFile.Type.TEST)
+      .setType(InputFile.Type.MAIN)
       .initMetadata("1\n2\n3\n4\n5\n6")
       .build();
   }

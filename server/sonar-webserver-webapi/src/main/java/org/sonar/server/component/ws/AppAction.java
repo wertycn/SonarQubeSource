@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ import org.sonar.api.web.UserRole;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.user.UserSession;
 
@@ -41,7 +42,6 @@ public class AppAction implements ComponentsWsAction {
   static final String PARAM_COMPONENT = "component";
 
   private final DbClient dbClient;
-
   private final UserSession userSession;
   private final ComponentFinder componentFinder;
   private final ComponentViewerJsonWriter componentViewerJsonWriter;
@@ -61,7 +61,10 @@ public class AppAction implements ComponentsWsAction {
         "Requires the following permission: 'Browse'.")
       .setResponseExample(getClass().getResource("app-example.json"))
       .setSince("4.4")
-      .setChangelog(new Change("7.6", String.format("The use of module keys in parameter '%s' is deprecated", PARAM_COMPONENT)))
+      .setChangelog(
+        new Change("10.1", String.format("The use of module keys in parameter '%s' is removed", PARAM_COMPONENT)),
+        new Change("9.6", "The fields 'subProject', 'subProjectName' were removed from the response."),
+        new Change("7.6", String.format("The use of module keys in parameter '%s' is deprecated", PARAM_COMPONENT)))
       .setInternal(true)
       .setHandler(this);
 
@@ -87,7 +90,10 @@ public class AppAction implements ComponentsWsAction {
     try (DbSession session = dbClient.openSession(false)) {
       ComponentDto component = loadComponent(session, request);
       userSession.checkComponentPermission(UserRole.USER, component);
-      writeJsonResponse(response, session, component);
+
+      EntityDto entity = dbClient.entityDao().selectByComponentUuid(session, component.uuid())
+        .orElseThrow(() -> new IllegalStateException("Couldn't find entity for component " + component.uuid()));
+      writeJsonResponse(response, session, entity, component, request);
     }
   }
 
@@ -95,14 +101,14 @@ public class AppAction implements ComponentsWsAction {
     String branch = request.param(PARAM_BRANCH);
     String pullRequest = request.param(PARAM_PULL_REQUEST);
     String componentKey = request.mandatoryParam(PARAM_COMPONENT);
-
     return componentFinder.getByKeyAndOptionalBranchOrPullRequest(dbSession, componentKey, branch, pullRequest);
   }
 
-  private void writeJsonResponse(Response response, DbSession session, ComponentDto component) {
+  private void writeJsonResponse(Response response, DbSession session, EntityDto entity, ComponentDto component, Request request) {
     try (JsonWriter json = response.newJsonWriter()) {
       json.beginObject();
-      componentViewerJsonWriter.writeComponent(json, component, userSession, session);
+      componentViewerJsonWriter.writeComponent(json, entity, component, userSession, session, request.param(PARAM_BRANCH),
+        request.param(PARAM_PULL_REQUEST));
       appendPermissions(json, userSession);
       componentViewerJsonWriter.writeMeasures(json, component, session);
       json.endObject();

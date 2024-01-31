@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { NumberedListItem } from 'design-system/lib';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../../helpers/l10n';
+import { Component } from '../../../../types/types';
 import RenderOptions from '../../components/RenderOptions';
 import { OSs } from '../../types';
+import { LanguageProps } from '../JenkinsStep';
 import DotNetCore from './DotNetCore';
 import DotNetFramework from './DotNetFramework';
 
-export interface DotNetProps {
-  component: T.Component;
-}
-
 export interface DotNetCoreFrameworkProps {
-  component: T.Component;
+  component: Component;
   os: OSDotNet;
 }
 
@@ -39,24 +38,31 @@ const DotNetFlavor = { win_core: DotNetCore, win_msbuild: DotNetFramework, linux
 const DotOS: { [key in keyof typeof DotNetFlavor]: OSDotNet } = {
   win_core: OSs.Windows,
   win_msbuild: OSs.Windows,
-  linux_core: OSs.Linux
+  linux_core: OSs.Linux,
 };
 
-export default function DotNet({ component }: DotNetProps) {
-  const [flavorComponent, setFlavorComponet] = React.useState<keyof typeof DotNetFlavor>();
+export default function DotNet(props: LanguageProps) {
+  const { component, onDone } = props;
+  const [flavorComponent, setFlavorComponent] =
+    React.useState<keyof typeof DotNetFlavor>('win_core');
   const DotNetTutorial = flavorComponent && DotNetFlavor[flavorComponent];
+
+  React.useEffect(() => {
+    onDone(flavorComponent !== undefined);
+  }, [flavorComponent, onDone]);
+
   return (
     <>
-      <li>
+      <NumberedListItem>
         {translate('onboarding.tutorial.with.jenkins.jenkinsfile.dotnet.build_agent')}
         <RenderOptions
+          label={translate('onboarding.tutorial.with.jenkins.jenkinsfile.dotnet.build_agent')}
           checked={flavorComponent}
-          name="flavorComponent"
           optionLabelKey="onboarding.build.dotnet"
-          onCheck={value => setFlavorComponet(value as keyof typeof DotNetFlavor)}
+          onCheck={(value) => setFlavorComponent(value as keyof typeof DotNetFlavor)}
           options={Object.keys(DotNetFlavor)}
         />
-      </li>
+      </NumberedListItem>
       {DotNetTutorial && flavorComponent && (
         <DotNetTutorial component={component} os={DotOS[flavorComponent]} />
       )}

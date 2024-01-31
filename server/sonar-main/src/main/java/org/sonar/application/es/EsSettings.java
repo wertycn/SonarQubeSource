@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,7 +36,9 @@ import org.sonar.process.System2;
 
 import static java.lang.String.valueOf;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_DISCOVERY_SEED_HOSTS;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HOSTS;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HTTP_KEYSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_KEYSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_TRUSTSTORE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NAME;
@@ -80,7 +82,7 @@ public class EsSettings {
     this.clusterName = props.nonNullValue(CLUSTER_NAME.getKey());
     this.clusterEnabled = props.valueAsBoolean(CLUSTER_ENABLED.getKey());
     if (this.clusterEnabled) {
-      this.nodeName = props.value(CLUSTER_NODE_NAME.getKey(), "sonarqube-" + UUID.randomUUID().toString());
+      this.nodeName = props.value(CLUSTER_NODE_NAME.getKey(), "sonarqube-" + UUID.randomUUID());
     } else {
       this.nodeName = STANDALONE_NODE_NAME;
     }
@@ -97,7 +99,7 @@ public class EsSettings {
     configureFileSystem(builder);
     configureNetwork(builder);
     configureCluster(builder);
-    configureAuthentication(builder);
+    configureSecurity(builder);
     configureOthers(builder);
     LOGGER.info("Elasticsearch listening on [HTTP: {}:{}, TCP: {}:{}]",
       builder.get(ES_HTTP_HOST_KEY), builder.get(ES_HTTP_PORT_KEY),
@@ -110,7 +112,7 @@ public class EsSettings {
     builder.put("path.logs", fileSystem.getLogDirectory().getAbsolutePath());
   }
 
-  private void configureAuthentication(Map<String, String> builder) {
+  private void configureSecurity(Map<String, String> builder) {
     if (clusterEnabled && props.value((CLUSTER_SEARCH_PASSWORD.getKey())) != null) {
 
       String clusterESKeystoreFileName = getFileNameFromPathProperty(CLUSTER_ES_KEYSTORE);
@@ -118,9 +120,20 @@ public class EsSettings {
 
       builder.put("xpack.security.enabled", "true");
       builder.put("xpack.security.transport.ssl.enabled", "true");
+      builder.put("xpack.security.transport.ssl.supported_protocols", "TLSv1.3,TLSv1.2");
       builder.put("xpack.security.transport.ssl.verification_mode", "certificate");
       builder.put("xpack.security.transport.ssl.keystore.path", clusterESKeystoreFileName);
       builder.put("xpack.security.transport.ssl.truststore.path", clusterESTruststoreFileName);
+
+      if (props.value(CLUSTER_ES_HTTP_KEYSTORE.getKey()) != null) {
+        String clusterESHttpKeystoreFileName = getFileNameFromPathProperty(CLUSTER_ES_HTTP_KEYSTORE);
+
+        builder.put("xpack.security.http.ssl.enabled", Boolean.TRUE.toString());
+        builder.put("xpack.security.http.ssl.keystore.path", clusterESHttpKeystoreFileName);
+      }
+    } else {
+      builder.put("xpack.security.autoconfiguration.enabled", Boolean.FALSE.toString());
+      builder.put("xpack.security.enabled", Boolean.FALSE.toString());
     }
   }
 
@@ -138,7 +151,7 @@ public class EsSettings {
     }
     if (!path.toFile().canRead()) {
       throw new MessageException("Unable to configure: " + processProperty.getKey() + ". "
-          + "Could not get read access to [" + processPropertyPath + "]");
+        + "Could not get read access to [" + processPropertyPath + "]");
     }
     return path.getFileName().toString();
   }
@@ -149,14 +162,15 @@ public class EsSettings {
       int searchPort = Integer.parseInt(props.nonNullValue(SEARCH_PORT.getKey()));
       builder.put(ES_HTTP_HOST_KEY, searchHost.getHostAddress());
       builder.put(ES_HTTP_PORT_KEY, valueOf(searchPort));
-      builder.put(ES_NETWORK_HOST_KEY, searchHost.getHostAddress());
-      builder.put("discovery.seed_hosts", searchHost.getHostAddress());
-      builder.put("cluster.initial_master_nodes", searchHost.getHostAddress());
+      builder.put("discovery.type", "single-node");
 
       int transportPort = Integer.parseInt(props.nonNullValue(ES_PORT.getKey()));
 
       // we have no use of transport port in non-DCE editions
-      builder.put(ES_TRANSPORT_HOST_KEY, this.loopbackAddress.getHostAddress());
+      // but specified host must be the one listed in: discovery.seed_hosts
+      // otherwise elasticsearch cannot elect master node
+      // by default it will be localhost, see: org.sonar.process.ProcessProperties.completeDefaults
+      builder.put(ES_TRANSPORT_HOST_KEY, searchHost.getHostAddress());
       builder.put(ES_TRANSPORT_PORT_KEY, valueOf(transportPort));
     }
 
@@ -210,8 +224,9 @@ public class EsSettings {
       builder.put(ES_NETWORK_HOST_KEY, nodeTransportHost);
 
       String hosts = props.value(CLUSTER_ES_HOSTS.getKey(), loopbackAddress.getHostAddress());
+      String discoveryHosts = props.value(CLUSTER_ES_DISCOVERY_SEED_HOSTS.getKey(), hosts);
       LOGGER.info("Elasticsearch cluster enabled. Connect to hosts [{}]", hosts);
-      builder.put("discovery.seed_hosts", hosts);
+      builder.put("discovery.seed_hosts", discoveryHosts);
       builder.put("cluster.initial_master_nodes", hosts);
     }
 
@@ -220,22 +235,20 @@ public class EsSettings {
     builder.put("cluster.routing.allocation.awareness.attributes", "rack_id");
     builder.put("node.attr.rack_id", nodeName);
     builder.put("node.name", nodeName);
-    builder.put("node.data", valueOf(true));
-    builder.put("node.master", valueOf(true));
   }
 
   private void configureOthers(Map<String, String> builder) {
     builder.put("action.auto_create_index", String.valueOf(false));
-    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-D" + SECCOMP_PROPERTY + "=false")) {
-      builder.put(SECCOMP_PROPERTY, "false");
+    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-D" + SECCOMP_PROPERTY + "=" + Boolean.FALSE)) {
+      builder.put(SECCOMP_PROPERTY, Boolean.FALSE.toString());
     }
 
-    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-Dnode.store.allow_mmapfs=false")) {
+    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-Dnode.store.allow_mmapfs=" + Boolean.FALSE)) {
       throw new MessageException("Property 'node.store.allow_mmapfs' is no longer supported. Use 'node.store.allow_mmap' instead.");
     }
 
-    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-D" + ALLOW_MMAP + "=false")) {
-      builder.put(ALLOW_MMAP, "false");
+    if (props.value(JAVA_ADDITIONAL_OPS_PROPERTY, "").contains("-D" + ALLOW_MMAP + "=" + Boolean.FALSE)) {
+      builder.put(ALLOW_MMAP, Boolean.FALSE.toString());
     }
   }
 }

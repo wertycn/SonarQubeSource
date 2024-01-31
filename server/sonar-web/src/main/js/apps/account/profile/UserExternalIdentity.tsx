@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { getTextColor } from 'design-system';
 import * as React from 'react';
-import { getTextColor } from 'sonar-ui-common/helpers/colors';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
 import { getIdentityProviders } from '../../../api/users';
 import { colors } from '../../../app/theme';
+import { getBaseUrl } from '../../../helpers/system';
+import { IdentityProvider } from '../../../types/types';
+import { LoggedInUser } from '../../../types/users';
 
 export interface UserExternalIdentityProps {
-  user: T.LoggedInUser;
+  user: LoggedInUser;
 }
 
 interface State {
-  identityProvider?: T.IdentityProvider;
+  identityProvider?: IdentityProvider;
   loading: boolean;
 }
 
@@ -38,7 +40,7 @@ export default class UserExternalIdentity extends React.PureComponent<
 > {
   mounted = false;
   state: State = {
-    loading: true
+    loading: true,
   };
 
   componentDidMount() {
@@ -59,11 +61,11 @@ export default class UserExternalIdentity extends React.PureComponent<
   fetchIdentityProviders() {
     this.setState({ loading: true });
     getIdentityProviders()
-      .then(r => r.identityProviders)
-      .then(providers => {
+      .then((r) => r.identityProviders)
+      .then((providers) => {
         if (this.mounted) {
           const identityProvider = providers.find(
-            provider => provider.key === this.props.user.externalProvider
+            (provider) => provider.key === this.props.user.externalProvider,
           );
           this.setState({ loading: false, identityProvider });
         }
@@ -94,20 +96,23 @@ export default class UserExternalIdentity extends React.PureComponent<
     }
 
     return (
-      <div
-        className="identity-provider"
-        style={{
-          backgroundColor: identityProvider.backgroundColor,
-          color: getTextColor(identityProvider.backgroundColor, colors.secondFontColor)
-        }}>
-        <img
-          alt={identityProvider.name}
-          className="little-spacer-right"
-          height="14"
-          src={getBaseUrl() + identityProvider.iconPath}
-          width="14"
-        />{' '}
-        {user.externalIdentity}
+      <div className="sw-mt-1 sw-ml-2">
+        <span
+          className="sw-inline-flex sw-items-center sw-px-1"
+          style={{
+            backgroundColor: identityProvider.backgroundColor,
+            color: getTextColor(identityProvider.backgroundColor, colors.secondFontColor),
+          }}
+        >
+          <img
+            alt={identityProvider.name}
+            className="sw-mr-1"
+            height="14"
+            src={getBaseUrl() + identityProvider.iconPath}
+            width="14"
+          />
+          {user.externalIdentity}
+        </span>
       </div>
     );
   }

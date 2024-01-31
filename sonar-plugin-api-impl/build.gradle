@@ -1,4 +1,4 @@
-sonarqube {
+sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: Plugin API Implementation"
   }
@@ -7,23 +7,30 @@ sonarqube {
 dependencies {
   // please keep the list grouped by configuration and ordered by name
 
-  compile 'commons-codec:commons-codec'
-  compile 'commons-io:commons-io'
-  compile 'commons-lang:commons-lang'
-  compile 'org.apache.commons:commons-csv'
+  api 'commons-codec:commons-codec'
+  api 'commons-io:commons-io'
+  api 'commons-lang:commons-lang'
+  api 'org.apache.commons:commons-csv'
+  api 'org.sonarsource.api.plugin:sonar-plugin-api'
 
-  compile project(path: ':sonar-plugin-api', configuration: 'shadow')
-
-  compileOnly 'com.google.code.findbugs:jsr305'
-  compileOnly 'junit:junit'
+  compileOnlyApi 'com.google.code.findbugs:jsr305'
+  compileOnlyApi 'junit:junit'
 
   testCompileOnly 'com.google.code.findbugs:jsr305'
 
-  testCompile 'com.google.guava:guava'
-  testCompile 'com.tngtech.java:junit-dataprovider'
-  testCompile 'junit:junit'
-  testCompile 'org.assertj:assertj-core'
-  testCompile 'org.mockito:mockito-core'
+  testImplementation 'com.google.guava:guava'
+  testImplementation 'com.tngtech.java:junit-dataprovider'
+  testImplementation 'junit:junit'
+  testImplementation 'org.assertj:assertj-core'
+  testImplementation 'org.mockito:mockito-core'
+  testImplementation 'org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures'
+}
+
+import org.apache.tools.ant.filters.ReplaceTokens
+processResources {
+  filter ReplaceTokens, tokens: [
+          'project.version': project.version
+  ]
 }
 
 artifactoryPublish.skip = false

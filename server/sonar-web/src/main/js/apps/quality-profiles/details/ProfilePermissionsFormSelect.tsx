@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,120 +17,125 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { debounce, identity } from 'lodash';
+import {
+  Avatar,
+  GenericAvatar,
+  LabelValueSelectOption,
+  SearchSelectDropdown,
+  UserGroupIcon,
+} from 'design-system';
+import { omit } from 'lodash';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import GroupIcon from 'sonar-ui-common/components/icons/GroupIcon';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import Avatar from '../../../components/ui/Avatar';
+import { useIntl } from 'react-intl';
+import {
+  SearchUsersGroupsParameters,
+  searchGroups,
+  searchUsers,
+} from '../../../api/quality-profiles';
+import { UserSelected } from '../../../types/types';
 import { Group } from './ProfilePermissions';
 
-type Option = T.UserSelected | Group;
-type OptionWithValue = Option & { value: string };
+type Option = UserSelected | Group;
 
 interface Props {
-  onChange: (option: OptionWithValue) => void;
-  onSearch: (query: string) => Promise<Option[]>;
+  onChange: (option: Option) => void;
+  profile: { language: string; name: string };
   selected?: Option;
 }
 
-interface State {
-  loading: boolean;
-  query: string;
-  searchResults: Option[];
-}
+export default function ProfilePermissionsFormSelect(props: Readonly<Props>) {
+  const { profile, selected } = props;
+  const [defaultOptions, setDefaultOptions] = React.useState<LabelValueSelectOption<string>[]>([]);
+  const intl = useIntl();
 
-export default class ProfilePermissionsFormSelect extends React.PureComponent<Props, State> {
-  mounted = false;
+  const value = selected ? getOption(selected) : null;
+  const controlLabel = selected ? (
+    <>
+      {isUser(selected) ? (
+        <Avatar hash={selected.avatar} name={selected.name} size="xs" className="sw-mt-1" />
+      ) : (
+        <GenericAvatar Icon={UserGroupIcon} name={selected.name} size="xs" className="sw-mt-1" />
+      )}{' '}
+      {selected.name}
+    </>
+  ) : undefined;
 
-  constructor(props: Props) {
-    super(props);
-    this.handleSearch = debounce(this.handleSearch, 250);
-    this.state = { loading: false, query: '', searchResults: [] };
-  }
+  const loadOptions = React.useCallback(
+    async (q = '') => {
+      const parameters: SearchUsersGroupsParameters = {
+        language: profile.language,
+        q,
+        qualityProfile: profile.name,
+        selected: 'deselected',
+      };
+      const [{ users }, { groups }] = await Promise.all([
+        searchUsers(parameters),
+        searchGroups(parameters),
+      ]);
 
-  componentDidMount() {
-    this.mounted = true;
-    this.handleSearch(this.state.query);
-  }
+      return { users, groups };
+    },
+    [profile.language, profile.name],
+  );
 
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  handleSearch = (query: string) => {
-    this.setState({ loading: true });
-    this.props.onSearch(query).then(
-      searchResults => {
-        if (this.mounted) {
-          this.setState({ loading: false, searchResults });
-        }
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      }
-    );
-  };
-
-  handleInputChange = (query: string) => {
-    this.setState({ query });
-    if (query.length > 1) {
-      this.handleSearch(query);
+  const loadInitial = React.useCallback(async () => {
+    try {
+      const { users, groups } = await loadOptions();
+      setDefaultOptions([...users, ...groups].map(getOption));
+    } catch {
+      // noop
     }
+  }, [loadOptions]);
+
+  const handleSearch = (q: string, cb: (options: LabelValueSelectOption<string>[]) => void) => {
+    loadOptions(q)
+      .then(({ users, groups }) => [...users, ...groups].map(getOption))
+      // eslint-disable-next-line promise/no-callback-in-promise
+      .then(cb)
+      // eslint-disable-next-line promise/no-callback-in-promise
+      .catch(() => cb([]));
   };
 
-  render() {
-    const noResultsText =
-      this.state.query.length === 1
-        ? translateWithParameters('select2.tooShort', 2)
-        : translate('no_results');
+  const handleChange = (option: LabelValueSelectOption<string>) => {
+    props.onChange(omit(option, ['Icon', 'label', 'value']) as Option);
+  };
 
-    // create a uniq string both for users and groups
-    const options = this.state.searchResults.map(r => ({ ...r, value: getStringValue(r) }));
+  React.useEffect(() => {
+    loadInitial();
+  }, [loadInitial]);
 
-    return (
-      <Select
-        autoFocus={true}
-        className="Select-big"
-        clearable={false}
-        // disable default react-select filtering
-        filterOptions={identity}
-        isLoading={this.state.loading}
-        noResultsText={noResultsText}
-        onChange={this.props.onChange}
-        onInputChange={this.handleInputChange}
-        optionRenderer={optionRenderer}
-        options={options}
-        placeholder=""
-        searchable={true}
-        value={this.props.selected && getStringValue(this.props.selected)}
-        valueRenderer={optionRenderer}
-      />
-    );
-  }
+  return (
+    <SearchSelectDropdown
+      id="change-profile-permission"
+      inputId="change-profile-permission-input"
+      controlAriaLabel={intl.formatMessage({ id: 'quality_profiles.search_description' })}
+      size="full"
+      controlLabel={controlLabel}
+      onChange={handleChange}
+      defaultOptions={defaultOptions}
+      loadOptions={handleSearch}
+      value={value}
+    />
+  );
 }
 
-function isUser(option: Option): option is T.UserSelected {
-  return (option as T.UserSelected).login !== undefined;
+const getOption = (option: Option): LabelValueSelectOption<string> => {
+  return {
+    ...option,
+    value: getStringValue(option),
+    label: option.name,
+    Icon: isUser(option) ? (
+      <Avatar hash={option.avatar} name={option.name} size="xs" />
+    ) : (
+      <GenericAvatar Icon={UserGroupIcon} name={option.name} size="xs" />
+    ),
+  };
+};
+
+function isUser(option: Option): option is UserSelected {
+  return (option as UserSelected).login !== undefined;
 }
 
 function getStringValue(option: Option) {
   return isUser(option) ? `user:${option.login}` : `group:${option.name}`;
-}
-
-function optionRenderer(option: OptionWithValue) {
-  return isUser(option) ? (
-    <>
-      <Avatar hash={option.avatar} name={option.name} size={16} />
-      <strong className="spacer-left">{option.name}</strong>
-      <span className="note little-spacer-left">{option.login}</span>
-    </>
-  ) : (
-    <>
-      <GroupIcon size={16} />
-      <strong className="spacer-left">{option.name}</strong>
-    </>
-  );
 }

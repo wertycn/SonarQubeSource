@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -51,10 +51,9 @@ public class IssueExclusionsRegexpScannerTest {
 
   @Before
   public void init() {
-    blockPatterns = Arrays.asList(new DoubleRegexpMatcher[] {
+    blockPatterns = Arrays.asList(
       new DoubleRegexpMatcher(Pattern.compile("// SONAR-OFF"), Pattern.compile("// SONAR-ON")),
-      new DoubleRegexpMatcher(Pattern.compile("// FOO-OFF"), Pattern.compile("// FOO-ON"))
-    });
+      new DoubleRegexpMatcher(Pattern.compile("// FOO-OFF"), Pattern.compile("// FOO-ON")));
     allFilePatterns = Collections.singletonList(Pattern.compile("@SONAR-IGNORE-ALL"));
 
     javaFile = TestInputFileBuilder.create("foo", "src/Foo.java").build();

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,13 +22,11 @@ package org.sonar.server.user;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
-import javax.annotation.concurrent.Immutable;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.permission.GlobalPermission;
-import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.GroupDto;
 
 import static java.util.Objects.requireNonNull;
@@ -96,21 +94,10 @@ public interface UserSession {
    */
   Optional<IdentityProvider> getIdentityProvider();
 
-  @Immutable final class ExternalIdentity {
-    private final String id;
-    private final String login;
-
+  record ExternalIdentity(String id, String login) {
     public ExternalIdentity(String id, String login) {
       this.id = requireNonNull(id, "id can't be null");
       this.login = requireNonNull(login, "login can't be null");
-    }
-
-    public String getId() {
-      return id;
-    }
-
-    public String getLogin() {
-      return login;
     }
 
     @Override
@@ -121,22 +108,6 @@ public interface UserSession {
         '}';
     }
 
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      ExternalIdentity that = (ExternalIdentity) o;
-      return Objects.equals(id, that.id) && Objects.equals(login, that.login);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(id, login);
-    }
   }
 
   /**
@@ -150,26 +121,12 @@ public interface UserSession {
   boolean isLoggedIn();
 
   /**
-   * Whether the user has root privileges. If {@code true}, then user automatically
-   * benefits from all the permissions on all projects.
-   */
-  boolean isRoot();
-
-  /**
-   * Ensures that {@link #isRoot()} returns {@code true} otherwise throws a
-   * {@link org.sonar.server.exceptions.ForbiddenException}.
-   */
-  UserSession checkIsRoot();
-
-  /**
    * Ensures that user is logged in otherwise throws {@link org.sonar.server.exceptions.UnauthorizedException}.
    */
   UserSession checkLoggedIn();
 
   /**
    * Returns {@code true} if the permission is granted, otherwise {@code false}.
-   *
-   * Always returns {@code true} if {@link #isRoot()} is {@code true}.
    */
   boolean hasPermission(GlobalPermission permission);
 
@@ -182,18 +139,22 @@ public interface UserSession {
   /**
    * Returns {@code true} if the permission is granted to user on the component,
    * otherwise {@code false}.
-   *
    * If the component does not exist, then returns {@code false}.
    *
-   * Always returns {@code true} if {@link #isRoot()} is {@code true}, even if
-   * component does not exist.
-   *
-   * @param component non-null component.
+   * @param component  non-null component.
    * @param permission project permission as defined by {@link org.sonar.server.permission.PermissionService}
    */
   boolean hasComponentPermission(String permission, ComponentDto component);
 
-  boolean hasProjectPermission(String permission, ProjectDto project);
+  boolean hasEntityPermission(String permission, EntityDto entity);
+
+  boolean hasEntityPermission(String permission, String entityUuid);
+
+  boolean hasChildProjectsPermission(String permission, ComponentDto component);
+
+  boolean hasChildProjectsPermission(String permission, EntityDto application);
+
+  boolean hasPortfolioChildProjectsPermission(String permission, ComponentDto component);
 
   /**
    * Using {@link #hasComponentPermission(String, ComponentDto)} is recommended
@@ -214,7 +175,7 @@ public interface UserSession {
    */
   List<ComponentDto> keepAuthorizedComponents(String permission, Collection<ComponentDto> components);
 
-  List<ProjectDto> keepAuthorizedProjects(String permission, Collection<ProjectDto> projects);
+  <T extends EntityDto> List<T> keepAuthorizedEntities(String permission, Collection<T> components);
 
   /**
    * Ensures that {@link #hasComponentPermission(String, ComponentDto)} is {@code true},
@@ -223,10 +184,22 @@ public interface UserSession {
   UserSession checkComponentPermission(String projectPermission, ComponentDto component);
 
   /**
-   * Ensures that {@link #hasProjectPermission(String, ProjectDto)} is {@code true},
+   * Ensures that {@link #hasEntityPermission(String, EntityDto)} is {@code true},
    * otherwise throws a {@link org.sonar.server.exceptions.ForbiddenException}.
    */
-  UserSession checkProjectPermission(String projectPermission, ProjectDto project);
+  UserSession checkEntityPermission(String projectPermission, EntityDto entity);
+
+  /**
+   * Ensures that {@link #hasChildProjectsPermission(String, ComponentDto)} is {@code true}
+   * otherwise throws a {@link org.sonar.server.exceptions.ForbiddenException}.
+   */
+  UserSession checkChildProjectsPermission(String projectPermission, ComponentDto project);
+
+  /**
+   * Ensures that {@link #hasChildProjectsPermission(String, EntityDto)} is {@code true}
+   * otherwise throws a {@link org.sonar.server.exceptions.ForbiddenException}.
+   */
+  UserSession checkChildProjectsPermission(String projectPermission, EntityDto application);
 
   /**
    * Ensures that {@link #hasComponentUuidPermission(String, String)} is {@code true},
@@ -240,10 +213,8 @@ public interface UserSession {
   /**
    * Whether user can administrate system, for example for using cross-organizations services
    * like update center, system info or management of users.
-   *
    * Returns {@code true} if:
    * <ul>
-   *   <li>{@link #isRoot()} is {@code true}</li>
    *   <li>user is administrator</li>
    * </ul>
    */
@@ -254,4 +225,8 @@ public interface UserSession {
    * otherwise throws {@link org.sonar.server.exceptions.ForbiddenException}.
    */
   UserSession checkIsSystemAdministrator();
+
+  boolean isActive();
+
+  boolean isAuthenticatedBrowserSession();
 }

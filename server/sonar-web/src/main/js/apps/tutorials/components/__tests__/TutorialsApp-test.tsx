@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,27 +17,52 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
-import * as React from 'react';
-import handleRequiredAuthentication from 'sonar-ui-common/helpers/handleRequiredAuthentication';
-import { mockProjectAzureBindingResponse } from '../../../../helpers/mocks/alm-settings';
-import { mockComponent, mockCurrentUser, mockLoggedInUser } from '../../../../helpers/testMocks';
-import { TutorialsApp, TutorialsAppProps } from '../TutorialsApp';
+import SettingsServiceMock from '../../../../api/mocks/SettingsServiceMock';
+import UserTokensMock from '../../../../api/mocks/UserTokensMock';
+import handleRequiredAuthentication from '../../../../helpers/handleRequiredAuthentication';
+import { mockCurrentUser, mockLoggedInUser } from '../../../../helpers/testMocks';
+import { renderAppWithComponentContext } from '../../../../helpers/testReactTestingUtils';
+import { byLabelText, byRole } from '../../../../helpers/testSelector';
+import { Permissions } from '../../../../types/permissions';
+import routes from '../../routes';
 
-jest.mock('sonar-ui-common/helpers/handleRequiredAuthentication', () => ({ default: jest.fn() }));
+jest.mock('../../../../helpers/handleRequiredAuthentication', () => jest.fn());
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
-  expect(shallowRender({ projectBinding: mockProjectAzureBindingResponse() })).toMatchSnapshot();
+let settingsMock: SettingsServiceMock;
+let tokenMock: UserTokensMock;
+
+beforeAll(() => {
+  settingsMock = new SettingsServiceMock();
+  tokenMock = new UserTokensMock();
+});
+
+afterEach(() => {
+  tokenMock.reset();
+  settingsMock.reset();
+});
+
+beforeEach(jest.clearAllMocks);
+
+const ui = {
+  loading: byLabelText('loading'),
+  localScanButton: byRole('heading', { name: 'onboarding.tutorial.choose_method' }),
+};
+
+it('renders tutorials page', async () => {
+  renderTutorialsApp(mockLoggedInUser({ permissions: { global: [Permissions.Scan] } }));
+  expect(ui.loading.get()).toBeInTheDocument();
+  expect(await ui.localScanButton.find()).toBeInTheDocument();
 });
 
 it('should redirect if user is not logged in', () => {
-  shallowRender({ currentUser: mockCurrentUser() });
+  renderTutorialsApp();
   expect(handleRequiredAuthentication).toHaveBeenCalled();
+  expect(ui.loading.query()).not.toBeInTheDocument();
+  expect(ui.localScanButton.query()).not.toBeInTheDocument();
 });
 
-function shallowRender(overrides: Partial<TutorialsAppProps> = {}) {
-  return shallow(
-    <TutorialsApp component={mockComponent()} currentUser={mockLoggedInUser()} {...overrides} />
-  );
+function renderTutorialsApp(currentUser = mockCurrentUser()) {
+  return renderAppWithComponentContext('tutorials', routes, {
+    currentUser,
+  });
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,9 @@ package org.sonar.db.alm.setting;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonar.api.config.internal.Encryption;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class AlmSettingDto {
 
@@ -75,12 +78,20 @@ public class AlmSettingDto {
    * It will be null when the ALM is Azure DevOps or Bitbucket.
    */
   private String clientId;
+
   /**
    * Application client secret of the GitHub instance. Max size is 80.
    * This column will only be fed when alm is GitHub.
    * It will be null when the ALM is Azure DevOps or Bitbucket.
    */
   private String clientSecret;
+
+  /**
+   * Webhook secret of the GitHub instance. Max size is 160.
+   * This column will only be fed when alm is GitHub.
+   * It will be null when the ALM is Azure DevOps or Bitbucket.
+   */
+  private String webhookSecret;
 
   private long updatedAt;
   private long createdAt;
@@ -89,8 +100,9 @@ public class AlmSettingDto {
     return uuid;
   }
 
-  void setUuid(String uuid) {
+  AlmSettingDto setUuid(String uuid) {
     this.uuid = uuid;
+    return this;
   }
 
   public String getKey() {
@@ -141,7 +153,10 @@ public class AlmSettingDto {
   }
 
   @CheckForNull
-  public String getPrivateKey() {
+  public String getDecryptedPrivateKey(Encryption encryption) {
+    if (!isNullOrEmpty(privateKey) && encryption.isEncrypted(privateKey)) {
+      return encryption.decrypt(privateKey);
+    }
     return privateKey;
   }
 
@@ -151,7 +166,10 @@ public class AlmSettingDto {
   }
 
   @CheckForNull
-  public String getPersonalAccessToken() {
+  public String getDecryptedPersonalAccessToken(Encryption encryption) {
+    if (!isNullOrEmpty(personalAccessToken) && encryption.isEncrypted(personalAccessToken)) {
+      return encryption.decrypt(personalAccessToken);
+    }
     return personalAccessToken;
   }
 
@@ -171,7 +189,10 @@ public class AlmSettingDto {
   }
 
   @CheckForNull
-  public String getClientSecret() {
+  public String getDecryptedClientSecret(Encryption encryption) {
+    if (!isNullOrEmpty(clientSecret) && encryption.isEncrypted(clientSecret)) {
+      return encryption.decrypt(clientSecret);
+    }
     return clientSecret;
   }
 
@@ -180,7 +201,20 @@ public class AlmSettingDto {
     return this;
   }
 
-  long getUpdatedAt() {
+  @CheckForNull
+  public String getDecryptedWebhookSecret(Encryption encryption) {
+    if (!isNullOrEmpty(webhookSecret) && encryption.isEncrypted(webhookSecret)) {
+      return encryption.decrypt(webhookSecret);
+    }
+    return webhookSecret;
+  }
+
+  public AlmSettingDto setWebhookSecret(@Nullable String webhookSecret) {
+    this.webhookSecret = webhookSecret;
+    return this;
+  }
+
+  public long getUpdatedAt() {
     return updatedAt;
   }
 

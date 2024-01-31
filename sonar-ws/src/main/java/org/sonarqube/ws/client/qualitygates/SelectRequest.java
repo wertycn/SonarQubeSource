@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,33 +30,20 @@ import javax.annotation.Generated;
 @Generated("sonar-ws-generator")
 public class SelectRequest {
 
-  private String gateId;
-  private String projectId;
+  private String gateName;
   private String projectKey;
 
   /**
    * This is a mandatory parameter.
    * Example value: "1"
    */
-  public SelectRequest setGateId(String gateId) {
-    this.gateId = gateId;
+  public SelectRequest setGateName(String gateName) {
+    this.gateName = gateName;
     return this;
   }
 
-  public String getGateId() {
-    return gateId;
-  }
-
-  /**
-   * Example value: "AU-Tpxb--iU5OvuD2FLy"
-   */
-  public SelectRequest setProjectId(String projectId) {
-    this.projectId = projectId;
-    return this;
-  }
-
-  public String getProjectId() {
-    return projectId;
+  public String getGateName() {
+    return gateName;
   }
 
   /**

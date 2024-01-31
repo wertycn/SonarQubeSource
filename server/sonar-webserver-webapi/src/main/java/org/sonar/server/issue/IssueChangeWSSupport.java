@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,13 +20,12 @@
 package org.sonar.server.issue;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +47,7 @@ import org.sonar.db.issue.IssueChangeDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.markdown.Markdown;
+import org.sonar.server.common.avatar.AvatarResolver;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Common;
 
@@ -56,9 +56,6 @@ import static java.util.Collections.emptyMap;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 import static org.sonar.db.issue.IssueChangeDto.TYPE_COMMENT;
 import static org.sonar.db.issue.IssueChangeDto.TYPE_FIELD_CHANGE;
 import static org.sonar.server.issue.IssueFieldsSetter.FILE;
@@ -66,8 +63,6 @@ import static org.sonar.server.issue.IssueFieldsSetter.TECHNICAL_DEBT;
 
 public class IssueChangeWSSupport {
   private static final String EFFORT_CHANGELOG_KEY = "effort";
-  private static final Ordering<IssueChangeDto> ISSUE_CHANGE_CREATED_AT_COMPARATOR = Ordering.natural().onResultOf(IssueChangeDto::getCreatedAt);
-
   private final DbClient dbClient;
   private final AvatarResolver avatarFactory;
   private final UserSession userSession;
@@ -79,7 +74,7 @@ public class IssueChangeWSSupport {
   }
 
   public enum Load {
-    CHANGE_LOG, COMMENTS, ALL;
+    CHANGE_LOG, COMMENTS, ALL
   }
 
   public interface FormattingContext {
@@ -98,15 +93,14 @@ public class IssueChangeWSSupport {
   }
 
   public FormattingContext newFormattingContext(DbSession dbSession, Set<IssueDto> dtos, Load load) {
-    return newFormattingContext(dbSession, dtos, load, ImmutableSet.of(), ImmutableSet.of());
+    return newFormattingContext(dbSession, dtos, load, Set.of(), Set.of());
   }
 
-  public FormattingContext newFormattingContext(DbSession dbSession, Set<IssueDto> dtos, Load load,
-    Set<UserDto> preloadedUsers, Set<ComponentDto> preloadedComponents) {
-    Set<String> issueKeys = dtos.stream().map(IssueDto::getKey).collect(toSet());
+  public FormattingContext newFormattingContext(DbSession dbSession, Set<IssueDto> dtos, Load load, Set<UserDto> preloadedUsers, Set<ComponentDto> preloadedComponents) {
+    Set<String> issueKeys = dtos.stream().map(IssueDto::getKey).collect(Collectors.toSet());
 
-    List<IssueChangeDto> changes = ImmutableList.of();
-    List<IssueChangeDto> comments = ImmutableList.of();
+    List<IssueChangeDto> changes = List.of();
+    List<IssueChangeDto> comments = List.of();
     switch (load) {
       case CHANGE_LOG:
         changes = dbClient.issueChangeDao().selectByTypeAndIssueKeys(dbSession, issueKeys, TYPE_FIELD_CHANGE);
@@ -118,46 +112,47 @@ public class IssueChangeWSSupport {
         List<IssueChangeDto> all = dbClient.issueChangeDao().selectByIssueKeys(dbSession, issueKeys);
         changes = all.stream()
           .filter(t -> TYPE_FIELD_CHANGE.equals(t.getChangeType()))
-          .collect(toList());
+          .toList();
         comments = all.stream()
           .filter(t -> TYPE_COMMENT.equals(t.getChangeType()))
-          .collect(toList());
+          .toList();
         break;
       default:
         throw new IllegalStateException("Unsupported Load value:" + load);
     }
 
-    Map<String, List<FieldDiffs>> changesByRuleKey = indexAndSort(changes, IssueChangeDto::toFieldDiffs);
-    Map<String, List<IssueChangeDto>> commentsByIssueKey = indexAndSort(comments, t -> t);
+    Map<String, List<FieldDiffs>> changesByRuleKey = indexAndSort(changes, IssueChangeDto::toFieldDiffs, Comparator.comparing(FieldDiffs::creationDate));
+    Map<String, List<IssueChangeDto>> commentsByIssueKey = indexAndSort(comments, t -> t, Comparator.comparing(IssueChangeDto::getIssueChangeCreationDate));
     Map<String, UserDto> usersByUuid = loadUsers(dbSession, changesByRuleKey, commentsByIssueKey, preloadedUsers);
     Map<String, ComponentDto> filesByUuid = loadFiles(dbSession, changesByRuleKey, preloadedComponents);
     Map<String, Boolean> updatableCommentByKey = loadUpdatableFlag(commentsByIssueKey);
     return new FormattingContextImpl(changesByRuleKey, commentsByIssueKey, usersByUuid, filesByUuid, updatableCommentByKey);
   }
 
-  private static <T> Map<String, List<T>> indexAndSort(List<IssueChangeDto> changes, Function<IssueChangeDto, T> transform) {
+  private static <T> Map<String, List<T>> indexAndSort(List<IssueChangeDto> changes, Function<IssueChangeDto, T> transform, Comparator<T> sortingComparator) {
     Multimap<String, IssueChangeDto> unordered = changes.stream()
       .collect(MoreCollectors.index(IssueChangeDto::getIssueKey, t -> t));
     return unordered.asMap().entrySet().stream()
-      .collect(uniqueIndex(
-        Map.Entry::getKey,
-        t -> t.getValue().stream()
-          .sorted(ISSUE_CHANGE_CREATED_AT_COMPARATOR)
-          .map(transform)
-          .collect(toList(t.getValue().size()))));
+      .collect(Collectors.toMap(Map.Entry::getKey, t -> t.getValue().stream()
+        .map(transform)
+        .sorted(sortingComparator)
+        .toList()));
   }
 
   private Map<String, UserDto> loadUsers(DbSession dbSession, Map<String, List<FieldDiffs>> changesByRuleKey,
     Map<String, List<IssueChangeDto>> commentsByIssueKey, Set<UserDto> preloadedUsers) {
     Set<String> userUuids = Stream.concat(
-      changesByRuleKey.values().stream()
-        .flatMap(Collection::stream)
-        .map(FieldDiffs::userUuid),
-      commentsByIssueKey.values().stream()
-        .flatMap(Collection::stream)
-        .map(IssueChangeDto::getUserUuid))
+        changesByRuleKey.values().stream()
+          .flatMap(Collection::stream)
+          .map(FieldDiffs::userUuid)
+          .filter(Optional::isPresent)
+          .map(Optional::get),
+        commentsByIssueKey.values().stream()
+          .flatMap(Collection::stream)
+          .map(IssueChangeDto::getUserUuid)
+      )
       .filter(Objects::nonNull)
-      .collect(toSet());
+      .collect(Collectors.toSet());
     if (userUuids.isEmpty()) {
       return emptyMap();
     }
@@ -167,14 +162,14 @@ public class IssueChangeWSSupport {
     if (missingUsersUuids.isEmpty()) {
       return preloadedUsers.stream()
         .filter(t -> userUuids.contains(t.getUuid()))
-        .collect(uniqueIndex(UserDto::getUuid, userUuids.size()));
+        .collect(Collectors.toMap(UserDto::getUuid, Function.identity()));
     }
 
     return Stream.concat(
-      preloadedUsers.stream(),
-      dbClient.userDao().selectByUuids(dbSession, missingUsersUuids).stream())
+        preloadedUsers.stream(),
+        dbClient.userDao().selectByUuids(dbSession, missingUsersUuids).stream())
       .filter(t -> userUuids.contains(t.getUuid()))
-      .collect(uniqueIndex(UserDto::getUuid, userUuids.size()));
+      .collect(Collectors.toMap(UserDto::getUuid, Function.identity()));
   }
 
   private Map<String, ComponentDto> loadFiles(DbSession dbSession, Map<String, List<FieldDiffs>> changesByRuleKey, Set<ComponentDto> preloadedComponents) {
@@ -189,7 +184,7 @@ public class IssueChangeWSSupport {
       })
       .map(Strings::emptyToNull)
       .filter(Objects::nonNull)
-      .collect(toSet());
+      .collect(Collectors.toSet());
     if (fileUuids.isEmpty()) {
       return emptyMap();
     }
@@ -199,14 +194,14 @@ public class IssueChangeWSSupport {
     if (missingFileUuids.isEmpty()) {
       return preloadedComponents.stream()
         .filter(t -> fileUuids.contains(t.uuid()))
-        .collect(uniqueIndex(ComponentDto::uuid, fileUuids.size()));
+        .collect(Collectors.toMap(ComponentDto::uuid, Function.identity()));
     }
 
     return Stream.concat(
-      preloadedComponents.stream(),
-      dbClient.componentDao().selectByUuids(dbSession, missingFileUuids).stream())
+        preloadedComponents.stream(),
+        dbClient.componentDao().selectByUuids(dbSession, missingFileUuids).stream())
       .filter(t -> fileUuids.contains(t.uuid()))
-      .collect(uniqueIndex(ComponentDto::uuid, fileUuids.size()));
+      .collect(Collectors.toMap(ComponentDto::uuid, Function.identity()));
   }
 
   private Map<String, Boolean> loadUpdatableFlag(Map<String, List<IssueChangeDto>> commentsByIssueKey) {
@@ -220,7 +215,7 @@ public class IssueChangeWSSupport {
 
     return commentsByIssueKey.values().stream()
       .flatMap(Collection::stream)
-      .collect(uniqueIndex(IssueChangeDto::getKey, t -> userUuid.equals(t.getUserUuid())));
+      .collect(Collectors.toMap(IssueChangeDto::getKey, t -> userUuid.equals(t.getUserUuid())));
   }
 
   public Stream<Common.Changelog> formatChangelog(IssueDto dto, FormattingContext formattingContext) {
@@ -230,16 +225,17 @@ public class IssueChangeWSSupport {
 
   private Function<FieldDiffs, Common.Changelog> toWsChangelog(FormattingContext formattingContext) {
     return change -> {
-      String userUUuid = change.userUuid();
       Common.Changelog.Builder changelogBuilder = Common.Changelog.newBuilder();
       changelogBuilder.setCreationDate(formatDateTime(change.creationDate()));
-      formattingContext.getUserByUuid(userUUuid)
+      change.userUuid().flatMap(formattingContext::getUserByUuid)
         .ifPresent(user -> {
           changelogBuilder.setUser(user.getLogin());
           changelogBuilder.setIsUserActive(user.isActive());
           ofNullable(user.getName()).ifPresent(changelogBuilder::setUserName);
           ofNullable(emptyToNull(user.getEmail())).ifPresent(email -> changelogBuilder.setAvatar(avatarFactory.create(user)));
         });
+      change.externalUser().ifPresent(changelogBuilder::setExternalUser);
+      change.webhookSource().ifPresent(changelogBuilder::setWebhookSource);
       change.diffs().entrySet().stream()
         .map(toWsDiff(formattingContext))
         .forEach(changelogBuilder::addDiffs);
@@ -316,18 +312,18 @@ public class IssueChangeWSSupport {
     public List<FieldDiffs> getChanges(IssueDto dto) {
       List<FieldDiffs> fieldDiffs = changesByIssueKey.get(dto.getKey());
       if (fieldDiffs == null) {
-        return ImmutableList.of();
+        return List.of();
       }
-      return ImmutableList.copyOf(fieldDiffs);
+      return List.copyOf(fieldDiffs);
     }
 
     @Override
     public List<IssueChangeDto> getComments(IssueDto dto) {
       List<IssueChangeDto> comments = commentsByIssueKey.get(dto.getKey());
       if (comments == null) {
-        return ImmutableList.of();
+        return List.of();
       }
-      return ImmutableList.copyOf(comments);
+      return List.copyOf(comments);
     }
 
     @Override

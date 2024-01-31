@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -74,13 +74,6 @@ public interface Component {
    * Returns the component uuid
    */
   String getUuid();
-
-  /**
-   * Returns the component key <b>as defined in database</b>
-   * It may differ from keys listed in scanner report
-   * when analyzing a branch.
-   */
-  String getDbKey();
 
   /**
    * Returns the key as it will be displayed in the ui.

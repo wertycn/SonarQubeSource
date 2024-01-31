@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,7 @@ import org.sonar.process.systeminfo.JvmPropertiesSection;
 import org.sonar.process.systeminfo.JvmStateSection;
 import org.sonar.server.platform.monitoring.AlmConfigurationSection;
 import org.sonar.server.platform.monitoring.BundledSection;
+import org.sonar.server.platform.monitoring.CommonSystemInformation;
 import org.sonar.server.platform.monitoring.DbConnectionSection;
 import org.sonar.server.platform.monitoring.DbSection;
 import org.sonar.server.platform.monitoring.EsIndexesSection;
@@ -40,17 +41,18 @@ import org.sonar.server.platform.monitoring.cluster.GlobalSystemSection;
 import org.sonar.server.platform.monitoring.cluster.NodeSystemSection;
 import org.sonar.server.platform.monitoring.cluster.ProcessInfoProvider;
 import org.sonar.server.platform.monitoring.cluster.SearchNodesInfoLoaderImpl;
+import org.sonar.server.platform.monitoring.cluster.ServerPushSection;
 
 public class SystemInfoWriterModule extends Module {
-  private final WebServer webServer;
+  private final NodeInformation nodeInformation;
 
-  public SystemInfoWriterModule(WebServer webServer) {
-    this.webServer = webServer;
+  public SystemInfoWriterModule(NodeInformation nodeInformation) {
+    this.nodeInformation = nodeInformation;
   }
 
   @Override
   protected void configureModule() {
-    boolean standalone = webServer.isStandalone();
+    boolean standalone = nodeInformation.isStandalone();
 
     add(
       new JvmPropertiesSection("Web JVM Properties"),
@@ -62,8 +64,10 @@ public class SystemInfoWriterModule extends Module {
       PluginsSection.class,
       SettingsSection.class,
       AlmConfigurationSection.class,
-      BundledSection.class
-
+      ServerPushSection.class,
+      BundledSection.class,
+      StatisticsSupport.class,
+      CommonSystemInformation.class
       );
     if (standalone) {
       add(

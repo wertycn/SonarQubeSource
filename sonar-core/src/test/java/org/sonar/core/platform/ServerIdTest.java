@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,43 +27,39 @@ import java.util.Date;
 import java.util.Random;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
-import org.sonar.core.util.UuidFactoryImpl;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.core.platform.ServerId.DATABASE_ID_LENGTH;
 import static org.sonar.core.platform.ServerId.DEPRECATED_SERVER_ID_LENGTH;
-import static org.sonar.core.platform.ServerId.NOT_UUID_DATASET_ID_LENGTH;
-import static org.sonar.core.platform.ServerId.SPLIT_CHARACTER;
-import static org.sonar.core.platform.ServerId.UUID_DATASET_ID_LENGTH;
 import static org.sonar.core.platform.ServerId.Format.DEPRECATED;
 import static org.sonar.core.platform.ServerId.Format.NO_DATABASE_ID;
 import static org.sonar.core.platform.ServerId.Format.WITH_DATABASE_ID;
+import static org.sonar.core.platform.ServerId.NOT_UUID_DATASET_ID_LENGTH;
+import static org.sonar.core.platform.ServerId.SPLIT_CHARACTER;
+import static org.sonar.core.platform.ServerId.UUID_DATASET_ID_LENGTH;
 
 @RunWith(DataProviderRunner.class)
 public class ServerIdTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+
+  private static final String OLD_UUID_FORMAT = "AY0XR6neBaNHvsTBjkC2";
 
   @Test
   public void parse_throws_NPE_if_argument_is_null() {
-    expectedException.expect(NullPointerException.class);
-
-    ServerId.parse(null);
+    assertThatThrownBy(() -> ServerId.parse(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   @UseDataProvider("emptyAfterTrim")
   public void parse_throws_IAE_if_parameter_is_empty_after_trim(String serverId) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("serverId can't be empty");
-
-    ServerId.parse(serverId);
+    assertThatThrownBy(() -> ServerId.parse(serverId))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("serverId can't be empty");
   }
 
   @DataProvider
@@ -78,10 +74,9 @@ public class ServerIdTest {
   @Test
   @UseDataProvider("wrongFormatWithDatabaseId")
   public void parse_throws_IAE_if_split_char_is_at_wrong_position(String emptyDatabaseId) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Unrecognized serverId format. Parts have wrong length");
-
-    ServerId.parse(emptyDatabaseId);
+    assertThatThrownBy(() -> ServerId.parse(emptyDatabaseId))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Unrecognized serverId format. Parts have wrong length");
   }
 
   @DataProvider
@@ -90,7 +85,7 @@ public class ServerIdTest {
     String startWithSplitChar = SPLIT_CHARACTER + randomAlphabetic(DATABASE_ID_LENGTH - 1);
 
     Stream<String> databaseIds = Stream.of(
-      UuidFactoryImpl.INSTANCE.create(),
+            OLD_UUID_FORMAT,
       randomAlphabetic(NOT_UUID_DATASET_ID_LENGTH),
       randomAlphabetic(UUID_DATASET_ID_LENGTH),
       repeat(SPLIT_CHARACTER + "", NOT_UUID_DATASET_ID_LENGTH),
@@ -119,7 +114,7 @@ public class ServerIdTest {
     assertThat(serverId.getFormat()).isEqualTo(DEPRECATED);
     assertThat(serverId.getDatasetId()).isEqualTo(deprecated);
     assertThat(serverId.getDatabaseId()).isEmpty();
-    assertThat(serverId.toString()).isEqualTo(deprecated);
+    assertThat(serverId).hasToString(deprecated);
   }
 
   @Test
@@ -130,13 +125,13 @@ public class ServerIdTest {
     assertThat(serverId.getFormat()).isEqualTo(NO_DATABASE_ID);
     assertThat(serverId.getDatasetId()).isEqualTo(noDatabaseId);
     assertThat(serverId.getDatabaseId()).isEmpty();
-    assertThat(serverId.toString()).isEqualTo(noDatabaseId);
+    assertThat(serverId).hasToString(noDatabaseId);
   }
 
   @DataProvider
   public static Object[][] validOldFormatServerIds() {
     return new Object[][] {
-      {UuidFactoryImpl.INSTANCE.create()},
+      {OLD_UUID_FORMAT},
       {randomAlphabetic(NOT_UUID_DATASET_ID_LENGTH)},
       {repeat(SPLIT_CHARACTER + "", NOT_UUID_DATASET_ID_LENGTH)},
       {randomAlphabetic(UUID_DATASET_ID_LENGTH)},
@@ -154,7 +149,7 @@ public class ServerIdTest {
     assertThat(serverId.getFormat()).isEqualTo(WITH_DATABASE_ID);
     assertThat(serverId.getDatasetId()).isEqualTo(datasetId);
     assertThat(serverId.getDatabaseId()).contains(databaseId);
-    assertThat(serverId.toString()).isEqualTo(rawServerId);
+    assertThat(serverId).hasToString(rawServerId);
   }
 
   @DataProvider
@@ -164,39 +159,35 @@ public class ServerIdTest {
       {randomAlphabetic(DATABASE_ID_LENGTH), randomAlphabetic(UUID_DATASET_ID_LENGTH)},
       {randomAlphabetic(DATABASE_ID_LENGTH), repeat(SPLIT_CHARACTER + "", NOT_UUID_DATASET_ID_LENGTH)},
       {randomAlphabetic(DATABASE_ID_LENGTH), repeat(SPLIT_CHARACTER + "", UUID_DATASET_ID_LENGTH)},
-      {randomAlphabetic(DATABASE_ID_LENGTH), UuidFactoryImpl.INSTANCE.create()},
+      {randomAlphabetic(DATABASE_ID_LENGTH), OLD_UUID_FORMAT},
     };
   }
 
   @Test
   public void parse_does_not_support_deprecated_server_id_with_database_id() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("serverId does not have a supported length");
-
-    ServerId.parse(randomAlphabetic(DATABASE_ID_LENGTH) + SPLIT_CHARACTER + randomAlphabetic(DEPRECATED_SERVER_ID_LENGTH));
+    assertThatThrownBy(() -> ServerId.parse(randomAlphabetic(DATABASE_ID_LENGTH) + SPLIT_CHARACTER + randomAlphabetic(DEPRECATED_SERVER_ID_LENGTH)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("serverId does not have a supported length");
   }
 
   @Test
   public void of_throws_NPE_if_datasetId_is_null() {
-    expectedException.expect(NullPointerException.class);
-
-    ServerId.of(randomAlphabetic(DATABASE_ID_LENGTH), null);
+    assertThatThrownBy(() -> ServerId.of(randomAlphabetic(DATABASE_ID_LENGTH), null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void of_throws_IAE_if_datasetId_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Illegal datasetId length (0)");
-
-    ServerId.of(randomAlphabetic(DATABASE_ID_LENGTH), "");
+    assertThatThrownBy(() -> ServerId.of(randomAlphabetic(DATABASE_ID_LENGTH), ""))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Illegal datasetId length (0)");
   }
 
   @Test
   public void of_throws_IAE_if_databaseId_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Illegal databaseId length (0)");
-
-    ServerId.of("", randomAlphabetic(UUID_DATASET_ID_LENGTH));
+    assertThatThrownBy(() -> ServerId.of("", randomAlphabetic(UUID_DATASET_ID_LENGTH)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Illegal databaseId length (0)");
   }
 
   @Test
@@ -215,10 +206,9 @@ public class ServerIdTest {
     String databaseId = randomAlphabetic(illegalDatabaseIdLengths);
     String datasetId = randomAlphabetic(UUID_DATASET_ID_LENGTH);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Illegal databaseId length (" + illegalDatabaseIdLengths + ")");
-
-    ServerId.of(databaseId, datasetId);
+    assertThatThrownBy(() -> ServerId.of(databaseId, datasetId))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Illegal databaseId length (" + illegalDatabaseIdLengths + ")");
   }
 
   @DataProvider
@@ -235,10 +225,9 @@ public class ServerIdTest {
     String datasetId = randomAlphabetic(illegalDatasetIdLengths);
     String databaseId = randomAlphabetic(DATABASE_ID_LENGTH);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Illegal datasetId length (" + illegalDatasetIdLengths + ")");
-
-    ServerId.of(databaseId, datasetId);
+    assertThatThrownBy(() -> ServerId.of(databaseId, datasetId))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Illegal datasetId length (" + illegalDatasetIdLengths + ")");
   }
 
   @DataProvider
@@ -260,19 +249,21 @@ public class ServerIdTest {
     String otherDatasetId = randomAlphabetic(datasetIdLength - 1) + 'b';
 
     ServerId newServerId = ServerId.of(databaseId, datasetId);
-    assertThat(newServerId).isEqualTo(newServerId);
-    assertThat(newServerId).isEqualTo(ServerId.of(databaseId, datasetId));
-    assertThat(newServerId).isNotEqualTo(new Object());
-    assertThat(newServerId).isNotEqualTo(null);
-    assertThat(newServerId).isNotEqualTo(ServerId.of(otherDatabaseId, datasetId));
-    assertThat(newServerId).isNotEqualTo(ServerId.of(databaseId, otherDatasetId));
-    assertThat(newServerId).isNotEqualTo(ServerId.of(otherDatabaseId, otherDatasetId));
+    assertThat(newServerId)
+      .isEqualTo(newServerId)
+      .isEqualTo(ServerId.of(databaseId, datasetId))
+      .isNotEqualTo(new Object())
+      .isNotNull()
+      .isNotEqualTo(ServerId.of(otherDatabaseId, datasetId))
+      .isNotEqualTo(ServerId.of(databaseId, otherDatasetId))
+      .isNotEqualTo(ServerId.of(otherDatabaseId, otherDatasetId));
 
     ServerId oldServerId = ServerId.parse(datasetId);
-    assertThat(oldServerId).isEqualTo(oldServerId);
-    assertThat(oldServerId).isEqualTo(ServerId.parse(datasetId));
-    assertThat(oldServerId).isNotEqualTo(ServerId.parse(otherDatasetId));
-    assertThat(oldServerId).isNotEqualTo(ServerId.of(databaseId, datasetId));
+    assertThat(oldServerId)
+      .isEqualTo(oldServerId)
+      .isEqualTo(ServerId.parse(datasetId))
+      .isNotEqualTo(ServerId.parse(otherDatasetId))
+      .isNotEqualTo(ServerId.of(databaseId, datasetId));
   }
 
   @Test
@@ -284,19 +275,22 @@ public class ServerIdTest {
     String otherDatasetId = randomAlphabetic(datasetIdLength - 1) + 'b';
 
     ServerId newServerId = ServerId.of(databaseId, datasetId);
-    assertThat(newServerId.hashCode()).isEqualTo(newServerId.hashCode());
-    assertThat(newServerId.hashCode()).isEqualTo(ServerId.of(databaseId, datasetId).hashCode());
-    assertThat(newServerId.hashCode()).isNotEqualTo(new Object().hashCode());
-    assertThat(newServerId.hashCode()).isNotEqualTo(null);
-    assertThat(newServerId.hashCode()).isNotEqualTo(ServerId.of(otherDatabaseId, datasetId).hashCode());
-    assertThat(newServerId.hashCode()).isNotEqualTo(ServerId.of(databaseId, otherDatasetId).hashCode());
-    assertThat(newServerId.hashCode()).isNotEqualTo(ServerId.of(otherDatabaseId, otherDatasetId).hashCode());
+    assertThat(newServerId)
+      .hasSameHashCodeAs(newServerId)
+      .hasSameHashCodeAs(ServerId.of(databaseId, datasetId));
+    assertThat(newServerId.hashCode())
+      .isNotEqualTo(new Object().hashCode())
+      .isNotEqualTo(ServerId.of(otherDatabaseId, datasetId).hashCode())
+      .isNotEqualTo(ServerId.of(databaseId, otherDatasetId).hashCode())
+      .isNotEqualTo(ServerId.of(otherDatabaseId, otherDatasetId).hashCode());
 
     ServerId oldServerId = ServerId.parse(datasetId);
-    assertThat(oldServerId.hashCode()).isEqualTo(oldServerId.hashCode());
-    assertThat(oldServerId.hashCode()).isEqualTo(ServerId.parse(datasetId).hashCode());
-    assertThat(oldServerId.hashCode()).isNotEqualTo(ServerId.parse(otherDatasetId).hashCode());
-    assertThat(oldServerId.hashCode()).isNotEqualTo(ServerId.of(databaseId, datasetId).hashCode());
+    assertThat(oldServerId)
+      .hasSameHashCodeAs(oldServerId)
+      .hasSameHashCodeAs(ServerId.parse(datasetId));
+    assertThat(oldServerId.hashCode())
+      .isNotEqualTo(ServerId.parse(otherDatasetId).hashCode())
+      .isNotEqualTo(ServerId.of(databaseId, datasetId).hashCode());
   }
 
   @DataProvider

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, Link } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { GithubBindingDefinition } from '../../../../types/alm-settings';
+import { FormattedMessage } from 'react-intl';
+import { ALM_DOCUMENTATION_PATHS } from '../../../../helpers/constants';
+import { useDocUrl } from '../../../../helpers/docs';
+import { translate } from '../../../../helpers/l10n';
+import { AlmKeys, GithubBindingDefinition } from '../../../../types/alm-settings';
 import { AlmBindingDefinitionFormField } from './AlmBindingDefinitionFormField';
 
 export interface GithubFormProps {
@@ -29,16 +33,28 @@ export interface GithubFormProps {
 
 export default function GithubForm(props: GithubFormProps) {
   const { formData, onFieldChange } = props;
-
+  const toStatic = useDocUrl(ALM_DOCUMENTATION_PATHS[AlmKeys.GitHub]);
   return (
     <>
+      <FlagMessage variant="info" className="sw-mb-8">
+        <span>
+          <FormattedMessage
+            defaultMessage={translate(`settings.almintegration.github.info`)}
+            id="settings.almintegration.github.info"
+            values={{
+              link: <Link to={toStatic}>{translate('learn_more')}</Link>,
+            }}
+          />
+        </span>
+      </FlagMessage>
       <AlmBindingDefinitionFormField
-        autoFocus={true}
+        autoFocus
         help={translate('settings.almintegration.form.name.github.help')}
         id="name.github"
         onFieldChange={onFieldChange}
         propKey="key"
         value={formData.key}
+        maxLength={200}
       />
       <AlmBindingDefinitionFormField
         help={
@@ -59,8 +75,10 @@ export default function GithubForm(props: GithubFormProps) {
         propKey="url"
         value={formData.url}
       />
+
       <AlmBindingDefinitionFormField
         id="app_id"
+        help={translate('settings.almintegration.form.app_id.github.help')}
         maxLength={80}
         onFieldChange={onFieldChange}
         propKey="appId"
@@ -68,6 +86,7 @@ export default function GithubForm(props: GithubFormProps) {
       />
       <AlmBindingDefinitionFormField
         id="client_id.github"
+        help={translate('settings.almintegration.form.client_id.github.help')}
         maxLength={80}
         onFieldChange={onFieldChange}
         propKey="clientId"
@@ -75,19 +94,35 @@ export default function GithubForm(props: GithubFormProps) {
       />
       <AlmBindingDefinitionFormField
         id="client_secret.github"
-        maxLength={80}
+        help={translate('settings.almintegration.form.client_secret.github.help')}
+        maxLength={160}
         onFieldChange={onFieldChange}
         overwriteOnly={Boolean(formData.key)}
         propKey="clientSecret"
         value={formData.clientSecret}
+        isSecret
       />
       <AlmBindingDefinitionFormField
         id="private_key"
-        isTextArea={true}
+        help={translate('settings.almintegration.form.private_key.github.help')}
+        isTextArea
         onFieldChange={onFieldChange}
         overwriteOnly={Boolean(formData.key)}
         propKey="privateKey"
         value={formData.privateKey}
+        maxLength={2500}
+        isSecret
+      />
+      <AlmBindingDefinitionFormField
+        id="webhook_secret.github"
+        help={translate('settings.almintegration.form.webhook_secret.github.help')}
+        maxLength={160}
+        onFieldChange={onFieldChange}
+        overwriteOnly={Boolean(formData.key)}
+        propKey="webhookSecret"
+        value={formData.webhookSecret}
+        isSecret
+        optional
       />
     </>
   );

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,7 @@ import static org.sonar.process.ProcessProperties.Property.JDBC_URL;
 import static org.sonar.process.ProcessProperties.Property.PATH_HOME;
 
 public class JdbcSettings implements Consumer<Props> {
-
+  private static final String IGNORED_KEYWORDS_OPTION = ";NON_KEYWORDS=VALUE";
   private static final int JDBC_EMBEDDED_PORT_DEFAULT_VALUE = 9092;
 
   enum Provider {
@@ -119,7 +119,7 @@ public class JdbcSettings implements Consumer<Props> {
     } else {
       host = ip.getHostAddress();
     }
-    return format("jdbc:h2:tcp://%s:%d/sonar", host, embeddedDatabasePort);
+    return format("jdbc:h2:tcp://%s:%d/sonar%s", host, embeddedDatabasePort, IGNORED_KEYWORDS_OPTION);
   }
 
   private static void warnIfUrlIsSet(int port, String existing, String expectedUrl) {
@@ -140,18 +140,6 @@ public class JdbcSettings implements Consumer<Props> {
           + "'.",
           existing, port, expectedUrl);
       }
-    }
-  }
-
-  private static void checkRequiredParameter(String url, String val) {
-    if (!url.contains(val)) {
-      throw new MessageException(format("JDBC URL must have the property '%s'", val));
-    }
-  }
-
-  private void checkRecommendedParameter(String url, String val) {
-    if (!url.contains(val)) {
-      LoggerFactory.getLogger(getClass()).warn("JDBC URL is recommended to have the property '{}'", val);
     }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,133 +17,156 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import ValidationInput from 'sonar-ui-common/components/controls/ValidationInput';
-import { change, submit, waitAndUpdate } from 'sonar-ui-common/helpers/testUtils';
-import { createProject, doesComponentExists } from '../../../../api/components';
-import ProjectKeyInput from '../../../../components/common/ProjectKeyInput';
-import { validateProjectKey } from '../../../../helpers/projects';
-import { mockEvent } from '../../../../helpers/testMocks';
-import { ProjectKeyValidationResult } from '../../../../types/component';
-import { PROJECT_NAME_MAX_LEN } from '../constants';
-import ManualProjectCreate from '../ManualProjectCreate';
+import { doesComponentExists } from '../../../../api/components';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { byRole } from '../../../../helpers/testSelector';
+import ManualProjectCreate from '../manual/ManualProjectCreate';
+
+const ui = {
+  nextButton: byRole('button', { name: 'next' }),
+  cancelButton: byRole('button', { name: 'cancel' }),
+  closeButton: byRole('button', { name: 'clear' }),
+};
 
 jest.mock('../../../../api/components', () => ({
-  createProject: jest.fn().mockResolvedValue({ project: { key: 'bar', name: 'Bar' } }),
   doesComponentExists: jest
     .fn()
-    .mockImplementation(({ component }) => Promise.resolve(component === 'exists'))
+    .mockImplementation(({ component }) => Promise.resolve(component === 'exists')),
 }));
 
-jest.mock('../../../../helpers/projects', () => {
-  const { ProjectKeyValidationResult } = jest.requireActual('../../../../types/component');
-  return { validateProjectKey: jest.fn(() => ProjectKeyValidationResult.Valid) };
-});
+jest.mock('../../../../api/settings', () => ({
+  getValue: jest.fn().mockResolvedValue({ value: 'main' }),
+}));
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
+it('should show branch information', async () => {
+  renderManualProjectCreate({ branchesEnabled: true });
+  expect(
+    await screen.findByText('onboarding.create_project.pr_decoration.information'),
+  ).toBeInTheDocument();
 });
 
-it('should correctly create a project', async () => {
-  const onProjectCreate = jest.fn();
-  const wrapper = shallowRender({ onProjectCreate });
+it('should validate form input', async () => {
+  const user = userEvent.setup();
+  renderManualProjectCreate();
 
-  wrapper
-    .find(ProjectKeyInput)
-    .props()
-    .onProjectKeyChange(mockEvent({ currentTarget: { value: 'bar' } }));
-  change(wrapper.find('input#project-name'), 'Bar');
-  expect(wrapper.find(SubmitButton).props().disabled).toBe(false);
-  expect(validateProjectKey).toBeCalledWith('bar');
-  expect(doesComponentExists).toBeCalledWith({ component: 'bar' });
-
-  submit(wrapper.find('form'));
-  expect(createProject).toBeCalledWith({
-    project: 'bar',
-    name: 'Bar'
-  });
-
-  await waitAndUpdate(wrapper);
-  expect(onProjectCreate).toBeCalledWith(['bar']);
-});
-
-it('should not display any status when the name is not defined', () => {
-  const wrapper = shallowRender();
-  const projectNameInput = wrapper.find(ValidationInput);
-  expect(projectNameInput.props().isInvalid).toBe(false);
-  expect(projectNameInput.props().isValid).toBe(false);
-});
-
-it('should have an error when the key is invalid', () => {
-  (validateProjectKey as jest.Mock).mockReturnValueOnce(ProjectKeyValidationResult.TooLong);
-  const wrapper = shallowRender();
-  const instance = wrapper.instance();
-  instance.handleProjectKeyChange(mockEvent());
-  expect(wrapper.find(ProjectKeyInput).props().error).toBe(
-    `onboarding.create_project.project_key.error.${ProjectKeyValidationResult.TooLong}`
+  // All input valid
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.display_name/,
+    }),
   );
-});
+  await user.keyboard('test');
+  expect(
+    screen.getByRole('textbox', { name: /onboarding.create_project.project_key/ }),
+  ).toHaveValue('test');
+  expect(ui.nextButton.get()).toBeEnabled();
 
-it('should have an error when the key already exists', async () => {
-  const wrapper = shallowRender();
-  wrapper.instance().handleProjectKeyChange(mockEvent({ currentTarget: { value: 'exists' } }));
-  await waitAndUpdate(wrapper);
-  expect(wrapper.state().projectKeyError).toBe('onboarding.create_project.project_key.taken');
-});
-
-it('should ignore promise return if value has been changed in the meantime', async () => {
-  (validateProjectKey as jest.Mock)
-    .mockReturnValueOnce(ProjectKeyValidationResult.Valid)
-    .mockReturnValueOnce(ProjectKeyValidationResult.InvalidChar);
-  const wrapper = shallowRender();
-  const instance = wrapper.instance();
-
-  instance.handleProjectKeyChange(mockEvent({ currentTarget: { value: 'exists' } }));
-  instance.handleProjectKeyChange(mockEvent({ currentTarget: { value: 'exists%' } }));
-
-  await waitAndUpdate(wrapper);
-
-  expect(wrapper.state().touched).toBe(true);
-  expect(wrapper.state().projectKeyError).toBe(
-    `onboarding.create_project.project_key.error.${ProjectKeyValidationResult.InvalidChar}`
+  // Sanitize the key
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.display_name/,
+    }),
   );
+  await user.keyboard('{Control>}a{/Control}This is not a key%^$');
+  expect(
+    screen.getByRole('textbox', { name: /onboarding.create_project.project_key/ }),
+  ).toHaveValue('This-is-not-a-key-');
+
+  // Clear name
+  await user.clear(
+    screen.getByRole('textbox', {
+      name: /onboarding.create_project.display_name/,
+    }),
+  );
+  expect(
+    screen.getByRole('textbox', { name: /onboarding.create_project.project_key/ }),
+  ).toHaveValue('');
+
+  expect(ui.nextButton.get()).toBeDisabled();
+
+  // Only key
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.project_key/,
+    }),
+  );
+  await user.keyboard('awsome-key');
+  expect(
+    screen.getByRole('textbox', { name: /onboarding.create_project.display_name/ }),
+  ).toHaveValue('');
+  expect(ui.nextButton.get()).toBeDisabled();
+
+  // Invalid key
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.project_key/,
+    }),
+  );
+  await user.keyboard('{Control>}a{/Control}123');
+  expect(ui.nextButton.get()).toBeDisabled();
+
+  await user.keyboard('{Control>}a{/Control}@');
+  expect(ui.nextButton.get()).toBeDisabled();
+
+  await user.keyboard('{Control>}a{/Control}exists');
+  expect(ui.nextButton.get()).toBeDisabled();
+
+  // Invalid main branch name
+  await user.clear(
+    screen.getByRole('textbox', {
+      name: /onboarding.create_project.main_branch_name/,
+    }),
+  );
+  expect(ui.nextButton.get()).toBeDisabled();
 });
 
-it('should autofill the name based on the key', () => {
-  const wrapper = shallowRender();
-  wrapper.instance().handleProjectKeyChange(mockEvent({ currentTarget: { value: 'bar' } }));
-  expect(wrapper.find('input#project-name').props().value).toBe('bar');
+it('should submit form input', async () => {
+  const user = userEvent.setup();
+  const onProjectSetupDone = jest.fn();
+  renderManualProjectCreate({ onProjectSetupDone });
+
+  // All input valid
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.display_name/,
+    }),
+  );
+  await user.keyboard('test');
+  await user.click(ui.nextButton.get());
+  expect(onProjectSetupDone).toHaveBeenCalled();
 });
 
-it('should have an error when the name is incorrect', () => {
-  const wrapper = shallowRender();
-  wrapper.setState({ touched: true });
-  const instance = wrapper.instance();
+it('should handle component exists failure', async () => {
+  const user = userEvent.setup();
+  jest.mocked(doesComponentExists).mockRejectedValueOnce({});
+  renderManualProjectCreate();
 
-  instance.handleProjectNameChange(mockEvent({ currentTarget: { value: '' } }));
-  expect(wrapper.find(ValidationInput).props().isInvalid).toBe(true);
-  expect(wrapper.state().projectNameError).toBe(
-    'onboarding.create_project.display_name.error.empty'
+  // All input valid
+  await user.click(
+    await screen.findByRole('textbox', {
+      name: /onboarding.create_project.display_name/,
+    }),
   );
-
-  instance.handleProjectNameChange(
-    mockEvent({ currentTarget: { value: new Array(PROJECT_NAME_MAX_LEN + 1).fill('a').join('') } })
-  );
-  expect(wrapper.find(ValidationInput).props().isInvalid).toBe(true);
-  expect(wrapper.state().projectNameError).toBe(
-    'onboarding.create_project.display_name.error.too_long'
-  );
+  await user.keyboard('test');
+  expect(
+    screen.getByRole('textbox', { name: /onboarding.create_project.display_name/ }),
+  ).toHaveValue('test');
 });
 
-function shallowRender(props: Partial<ManualProjectCreate['props']> = {}) {
-  return shallow<ManualProjectCreate>(
-    <ManualProjectCreate onProjectCreate={jest.fn()} {...props} />
+function renderManualProjectCreate(props: Partial<Parameters<typeof ManualProjectCreate>[0]> = {}) {
+  renderComponent(
+    <ManualProjectCreate
+      branchesEnabled={false}
+      onProjectSetupDone={jest.fn()}
+      onClose={jest.fn()}
+      {...props}
+    />,
   );
 }

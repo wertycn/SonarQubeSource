@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,9 @@
 package org.sonar.server.permission;
 
 import javax.annotation.Nullable;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
+import org.sonar.db.user.UserId;
+import org.sonar.server.common.permission.Operation;
 
 import static java.util.Objects.requireNonNull;
 
@@ -28,12 +30,18 @@ public class UserPermissionChange extends PermissionChange {
 
   private final UserId userId;
 
-  public UserPermissionChange(Operation operation, String permission, @Nullable ComponentDto project, UserId userId, PermissionService permissionService) {
-    super(operation, permission, project, permissionService);
+  public UserPermissionChange(Operation operation, String permission, @Nullable EntityDto entity, UserId userId,
+    PermissionService permissionService) {
+    super(operation, permission, entity, permissionService);
     this.userId = requireNonNull(userId);
   }
 
   public UserId getUserId() {
     return userId;
+  }
+
+  @Override
+  public String getUuidOfGrantee() {
+    return userId.getUuid();
   }
 }

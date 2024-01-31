@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,14 +20,12 @@
 package org.sonar.scanner.scan;
 
 import java.util.Map;
-import org.sonar.api.config.internal.Encryption;
 import org.sonar.api.config.PropertyDefinitions;
+import org.sonar.api.config.internal.Encryption;
 import org.sonar.scanner.config.DefaultConfiguration;
 
 public class ModuleConfiguration extends DefaultConfiguration {
-
   public ModuleConfiguration(PropertyDefinitions propertyDefinitions, Encryption encryption, Map<String, String> props) {
     super(propertyDefinitions, encryption, props);
   }
-
 }

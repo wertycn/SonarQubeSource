@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,12 +27,12 @@ public class UsersWsParameters {
   public static final String ACTION_CREATE = "create";
   public static final String ACTION_DEACTIVATE = "deactivate";
   public static final String ACTION_UPDATE = "update";
-  public static final String ACTION_SKIP_ONBOARDING_TUTORIAL = "skip_onboarding_tutorial";
   public static final String ACTION_CURRENT = "current";
   public static final String ACTION_UPDATE_IDENTITY_PROVIDER = "update_identity_provider";
 
   public static final String PARAM_LOGIN = "login";
   public static final String PARAM_PASSWORD = "password";
+  public static final String PARAM_PREVIOUS_PASSWORD = "previousPassword";
   public static final String PARAM_NAME = "name";
   public static final String PARAM_EMAIL = "email";
 

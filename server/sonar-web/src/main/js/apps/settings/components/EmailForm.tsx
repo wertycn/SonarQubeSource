@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  BasicSeparator,
+  ButtonPrimary,
+  FlagMessage,
+  FormField,
+  InputField,
+  InputTextArea,
+  Spinner,
+  SubHeading,
+} from 'design-system';
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import MandatoryFieldsExplanation from 'sonar-ui-common/components/ui/MandatoryFieldsExplanation';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { parseError } from 'sonar-ui-common/helpers/request';
 import { sendTestEmail } from '../../../api/settings';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
+import MandatoryFieldsExplanation from '../../../components/ui/MandatoryFieldsExplanation';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { parseError } from '../../../helpers/request';
+import { LoggedInUser } from '../../../types/users';
 
 interface Props {
-  currentUser: T.LoggedInUser;
+  currentUser: LoggedInUser;
 }
 
 interface State {
@@ -50,7 +57,7 @@ export class EmailForm extends React.PureComponent<Props, State> {
       recipient: this.props.currentUser.email || '',
       subject: translate('email_configuration.test.subject'),
       message: translate('email_configuration.test.message_text'),
-      loading: false
+      loading: false,
     };
   }
 
@@ -63,7 +70,7 @@ export class EmailForm extends React.PureComponent<Props, State> {
   }
 
   handleError = (response: Response) => {
-    return parseError(response).then(message => {
+    return parseError(response).then((message) => {
       if (this.mounted) {
         this.setState({ error: message, loading: false });
       }
@@ -96,82 +103,67 @@ export class EmailForm extends React.PureComponent<Props, State> {
   render() {
     const { error, loading, message, recipient, subject, success } = this.state;
     return (
-      <div className="settings-definition">
-        <div className="settings-definition-left">
-          <h3 className="settings-definition-name">
-            {translate('email_configuration.test.title')}
-          </h3>
-        </div>
+      <>
+        <BasicSeparator />
+        <div className="sw-p-6 sw-flex sw-gap-12">
+          <div className="sw-w-abs-300">
+            <SubHeading>{translate('email_configuration.test.title')}</SubHeading>
+            <div className="sw-mt-1">
+              <MandatoryFieldsExplanation />
+            </div>
+          </div>
 
-        <form className="settings-definition-right" onSubmit={this.handleFormSubmit}>
-          {success && (
-            <div className="form-field">
-              <Alert variant="success">
+          <form className="sw-flex-1" onSubmit={this.handleFormSubmit}>
+            {success && (
+              <FlagMessage variant="success">
                 {translateWithParameters('email_configuration.test.email_was_sent_to_x', success)}
-              </Alert>
-            </div>
-          )}
+              </FlagMessage>
+            )}
 
-          {error !== undefined && (
-            <div className="form-field">
-              <Alert variant="error">{error}</Alert>
-            </div>
-          )}
+            {error !== undefined && <FlagMessage variant="error">{error}</FlagMessage>}
 
-          <MandatoryFieldsExplanation className="form-field" />
+            <FormField label={translate('email_configuration.test.to_address')} required>
+              <InputField
+                disabled={loading}
+                id="test-email-to"
+                onChange={this.onRecipientChange}
+                required
+                size="large"
+                type="email"
+                value={recipient}
+              />
+            </FormField>
+            <FormField label={translate('email_configuration.test.subject')}>
+              <InputField
+                disabled={loading}
+                id="test-email-subject"
+                onChange={this.onSubjectChange}
+                size="large"
+                type="text"
+                value={subject}
+              />
+            </FormField>
+            <FormField label={translate('email_configuration.test.message')} required>
+              <InputTextArea
+                disabled={loading}
+                id="test-email-message"
+                onChange={this.onMessageChange}
+                required
+                rows={5}
+                size="large"
+                value={message}
+              />
+            </FormField>
 
-          <div className="form-field">
-            <label htmlFor="test-email-to">
-              {translate('email_configuration.test.to_address')}
-              <MandatoryFieldMarker />
-            </label>
-            <input
-              className="settings-large-input"
-              disabled={loading}
-              id="test-email-to"
-              onChange={this.onRecipientChange}
-              required={true}
-              type="email"
-              value={recipient}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="test-email-subject">
-              {translate('email_configuration.test.subject')}
-            </label>
-            <input
-              className="settings-large-input"
-              disabled={loading}
-              id="test-email-subject"
-              onChange={this.onSubjectChange}
-              type="text"
-              value={subject}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="test-email-message">
-              {translate('email_configuration.test.message')}
-              <MandatoryFieldMarker />
-            </label>
-            <textarea
-              className="settings-large-input"
-              disabled={loading}
-              id="test-email-message"
-              onChange={this.onMessageChange}
-              required={true}
-              rows={5}
-              value={message}
-            />
-          </div>
-
-          <SubmitButton disabled={loading}>
-            {translate('email_configuration.test.send')}
-          </SubmitButton>
-          {loading && <DeferredSpinner className="spacer-left" />}
-        </form>
-      </div>
+            <ButtonPrimary disabled={loading} type="submit" className="sw-mt-2">
+              {translate('email_configuration.test.send')}
+            </ButtonPrimary>
+            <Spinner loading={loading} className="sw-ml-2" />
+          </form>
+        </div>
+      </>
     );
   }
 }
 
-export default withCurrentUser(EmailForm);
+export default withCurrentUserContext(EmailForm);

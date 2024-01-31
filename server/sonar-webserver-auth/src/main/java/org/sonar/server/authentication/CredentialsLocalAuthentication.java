@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@ import java.util.EnumMap;
 import javax.annotation.Nullable;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
-import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.lang.RandomStringUtils;
 import org.mindrot.jbcrypt.BCrypt;
 import org.sonar.api.config.Configuration;
 import org.sonar.db.DbClient;
@@ -39,30 +39,39 @@ import org.sonar.server.authentication.event.AuthenticationException;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
-import static java.util.Objects.requireNonNull;
 
 /**
  * Validates the password of a "local" user (password is stored in
  * database).
  */
 public class CredentialsLocalAuthentication {
+  public static final String ERROR_NULL_HASH_METHOD = "null hash method";
+  public static final String ERROR_NULL_PASSWORD_IN_DB = "null password in DB";
+  public static final String ERROR_NULL_SALT = "null salt";
+  public static final String ERROR_WRONG_PASSWORD = "wrong password";
+  public static final String ERROR_UNKNOWN_HASH_METHOD = "Unknown hash method [%s]";
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-  private static final HashMethod DEFAULT = HashMethod.PBKDF2;
   private static final String PBKDF2_ITERATIONS_PROP = "sonar.internal.pbkdf2.iterations";
+  private static final HashMethod DEFAULT = HashMethod.PBKDF2;
+  private static final int DUMMY_PASSWORD_AND_SALT_SIZE = 100;
 
   private final DbClient dbClient;
   private final EnumMap<HashMethod, HashFunction> hashFunctions = new EnumMap<>(HashMethod.class);
 
   public enum HashMethod {
-    SHA1, BCRYPT, PBKDF2;
+    BCRYPT, PBKDF2
   }
 
   public CredentialsLocalAuthentication(DbClient dbClient, Configuration configuration) {
     this.dbClient = dbClient;
     hashFunctions.put(HashMethod.BCRYPT, new BcryptFunction());
-    hashFunctions.put(HashMethod.SHA1, new Sha1Function());
     hashFunctions.put(HashMethod.PBKDF2, new PBKDF2Function(configuration.getInt(PBKDF2_ITERATIONS_PROP).orElse(null)));
+  }
 
+  void generateHashToAvoidEnumerationAttack(){
+    String randomSalt = RandomStringUtils.randomAlphabetic(DUMMY_PASSWORD_AND_SALT_SIZE);
+    String randomPassword = RandomStringUtils.randomAlphabetic(DUMMY_PASSWORD_AND_SALT_SIZE);
+    hashFunctions.get(HashMethod.PBKDF2).encryptPassword(randomSalt, randomPassword);
   }
 
   /**
@@ -71,28 +80,39 @@ public class CredentialsLocalAuthentication {
    * If the password must be updated because an old algorithm is used, the UserDto is updated but the session
    * is not committed
    */
-  public void authenticate(DbSession session, UserDto user, @Nullable String password, Method method) {
+  public void authenticate(DbSession session, UserDto user, String password, Method method) {
+    HashMethod hashMethod = getHashMethod(user, method);
+    HashFunction hashFunction = hashFunctions.get(hashMethod);
+    AuthenticationResult result = authenticate(user, password, method, hashFunction);
+
+    // Upgrade the password if it's an old hashMethod
+    if (hashMethod != DEFAULT || result.needsUpdate) {
+      hashFunctions.get(DEFAULT).storeHashPassword(user, password);
+      dbClient.userDao().update(session, user);
+    }
+  }
+
+  private HashMethod getHashMethod(UserDto user, Method method) {
     if (user.getHashMethod() == null) {
       throw AuthenticationException.newBuilder()
         .setSource(Source.local(method))
         .setLogin(user.getLogin())
-        .setMessage("null hash method")
+        .setMessage(ERROR_NULL_HASH_METHOD)
         .build();
     }
-
-    HashMethod hashMethod;
     try {
-      hashMethod = HashMethod.valueOf(user.getHashMethod());
+      return HashMethod.valueOf(user.getHashMethod());
     } catch (IllegalArgumentException ex) {
+      generateHashToAvoidEnumerationAttack();
       throw AuthenticationException.newBuilder()
         .setSource(Source.local(method))
         .setLogin(user.getLogin())
-        .setMessage(format("Unknown hash method [%s]", user.getHashMethod()))
+        .setMessage(format(ERROR_UNKNOWN_HASH_METHOD, user.getHashMethod()))
         .build();
     }
+  }
 
-    HashFunction hashFunction = hashFunctions.get(hashMethod);
-
+  private static AuthenticationResult authenticate(UserDto user, String password, Method method, HashFunction hashFunction) {
     AuthenticationResult result = hashFunction.checkCredentials(user, password);
     if (!result.isSuccessful()) {
       throw AuthenticationException.newBuilder()
@@ -101,12 +121,7 @@ public class CredentialsLocalAuthentication {
         .setMessage(result.getFailureMessage())
         .build();
     }
-
-    // Upgrade the password if it's an old hashMethod
-    if (hashMethod != DEFAULT || result.needsUpdate) {
-      hashFunctions.get(DEFAULT).storeHashPassword(user, password);
-      dbClient.userDao().update(session, user);
-    }
+    return result;
   }
 
   /**
@@ -150,79 +165,50 @@ public class CredentialsLocalAuthentication {
     AuthenticationResult checkCredentials(UserDto user, String password);
 
     void storeHashPassword(UserDto user, String password);
-  }
 
-  /**
-   * Implementation of deprecated SHA1 hash function
-   */
-  private static final class Sha1Function implements HashFunction {
-    @Override
-    public AuthenticationResult checkCredentials(UserDto user, String password) {
-      if (user.getCryptedPassword() == null) {
-        return new AuthenticationResult(false, "null password in DB");
-      }
-      if (user.getSalt() == null) {
-        return new AuthenticationResult(false, "null salt");
-      }
-      if (!user.getCryptedPassword().equals(hash(user.getSalt(), password))) {
-        return new AuthenticationResult(false, "wrong password");
-      }
-      return new AuthenticationResult(true, "");
-    }
-
-    @Override
-    public void storeHashPassword(UserDto user, String password) {
-      requireNonNull(password, "Password cannot be null");
-      byte[] saltRandom = new byte[20];
-      SECURE_RANDOM.nextBytes(saltRandom);
-      String salt = DigestUtils.sha1Hex(saltRandom);
-
-      user.setHashMethod(HashMethod.SHA1.name())
-        .setCryptedPassword(hash(salt, password))
-        .setSalt(salt);
-    }
-
-    private static String hash(String salt, String password) {
-      return DigestUtils.sha1Hex("--" + salt + "--" + password + "--");
+    default String encryptPassword(String salt, String password) {
+      throw new IllegalStateException("This method is not supported for this hash function");
     }
   }
 
-  private static final class PBKDF2Function implements HashFunction {
+  static final class PBKDF2Function implements HashFunction {
+    private static final char ITERATIONS_HASH_SEPARATOR = '$';
     private static final int DEFAULT_ITERATIONS = 100_000;
     private static final String ALGORITHM = "PBKDF2WithHmacSHA512";
     private static final int KEY_LEN = 512;
-    private final int gen_iterations;
+    private static final String ERROR_INVALID_HASH_STORED = "invalid hash stored";
+    private final int generationIterations;
 
-    public PBKDF2Function(@Nullable Integer gen_iterations) {
-      this.gen_iterations = gen_iterations != null ? gen_iterations : DEFAULT_ITERATIONS;
+    public PBKDF2Function(@Nullable Integer generationIterations) {
+      this.generationIterations = generationIterations != null ? generationIterations : DEFAULT_ITERATIONS;
     }
 
     @Override
     public AuthenticationResult checkCredentials(UserDto user, String password) {
       if (user.getCryptedPassword() == null) {
-        return new AuthenticationResult(false, "null password in DB");
+        return new AuthenticationResult(false, ERROR_NULL_PASSWORD_IN_DB);
       }
       if (user.getSalt() == null) {
-        return new AuthenticationResult(false, "null salt");
+        return new AuthenticationResult(false, ERROR_NULL_SALT);
       }
 
-      int pos = user.getCryptedPassword().indexOf('$');
+      int pos = user.getCryptedPassword().indexOf(ITERATIONS_HASH_SEPARATOR);
       if (pos < 1) {
-        return new AuthenticationResult(false, "invalid hash stored");
+        return new AuthenticationResult(false, ERROR_INVALID_HASH_STORED);
       }
       int iterations;
       try {
         iterations = Integer.parseInt(user.getCryptedPassword().substring(0, pos));
       } catch (NumberFormatException e) {
-        return new AuthenticationResult(false, "invalid hash stored");
+        return new AuthenticationResult(false, ERROR_INVALID_HASH_STORED);
       }
       String hash = user.getCryptedPassword().substring(pos + 1);
       byte[] salt = Base64.getDecoder().decode(user.getSalt());
 
       if (!hash.equals(hash(salt, password, iterations))) {
-        return new AuthenticationResult(false, "wrong password");
+        return new AuthenticationResult(false, ERROR_WRONG_PASSWORD);
       }
-      boolean needsUpdate = iterations != gen_iterations;
+      boolean needsUpdate = iterations != generationIterations;
       return new AuthenticationResult(true, "", needsUpdate);
     }
 
@@ -230,14 +216,24 @@ public class CredentialsLocalAuthentication {
     public void storeHashPassword(UserDto user, String password) {
       byte[] salt = new byte[20];
       SECURE_RANDOM.nextBytes(salt);
-      String hashStr = hash(salt, password, gen_iterations);
+      String hashStr = hash(salt, password, generationIterations);
       String saltStr = Base64.getEncoder().encodeToString(salt);
       user.setHashMethod(HashMethod.PBKDF2.name())
-        .setCryptedPassword(gen_iterations + "$" + hashStr)
+        .setCryptedPassword(composeEncryptedPassword(hashStr))
         .setSalt(saltStr);
     }
 
-    private String hash(byte[] salt, String password, int iterations) {
+    @Override
+    public String encryptPassword(String saltStr, String password) {
+      byte[] salt = Base64.getDecoder().decode(saltStr);
+      return composeEncryptedPassword(hash(salt, password, generationIterations));
+    }
+
+    private String composeEncryptedPassword(String hashStr) {
+      return format("%d%c%s", generationIterations, ITERATIONS_HASH_SEPARATOR, hashStr);
+    }
+
+    private static String hash(byte[] salt, String password, int iterations) {
       try {
         SecretKeyFactory skf = SecretKeyFactory.getInstance(ALGORITHM);
         PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, KEY_LEN);
@@ -255,16 +251,19 @@ public class CredentialsLocalAuthentication {
   private static final class BcryptFunction implements HashFunction {
     @Override
     public AuthenticationResult checkCredentials(UserDto user, String password) {
-      // This behavior is overridden in most of integration tests for performance reasons, any changes to BCrypt calls should be propagated to Byteman classes
+      if (user.getCryptedPassword() == null) {
+        return new AuthenticationResult(false, ERROR_NULL_PASSWORD_IN_DB);
+      }
+      // This behavior is overridden in most of integration tests for performance reasons, any changes to BCrypt calls should be propagated to
+      // Byteman classes
       if (!BCrypt.checkpw(password, user.getCryptedPassword())) {
-        return new AuthenticationResult(false, "wrong password");
+        return new AuthenticationResult(false, ERROR_WRONG_PASSWORD);
       }
       return new AuthenticationResult(true, "");
     }
 
     @Override
     public void storeHashPassword(UserDto user, String password) {
-      requireNonNull(password, "Password cannot be null");
       user.setHashMethod(HashMethod.BCRYPT.name())
         .setCryptedPassword(BCrypt.hashpw(password, BCrypt.gensalt(12)))
         .setSalt(null);

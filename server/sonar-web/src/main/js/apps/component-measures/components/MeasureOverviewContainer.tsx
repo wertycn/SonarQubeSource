@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,23 +18,30 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { InjectedRouter } from 'react-router';
 import { getComponentShow } from '../../../api/components';
+import { Router } from '../../../components/hoc/withRouter';
 import { getBranchLikeQuery, isSameBranchLike } from '../../../helpers/branch-like';
 import { getProjectUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
-import { isViewType, Query } from '../utils';
+import { isView } from '../../../types/component';
+import {
+  ComponentMeasure,
+  ComponentMeasureIntern,
+  Dict,
+  Metric,
+  Period,
+} from '../../../types/types';
+import { Query } from '../utils';
 import MeasureOverview from './MeasureOverview';
 
 interface Props {
   branchLike?: BranchLike;
   className?: string;
   domain: string;
-  leakPeriod?: T.Period;
-  metrics: T.Dict<T.Metric>;
-  onIssueChange?: (issue: T.Issue) => void;
-  rootComponent: T.ComponentMeasure;
-  router: InjectedRouter;
+  leakPeriod?: Period;
+  metrics: Dict<Metric>;
+  rootComponent: ComponentMeasure;
+  router: Router;
   selected?: string;
   updateQuery: (query: Partial<Query>) => void;
 }
@@ -45,7 +52,7 @@ interface LoadingState {
 }
 
 interface State {
-  component?: T.ComponentMeasure;
+  component?: ComponentMeasure;
   loading: LoadingState;
 }
 
@@ -53,7 +60,7 @@ export default class MeasureOverviewContainer extends React.PureComponent<Props,
   mounted = false;
 
   state: State = {
-    loading: { bubbles: false, component: false }
+    loading: { bubbles: false, component: false },
   };
 
   componentDidMount() {
@@ -92,22 +99,22 @@ export default class MeasureOverviewContainer extends React.PureComponent<Props,
           this.updateLoading({ component: false });
         }
       },
-      () => this.updateLoading({ component: false })
+      () => this.updateLoading({ component: false }),
     );
   };
 
   updateLoading = (loading: Partial<LoadingState>) => {
     if (this.mounted) {
-      this.setState(state => ({ loading: { ...state.loading, ...loading } }));
+      this.setState((state) => ({ loading: { ...state.loading, ...loading } }));
     }
   };
 
-  updateSelected = (component: string) => {
-    if (this.state.component && isViewType(this.state.component)) {
-      this.props.router.push(getProjectUrl(component));
+  updateSelected = (component: ComponentMeasureIntern) => {
+    if (this.state.component && isView(this.state.component.qualifier)) {
+      this.props.router.push(getProjectUrl(component.refKey || component.key, component.branch));
     } else {
       this.props.updateQuery({
-        selected: component !== this.props.rootComponent.key ? component : undefined
+        selected: component.key !== this.props.rootComponent.key ? component.key : undefined,
       });
     }
   };
@@ -126,7 +133,6 @@ export default class MeasureOverviewContainer extends React.PureComponent<Props,
         leakPeriod={this.props.leakPeriod}
         loading={this.state.loading.component || this.state.loading.bubbles}
         metrics={this.props.metrics}
-        onIssueChange={this.props.onIssueChange}
         rootComponent={this.props.rootComponent}
         updateLoading={this.updateLoading}
         updateSelected={this.updateSelected}

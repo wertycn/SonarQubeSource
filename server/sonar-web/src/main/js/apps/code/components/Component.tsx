@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { ContentCell, NumericalCell, TableRowInteractive } from 'design-system';
 import * as React from 'react';
-import { withScrollTo } from '../../../components/hoc/withScrollTo';
+import DateFromNow from '../../../components/intl/DateFromNow';
 import { WorkspaceContext } from '../../../components/workspace/context';
 import { BranchLike } from '../../../types/branch-like';
+import { ComponentQualifier } from '../../../types/component';
+import { Metric, ComponentMeasure as TypeComponentMeasure } from '../../../types/types';
 import ComponentMeasure from './ComponentMeasure';
 import ComponentName from './ComponentName';
 import ComponentPin from './ComponentPin';
@@ -30,78 +32,74 @@ interface Props {
   branchLike?: BranchLike;
   canBePinned?: boolean;
   canBrowse?: boolean;
-  component: T.ComponentMeasure;
-  metrics: T.Metric[];
-  previous?: T.ComponentMeasure;
-  rootComponent: T.ComponentMeasure;
+  component: TypeComponentMeasure;
+  isBaseComponent?: boolean;
+  metrics: Metric[];
+  previous?: TypeComponentMeasure;
+  rootComponent: TypeComponentMeasure;
   selected?: boolean;
+  newCodeSelected?: boolean;
+  showAnalysisDate?: boolean;
 }
 
-export class Component extends React.PureComponent<Props> {
-  render() {
-    const {
-      branchLike,
-      canBePinned = true,
-      canBrowse = false,
-      component,
-      metrics,
-      previous,
-      rootComponent,
-      selected = false
-    } = this.props;
+export default function Component(props: Props) {
+  const {
+    branchLike,
+    canBePinned = true,
+    canBrowse = false,
+    component,
+    isBaseComponent = false,
+    metrics,
+    previous,
+    rootComponent,
+    selected = false,
+    newCodeSelected,
+    showAnalysisDate,
+  } = props;
 
-    const isFile = component.qualifier === 'FIL' || component.qualifier === 'UTS';
+  const isFile =
+    component.qualifier === ComponentQualifier.File ||
+    component.qualifier === ComponentQualifier.TestFile;
 
-    return (
-      <tr className={classNames({ selected })}>
-        <td className="blank" />
-        {canBePinned && (
-          <td className="thin nowrap">
-            {isFile && (
-              <span className="spacer-right">
-                <WorkspaceContext.Consumer>
-                  {({ openComponent }) => (
-                    <ComponentPin
-                      branchLike={branchLike}
-                      component={component}
-                      openComponent={openComponent}
-                    />
-                  )}
-                </WorkspaceContext.Consumer>
-              </span>
-            )}
-          </td>
-        )}
-        <td className="code-name-cell">
-          <ComponentName
-            branchLike={branchLike}
-            canBrowse={canBrowse}
-            component={component}
-            previous={previous}
-            rootComponent={rootComponent}
-          />
-        </td>
+  return (
+    <TableRowInteractive selected={selected} aria-label={component.name}>
+      {canBePinned && (
+        <ContentCell className="sw-py-3">
+          {isFile && (
+            <WorkspaceContext.Consumer>
+              {({ openComponent }) => (
+                <ComponentPin
+                  branchLike={branchLike}
+                  component={component}
+                  openComponent={openComponent}
+                />
+              )}
+            </WorkspaceContext.Consumer>
+          )}
+        </ContentCell>
+      )}
+      <ContentCell className="it__code-name-cell sw-overflow-hidden">
+        <ComponentName
+          branchLike={branchLike}
+          canBrowse={canBrowse}
+          component={component}
+          previous={previous}
+          rootComponent={rootComponent}
+          unclickable={isBaseComponent}
+          newCodeSelected={newCodeSelected}
+        />
+      </ContentCell>
 
-        {metrics.map(metric => (
-          <td
-            className={classNames('thin', {
-              'text-center': metric.type === 'RATING',
-              'nowrap text-right': metric.type !== 'RATING'
-            })}
-            key={metric.key}>
-            <div
-              className={classNames({
-                'code-components-rating-cell': metric.type === 'RATING',
-                'code-components-cell': metric.type !== 'RATING'
-              })}>
-              <ComponentMeasure component={component} metric={metric} />
-            </div>
-          </td>
-        ))}
-        <td className="blank" />
-      </tr>
-    );
-  }
+      {metrics.map((metric) => (
+        <ComponentMeasure component={component} key={metric.key} metric={metric} />
+      ))}
+
+      {showAnalysisDate && (
+        <NumericalCell className="sw-whitespace-nowrap">
+          {!isBaseComponent &&
+            (component.analysisDate ? <DateFromNow date={component.analysisDate} /> : '—')}
+        </NumericalCell>
+      )}
+    </TableRowInteractive>
+  );
 }
-
-export default withScrollTo(Component);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -64,15 +64,7 @@ public class EsLoggingTest {
       "appender.file_es.strategy.action.condition.nested_condition.type", "IfAccumulatedFileCount",
       "appender.file_es.strategy.action.condition.nested_condition.exceeds", "7",
       "rootLogger.level", "INFO",
-      "rootLogger.appenderRef.file_es.ref", "file_es",
-      "loggers", "DEPRECATION,org.elasticsearch.client.RestClient,org.elasticsearch.deprecation",
-      "logger.org.elasticsearch.client.RestClient.name", "org.elasticsearch.client.RestClient",
-      "logger.org.elasticsearch.deprecation.level", "ERROR",
-      "logger.org.elasticsearch.deprecation.name", "org.elasticsearch.deprecation",
-      "logger.DEPRECATION.level", "ERROR",
-      "logger.DEPRECATION.name", "DEPRECATION",
-      "logger.org.elasticsearch.client.RestClient.level", "ERROR"
-
+      "rootLogger.appenderRef.file_es.ref", "file_es"
     );
   }
 
@@ -112,6 +104,18 @@ public class EsLoggingTest {
     assertThat(properties.getProperty("rootLogger.level")).isEqualTo("TRACE");
   }
 
+  @Test
+  public void createProperties_adds_nodename_if_cluster_property_is_set() throws IOException {
+    File logDir = temporaryFolder.newFolder();
+    Properties properties = underTest.createProperties(
+      newProps(
+        "sonar.cluster.enabled", "true",
+          "sonar.cluster.node.name", "my-node"),
+      logDir);
+
+    assertThat(properties.getProperty("appender.file_es.layout.pattern")).isEqualTo("%d{yyyy.MM.dd HH:mm:ss} %-5level my-node es[][%logger{1.}] %msg%n");
+  }
+
   private static Props newProps(String... propertyKeysAndValues) {
     assertThat(propertyKeysAndValues.length % 2).describedAs("Number of parameters must be even").isZero();
     Properties properties = new Properties();
@@ -123,7 +127,7 @@ public class EsLoggingTest {
 
   private void verifyProperties(Properties properties, String... expectedPropertyKeysAndValuesOrdered) {
     if (expectedPropertyKeysAndValuesOrdered.length == 0) {
-      assertThat(properties.size()).isZero();
+      assertThat(properties).isEmpty();
     } else {
       assertThat(expectedPropertyKeysAndValuesOrdered.length % 2).describedAs("Number of parameters must be even").isZero();
       Set<String> keys = new HashSet<>(expectedPropertyKeysAndValuesOrdered.length / 2 + 1);
@@ -134,7 +138,7 @@ public class EsLoggingTest {
         assertThat(properties.get(key)).describedAs("Unexpected value for property " + key).isEqualTo(value);
         keys.add(key);
       }
-      assertThat(properties.keySet()).containsOnly(keys.toArray());
+      assertThat(properties).containsOnlyKeys(keys.toArray());
     }
   }
 }

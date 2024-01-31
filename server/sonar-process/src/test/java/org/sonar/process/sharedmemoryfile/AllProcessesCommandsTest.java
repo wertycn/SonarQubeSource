@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,10 +24,10 @@ import java.io.IOException;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.fail;
 import static org.sonar.process.sharedmemoryfile.ProcessCommands.MAX_PROCESSES;
 
@@ -43,8 +43,6 @@ public class AllProcessesCommandsTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void fail_to_init_if_dir_does_not_exist() throws Exception {
@@ -84,19 +82,6 @@ public class AllProcessesCommandsTest {
       commands.setOperational(PROCESS_NUMBER);
       assertThat(commands.isOperational(PROCESS_NUMBER)).isTrue();
       assertThat(readByte(commands, offset)).isEqualTo(OPERATIONAL);
-    }
-  }
-
-  @Test
-  public void write_and_read_ping() throws IOException {
-    try (AllProcessesCommands commands = new AllProcessesCommands(temp.newFolder())) {
-      int offset = 5;
-
-      assertThat(readLong(commands, offset)).isEqualTo(0L);
-
-      long currentTime = System.currentTimeMillis();
-      commands.ping(PROCESS_NUMBER);
-      assertThat(readLong(commands, offset)).isGreaterThanOrEqualTo(currentTime);
     }
   }
 
@@ -191,10 +176,9 @@ public class AllProcessesCommandsTest {
     try (AllProcessesCommands commands = new AllProcessesCommands(temp.newFolder())) {
       int processNumber = -2;
 
-      expectedException.expect(IllegalArgumentException.class);
-      expectedException.expectMessage("Process number " + processNumber + " is not valid");
-
-      commands.createAfterClean(processNumber);
+      assertThatThrownBy(() -> commands.createAfterClean(processNumber))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Process number " + processNumber + " is not valid");
     }
   }
 
@@ -203,10 +187,9 @@ public class AllProcessesCommandsTest {
     try (AllProcessesCommands commands = new AllProcessesCommands(temp.newFolder())) {
       int processNumber = MAX_PROCESSES + 1;
 
-      expectedException.expect(IllegalArgumentException.class);
-      expectedException.expectMessage("Process number " + processNumber + " is not valid");
-
-      commands.createAfterClean(processNumber);
+      assertThatThrownBy(() -> commands.createAfterClean(processNumber))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Process number " + processNumber + " is not valid");
     }
   }
 

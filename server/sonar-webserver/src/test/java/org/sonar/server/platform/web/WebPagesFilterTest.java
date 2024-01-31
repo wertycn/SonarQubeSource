@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,22 +26,18 @@ import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_MOCKS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class WebPagesFilterTest {
 
   private static final String TEST_CONTEXT = "/sonarqube";
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private ServletContext servletContext = mock(ServletContext.class, RETURNS_MOCKS);
   private WebPagesCache webPagesCache = mock(WebPagesCache.class);
@@ -71,7 +67,7 @@ public class WebPagesFilterTest {
     verify(response).setContentType("text/html");
     verify(response).setCharacterEncoding("utf-8");
     verify(response).setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    assertThat(outputStream.toString()).isEqualTo("test");
+    assertThat(outputStream).hasToString("test");
   }
 
   @Test
@@ -82,7 +78,7 @@ public class WebPagesFilterTest {
     underTest.doFilter(request, response, chain);
 
     verify(chain).doFilter(request, response);
-    verifyZeroInteractions(webPagesCache);
+    verifyNoInteractions(webPagesCache);
   }
 
   static class StringOutputStream extends ServletOutputStream {

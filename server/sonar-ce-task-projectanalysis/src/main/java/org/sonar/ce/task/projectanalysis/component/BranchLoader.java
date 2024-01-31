@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,23 +20,29 @@
 package org.sonar.ce.task.projectanalysis.component;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.sonar.api.utils.MessageException;
 import org.sonar.ce.task.projectanalysis.analysis.MutableAnalysisMetadataHolder;
 import org.sonar.scanner.protocol.output.ScannerReport;
+import org.sonar.server.project.DefaultBranchNameResolver;
 
 import static org.sonar.scanner.protocol.output.ScannerReport.Metadata.BranchType.UNSET;
 
 public class BranchLoader {
   private final MutableAnalysisMetadataHolder metadataHolder;
   private final BranchLoaderDelegate delegate;
+  private final DefaultBranchNameResolver defaultBranchNameResolver;
 
-  public BranchLoader(MutableAnalysisMetadataHolder metadataHolder) {
-    this(metadataHolder, null);
+  public BranchLoader(MutableAnalysisMetadataHolder metadataHolder, DefaultBranchNameResolver defaultBranchNameResolver) {
+    this(metadataHolder, null, defaultBranchNameResolver);
   }
 
-  public BranchLoader(MutableAnalysisMetadataHolder metadataHolder, @Nullable BranchLoaderDelegate delegate) {
+  @Inject
+  public BranchLoader(MutableAnalysisMetadataHolder metadataHolder, @Nullable BranchLoaderDelegate delegate,
+    DefaultBranchNameResolver defaultBranchNameResolver) {
     this.metadataHolder = metadataHolder;
     this.delegate = delegate;
+    this.defaultBranchNameResolver = defaultBranchNameResolver;
   }
 
   public void load(ScannerReport.Metadata metadata) {
@@ -45,7 +51,7 @@ public class BranchLoader {
     } else if (hasBranchProperties(metadata)) {
       throw MessageException.of("Current edition does not support branch feature");
     } else {
-      metadataHolder.setBranch(new DefaultBranchImpl());
+      metadataHolder.setBranch(new DefaultBranchImpl(defaultBranchNameResolver.getEffectiveMainBranchName()));
     }
   }
 

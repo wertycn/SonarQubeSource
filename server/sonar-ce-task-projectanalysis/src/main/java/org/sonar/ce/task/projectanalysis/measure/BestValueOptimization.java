@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,6 @@ import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.metric.Metric;
 
 import static java.util.Objects.requireNonNull;
-import static org.apache.commons.lang.math.NumberUtils.compare;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.ValueType.NO_VALUE;
 
 public class BestValueOptimization implements Predicate<Measure> {
@@ -58,16 +57,7 @@ public class BestValueOptimization implements Predicate<Measure> {
   private boolean isBestValueOptimized(Measure measure) {
     return measure.getData() == null
       && !measure.hasQualityGateStatus()
-      && hasNoVariation(measure, metric.getBestValue())
       && (measure.getValueType() == NO_VALUE || isBestValue(measure, metric.getBestValue()));
-  }
-
-  private static boolean hasNoVariation(Measure measure, Double bestValue) {
-    return !measure.hasVariation() || isVariationEmptyOrBestValue(measure.getVariation(), bestValue);
-  }
-
-  private static boolean isVariationEmptyOrBestValue(double variation, Double bestValue) {
-    return compare(variation, 0d) == 0 || compare(variation, bestValue) == 0;
   }
 
   private static boolean isBestValue(Measure measure, Double bestValue) {

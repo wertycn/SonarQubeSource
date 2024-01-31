@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,18 +24,17 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import org.apache.commons.lang.StringUtils;
-import org.picocontainer.Startable;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.Properties;
 import org.sonar.api.Property;
 import org.sonar.api.PropertyType;
-import org.sonar.api.batch.AnalysisMode;
+import org.sonar.api.Startable;
 import org.sonar.api.batch.scm.ScmProvider;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.config.ScannerProperties;
 import org.sonar.scanner.fs.InputModuleHierarchy;
 
@@ -54,7 +53,7 @@ import static org.sonar.api.CoreProperties.SCM_PROVIDER_KEY;
     type = PropertyType.BOOLEAN)
 })
 public class ScmConfiguration implements Startable {
-  private static final Logger LOG = Loggers.get(ScmConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScmConfiguration.class);
 
   public static final String FORCE_RELOAD_KEY = "sonar.scm.forceReloadAll";
 
@@ -64,14 +63,13 @@ public class ScmConfiguration implements Startable {
   private final Configuration settings;
   private final AnalysisWarnings analysisWarnings;
   private final Map<String, ScmProvider> providerPerKey = new LinkedHashMap<>();
-  private final AnalysisMode analysisMode;
   private final InputModuleHierarchy moduleHierarchy;
 
   private ScmProvider provider;
 
-  public ScmConfiguration(InputModuleHierarchy moduleHierarchy, AnalysisMode analysisMode, Configuration settings, AnalysisWarnings analysisWarnings, ScmProvider... providers) {
+  public ScmConfiguration(InputModuleHierarchy moduleHierarchy, Configuration settings, AnalysisWarnings analysisWarnings,
+    ScmProvider... providers) {
     this.moduleHierarchy = moduleHierarchy;
-    this.analysisMode = analysisMode;
     this.settings = settings;
     this.analysisWarnings = analysisWarnings;
     for (ScmProvider scmProvider : providers) {
@@ -79,15 +77,8 @@ public class ScmConfiguration implements Startable {
     }
   }
 
-  public ScmConfiguration(InputModuleHierarchy moduleHierarchy, AnalysisMode analysisMode, Configuration settings, AnalysisWarnings analysisWarnings) {
-    this(moduleHierarchy, analysisMode, settings, analysisWarnings, new ScmProvider[0]);
-  }
-
   @Override
   public void start() {
-    if (analysisMode.isIssues()) {
-      return;
-    }
     if (isDisabled()) {
       LOG.debug(MESSAGE_SCM_STEP_IS_DISABLED_BY_CONFIGURATION);
       return;

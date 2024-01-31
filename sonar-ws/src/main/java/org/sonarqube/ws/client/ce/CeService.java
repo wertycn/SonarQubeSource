@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -56,11 +56,11 @@ public class CeService extends BaseService {
   public ActivityResponse activity(ActivityRequest request) {
     return call(
       new GetRequest(path("activity"))
-        .setParam("componentId", request.getComponentId())
         .setParam("component", request.getComponent())
         .setParam("maxExecutedAt", request.getMaxExecutedAt())
         .setParam("minSubmittedAt", request.getMinSubmittedAt())
         .setParam("onlyCurrents", request.getOnlyCurrents())
+        .setParam("p", request.getP())
         .setParam("ps", request.getPs())
         .setParam("q", request.getQ())
         .setParam("status", request.getStatus() == null ? null : request.getStatus().stream().collect(Collectors.joining(",")))
@@ -78,8 +78,7 @@ public class CeService extends BaseService {
   public ActivityStatusWsResponse activityStatus(ActivityStatusRequest request) {
     return call(
       new GetRequest(path("activity_status"))
-        .setParam("componentId", request.getComponentId())
-        .setParam("componentKey", request.getComponentKey()),
+        .setParam("component", request.getComponent()),
       ActivityStatusWsResponse.parser());
   }
 

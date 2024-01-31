@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,82 +22,41 @@ package org.sonar.server.issue.index;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.TotalHits.Relation;
-import org.assertj.core.groups.Tuple;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.SearchHit;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.api.impl.utils.TestSystem2;
 import org.sonar.api.issue.Issue;
-import org.sonar.api.utils.System2;
-import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.component.ProjectData;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.es.EsTester;
 import org.sonar.server.es.SearchOptions;
-import org.sonar.server.permission.index.IndexPermissions;
-import org.sonar.server.permission.index.PermissionIndexerTester;
-import org.sonar.server.permission.index.WebAuthorizationTypeSupport;
-import org.sonar.server.rule.index.RuleIndexer;
-import org.sonar.server.tester.UserSessionRule;
 
 import static com.google.common.collect.ImmutableSortedSet.of;
 import static java.util.Arrays.asList;
-import static java.util.Arrays.stream;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static java.util.TimeZone.getTimeZone;
-import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
-import static org.assertj.core.api.Assertions.tuple;
-import static org.junit.rules.ExpectedException.none;
-import static org.mockito.Mockito.mock;
-import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
-import static org.sonar.api.resources.Qualifiers.PROJECT;
-import static org.sonar.api.rules.RuleType.BUG;
-import static org.sonar.api.rules.RuleType.CODE_SMELL;
-import static org.sonar.api.rules.RuleType.VULNERABILITY;
 import static org.sonar.db.component.ComponentTesting.newFileDto;
 import static org.sonar.db.component.ComponentTesting.newPrivateProjectDto;
 import static org.sonar.db.user.GroupTesting.newGroupDto;
 import static org.sonar.db.user.UserTesting.newUserDto;
 import static org.sonar.server.issue.IssueDocTesting.newDoc;
+import static org.sonar.server.issue.IssueDocTesting.newDocForProject;
 
-public class IssueIndexTest {
-
-  @Rule
-  public EsTester es = EsTester.create();
-  @Rule
-  public UserSessionRule userSessionRule = UserSessionRule.standalone();
-  @Rule
-  public ExpectedException expectedException = none();
-  private final System2 system2 = new TestSystem2().setNow(1_500_000_000_000L).setDefaultTimeZone(getTimeZone("GMT-01:00"));
-  @Rule
-  public DbTester db = DbTester.create(system2);
-
-  private final AsyncIssueIndexing asyncIssueIndexing = mock(AsyncIssueIndexing.class);
-  private final IssueIndexer issueIndexer = new IssueIndexer(es.client(), db.getDbClient(), new IssueIteratorFactory(db.getDbClient()), asyncIssueIndexing);
-  private final RuleIndexer ruleIndexer = new RuleIndexer(es.client(), db.getDbClient());
-  private final PermissionIndexerTester authorizationIndexer = new PermissionIndexerTester(es, issueIndexer);
-
-  private final IssueIndex underTest = new IssueIndex(es.client(), system2, userSessionRule, new WebAuthorizationTypeSupport(userSessionRule));
+public class IssueIndexTest extends IssueIndexTestCommon {
 
   @Test
   public void paging() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
     for (int i = 0; i < 12; i++) {
-      indexIssues(newDoc("I" + i, file));
+      indexIssues(newDoc("I" + i, project.uuid(), file));
     }
 
     IssueQuery.Builder query = IssueQuery.builder();
@@ -118,13 +77,13 @@ public class IssueIndexTest {
   @Test
   public void search_with_max_limit() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
     List<IssueDoc> issues = new ArrayList<>();
     for (int i = 0; i < 500; i++) {
       String key = "I" + i;
-      issues.add(newDoc(key, file));
+      issues.add(newDoc(key, project.uuid(), file));
     }
-    indexIssues(issues.toArray(new IssueDoc[] {}));
+    indexIssues(issues.toArray(new IssueDoc[]{}));
 
     IssueQuery.Builder query = IssueQuery.builder();
     SearchResponse result = underTest.search(query.build(), new SearchOptions().setLimit(500));
@@ -135,13 +94,13 @@ public class IssueIndexTest {
   @Test
   public void search_exceeding_default_index_max_window() {
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
     List<IssueDoc> issues = new ArrayList<>();
     for (int i = 0; i < 11_000; i++) {
       String key = "I" + i;
-      issues.add(newDoc(key, file));
+      issues.add(newDoc(key, project.uuid(), file));
     }
-    indexIssues(issues.toArray(new IssueDoc[] {}));
+    indexIssues(issues.toArray(new IssueDoc[]{}));
 
     IssueQuery.Builder query = IssueQuery.builder();
     SearchResponse result = underTest.search(query.build(), new SearchOptions().setLimit(500));
@@ -151,24 +110,71 @@ public class IssueIndexTest {
   }
 
   @Test
+  public void search_nine_issues_with_same_creation_date_sorted_by_creation_date_order_is_sorted_also_by_key() {
+    ComponentDto project = newPrivateProjectDto();
+    ComponentDto file = newFileDto(project);
+    List<IssueDoc> issues = new ArrayList<>();
+    // we are adding issues in reverse order to see if the sort is actually doing anything
+    for (int i = 9; i >= 1; i--) {
+      String key = "I" + i;
+      issues.add(newDoc(key, project.uuid(), file));
+    }
+    indexIssues(issues.toArray(new IssueDoc[]{}));
+    IssueQuery.Builder query = IssueQuery.builder().asc(true);
+
+    SearchResponse result = underTest.search(query.sort(IssueQuery.SORT_BY_CREATION_DATE).build(), new SearchOptions());
+
+    SearchHit[] hits = result.getHits().getHits();
+    for (int i = 1; i <= 9; i++) {
+      assertThat(hits[i - 1].getId()).isEqualTo("I" + i);
+    }
+  }
+
+  @Test
+  public void search_nine_issues_5_times_with_same_creation_date_sorted_by_creation_date_returned_issues_same_order() {
+    ComponentDto project = newPrivateProjectDto();
+    ComponentDto file = newFileDto(project);
+    List<IssueDoc> issues = new ArrayList<>();
+    // we are adding issues in reverse order to see if the sort is actually doing anything
+    for (int i = 9; i >= 1; i--) {
+      String key = "I" + i;
+      issues.add(newDoc(key, project.uuid(), file));
+    }
+    indexIssues(issues.toArray(new IssueDoc[]{}));
+    IssueQuery.Builder query = IssueQuery.builder().asc(true);
+
+    SearchResponse result = underTest.search(query.sort(IssueQuery.SORT_BY_CREATION_DATE).build(), new SearchOptions());
+
+    SearchHit[] originalHits = result.getHits().getHits();
+    for (int i = 0; i < 4; i++) {
+      result = underTest.search(query.sort(IssueQuery.SORT_BY_CREATION_DATE).build(), new SearchOptions());
+      for (int j = 0; j < originalHits.length; j++) {
+        SearchHit[] hits = result.getHits().getHits();
+        assertThat(originalHits[j].getId()).isEqualTo(hits[j].getId());
+      }
+    }
+
+  }
+
+  @Test
   public void authorized_issues_on_groups() {
-    ComponentDto project1 = newPrivateProjectDto();
-    ComponentDto project2 = newPrivateProjectDto();
-    ComponentDto project3 = newPrivateProjectDto();
-    ComponentDto file1 = newFileDto(project1, null);
-    ComponentDto file2 = newFileDto(project2, null);
-    ComponentDto file3 = newFileDto(project3, null);
+    ProjectData project1 = db.components().insertPublicProject();
+    ProjectData project2 = db.components().insertPublicProject();
+    ProjectData project3 = db.components().insertPublicProject();
+    ComponentDto file1 = newFileDto(project1.getMainBranchComponent());
+    ComponentDto file2 = newFileDto(project2.getMainBranchComponent());
+    ComponentDto file3 = newFileDto(project3.getMainBranchComponent());
     GroupDto group1 = newGroupDto();
     GroupDto group2 = newGroupDto();
 
     // project1 can be seen by group1
-    indexIssue(newDoc("I1", file1));
-    authorizationIndexer.allowOnlyGroup(project1, group1);
+    indexIssue(newDoc("I1", project1.projectUuid(), true, file1));
+    authorizationIndexer.allowOnlyGroup(project1.getProjectDto(), group1);
     // project2 can be seen by group2
-    indexIssue(newDoc("I2", file2));
-    authorizationIndexer.allowOnlyGroup(project2, group2);
+    indexIssue(newDoc("I2", project2.projectUuid(), true, file2));
+    authorizationIndexer.allowOnlyGroup(project2.getProjectDto(), group2);
     // project3 can be seen by nobody but root
-    indexIssue(newDoc("I3", file3));
+    indexIssue(newDoc("I3", project3.projectUuid(), true, file3));
 
     userSessionRule.logIn().setGroups(group1);
     assertThatSearchReturnsOnly(IssueQuery.builder(), "I1");
@@ -184,33 +190,30 @@ public class IssueIndexTest {
     assertThatSearchReturnsEmpty(IssueQuery.builder());
 
     userSessionRule.logIn().setGroups(group1, group2);
-    assertThatSearchReturnsEmpty(IssueQuery.builder().projectUuids(singletonList(project3.uuid())));
-
-    userSessionRule.setRoot();
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1", "I2", "I3");
+    assertThatSearchReturnsEmpty(IssueQuery.builder().projectUuids(singletonList(project3.projectUuid())));
   }
 
   @Test
   public void authorized_issues_on_user() {
-    ComponentDto project1 = newPrivateProjectDto();
-    ComponentDto project2 = newPrivateProjectDto();
-    ComponentDto project3 = newPrivateProjectDto();
-    ComponentDto file1 = newFileDto(project1, null);
-    ComponentDto file2 = newFileDto(project2, null);
-    ComponentDto file3 = newFileDto(project3, null);
+    ProjectData project1 = db.components().insertPublicProject();
+    ProjectData project2 = db.components().insertPublicProject();
+    ProjectData project3 = db.components().insertPublicProject();
+    ComponentDto file1 = newFileDto(project1.getMainBranchComponent());
+    ComponentDto file2 = newFileDto(project2.getMainBranchComponent());
+    ComponentDto file3 = newFileDto(project3.getMainBranchComponent());
     UserDto user1 = newUserDto();
     UserDto user2 = newUserDto();
 
     // project1 can be seen by john, project2 by max, project3 cannot be seen by anyone
-    indexIssue(newDoc("I1", file1));
-    authorizationIndexer.allowOnlyUser(project1, user1);
-    indexIssue(newDoc("I2", file2));
-    authorizationIndexer.allowOnlyUser(project2, user2);
-    indexIssue(newDoc("I3", file3));
+    indexIssue(newDoc("I1", project1.projectUuid(), true, file1));
+    authorizationIndexer.allowOnlyUser(project1.getProjectDto(), user1);
+    indexIssue(newDoc("I2", project2.projectUuid(), true, file2));
+    authorizationIndexer.allowOnlyUser(project2.getProjectDto(), user2);
+    indexIssue(newDoc("I3", project3.projectUuid(), true, file3));
 
     userSessionRule.logIn(user1);
     assertThatSearchReturnsOnly(IssueQuery.builder(), "I1");
-    assertThatSearchReturnsEmpty(IssueQuery.builder().projectUuids(singletonList(project3.getDbKey())));
+    assertThatSearchReturnsEmpty(IssueQuery.builder().projectUuids(singletonList(project3.projectUuid())));
 
     userSessionRule.logIn(user2);
     assertThatSearchReturnsOnly(IssueQuery.builder(), "I2");
@@ -218,33 +221,21 @@ public class IssueIndexTest {
     // another user
     userSessionRule.logIn(newUserDto());
     assertThatSearchReturnsEmpty(IssueQuery.builder());
-
-    userSessionRule.setRoot();
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1", "I2", "I3");
-  }
-
-  @Test
-  public void root_user_is_authorized_to_access_all_issues() {
-    ComponentDto project = newPrivateProjectDto();
-    indexIssue(newDoc("I1", project));
-    userSessionRule.logIn().setRoot();
-
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1");
   }
 
   @Test
   public void list_tags() {
-    RuleDefinitionDto r1 = db.rules().insert();
-    RuleDefinitionDto r2 = db.rules().insert();
+    RuleDto r1 = db.rules().insert();
+    RuleDto r2 = db.rules().insert();
     ruleIndexer.commitAndIndex(db.getSession(), asList(r1.getUuid(), r2.getUuid()));
     ComponentDto project = newPrivateProjectDto();
-    ComponentDto file = newFileDto(project, null);
+    ComponentDto file = newFileDto(project);
     indexIssues(
-      newDoc("I42", file).setRuleUuid(r1.getUuid()).setTags(of("another")),
-      newDoc("I1", file).setRuleUuid(r1.getUuid()).setTags(of("convention", "java8", "bug")),
-      newDoc("I2", file).setRuleUuid(r1.getUuid()).setTags(of("convention", "bug")),
-      newDoc("I3", file).setRuleUuid(r2.getUuid()),
-      newDoc("I4", file).setRuleUuid(r1.getUuid()).setTags(of("convention")));
+      newDoc("I42", project.uuid(), file).setRuleUuid(r1.getUuid()).setTags(of("another")),
+      newDoc("I1", project.uuid(), file).setRuleUuid(r1.getUuid()).setTags(of("convention", "java8", "bug")),
+      newDoc("I2", project.uuid(), file).setRuleUuid(r1.getUuid()).setTags(of("convention", "bug")),
+      newDoc("I3", project.uuid(), file).setRuleUuid(r2.getUuid()),
+      newDoc("I4", project.uuid(), file).setRuleUuid(r1.getUuid()).setTags(of("convention")));
 
     assertThat(underTest.searchTags(IssueQuery.builder().build(), null, 100)).containsExactlyInAnyOrder("convention", "java8", "bug", "another");
     assertThat(underTest.searchTags(IssueQuery.builder().build(), null, 2)).containsOnly("another", "bug");
@@ -257,10 +248,10 @@ public class IssueIndexTest {
   public void list_authors() {
     ComponentDto project = newPrivateProjectDto();
     indexIssues(
-      newDoc("issue1", project).setAuthorLogin("luke.skywalker"),
-      newDoc("issue2", project).setAuthorLogin("luke@skywalker.name"),
-      newDoc("issue3", project).setAuthorLogin(null),
-      newDoc("issue4", project).setAuthorLogin("anakin@skywalker.name"));
+      newDocForProject("issue1", project).setAuthorLogin("luke.skywalker"),
+      newDocForProject("issue2", project).setAuthorLogin("luke@skywalker.name"),
+      newDocForProject("issue3", project).setAuthorLogin(null),
+      newDocForProject("issue4", project).setAuthorLogin("anakin@skywalker.name"));
     IssueQuery query = IssueQuery.builder().build();
 
     assertThat(underTest.searchAuthors(query, null, 5)).containsExactly("anakin@skywalker.name", "luke.skywalker", "luke@skywalker.name");
@@ -274,7 +265,7 @@ public class IssueIndexTest {
   public void list_authors_escapes_regexp_special_characters() {
     ComponentDto project = newPrivateProjectDto();
     indexIssues(
-      newDoc("issue1", project).setAuthorLogin("name++"));
+      newDocForProject("issue1", project).setAuthorLogin("name++"));
     IssueQuery query = IssueQuery.builder().build();
 
     assertThat(underTest.searchAuthors(query, "invalidRegexp[", 5)).isEmpty();
@@ -287,104 +278,22 @@ public class IssueIndexTest {
   public void countTags() {
     ComponentDto project = newPrivateProjectDto();
     indexIssues(
-      newDoc("issue1", project).setTags(ImmutableSet.of("convention", "java8", "bug")),
-      newDoc("issue2", project).setTags(ImmutableSet.of("convention", "bug")),
-      newDoc("issue3", project).setTags(emptyList()),
-      newDoc("issue4", project).setTags(ImmutableSet.of("convention", "java8", "bug")).setResolution(Issue.RESOLUTION_FIXED),
-      newDoc("issue5", project).setTags(ImmutableSet.of("convention")));
+      newDocForProject("issue1", project).setTags(ImmutableSet.of("convention", "java8", "bug")),
+      newDocForProject("issue2", project).setTags(ImmutableSet.of("convention", "bug")),
+      newDocForProject("issue3", project).setTags(emptyList()),
+      newDocForProject("issue4", project).setTags(ImmutableSet.of("convention", "java8", "bug")).setResolution(Issue.RESOLUTION_FIXED),
+      newDocForProject("issue5", project).setTags(ImmutableSet.of("convention")));
 
     assertThat(underTest.countTags(projectQuery(project.uuid()), 5)).containsOnly(entry("convention", 3L), entry("bug", 2L), entry("java8", 1L));
     assertThat(underTest.countTags(projectQuery(project.uuid()), 2)).contains(entry("convention", 3L), entry("bug", 2L)).doesNotContainEntry("java8", 1L);
     assertThat(underTest.countTags(projectQuery("other"), 10)).isEmpty();
   }
 
-  @Test
-  public void searchBranchStatistics() {
-    ComponentDto project = db.components().insertPublicProject();
-    ComponentDto branch1 = db.components().insertProjectBranch(project);
-    ComponentDto branch2 = db.components().insertProjectBranch(project);
-    ComponentDto branch3 = db.components().insertProjectBranch(project);
-    ComponentDto fileOnBranch3 = db.components().insertComponent(newFileDto(branch3));
-    indexIssues(newDoc(project),
-      newDoc(branch1).setType(BUG).setResolution(null), newDoc(branch1).setType(VULNERABILITY).setResolution(null), newDoc(branch1).setType(CODE_SMELL).setResolution(null),
-      newDoc(branch1).setType(CODE_SMELL).setResolution(RESOLUTION_FIXED),
-      newDoc(branch3).setType(CODE_SMELL).setResolution(null), newDoc(branch3).setType(CODE_SMELL).setResolution(null),
-      newDoc(fileOnBranch3).setType(CODE_SMELL).setResolution(null), newDoc(fileOnBranch3).setType(CODE_SMELL).setResolution(RESOLUTION_FIXED));
-
-    List<PrStatistics> prStatistics = underTest.searchBranchStatistics(project.uuid(), asList(branch1.uuid(), branch2.uuid(), branch3.uuid()));
-
-    assertThat(prStatistics).extracting(PrStatistics::getBranchUuid, PrStatistics::getBugs, PrStatistics::getVulnerabilities, PrStatistics::getCodeSmells)
-      .containsExactlyInAnyOrder(
-        tuple(branch1.uuid(), 1L, 1L, 1L),
-        tuple(branch3.uuid(), 0L, 0L, 3L));
-  }
-
-  @Test
-  public void searchBranchStatistics_on_many_branches() {
-    ComponentDto project = db.components().insertPublicProject();
-    List<String> branchUuids = new ArrayList<>();
-    List<Tuple> expectedResult = new ArrayList<>();
-    IntStream.range(0, 15).forEach(i -> {
-      ComponentDto branch = db.components().insertProjectBranch(project);
-      addIssues(branch, 1 + i, 2 + i, 3 + i);
-      expectedResult.add(tuple(branch.uuid(), 1L + i, 2L + i, 3L + i));
-      branchUuids.add(branch.uuid());
-    });
-
-    List<PrStatistics> prStatistics = underTest.searchBranchStatistics(project.uuid(), branchUuids);
-
-    assertThat(prStatistics)
-      .extracting(PrStatistics::getBranchUuid, PrStatistics::getBugs, PrStatistics::getVulnerabilities, PrStatistics::getCodeSmells)
-      .hasSize(15)
-      .containsAll(expectedResult);
-  }
-
-  @Test
-  public void searchBranchStatistics_on_empty_list() {
-    ComponentDto project = db.components().insertPublicProject();
-
-    assertThat(underTest.searchBranchStatistics(project.uuid(), emptyList())).isEmpty();
-    assertThat(underTest.searchBranchStatistics(project.uuid(), singletonList("unknown"))).isEmpty();
-  }
-
-  private void addIssues(ComponentDto component, int bugs, int vulnerabilities, int codeSmelles) {
-    List<IssueDoc> issues = new ArrayList<>();
-    IntStream.range(0, bugs).forEach(b -> issues.add(newDoc(component).setType(BUG).setResolution(null)));
-    IntStream.range(0, vulnerabilities).forEach(v -> issues.add(newDoc(component).setType(VULNERABILITY).setResolution(null)));
-    IntStream.range(0, codeSmelles).forEach(c -> issues.add(newDoc(component).setType(CODE_SMELL).setResolution(null)));
-    indexIssues(issues.toArray(new IssueDoc[0]));
-  }
-
   private IssueQuery projectQuery(String projectUuid) {
     return IssueQuery.builder().projectUuids(singletonList(projectUuid)).resolved(false).build();
-  }
-
-  private void indexIssues(IssueDoc... issues) {
-    issueIndexer.index(asList(issues).iterator());
-    authorizationIndexer.allow(stream(issues).map(issue -> new IndexPermissions(issue.projectUuid(), PROJECT).allowAnyone()).collect(toList()));
   }
 
   private void indexIssue(IssueDoc issue) {
     issueIndexer.index(Iterators.singletonIterator(issue));
   }
-
-  /**
-   * Execute the search request and return the document ids of results.
-   */
-  private List<String> searchAndReturnKeys(IssueQuery.Builder query) {
-    return Arrays.stream(underTest.search(query.build(), new SearchOptions()).getHits().getHits())
-      .map(SearchHit::getId)
-      .collect(Collectors.toList());
-  }
-
-  private void assertThatSearchReturnsOnly(IssueQuery.Builder query, String... expectedIssueKeys) {
-    List<String> keys = searchAndReturnKeys(query);
-    assertThat(keys).containsExactlyInAnyOrder(expectedIssueKeys);
-  }
-
-  private void assertThatSearchReturnsEmpty(IssueQuery.Builder query) {
-    List<String> keys = searchAndReturnKeys(query);
-    assertThat(keys).isEmpty();
-  }
-
 }

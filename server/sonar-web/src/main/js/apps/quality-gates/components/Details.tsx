@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,169 +17,31 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Spinner } from 'design-system';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { connect } from 'react-redux';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { fetchQualityGate } from '../../../api/quality-gates';
-import addGlobalSuccessMessage from '../../../app/utils/addGlobalSuccessMessage';
-import { fetchMetrics } from '../../../store/rootActions';
-import { getMetrics, Store } from '../../../store/rootReducer';
-import { addCondition, checkIfDefault, deleteCondition, replaceCondition } from '../utils';
+import { useQualityGateQuery } from '../../../queries/quality-gates';
 import DetailsContent from './DetailsContent';
 import DetailsHeader from './DetailsHeader';
 
-interface OwnProps {
-  id: string;
-  onSetDefault: (qualityGate: T.QualityGate) => void;
-  qualityGates: T.QualityGate[];
-  refreshQualityGates: () => Promise<void>;
+interface Props {
+  qualityGateName: string;
 }
 
-interface StateToProps {
-  metrics: T.Dict<T.Metric>;
+export default function Details({ qualityGateName }: Readonly<Props>) {
+  const { data: qualityGate, isLoading, isFetching } = useQualityGateQuery(qualityGateName);
+
+  return (
+    <main className="layout-page-main">
+      <Spinner loading={isLoading}>
+        {qualityGate && (
+          <>
+            <Helmet defer={false} title={qualityGate.name} />
+            <DetailsHeader qualityGate={qualityGate} />
+            <DetailsContent qualityGate={qualityGate} isFetching={isFetching} />
+          </>
+        )}
+      </Spinner>
+    </main>
+  );
 }
-
-interface DispatchToProps {
-  fetchMetrics: () => void;
-}
-
-type Props = StateToProps & DispatchToProps & OwnProps;
-
-interface State {
-  loading: boolean;
-  qualityGate?: T.QualityGate;
-  updatedConditionId?: number;
-}
-
-export class Details extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = { loading: true };
-
-  componentDidMount() {
-    this.mounted = true;
-    this.props.fetchMetrics();
-    this.fetchDetails();
-  }
-
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.id !== this.props.id) {
-      this.fetchDetails();
-    }
-  }
-
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  fetchDetails = () => {
-    const { id } = this.props;
-    this.setState({ loading: true });
-    return fetchQualityGate({ id }).then(
-      qualityGate => {
-        if (this.mounted) {
-          this.setState({ loading: false, qualityGate, updatedConditionId: undefined });
-        }
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      }
-    );
-  };
-
-  handleAddCondition = (condition: T.Condition) => {
-    this.setState(({ qualityGate }) => {
-      if (!qualityGate) {
-        return null;
-      }
-      addGlobalSuccessMessage(translate('quality_gates.condition_added'));
-      return {
-        qualityGate: addCondition(qualityGate, condition),
-        updatedConditionId: condition.id
-      };
-    });
-  };
-
-  handleSaveCondition = (newCondition: T.Condition, oldCondition: T.Condition) => {
-    this.setState(({ qualityGate }) => {
-      if (!qualityGate) {
-        return null;
-      }
-      addGlobalSuccessMessage(translate('quality_gates.condition_updated'));
-      return {
-        qualityGate: replaceCondition(qualityGate, newCondition, oldCondition),
-        updatedConditionId: newCondition.id
-      };
-    });
-  };
-
-  handleRemoveCondition = (condition: T.Condition) => {
-    this.setState(({ qualityGate }) => {
-      if (!qualityGate) {
-        return null;
-      }
-      addGlobalSuccessMessage(translate('quality_gates.condition_deleted'));
-      return {
-        qualityGate: deleteCondition(qualityGate, condition),
-        updatedConditionId: undefined
-      };
-    });
-  };
-
-  handleSetDefault = () => {
-    this.setState(({ qualityGate }) => {
-      if (!qualityGate) {
-        return null;
-      }
-      this.props.onSetDefault(qualityGate);
-      const newQualityGate: T.QualityGate = {
-        ...qualityGate,
-        actions: { ...qualityGate.actions, delete: false, setAsDefault: false }
-      };
-      return { qualityGate: newQualityGate };
-    });
-  };
-
-  render() {
-    const { metrics, refreshQualityGates } = this.props;
-    const { loading, qualityGate, updatedConditionId } = this.state;
-
-    return (
-      <div className="layout-page-main">
-        <DeferredSpinner loading={loading} timeout={200}>
-          {qualityGate && (
-            <>
-              <Helmet defer={false} title={qualityGate.name} />
-              <DetailsHeader
-                onSetDefault={this.handleSetDefault}
-                qualityGate={qualityGate}
-                refreshItem={this.fetchDetails}
-                refreshList={refreshQualityGates}
-              />
-              <DetailsContent
-                isDefault={checkIfDefault(qualityGate, this.props.qualityGates)}
-                metrics={metrics}
-                onAddCondition={this.handleAddCondition}
-                onRemoveCondition={this.handleRemoveCondition}
-                onSaveCondition={this.handleSaveCondition}
-                qualityGate={qualityGate}
-                updatedConditionId={updatedConditionId}
-              />
-            </>
-          )}
-        </DeferredSpinner>
-      </div>
-    );
-  }
-}
-
-const mapDispatchToProps: DispatchToProps = { fetchMetrics };
-
-const mapStateToProps = (state: Store): StateToProps => ({
-  metrics: getMetrics(state)
-});
-
-export default connect(mapStateToProps, mapDispatchToProps)(Details);

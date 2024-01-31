@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,31 +26,31 @@ import com.google.common.collect.Multiset;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
+import org.sonar.api.issue.IssueStatus;
+import org.sonar.api.issue.impact.Severity;
 import org.sonar.api.rules.RuleType;
-import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 import org.sonar.ce.task.projectanalysis.measure.MeasureRepository;
 import org.sonar.ce.task.projectanalysis.metric.Metric;
 import org.sonar.ce.task.projectanalysis.metric.MetricRepository;
-import org.sonar.ce.task.projectanalysis.period.Period;
-import org.sonar.ce.task.projectanalysis.period.PeriodHolder;
 import org.sonar.core.issue.DefaultIssue;
 
-import static org.sonar.api.issue.Issue.RESOLUTION_FALSE_POSITIVE;
-import static org.sonar.api.issue.Issue.RESOLUTION_WONT_FIX;
 import static org.sonar.api.issue.Issue.STATUS_CONFIRMED;
 import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.api.issue.Issue.STATUS_REOPENED;
+import static org.sonar.api.measures.CoreMetrics.ACCEPTED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.BLOCKER_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.BUGS_KEY;
 import static org.sonar.api.measures.CoreMetrics.CODE_SMELLS_KEY;
 import static org.sonar.api.measures.CoreMetrics.CONFIRMED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.CRITICAL_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.FALSE_POSITIVE_ISSUES_KEY;
+import static org.sonar.api.measures.CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.INFO_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.MAJOR_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.MINOR_VIOLATIONS_KEY;
+import static org.sonar.api.measures.CoreMetrics.NEW_ACCEPTED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_BLOCKER_VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_BUGS_KEY;
 import static org.sonar.api.measures.CoreMetrics.NEW_CODE_SMELLS_KEY;
@@ -66,7 +66,6 @@ import static org.sonar.api.measures.CoreMetrics.REOPENED_ISSUES_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_KEY;
 import static org.sonar.api.measures.CoreMetrics.VIOLATIONS_KEY;
 import static org.sonar.api.measures.CoreMetrics.VULNERABILITIES_KEY;
-import static org.sonar.api.measures.CoreMetrics.WONT_FIX_ISSUES_KEY;
 import static org.sonar.api.rule.Severity.BLOCKER;
 import static org.sonar.api.rule.Severity.CRITICAL;
 import static org.sonar.api.rule.Severity.INFO;
@@ -116,20 +115,17 @@ public class IssueCounter extends IssueVisitor {
     .put(SECURITY_HOTSPOT, NEW_SECURITY_HOTSPOTS_KEY)
     .build();
 
-  private final PeriodHolder periodHolder;
-  private final AnalysisMetadataHolder analysisMetadataHolder;
   private final MetricRepository metricRepository;
   private final MeasureRepository measureRepository;
+  private final NewIssueClassifier newIssueClassifier;
   private final Map<String, Counters> countersByComponentUuid = new HashMap<>();
 
   private Counters currentCounters;
 
-  public IssueCounter(PeriodHolder periodHolder, AnalysisMetadataHolder analysisMetadataHolder,
-    MetricRepository metricRepository, MeasureRepository measureRepository) {
-    this.periodHolder = periodHolder;
-    this.analysisMetadataHolder = analysisMetadataHolder;
+  public IssueCounter(MetricRepository metricRepository, MeasureRepository measureRepository, NewIssueClassifier newIssueClassifier) {
     this.metricRepository = metricRepository;
     this.measureRepository = measureRepository;
+    this.newIssueClassifier = newIssueClassifier;
   }
 
   @Override
@@ -139,7 +135,6 @@ public class IssueCounter extends IssueVisitor {
 
     // aggregate children counters
     for (Component child : component.getChildren()) {
-      // no need to keep the children in memory. They can be garbage-collected.
       Counters childCounters = countersByComponentUuid.remove(child.getUuid());
       currentCounters.add(childCounters);
     }
@@ -148,13 +143,8 @@ public class IssueCounter extends IssueVisitor {
   @Override
   public void onIssue(Component component, DefaultIssue issue) {
     currentCounters.add(issue);
-    if (analysisMetadataHolder.isPullRequest()) {
+    if (newIssueClassifier.isNew(component, issue)) {
       currentCounters.addOnPeriod(issue);
-    } else if (periodHolder.hasPeriodDate()) {
-      Period period = periodHolder.getPeriod();
-      if (period.isOnPeriod(issue.creationDate())){
-        currentCounters.addOnPeriod(issue);
-      }
     }
   }
 
@@ -181,7 +171,8 @@ public class IssueCounter extends IssueVisitor {
     addMeasure(component, REOPENED_ISSUES_KEY, currentCounters.counter().reopened);
     addMeasure(component, CONFIRMED_ISSUES_KEY, currentCounters.counter().confirmed);
     addMeasure(component, FALSE_POSITIVE_ISSUES_KEY, currentCounters.counter().falsePositives);
-    addMeasure(component, WONT_FIX_ISSUES_KEY, currentCounters.counter().wontFix);
+    addMeasure(component, ACCEPTED_ISSUES_KEY, currentCounters.counter().accepted);
+    addMeasure(component, HIGH_IMPACT_ACCEPTED_ISSUES_KEY, currentCounters.counter().highImpactAccepted);
   }
 
   private void addMeasuresByType(Component component) {
@@ -196,13 +187,12 @@ public class IssueCounter extends IssueVisitor {
   }
 
   private void addNewMeasures(Component component) {
-    if (!periodHolder.hasPeriodDate() && !analysisMetadataHolder.isPullRequest()) {
+    if (!newIssueClassifier.isEnabled()) {
       return;
     }
-    double unresolvedVariations = currentCounters.counterForPeriod().unresolved;
+    int unresolved = currentCounters.counterForPeriod().unresolved;
     measureRepository.add(component, metricRepository.getByKey(NEW_VIOLATIONS_KEY), Measure.newMeasureBuilder()
-      .setVariation(unresolvedVariations)
-      .createNoValue());
+      .create(unresolved));
 
     for (Map.Entry<String, String> entry : SEVERITY_TO_NEW_METRIC_KEY.entrySet()) {
       String severity = entry.getKey();
@@ -210,8 +200,7 @@ public class IssueCounter extends IssueVisitor {
       Multiset<String> bag = currentCounters.counterForPeriod().severityBag;
       Metric metric = metricRepository.getByKey(metricKey);
       measureRepository.add(component, metric, Measure.newMeasureBuilder()
-        .setVariation(bag.count(severity))
-        .createNoValue());
+        .create(bag.count(severity)));
     }
 
     // waiting for Java 8 lambda in order to factor this loop with the previous one
@@ -222,9 +211,10 @@ public class IssueCounter extends IssueVisitor {
       Multiset<RuleType> bag = currentCounters.counterForPeriod().typeBag;
       Metric metric = metricRepository.getByKey(metricKey);
       measureRepository.add(component, metric, Measure.newMeasureBuilder()
-        .setVariation(bag.count(type))
-        .createNoValue());
+        .create(bag.count(type)));
     }
+
+    addMeasure(component, NEW_ACCEPTED_ISSUES_KEY, currentCounters.counterForPeriod().accepted);
   }
 
   /**
@@ -236,7 +226,8 @@ public class IssueCounter extends IssueVisitor {
     private int reopened = 0;
     private int confirmed = 0;
     private int falsePositives = 0;
-    private int wontFix = 0;
+    private int accepted = 0;
+    private int highImpactAccepted = 0;
     private final Multiset<String> severityBag = HashMultiset.create();
     private final EnumMultiset<RuleType> typeBag = EnumMultiset.create(RuleType.class);
 
@@ -246,7 +237,8 @@ public class IssueCounter extends IssueVisitor {
       reopened += counter.reopened;
       confirmed += counter.confirmed;
       falsePositives += counter.falsePositives;
-      wontFix += counter.wontFix;
+      accepted += counter.accepted;
+      highImpactAccepted += counter.highImpactAccepted;
       severityBag.addAll(counter.severityBag);
       typeBag.addAll(counter.typeBag);
     }
@@ -262,10 +254,13 @@ public class IssueCounter extends IssueVisitor {
         unresolved++;
         typeBag.add(issue.type());
         severityBag.add(issue.severity());
-      } else if (RESOLUTION_FALSE_POSITIVE.equals(issue.resolution())) {
+      } else if (IssueStatus.FALSE_POSITIVE.equals(issue.issueStatus())) {
         falsePositives++;
-      } else if (RESOLUTION_WONT_FIX.equals(issue.resolution())) {
-        wontFix++;
+      } else if (IssueStatus.ACCEPTED.equals(issue.issueStatus())) {
+        accepted++;
+        if (issue.impacts().values().stream().anyMatch(severity -> severity == Severity.HIGH)) {
+          highImpactAccepted++;
+        }
       }
       switch (issue.status()) {
         case STATUS_OPEN:

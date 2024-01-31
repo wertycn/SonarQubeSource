@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,26 +17,35 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary, DateRangePicker } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import DateRangeInput from '../../../components/controls/DateRangeInput';
+import { useIntl } from 'react-intl';
 
-interface Props {
+interface ChangelogSearchProps {
   dateRange: { from?: Date; to?: Date } | undefined;
   onDateRangeChange: (range: { from?: Date; to?: Date }) => void;
   onReset: () => void;
 }
 
-export default class ChangelogSearch extends React.PureComponent<Props> {
-  render() {
-    return (
-      <div className="display-inline-block" id="quality-profile-changelog-form">
-        <DateRangeInput onChange={this.props.onDateRangeChange} value={this.props.dateRange} />
-        <Button className="spacer-left text-top" onClick={this.props.onReset}>
-          {translate('reset_verb')}
-        </Button>
-      </div>
-    );
-  }
+export default function ChangelogSearch(props: ChangelogSearchProps) {
+  const { dateRange } = props;
+
+  const intl = useIntl();
+
+  return (
+    <div className="sw-flex sw-gap-2">
+      <DateRangePicker
+        clearButtonLabel={intl.formatMessage({ id: 'clear' })}
+        fromLabel={intl.formatMessage({ id: 'start_date' })}
+        inputSize="small"
+        separatorText={intl.formatMessage({ id: 'to_' })}
+        toLabel={intl.formatMessage({ id: 'end_date' })}
+        onChange={props.onDateRangeChange}
+        value={dateRange}
+      />
+      <ButtonSecondary className="sw-ml-2 sw-align-top" onClick={props.onReset}>
+        {intl.formatMessage({ id: 'reset_verb' })}
+      </ButtonSecondary>
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,34 +17,41 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ActionsDropdown,
+  ItemButton,
+  ItemDangerButton,
+  ItemDivider,
+  ItemDownload,
+  ItemLink,
+  PopupPlacement,
+  PopupZLevel,
+  Tooltip,
+} from 'design-system';
+import { some } from 'lodash';
 import * as React from 'react';
-import ActionsDropdown, {
-  ActionsDropdownDivider,
-  ActionsDropdownItem
-} from 'sonar-ui-common/components/controls/ActionsDropdown';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import {
   changeProfileParent,
   copyProfile,
   createQualityProfile,
   deleteProfile,
-  getQualityProfileBackupUrl,
   renameProfile,
-  setDefaultProfile
+  setDefaultProfile,
 } from '../../../api/quality-profiles';
 import { Router, withRouter } from '../../../components/hoc/withRouter';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { getBaseUrl } from '../../../helpers/system';
 import { getRulesUrl } from '../../../helpers/urls';
+import { PROFILE_PATH } from '../constants';
 import { Profile, ProfileActionModals } from '../types';
-import { getProfileComparePath, getProfilePath, PROFILE_PATH } from '../utils';
+import { getProfileComparePath, getProfilePath } from '../utils';
 import DeleteProfileForm from './DeleteProfileForm';
 import ProfileModalForm from './ProfileModalForm';
 
 interface Props {
-  className?: string;
-  fromList?: boolean;
   profile: Profile;
-  router: Pick<Router, 'push' | 'replace'>;
+  router: Router;
+  isComparable: boolean;
   updateProfiles: () => Promise<void>;
 }
 
@@ -53,10 +60,10 @@ interface State {
   openModal?: ProfileActionModals;
 }
 
-export class ProfileActions extends React.PureComponent<Props, State> {
+class ProfileActions extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = {
-    loading: false
+    loading: false,
   };
 
   componentDidMount() {
@@ -103,7 +110,7 @@ export class ProfileActions extends React.PureComponent<Props, State> {
 
     const data = {
       language: parentProfile.language,
-      name
+      name,
     };
 
     this.setState({ loading: true });
@@ -145,7 +152,12 @@ export class ProfileActions extends React.PureComponent<Props, State> {
   };
 
   handleSetDefaultClick = () => {
-    setDefaultProfile(this.props.profile).then(this.props.updateProfiles, () => {});
+    const { profile } = this.props;
+    if (profile.activeRuleCount > 0) {
+      setDefaultProfile(profile).then(this.props.updateProfiles, () => {
+        /* noop */
+      });
+    }
   };
 
   profileActionPerformed = (name: string) => {
@@ -158,7 +170,7 @@ export class ProfileActions extends React.PureComponent<Props, State> {
         },
         () => {
           /* noop */
-        }
+        },
       );
     }
   };
@@ -169,92 +181,143 @@ export class ProfileActions extends React.PureComponent<Props, State> {
     }
   };
 
+  getQualityProfileBackupUrl = ({ language, name: qualityProfile }: Profile) => {
+    const queryParams = Object.entries({ language, qualityProfile })
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join('&');
+    return `/api/qualityprofiles/backup?${queryParams}`;
+  };
+
   render() {
-    const { profile } = this.props;
+    const { profile, isComparable } = this.props;
     const { loading, openModal } = this.state;
     const { actions = {} } = profile;
 
-    const backupUrl = `${getBaseUrl()}${getQualityProfileBackupUrl(profile)}`;
+    const backupUrl = `${getBaseUrl()}${this.getQualityProfileBackupUrl(profile)}`;
 
     const activateMoreUrl = getRulesUrl({
       qprofile: profile.key,
-      activation: 'false'
+      activation: 'false',
     });
+
+    const hasNoActiveRules = profile.activeRuleCount === 0;
+    const hasAnyAction = some([...Object.values(actions), !profile.isBuiltIn, isComparable]);
+
+    if (!hasAnyAction) {
+      return null;
+    }
 
     return (
       <>
-        <ActionsDropdown className={this.props.className}>
+        <ActionsDropdown
+          allowResizing
+          id={`quality-profile-actions-${profile.key}`}
+          className="it__quality-profiles__actions-dropdown"
+          toggleClassName="it__quality-profiles__actions-dropdown-toggle"
+          ariaLabel={translateWithParameters(
+            'quality_profiles.actions',
+            profile.name,
+            profile.languageName,
+          )}
+          zLevel={PopupZLevel.Global}
+        >
           {actions.edit && (
-            <ActionsDropdownItem
-              className="it__quality-profiles__activate-more-rules"
-              to={activateMoreUrl}>
+            <ItemLink className="it__quality-profiles__activate-more-rules" to={activateMoreUrl}>
               {translate('quality_profiles.activate_more_rules')}
-            </ActionsDropdownItem>
+            </ItemLink>
           )}
 
           {!profile.isBuiltIn && (
-            <ActionsDropdownItem
-              className="it__quality-profiles__backup"
+            <ItemDownload
               download={`${profile.key}.xml`}
-              to={backupUrl}>
+              href={backupUrl}
+              className="it__quality-profiles__backup"
+            >
               {translate('backup_verb')}
-            </ActionsDropdownItem>
+            </ItemDownload>
           )}
 
-          <ActionsDropdownItem
-            className="it__quality-profiles__compare"
-            to={getProfileComparePath(profile.name, profile.language)}>
-            {translate('compare')}
-          </ActionsDropdownItem>
+          {isComparable && (
+            <ItemLink
+              className="it__quality-profiles__compare"
+              to={getProfileComparePath(profile.name, profile.language)}
+            >
+              {translate('compare')}
+            </ItemLink>
+          )}
 
           {actions.copy && (
             <>
-              <ActionsDropdownItem
-                className="it__quality-profiles__copy"
-                onClick={this.handleCopyClick}>
-                {translate('copy')}
-              </ActionsDropdownItem>
+              <Tooltip
+                overlay={translateWithParameters('quality_profiles.extend_help', profile.name)}
+                placement={PopupPlacement.Left}
+              >
+                <ItemButton
+                  className="it__quality-profiles__extend"
+                  onClick={this.handleExtendClick}
+                >
+                  {translate('extend')}
+                </ItemButton>
+              </Tooltip>
 
-              <ActionsDropdownItem
-                className="it__quality-profiles__extend"
-                onClick={this.handleExtendClick}>
-                {translate('extend')}
-              </ActionsDropdownItem>
+              <Tooltip
+                overlay={translateWithParameters('quality_profiles.copy_help', profile.name)}
+                placement={PopupPlacement.Left}
+              >
+                <ItemButton className="it__quality-profiles__copy" onClick={this.handleCopyClick}>
+                  {translate('copy')}
+                </ItemButton>
+              </Tooltip>
             </>
           )}
 
           {actions.edit && (
-            <ActionsDropdownItem
-              className="it__quality-profiles__rename"
-              onClick={this.handleRenameClick}>
+            <ItemButton className="it__quality-profiles__rename" onClick={this.handleRenameClick}>
               {translate('rename')}
-            </ActionsDropdownItem>
+            </ItemButton>
           )}
 
-          {actions.setAsDefault && (
-            <ActionsDropdownItem
-              className="it__quality-profiles__set-as-default"
-              onClick={this.handleSetDefaultClick}>
-              {translate('set_as_default')}
-            </ActionsDropdownItem>
-          )}
-
-          {actions.delete && <ActionsDropdownDivider />}
+          {actions.setAsDefault &&
+            (hasNoActiveRules ? (
+              <li>
+                <Tooltip
+                  placement={PopupPlacement.Left}
+                  overlay={translate('quality_profiles.cannot_set_default_no_rules')}
+                >
+                  <ItemButton
+                    className="it__quality-profiles__set-as-default"
+                    onClick={this.handleSetDefaultClick}
+                    disabled
+                  >
+                    {translate('set_as_default')}
+                  </ItemButton>
+                </Tooltip>
+              </li>
+            ) : (
+              <ItemButton
+                className="it__quality-profiles__set-as-default"
+                onClick={this.handleSetDefaultClick}
+              >
+                {translate('set_as_default')}
+              </ItemButton>
+            ))}
 
           {actions.delete && (
-            <ActionsDropdownItem
-              className="it__quality-profiles__delete"
-              destructive={true}
-              onClick={this.handleDeleteClick}>
-              {translate('delete')}
-            </ActionsDropdownItem>
+            <>
+              <ItemDivider />
+              <ItemDangerButton
+                className="it__quality-profiles__delete"
+                onClick={this.handleDeleteClick}
+              >
+                {translate('delete')}
+              </ItemDangerButton>
+            </>
           )}
         </ActionsDropdown>
 
         {openModal === ProfileActionModals.Copy && (
           <ProfileModalForm
-            btnLabelKey="copy"
-            headerKey="quality_profiles.copy_x_title"
+            action={openModal}
             loading={loading}
             onClose={this.handleCloseModal}
             onSubmit={this.handleProfileCopy}
@@ -264,8 +327,7 @@ export class ProfileActions extends React.PureComponent<Props, State> {
 
         {openModal === ProfileActionModals.Extend && (
           <ProfileModalForm
-            btnLabelKey="extend"
-            headerKey="quality_profiles.extend_x_title"
+            action={openModal}
             loading={loading}
             onClose={this.handleCloseModal}
             onSubmit={this.handleProfileExtend}
@@ -275,8 +337,7 @@ export class ProfileActions extends React.PureComponent<Props, State> {
 
         {openModal === ProfileActionModals.Rename && (
           <ProfileModalForm
-            btnLabelKey="rename"
-            headerKey="quality_profiles.rename_x_title"
+            action={openModal}
             loading={loading}
             onClose={this.handleCloseModal}
             onSubmit={this.handleProfileRename}

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,20 +32,16 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static java.lang.String.format;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.sonar.auth.OAuthRestClient.executePaginatedRequest;
 import static org.sonar.auth.OAuthRestClient.executeRequest;
 
 public class OAuthRestClientTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   @Rule
   public MockWebServer mockWebServer = new MockWebServer();
 
@@ -77,10 +73,9 @@ public class OAuthRestClientTest {
   public void fail_to_execute_request() throws IOException {
     mockWebServer.enqueue(new MockResponse().setResponseCode(404).setBody("Error!"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage(format("Fail to execute request '%s/test'. HTTP code: 404, response: Error!", serverUrl));
-
-    executeRequest(serverUrl + "/test", oAuth20Service, auth2AccessToken);
+    assertThatThrownBy(() -> executeRequest(serverUrl + "/test", oAuth20Service, auth2AccessToken))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage(format("Fail to execute request '%s/test'. HTTP code: 404, response: Error!", serverUrl));
   }
 
   @Test
@@ -98,16 +93,46 @@ public class OAuthRestClientTest {
   }
 
   @Test
+  public void execute_paginated_request_with_query_parameter() throws InterruptedException {
+    mockWebServer.enqueue(new MockResponse()
+      .setHeader("Link", "<" + serverUrl + "/test?param=value&per_page=100&page=2>; rel=\"next\", <" + serverUrl + "/test?param=value&per_page=100&page=2>; rel=\"last\"")
+      .setBody("A"));
+    mockWebServer.enqueue(new MockResponse()
+      .setHeader("Link", "<" + serverUrl + "/test?param=value&per_page=100&page=1>; rel=\"prev\", <" + serverUrl + "/test?param=value&per_page=100&page=1>; rel=\"first\"")
+      .setBody("B"));
+
+    List<String> response = executePaginatedRequest(serverUrl + "/test?param=value", oAuth20Service, auth2AccessToken, Arrays::asList);
+
+    assertThat(response).contains("A", "B");
+
+    assertThat(mockWebServer.takeRequest().getPath()).isEqualTo("/test?param=value&per_page=100");
+    assertThat(mockWebServer.takeRequest().getPath()).isEqualTo("/test?param=value&per_page=100&page=2");
+  }
+
+  @Test
+  public void execute_paginated_request_case_insensitive_headers() {
+    mockWebServer.enqueue(new MockResponse()
+      .setHeader("link", "<" + serverUrl + "/test?per_page=100&page=2>; rel=\"next\", <" + serverUrl + "/test?per_page=100&page=2>; rel=\"last\"")
+      .setBody("A"));
+    mockWebServer.enqueue(new MockResponse()
+      .setHeader("link", "<" + serverUrl + "/test?per_page=100&page=1>; rel=\"prev\", <" + serverUrl + "/test?per_page=100&page=1>; rel=\"first\"")
+      .setBody("B"));
+
+    List<String> response = executePaginatedRequest(serverUrl + "/test", oAuth20Service, auth2AccessToken, Arrays::asList);
+
+    assertThat(response).contains("A", "B");
+  }
+
+  @Test
   public void fail_to_executed_paginated_request() {
     mockWebServer.enqueue(new MockResponse()
       .setHeader("Link", "<" + serverUrl + "/test?per_page=100&page=2>; rel=\"next\", <" + serverUrl + "/test?per_page=100&page=2>; rel=\"last\"")
       .setBody("A"));
     mockWebServer.enqueue(new MockResponse().setResponseCode(404).setBody("Error!"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage(format("Fail to execute request '%s/test?per_page=100&page=2'. HTTP code: 404, response: Error!", serverUrl));
-
-    executePaginatedRequest(serverUrl + "/test", oAuth20Service, auth2AccessToken, Arrays::asList);
+    assertThatThrownBy(() -> executePaginatedRequest(serverUrl + "/test", oAuth20Service, auth2AccessToken, Arrays::asList))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage(format("Fail to execute request '%s/test?per_page=100&page=2'. HTTP code: 404, response: Error!", serverUrl));
   }
 
   private class TestAPI extends DefaultApi20 {

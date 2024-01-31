@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,38 +22,40 @@ package org.sonar.server.platform.monitoring.cluster;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import org.junit.Rule;
+import java.util.List;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.sonar.api.CoreProperties;
-import org.sonar.api.config.internal.MapSettings;
+import org.sonar.api.SonarRuntime;
 import org.sonar.api.platform.Server;
-import org.sonar.api.security.SecurityRealm;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
-import org.sonar.server.authentication.IdentityProviderRepositoryRule;
-import org.sonar.server.authentication.TestIdentityProvider;
-import org.sonar.server.platform.DockerSupport;
-import org.sonar.server.user.SecurityRealmFactory;
+import org.sonar.server.platform.ContainerSupport;
+import org.sonar.server.platform.StatisticsSupport;
+import org.sonar.server.platform.monitoring.CommonSystemInformation;
 
+import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.process.systeminfo.SystemInfoUtils.attribute;
+import static org.sonar.api.SonarEdition.COMMUNITY;
+import static org.sonar.server.platform.monitoring.SystemInfoTesting.assertThatAttributeDoesNotExist;
 import static org.sonar.server.platform.monitoring.SystemInfoTesting.assertThatAttributeIs;
 
 @RunWith(DataProviderRunner.class)
 public class GlobalSystemSectionTest {
 
-  @Rule
-  public IdentityProviderRepositoryRule identityProviderRepository = new IdentityProviderRepositoryRule();
+  private final Server server = mock(Server.class);
+  private final ContainerSupport containerSupport = mock(ContainerSupport.class);
+  private final StatisticsSupport statisticsSupport = mock(StatisticsSupport.class);
+  private final SonarRuntime sonarRuntime = mock(SonarRuntime.class);
+  private final CommonSystemInformation commonSystemInformation = mock(CommonSystemInformation.class);
 
-  private MapSettings settings = new MapSettings();
-  private Server server = mock(Server.class);
-  private SecurityRealmFactory securityRealmFactory = mock(SecurityRealmFactory.class);
+  private final GlobalSystemSection underTest = new GlobalSystemSection(server, containerSupport, statisticsSupport, sonarRuntime, commonSystemInformation);
 
-  private DockerSupport dockerSupport = mock(DockerSupport.class);
-  private GlobalSystemSection underTest = new GlobalSystemSection(settings.asConfig(),
-    server, securityRealmFactory, identityProviderRepository, dockerSupport);
+  @Before
+  public void setUp() {
+    when(sonarRuntime.getEdition()).thenReturn(COMMUNITY);
+  }
 
   @Test
   public void name_is_not_empty() {
@@ -61,84 +63,95 @@ public class GlobalSystemSectionTest {
   }
 
   @Test
-  public void get_realm() {
-    SecurityRealm realm = mock(SecurityRealm.class);
-    when(realm.getName()).thenReturn("LDAP");
-    when(securityRealmFactory.getRealm()).thenReturn(realm);
+  public void toProtobuf_whenNoExternalUserAuthentication_shouldWriteNothing() {
+    when(commonSystemInformation.getExternalUserAuthentication()).thenReturn(null);
 
+    ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
+    assertThatAttributeDoesNotExist(protobuf, "External User Authentication");
+  }
+
+  @Test
+  public void toProtobuf_whenExternalUserAuthentication_shouldWriteIt() {
+    when(commonSystemInformation.getExternalUserAuthentication()).thenReturn("LDAP");
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
     assertThatAttributeIs(protobuf, "External User Authentication", "LDAP");
   }
 
   @Test
-  public void no_realm() {
-    when(securityRealmFactory.getRealm()).thenReturn(null);
+  public void toProtobuf_whenNoIdentityProviders_shouldWriteNothing() {
+    when(commonSystemInformation.getEnabledIdentityProviders()).thenReturn(emptyList());
 
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
-    assertThat(attribute(protobuf, "External User Authentication")).isNull();
+    assertThatAttributeDoesNotExist(protobuf, "Accepted external identity providers");
   }
 
   @Test
-  public void get_enabled_identity_providers() {
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("github")
-      .setName("GitHub")
-      .setEnabled(true));
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("bitbucket")
-      .setName("Bitbucket")
-      .setEnabled(true));
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("disabled")
-      .setName("Disabled")
-      .setEnabled(false));
+  public void toProtobuf_whenEnabledIdentityProviders_shouldWriteThem() {
+    when(commonSystemInformation.getEnabledIdentityProviders()).thenReturn(List.of("Bitbucket, GitHub"));
 
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
     assertThatAttributeIs(protobuf, "Accepted external identity providers", "Bitbucket, GitHub");
   }
 
   @Test
-  public void get_enabled_identity_providers_allowing_users_to_signup() {
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("github")
-      .setName("GitHub")
-      .setEnabled(true)
-      .setAllowsUsersToSignUp(true));
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("bitbucket")
-      .setName("Bitbucket")
-      .setEnabled(true)
-      .setAllowsUsersToSignUp(false));
-    identityProviderRepository.addIdentityProvider(new TestIdentityProvider()
-      .setKey("disabled")
-      .setName("Disabled")
-      .setEnabled(false)
-      .setAllowsUsersToSignUp(true));
+  public void toProtobuf_whenNoAllowsToSignUpEnabledIdentityProviders_shouldWriteNothing() {
+    when(commonSystemInformation.getAllowsToSignUpEnabledIdentityProviders()).thenReturn(emptyList());
+
+    ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
+    assertThatAttributeDoesNotExist(protobuf, "External identity providers whose users are allowed to sign themselves up");
+  }
+
+  @Test
+  public void toProtobuf_whenAllowsToSignUpEnabledIdentityProviders_shouldWriteThem() {
+    when(commonSystemInformation.getAllowsToSignUpEnabledIdentityProviders()).thenReturn(List.of("GitHub"));
 
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
     assertThatAttributeIs(protobuf, "External identity providers whose users are allowed to sign themselves up", "GitHub");
   }
 
   @Test
-  public void get_force_authentication_defaults_to_true() {
+  public void toProtobuf_whenInstanceIsNotManaged_shouldWriteNothing() {
+    when(commonSystemInformation.getManagedInstanceProviderName()).thenReturn(null);
+
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
-    assertThatAttributeIs(protobuf, "Force authentication", true);
+    assertThatAttributeDoesNotExist(protobuf, "External Users and Groups Provisioning");
   }
 
   @Test
-  public void get_force_authentication() {
-    settings.setProperty(CoreProperties.CORE_FORCE_AUTHENTICATION_PROPERTY, false);
+  public void toProtobuf_whenInstanceIsManaged_shouldWriteItsProviderName() {
+    when(commonSystemInformation.getManagedInstanceProviderName()).thenReturn("Okta");
+
+    ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
+    assertThatAttributeIs(protobuf, "External Users and Groups Provisioning", "Okta");
+  }
+
+  @Test
+  public void toProtobuf_whenForceAuthentication_returnIt() {
+    when(commonSystemInformation.getForceAuthentication()).thenReturn(false);
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
     assertThatAttributeIs(protobuf, "Force authentication", false);
   }
 
   @Test
+  public void return_Lines_of_Codes_from_StatisticsSupport(){
+    when(statisticsSupport.getLinesOfCode()).thenReturn(17752L);
+    ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
+    assertThatAttributeIs(protobuf,"Lines of Code", 17752L);
+  }
+
+  @Test
   @UseDataProvider("trueOrFalse")
-  public void get_docker_flag(boolean flag) {
-    when(dockerSupport.isRunningInDocker()).thenReturn(flag);
+  public void toProtobuf_whenRunningOrNotRunningInContainer_shouldReturnCorrectFlag(boolean flag) {
+    when(containerSupport.isRunningInContainer()).thenReturn(flag);
 
     ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
-    assertThatAttributeIs(protobuf, "Docker", flag);
+    assertThatAttributeIs(protobuf, "Container", flag);
+  }
+
+  @Test
+  public void get_edition() {
+    ProtobufSystemInfo.Section protobuf = underTest.toProtobuf();
+    assertThatAttributeIs(protobuf, "Edition", COMMUNITY.getLabel());
   }
 
   @DataProvider

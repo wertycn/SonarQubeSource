@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { addGlobalErrorMessage } from '../../../store/globalMessages';
+import { useParams } from 'react-router-dom';
+import { useRefreshBranches } from '../../../queries/branch';
 import NotFound from '../NotFound';
+import { ComponentContext } from '../componentContext/ComponentContext';
 import Extension from './Extension';
 
-export interface ProjectAdminPageExtensionProps {
-  component: T.Component;
-  location: Location;
-  params: { extensionKey: string; pluginKey: string };
-}
+export default function ProjectAdminPageExtension() {
+  const { extensionKey, pluginKey } = useParams();
+  const { component, onComponentChange } = React.useContext(ComponentContext);
 
-export function ProjectAdminPageExtension(props: ProjectAdminPageExtensionProps) {
-  const {
-    component,
-    params: { extensionKey, pluginKey }
-  } = props;
+  // We keep that for compatibility but ideally should advocate to use tanstack query
+  const onBranchesChange = useRefreshBranches();
 
-  const extension =
-    component.configuration &&
-    (component.configuration.extensions || []).find(p => p.key === `${pluginKey}/${extensionKey}`);
+  const extension = component?.configuration?.extensions?.find(
+    (p) => p.key === `${pluginKey}/${extensionKey}`,
+  );
 
   return extension ? (
-    <Extension extension={extension} options={{ component }} />
+    <Extension extension={extension} options={{ component, onComponentChange, onBranchesChange }} />
   ) : (
-    <NotFound withContainer={false} />
+    <NotFound />
   );
 }
-
-const mapDispatchToProps = { onFail: addGlobalErrorMessage };
-
-export default connect(null, mapDispatchToProps)(ProjectAdminPageExtension);

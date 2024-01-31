@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage } from 'design-system';
 import * as React from 'react';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
 import { getBranchLikeDisplayName, isMainBranch } from '../../../helpers/branch-like';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
 import { ComponentQualifier } from '../../../types/component';
 import { MetricKey } from '../../../types/metrics';
+import { Component, MeasureEnhanced } from '../../../types/types';
 
 interface Props {
   branchLike?: BranchLike;
-  component: T.Component;
-  measures?: T.MeasureEnhanced[];
+  component: Component;
+  measures?: MeasureEnhanced[];
 }
 
 export function NoCodeWarning({ branchLike, component, measures }: Props) {
@@ -51,7 +52,7 @@ export function NoCodeWarning({ branchLike, component, measures }: Props) {
   if (isApp) {
     if (
       measures === undefined ||
-      measures.find(measure => measure.metric.key === MetricKey.projects) === undefined
+      measures.find((measure) => measure.metric.key === MetricKey.projects) === undefined
     ) {
       title = translate('portfolio.app.empty');
     } else {
@@ -64,7 +65,7 @@ export function NoCodeWarning({ branchLike, component, measures }: Props) {
       } else if (branchLike !== undefined) {
         title = translateWithParameters(
           'overview.project.branch_X_empty',
-          getBranchLikeDisplayName(branchLike)
+          getBranchLikeDisplayName(branchLike),
         );
       } else {
         title = translate('overview.project.empty');
@@ -75,18 +76,14 @@ export function NoCodeWarning({ branchLike, component, measures }: Props) {
       } else if (branchLike !== undefined) {
         title = translateWithParameters(
           'overview.project.branch_X_no_lines_of_code',
-          getBranchLikeDisplayName(branchLike)
+          getBranchLikeDisplayName(branchLike),
         );
       }
     }
   }
   /* eslint-enable no-lonely-if */
 
-  return (
-    <Alert display="banner" variant="warning">
-      {title}
-    </Alert>
-  );
+  return <FlagMessage variant="warning">{title}</FlagMessage>;
 }
 
 export default React.memo(NoCodeWarning);

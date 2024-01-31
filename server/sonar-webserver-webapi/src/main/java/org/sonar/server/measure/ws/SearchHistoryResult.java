@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,7 @@ import com.google.common.collect.Table;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import org.sonar.core.util.stream.MoreCollectors;
+import java.util.stream.Collectors;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.measure.MeasureDto;
@@ -46,6 +46,7 @@ public class SearchHistoryResult {
   private List<MeasureDto> measures;
   private Common.Paging paging;
   private ComponentDto component;
+  private List<String> requestedMetrics;
 
   public SearchHistoryResult(int page, int pageSize) {
     this.page = page;
@@ -68,7 +69,7 @@ public class SearchHistoryResult {
 
   public SearchHistoryResult setAnalyses(List<SnapshotDto> analyses) {
     this.paging = Common.Paging.newBuilder().setPageIndex(page).setPageSize(pageSize).setTotal(analyses.size()).build();
-    this.analyses = analyses.stream().skip(offset(page, pageSize)).limit(pageSize).collect(MoreCollectors.toList());
+    this.analyses = analyses.stream().skip(offset(page, pageSize)).limit(pageSize).toList();
 
     return this;
   }
@@ -87,11 +88,11 @@ public class SearchHistoryResult {
   }
 
   public SearchHistoryResult setMeasures(List<MeasureDto> measures) {
-    Set<String> analysisUuids = analyses.stream().map(SnapshotDto::getUuid).collect(MoreCollectors.toHashSet());
+    Set<String> analysisUuids = analyses.stream().map(SnapshotDto::getUuid).collect(Collectors.toSet());
     ImmutableList.Builder<MeasureDto> measuresBuilder = ImmutableList.builder();
     List<MeasureDto> filteredMeasures = measures.stream()
       .filter(measure -> analysisUuids.contains(measure.getAnalysisUuid()))
-      .collect(MoreCollectors.toArrayList());
+      .toList();
     measuresBuilder.addAll(filteredMeasures);
     measuresBuilder.addAll(computeBestValues(filteredMeasures));
 
@@ -129,20 +130,22 @@ public class SearchHistoryResult {
   }
 
   private static MeasureDto toBestValue(MetricDto metric, SnapshotDto analysis) {
-    MeasureDto measure = new MeasureDto()
+    return new MeasureDto()
       .setMetricUuid(metric.getUuid())
-      .setAnalysisUuid(analysis.getUuid());
-
-    if (metric.getKey().startsWith("new_")) {
-      measure.setVariation(metric.getBestValue());
-    } else {
-      measure.setValue(metric.getBestValue());
-    }
-
-    return measure;
+      .setAnalysisUuid(analysis.getUuid())
+      .setValue(metric.getBestValue());
   }
 
   Common.Paging getPaging() {
     return requireNonNull(paging);
+  }
+
+  public SearchHistoryResult setRequestedMetrics(List<String> requestedMetrics) {
+    this.requestedMetrics = requestedMetrics;
+    return this;
+  }
+
+  public List<String> getRequestedMetrics() {
+    return requestedMetrics;
   }
 }

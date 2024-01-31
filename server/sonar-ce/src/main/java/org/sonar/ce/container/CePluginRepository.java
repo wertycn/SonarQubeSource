@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,23 +19,24 @@
  */
 package org.sonar.ce.container;
 
-import com.google.common.collect.ImmutableList;
 import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
-import org.picocontainer.Startable;
 import org.sonar.api.Plugin;
-import org.sonar.api.utils.log.Loggers;
+import org.sonar.api.Startable;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.platform.ExplodedPlugin;
 import org.sonar.core.platform.PluginClassLoader;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
 import org.sonar.server.platform.ServerFileSystem;
+import org.sonar.server.plugins.PluginRequirementsValidator;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -67,9 +68,12 @@ public class CePluginRepository implements PluginRepository, Startable {
 
   @Override
   public void start() {
-    Loggers.get(getClass()).info("Load plugins");
+    LoggerFactory.getLogger(getClass()).info("Load plugins");
     registerPluginsFromDir(fs.getInstalledBundledPluginsDir());
     registerPluginsFromDir(fs.getInstalledExternalPluginsDir());
+
+    PluginRequirementsValidator.unloadIncompatiblePlugins(pluginInfosByKeys);
+
     Map<String, ExplodedPlugin> explodedPluginsByKey = extractPlugins(pluginInfosByKeys);
     pluginInstancesByKeys.putAll(loader.load(explodedPluginsByKey));
     started.set(true);
@@ -100,7 +104,7 @@ public class CePluginRepository implements PluginRepository, Startable {
   @Override
   public Collection<PluginInfo> getPluginInfos() {
     checkState(started.get(), NOT_STARTED_YET);
-    return ImmutableList.copyOf(pluginInfosByKeys.values());
+    return Set.copyOf(pluginInfosByKeys.values());
   }
 
   @Override

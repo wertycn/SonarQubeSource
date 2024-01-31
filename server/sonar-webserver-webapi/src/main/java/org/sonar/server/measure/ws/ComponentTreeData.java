@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.metric.MetricDto;
@@ -35,9 +36,11 @@ import static java.util.Objects.requireNonNull;
 
 class ComponentTreeData {
   private final ComponentDto baseComponent;
+  private final BranchDto branch;
   private final List<ComponentDto> components;
   private final int componentCount;
   private final Map<String, ComponentDto> referenceComponentsByUuid;
+  private final Map<String, String> branchByReferenceUuid;
   private final List<MetricDto> metrics;
   private final Measures.Period period;
   private final Table<String, MetricDto, Measure> measuresByComponentUuidAndMetric;
@@ -46,10 +49,16 @@ class ComponentTreeData {
     this.baseComponent = builder.baseComponent;
     this.components = builder.componentsFromDb;
     this.componentCount = builder.componentCount;
+    this.branch = builder.branch;
     this.referenceComponentsByUuid = builder.referenceComponentsByUuid;
+    this.branchByReferenceUuid = builder.branchByReferenceUuid;
     this.metrics = builder.metrics;
     this.measuresByComponentUuidAndMetric = builder.measuresByComponentUuidAndMetric;
     this.period = builder.period;
+  }
+
+  public Map<String, String> getBranchByReferenceUuid() {
+    return branchByReferenceUuid;
   }
 
   public ComponentDto getBaseComponent() {
@@ -57,16 +66,19 @@ class ComponentTreeData {
   }
 
   @CheckForNull
+  public BranchDto getBranch() {
+    return branch;
+  }
+
+  @CheckForNull
   List<ComponentDto> getComponents() {
     return components;
   }
 
-  @CheckForNull
   int getComponentCount() {
     return componentCount;
   }
 
-  @CheckForNull
   public Map<String, ComponentDto> getReferenceComponentsByUuid() {
     return referenceComponentsByUuid;
   }
@@ -93,13 +105,21 @@ class ComponentTreeData {
     private ComponentDto baseComponent;
     private List<ComponentDto> componentsFromDb;
     private Map<String, ComponentDto> referenceComponentsByUuid;
+    private Map<String, String> branchByReferenceUuid;
     private int componentCount;
     private List<MetricDto> metrics;
     private Measures.Period period;
+    private BranchDto branch;
+
     private Table<String, MetricDto, Measure> measuresByComponentUuidAndMetric;
 
     private Builder() {
       // private constructor
+    }
+
+    public Builder setBranchByReferenceUuid(Map<String, String> branchByReferenceUuid) {
+      this.branchByReferenceUuid = branchByReferenceUuid;
+      return this;
     }
 
     public Builder setBaseComponent(ComponentDto baseComponent) {
@@ -114,6 +134,11 @@ class ComponentTreeData {
 
     public Builder setComponentCount(int componentCount) {
       this.componentCount = componentCount;
+      return this;
+    }
+
+    public Builder setBranch(@Nullable BranchDto branch) {
+      this.branch = branch;
       return this;
     }
 
@@ -146,16 +171,14 @@ class ComponentTreeData {
   static class Measure {
     private double value;
     private String data;
-    private double variation;
 
-    public Measure(@Nullable String data, @Nullable Double value, @Nullable Double variation) {
+    public Measure(@Nullable String data, @Nullable Double value) {
       this.data = data;
       this.value = toPrimitive(value);
-      this.variation = toPrimitive(variation);
     }
 
     private Measure(LiveMeasureDto measureDto) {
-      this(measureDto.getDataAsString(), measureDto.getValue(), measureDto.getVariation());
+      this(measureDto.getDataAsString(), measureDto.getValue());
     }
 
     public double getValue() {
@@ -169,14 +192,6 @@ class ComponentTreeData {
     @CheckForNull
     public String getData() {
       return data;
-    }
-
-    public double getVariation() {
-      return variation;
-    }
-
-    public boolean isVariationSet() {
-      return !isNaN(variation);
     }
 
     static Measure createFromMeasureDto(LiveMeasureDto measureDto) {

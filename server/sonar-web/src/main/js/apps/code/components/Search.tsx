@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,29 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import classNames from 'classnames';
+import { InputSearch, Spinner, ToggleButton } from 'design-system';
+import { isEmpty, omit } from 'lodash';
 import * as React from 'react';
-import SearchBox from 'sonar-ui-common/components/controls/SearchBox';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getTree } from '../../../api/components';
 import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
+import { KeyboardKeys } from '../../../helpers/keycodes';
+import { translate } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
+import { ComponentQualifier, isPortfolioLike, isView } from '../../../types/component';
+import { ComponentMeasure } from '../../../types/types';
 
 interface Props {
   branchLike?: BranchLike;
-  component: T.ComponentMeasure;
+  className?: string;
+  component: ComponentMeasure;
   location: Location;
+  newCodeSelected: boolean;
   onSearchClear: () => void;
-  onSearchResults: (results?: T.ComponentMeasure[]) => void;
-  router: Pick<Router, 'push'>;
+  onNewCodeToggle: (newCode: boolean) => void;
+  onSearchResults: (results?: ComponentMeasure[]) => void;
+  router: Router;
 }
 
 interface State {
@@ -44,19 +51,22 @@ class Search extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = {
     query: '',
-    loading: false
+    loading: false,
   };
 
   componentDidMount() {
     this.mounted = true;
+    if (this.props.location.query.search) {
+      this.handleQueryChange(this.props.location.query.search);
+    }
   }
 
-  componentWillReceiveProps(nextProps: Props) {
-    // if the url has change, reset the current state
-    if (nextProps.location !== this.props.location) {
+  componentDidUpdate(nextProps: Props) {
+    // if the component has change, reset the current state
+    if (nextProps.location.query.id !== this.props.location.query.id) {
       this.setState({
         query: '',
-        loading: false
+        loading: false,
       });
       this.props.onSearchClear();
     }
@@ -67,10 +77,10 @@ class Search extends React.PureComponent<Props, State> {
   }
 
   handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    switch (event.keyCode) {
-      case 13:
-      case 38:
-      case 40:
+    switch (event.nativeEvent.key) {
+      case KeyboardKeys.Enter:
+      case KeyboardKeys.UpArrow:
+      case KeyboardKeys.DownArrow:
         event.preventDefault();
         event.currentTarget.blur();
         break;
@@ -79,23 +89,31 @@ class Search extends React.PureComponent<Props, State> {
 
   handleSearch = (query: string) => {
     if (this.mounted) {
-      const { branchLike, component } = this.props;
+      const { branchLike, component, router, location } = this.props;
       this.setState({ loading: true });
 
-      const isPortfolio = ['VW', 'SVW', 'APP'].includes(component.qualifier);
-      const qualifiers = isPortfolio ? 'SVW,TRK' : 'BRC,UTS,FIL';
+      if (query !== location.query.search) {
+        router.replace({
+          pathname: location.pathname,
+          query: { ...location.query, search: query },
+        });
+      }
+
+      const qualifiers = isView(component.qualifier)
+        ? [ComponentQualifier.SubPortfolio, ComponentQualifier.Project].join(',')
+        : [ComponentQualifier.TestFile, ComponentQualifier.File].join(',');
 
       getTree({
         component: component.key,
         q: query,
         s: 'qualifier,name',
         qualifiers,
-        ...getBranchLikeQuery(branchLike)
+        ...getBranchLikeQuery(branchLike),
       })
-        .then(r => {
+        .then((r) => {
           if (this.mounted) {
             this.setState({
-              loading: false
+              loading: false,
             });
             this.props.onSearchResults(r.components);
           }
@@ -109,8 +127,10 @@ class Search extends React.PureComponent<Props, State> {
   };
 
   handleQueryChange = (query: string) => {
+    const { router, location } = this.props;
     this.setState({ query });
     if (query.length === 0) {
+      router.replace({ pathname: location.pathname, query: omit(location.query, 'search') });
       this.props.onSearchClear();
     } else {
       this.handleSearch(query);
@@ -118,25 +138,60 @@ class Search extends React.PureComponent<Props, State> {
   };
 
   render() {
-    const { component } = this.props;
-    const { loading } = this.state;
-    const isPortfolio = ['VW', 'SVW', 'APP'].includes(component.qualifier);
+    const { className, component, newCodeSelected } = this.props;
+    const { loading, query } = this.state;
+    const isPortfolio = isPortfolioLike(component.qualifier);
+
+    const searchPlaceholder = getSearchPlaceholderLabel(component.qualifier as ComponentQualifier);
 
     return (
-      <div className="code-search" id="code-search">
-        <SearchBox
+      <div className={classNames('sw-flex sw-items-center', className)} id="code-search">
+        {isPortfolio && (
+          <div className="sw-mr-4">
+            <ToggleButton
+              disabled={!isEmpty(query)}
+              options={[
+                {
+                  value: true,
+                  label: translate('projects.view.new_code'),
+                },
+                {
+                  value: false,
+                  label: translate('projects.view.overall_code'),
+                },
+              ]}
+              value={newCodeSelected}
+              onChange={this.props.onNewCodeToggle}
+            />
+          </div>
+        )}
+        <InputSearch
+          searchInputAriaLabel={searchPlaceholder}
           minLength={3}
           onChange={this.handleQueryChange}
           onKeyDown={this.handleKeyDown}
-          placeholder={translate(
-            isPortfolio ? 'code.search_placeholder.portfolio' : 'code.search_placeholder'
-          )}
+          placeholder={searchPlaceholder}
+          size="large"
           value={this.state.query}
         />
-        <DeferredSpinner className="spacer-left" loading={loading} />
+        <Spinner className="sw-ml-2" loading={loading} />
       </div>
     );
   }
 }
 
 export default withRouter(Search);
+
+function getSearchPlaceholderLabel(qualifier: ComponentQualifier) {
+  switch (qualifier) {
+    case ComponentQualifier.Portfolio:
+    case ComponentQualifier.SubPortfolio:
+      return translate('code.search_placeholder.portfolio');
+
+    case ComponentQualifier.Application:
+      return translate('code.search_placeholder.application');
+
+    default:
+      return translate('code.search_placeholder');
+  }
+}

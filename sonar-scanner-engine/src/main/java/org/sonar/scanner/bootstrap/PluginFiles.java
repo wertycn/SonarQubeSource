@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,8 @@
  */
 package org.sonar.scanner.bootstrap;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,15 +28,12 @@ import java.net.HttpURLConnection;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Pack200;
 import java.util.stream.Stream;
-import java.util.zip.GZIPInputStream;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.config.Configuration;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.scanner.bootstrap.ScannerPluginInstaller.InstalledPlugin;
 import org.sonarqube.ws.client.GetRequest;
 import org.sonarqube.ws.client.HttpException;
@@ -46,18 +43,20 @@ import static java.lang.String.format;
 
 public class PluginFiles {
 
-  private static final Logger LOGGER = Loggers.get(PluginFiles.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(PluginFiles.class);
   private static final String MD5_HEADER = "Sonar-MD5";
-  private static final String COMPRESSION_HEADER = "Sonar-Compression";
-  private static final String PACK200 = "pack200";
-  private static final String UNCOMPRESSED_MD5_HEADER = "Sonar-UncompressedMD5";
+  @VisibleForTesting
+  static final String PLUGINS_DOWNLOAD_TIMEOUT_PROPERTY = "sonar.plugins.download.timeout";
+  private static final int PLUGINS_DOWNLOAD_TIMEOUT_DEFAULT = 300;
 
   private final DefaultScannerWsClient wsClient;
+  private final Configuration configuration;
   private final File cacheDir;
   private final File tempDir;
 
   public PluginFiles(DefaultScannerWsClient wsClient, Configuration configuration) {
     this.wsClient = wsClient;
+    this.configuration = configuration;
     File home = locateHomeDir(configuration);
     this.cacheDir = mkdir(new File(home, "cache"), "user cache");
     this.tempDir = mkdir(new File(home, "_tmp"), "temp dir");
@@ -92,14 +91,7 @@ public class PluginFiles {
   private Optional<File> download(InstalledPlugin plugin) {
     GetRequest request = new GetRequest("api/plugins/download")
       .setParam("plugin", plugin.key)
-      .setTimeOutInMs(5 * 60_000);
-
-    try {
-      Class.forName("java.util.jar.Pack200");
-      request.setParam("acceptCompressions", PACK200);
-    } catch (ClassNotFoundException e) {
-      // ignore and don't use any compression
-    }
+      .setTimeOutInMs(configuration.getInt(PLUGINS_DOWNLOAD_TIMEOUT_PROPERTY).orElse(PLUGINS_DOWNLOAD_TIMEOUT_DEFAULT) * 1000);
 
     File downloadedFile = newTempFile();
     LOGGER.debug("Download plugin '{}' to '{}'", plugin.key, downloadedFile);
@@ -123,15 +115,9 @@ public class PluginFiles {
       // un-compress if needed
       String cacheMd5;
       File tempJar;
-      Optional<String> compression = response.header(COMPRESSION_HEADER);
-      if (compression.isPresent() && PACK200.equals(compression.get())) {
-        tempJar = unpack200(plugin.key, downloadedFile);
-        cacheMd5 = response.header(UNCOMPRESSED_MD5_HEADER).orElseThrow(() -> new IllegalStateException(format(
-          "Fail to download plugin [%s]. Request to %s did not return header %s.", plugin.key, response.requestUrl(), UNCOMPRESSED_MD5_HEADER)));
-      } else {
-        tempJar = downloadedFile;
-        cacheMd5 = expectedMd5.get();
-      }
+
+      tempJar = downloadedFile;
+      cacheMd5 = expectedMd5.get();
 
       // put in cache
       File jarInCache = jarInCache(plugin.key, cacheMd5);
@@ -175,18 +161,6 @@ public class PluginFiles {
     } catch (IOException e) {
       throw new IllegalStateException("Fail to create temp file in " + tempDir, e);
     }
-  }
-
-  private File unpack200(String pluginKey, File compressedFile) {
-    LOGGER.debug("Unpacking plugin {}", pluginKey);
-    File jar = newTempFile();
-    try (InputStream input = new GZIPInputStream(new BufferedInputStream(FileUtils.openInputStream(compressedFile)));
-         JarOutputStream output = new JarOutputStream(new BufferedOutputStream(FileUtils.openOutputStream(jar)))) {
-      Pack200.newUnpacker().unpack(input, output);
-    } catch (IOException e) {
-      throw new IllegalStateException(format("Fail to download plugin [%s]. Pack200 error.", pluginKey), e);
-    }
-    return jar;
   }
 
   private static String computeMd5(File file) {

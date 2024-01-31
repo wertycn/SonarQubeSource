@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,19 +20,19 @@
 package org.sonar.server.source.ws;
 
 import org.junit.Test;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.ListContainer;
 import org.sonar.server.ws.WsAction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SourceWsModuleTest {
-  private SourceWsModule underTest = new SourceWsModule();
+  private final SourceWsModule underTest = new SourceWsModule();
 
   @Test
   public void verify_count_of_actions() {
-    ComponentContainer container = new ComponentContainer();
+    ListContainer container = new ListContainer();
     underTest.configure(container);
-    assertThat(container.getPicoContainer().getComponentAdapters(WsAction.class)).hasSize(7);
+    assertThat(container.getAddedObjects().stream().filter(o -> o instanceof Class && WsAction.class.isAssignableFrom((Class<?>) o)))
+      .hasSize(6);
   }
-
 }

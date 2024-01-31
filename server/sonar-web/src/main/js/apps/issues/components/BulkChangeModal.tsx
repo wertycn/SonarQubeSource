@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,77 +17,74 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { pickBy, sortBy } from 'lodash';
+import {
+  ButtonPrimary,
+  Checkbox,
+  FlagMessage,
+  FormField,
+  Highlight,
+  InputTextArea,
+  LabelValueSelectOption,
+  LightLabel,
+  Modal,
+  RadioButton,
+  Spinner,
+} from 'design-system';
+import { countBy, flattenDeep, pickBy, sortBy } from 'lodash';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Checkbox from 'sonar-ui-common/components/controls/Checkbox';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import Radio from 'sonar-ui-common/components/controls/Radio';
-import SearchSelect from 'sonar-ui-common/components/controls/SearchSelect';
-import Select from 'sonar-ui-common/components/controls/Select';
-import IssueTypeIcon from 'sonar-ui-common/components/icons/IssueTypeIcon';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { SingleValue } from 'react-select';
 import { bulkChangeIssues, searchIssueTags } from '../../../api/issues';
-import throwGlobalError from '../../../app/utils/throwGlobalError';
 import FormattingTips from '../../../components/common/FormattingTips';
-import SeverityHelper from '../../../components/shared/SeverityHelper';
-import Avatar from '../../../components/ui/Avatar';
-import { isLoggedIn, isUserActive } from '../../../helpers/users';
-import { searchAssignees } from '../utils';
-
-interface AssigneeOption {
-  avatar?: string;
-  email?: string;
-  label: string;
-  value: string;
-}
-
-interface TagOption {
-  label: string;
-  value: string;
-}
+import { isTransitionHidden, transitionRequiresComment } from '../../../components/issue/helpers';
+import { throwGlobalError } from '../../../helpers/error';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { withBranchStatusRefresh } from '../../../queries/branch';
+import { IssueTransition } from '../../../types/issues';
+import { Issue, Paging } from '../../../types/types';
+import AssigneeSelect from './AssigneeSelect';
+import TagsSelect from './TagsSelect';
 
 interface Props {
-  component: T.Component | undefined;
-  currentUser: T.CurrentUser;
-  fetchIssues: (x: {}) => Promise<{ issues: T.Issue[]; paging: T.Paging }>;
+  fetchIssues: (x: {}) => Promise<{ issues: Issue[]; paging: Paging }>;
+  needIssueSync?: boolean;
   onClose: () => void;
   onDone: () => void;
+  refreshBranchStatus: () => void;
 }
 
 interface FormFields {
-  addTags?: Array<{ label: string; value: string }>;
-  assignee?: AssigneeOption;
+  addTags?: Array<string>;
+  assignee?: SingleValue<LabelValueSelectOption<string>>;
   comment?: string;
   notifications?: boolean;
-  removeTags?: Array<{ label: string; value: string }>;
+  removeTags?: Array<string>;
   severity?: string;
-  transition?: string;
+  transition?: IssueTransition;
   type?: string;
 }
 
 interface State extends FormFields {
-  initialTags: Array<{ label: string; value: string }>;
-  issues: T.Issue[];
+  initialTags: Array<string>;
+  issues: Issue[];
   // used for initial loading of issues
   loading: boolean;
-  paging?: T.Paging;
+  paging?: Paging;
   // used when submitting a form
   submitting: boolean;
 }
 
-type AssigneeSelectType = new () => SearchSelect<AssigneeOption>;
-const AssigneeSelect = SearchSelect as AssigneeSelectType;
-
-type TagSelectType = new () => SearchSelect<TagOption>;
-const TagSelect = SearchSelect as TagSelectType;
+enum InputField {
+  addTags = 'addTags',
+  assignee = 'assignee',
+  removeTags = 'removeTags',
+  severity = 'severity',
+  type = 'type',
+}
 
 export const MAX_PAGE_SIZE = 500;
 
-export default class BulkChangeModal extends React.PureComponent<Props, State> {
+export class BulkChangeModal extends React.PureComponent<Props, State> {
   mounted = false;
 
   constructor(props: Props) {
@@ -96,9 +93,14 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
   }
 
   componentDidMount() {
+    const { needIssueSync } = this.props;
+
     this.mounted = true;
 
-    Promise.all([this.loadIssues(), searchIssueTags({})]).then(
+    Promise.all([
+      this.loadIssues(),
+      needIssueSync ? Promise.resolve([]) : searchIssueTags({}),
+    ]).then(
       ([{ issues, paging }, tags]) => {
         if (this.mounted) {
           if (issues.length > MAX_PAGE_SIZE) {
@@ -106,14 +108,14 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
           }
 
           this.setState({
-            initialTags: tags.map(tag => ({ label: tag, value: tag })),
+            initialTags: tags,
             issues,
             loading: false,
-            paging
+            paging,
           });
         }
       },
-      () => {}
+      () => {},
     );
   }
 
@@ -125,60 +127,20 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
     return this.props.fetchIssues({ additionalFields: 'actions,transitions', ps: MAX_PAGE_SIZE });
   };
 
-  getDefaultAssignee = () => {
-    const { currentUser } = this.props;
-    const { issues } = this.state;
-    const options = [];
-
-    if (isLoggedIn(currentUser)) {
-      const canBeAssignedToMe =
-        issues.filter(issue => issue.assignee !== currentUser.login).length > 0;
-      if (canBeAssignedToMe) {
-        options.push({
-          avatar: currentUser.avatar,
-          label: currentUser.name,
-          value: currentUser.login
-        });
-      }
-    }
-
-    const canBeUnassigned = issues.filter(issue => issue.assignee).length > 0;
-    if (canBeUnassigned) {
-      options.push({ label: translate('unassigned'), value: '' });
-    }
-
-    return options;
-  };
-
-  handleAssigneeSearch = (query: string) => {
-    return searchAssignees(query).then(({ results }) =>
-      results.map(r => {
-        const userInfo = r.name || r.login;
-
-        return {
-          avatar: r.avatar,
-          label: isUserActive(r) ? userInfo : translateWithParameters('user.x_deleted', userInfo),
-          value: r.login
-        };
-      })
-    );
-  };
-
-  handleAssigneeSelect = (assignee: AssigneeOption) => {
+  handleAssigneeSelect = (assignee: SingleValue<LabelValueSelectOption<string>>) => {
     this.setState({ assignee });
   };
 
-  handleTagsSearch = (query: string) => {
-    return searchIssueTags({ q: query }).then(tags =>
-      tags.map(tag => ({ label: tag, value: tag }))
-    );
+  handleTagsSearch = (query: string): Promise<string[]> => {
+    return searchIssueTags({ q: query })
+      .then((tags) => tags)
+      .catch(() => []);
   };
 
-  handleTagsSelect = (field: 'addTags' | 'removeTags') => (
-    options: Array<{ label: string; value: string }>
-  ) => {
-    this.setState<keyof FormFields>({ [field]: options });
-  };
+  handleTagsSelect =
+    (field: InputField.addTags | InputField.removeTags) => (options: Array<string>) => {
+      this.setState<keyof FormFields>({ [field]: options });
+    };
 
   handleFieldCheck = (field: keyof FormFields) => (checked: boolean) => {
     if (!checked) {
@@ -188,7 +150,7 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
     }
   };
 
-  handleRadioTransitionChange = (transition: string) => {
+  handleRadioTransitionChange = (transition: IssueTransition) => {
     this.setState({ transition });
   };
 
@@ -196,113 +158,86 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
     this.setState({ comment: event.currentTarget.value });
   };
 
-  handleSelectFieldChange = (field: 'severity' | 'type') => (data: { value: string } | null) => {
-    if (data) {
-      this.setState<keyof FormFields>({ [field]: data.value });
-    } else {
-      this.setState<keyof FormFields>({ [field]: undefined });
-    }
-  };
-
   handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const query = pickBy(
       {
-        add_tags: this.state.addTags && this.state.addTags.map(t => t.value).join(),
+        add_tags: this.state.addTags?.join(),
         assign: this.state.assignee ? this.state.assignee.value : null,
         comment: this.state.comment,
         do_transition: this.state.transition,
-        remove_tags: this.state.removeTags && this.state.removeTags.map(t => t.value).join(),
+        remove_tags: this.state.removeTags?.join(),
         sendNotifications: this.state.notifications,
         set_severity: this.state.severity,
-        set_type: this.state.type
+        set_type: this.state.type,
       },
-      x => x !== undefined
+      (x) => x !== undefined,
     );
 
-    const issueKeys = this.state.issues.map(issue => issue.key);
+    const issueKeys = this.state.issues.map((issue) => issue.key);
 
     this.setState({ submitting: true });
+
     bulkChangeIssues(issueKeys, query).then(
       () => {
         this.setState({ submitting: false });
+        this.props.refreshBranchStatus();
         this.props.onDone();
       },
-      error => {
+      (error) => {
         this.setState({ submitting: false });
         throwGlobalError(error);
-      }
+      },
     );
   };
 
-  getAvailableTransitions(issues: T.Issue[]) {
-    const transitions: T.Dict<number> = {};
-    issues.forEach(issue => {
-      if (issue.transitions) {
-        issue.transitions.forEach(t => {
-          if (transitions[t] !== undefined) {
-            transitions[t]++;
-          } else {
-            transitions[t] = 1;
-          }
-        });
-      }
-    });
-    return sortBy(Object.keys(transitions)).map(transition => ({
+  getAvailableTransitions(issues: Issue[]) {
+    const allTransitions = flattenDeep(issues.map((issue) => issue.transitions));
+    const countTransitions = countBy<IssueTransition>(allTransitions);
+
+    return sortBy(Object.keys(countTransitions)).map((transition: IssueTransition) => ({
       transition,
-      count: transitions[transition]
+      count: countTransitions[transition],
     }));
   }
 
-  renderLoading = () => (
-    <div>
-      <div className="modal-head">
-        <h2>{translate('bulk_change')}</h2>
-      </div>
-      <div className="modal-body">
-        <div className="text-center">
-          <i className="spinner spacer" />
-        </div>
-      </div>
-      <div className="modal-foot">
-        <ResetButtonLink onClick={this.props.onClose}>{translate('cancel')}</ResetButtonLink>
-      </div>
-    </div>
-  );
+  canSubmit = () => {
+    const { addTags, assignee, removeTags, severity, transition, type } = this.state;
 
-  renderAffected = (affected: number) => (
-    <div className="pull-right note">
-      ({translateWithParameters('issue_bulk_change.x_issues', affected)})
-    </div>
-  );
-
-  renderField = (
-    field: 'addTags' | 'assignee' | 'removeTags' | 'severity' | 'type',
-    label: string,
-    affected: number | undefined,
-    input: React.ReactNode
-  ) => (
-    <div className="modal-field" id={`issues-bulk-change-${field}`}>
-      <label htmlFor={field}>{translate(label)}</label>
-      {input}
-      {affected !== undefined && this.renderAffected(affected)}
-    </div>
-  );
-
-  renderAssigneeOption = (option: AssigneeOption) => {
-    return (
-      <span>
-        {option.avatar !== undefined && (
-          <Avatar className="spacer-right" hash={option.avatar} name={option.label} size={16} />
-        )}
-        {option.label}
-      </span>
+    return Boolean(
+      (addTags && addTags.length > 0) ||
+        (removeTags && removeTags.length > 0) ||
+        assignee ||
+        severity ||
+        transition ||
+        type,
     );
   };
 
+  renderField = (
+    field: InputField,
+    label: string,
+    affected: number | undefined,
+    input: React.ReactNode,
+  ) => (
+    <FormField htmlFor={`issues-bulk-change-${field}`} label={translate(label)}>
+      <div className="sw-flex sw-items-center sw-justify-between">
+        {input}
+
+        {affected !== undefined && (
+          <LightLabel>
+            ({translateWithParameters('issue_bulk_change.x_issues', affected)})
+          </LightLabel>
+        )}
+      </div>
+    </FormField>
+  );
+
   renderAssigneeField = () => {
+    const { assignee, issues } = this.state;
     const affected = this.state.issues.filter(hasAction('assign')).length;
+    const field = InputField.assignee;
 
     if (affected === 0) {
       return null;
@@ -310,88 +245,24 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
 
     const input = (
       <AssigneeSelect
-        className="input-super-large"
-        clearable={true}
-        defaultOptions={this.getDefaultAssignee()}
-        onSearch={this.handleAssigneeSearch}
-        onSelect={this.handleAssigneeSelect}
-        renderOption={this.renderAssigneeOption}
-        resetOnBlur={false}
-        value={this.state.assignee}
+        assignee={assignee}
+        className="sw-max-w-abs-300"
+        inputId={`issues-bulk-change-${field}`}
+        issues={issues}
+        onAssigneeSelect={this.handleAssigneeSelect}
       />
     );
 
-    return this.renderField('assignee', 'issue.assign.formlink', affected, input);
+    return this.renderField(field, 'issue.assign.formlink', affected, input);
   };
 
-  renderTypeField = () => {
-    const affected = this.state.issues.filter(hasAction('set_type')).length;
-
-    if (affected === 0) {
-      return null;
-    }
-
-    const types: T.IssueType[] = ['BUG', 'VULNERABILITY', 'CODE_SMELL'];
-    const options = types.map(type => ({ label: translate('issue.type', type), value: type }));
-
-    const optionRenderer = (option: { label: string; value: string }) => (
-      <>
-        <IssueTypeIcon query={option.value} />
-        <span className="little-spacer-left">{option.label}</span>
-      </>
-    );
-
-    const input = (
-      <Select
-        className="input-super-large"
-        clearable={true}
-        onChange={this.handleSelectFieldChange('type')}
-        optionRenderer={optionRenderer}
-        options={options}
-        searchable={false}
-        value={this.state.type}
-        valueRenderer={optionRenderer}
-      />
-    );
-
-    return this.renderField('type', 'issue.set_type', affected, input);
-  };
-
-  renderSeverityField = () => {
-    const affected = this.state.issues.filter(hasAction('set_severity')).length;
-
-    if (affected === 0) {
-      return null;
-    }
-
-    const severities = ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO'];
-    const options = severities.map(severity => ({
-      label: translate('severity', severity),
-      value: severity
-    }));
-
-    const input = (
-      <Select
-        className="input-super-large"
-        clearable={true}
-        onChange={this.handleSelectFieldChange('severity')}
-        optionRenderer={(option: { value: string }) => <SeverityHelper severity={option.value} />}
-        options={options}
-        searchable={false}
-        value={this.state.severity}
-        valueRenderer={(option: { value: string }) => <SeverityHelper severity={option.value} />}
-      />
-    );
-
-    return this.renderField('severity', 'issue.set_severity', affected, input);
-  };
-
-  renderTagOption = (option: TagOption) => {
-    return <span>{option.label}</span>;
-  };
-
-  renderTagsField = (field: 'addTags' | 'removeTags', label: string, allowCreate: boolean) => {
+  renderTagsField = (
+    field: InputField.addTags | InputField.removeTags,
+    label: string,
+    allowCreate: boolean,
+  ) => {
     const { initialTags } = this.state;
+    const tags = this.state[field] ?? [];
     const affected = this.state.issues.filter(hasAction('set_tags')).length;
 
     if (initialTags === undefined || affected === 0) {
@@ -399,19 +270,12 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
     }
 
     const input = (
-      <TagSelect
-        canCreate={allowCreate}
-        className="input-super-large"
-        clearable={true}
-        defaultOptions={this.state.initialTags}
-        minimumQueryLength={0}
-        multi={true}
-        onMultiSelect={this.handleTagsSelect(field)}
+      <TagsSelect
+        allowCreation={allowCreate}
+        inputId={`issues-bulk-change-${field}`}
+        onChange={this.handleTagsSelect(field)}
+        selectedTags={tags}
         onSearch={this.handleTagsSearch}
-        promptTextCreator={promptCreateTag}
-        renderOption={this.renderTagOption}
-        resetOnBlur={false}
-        value={this.state[field]}
       />
     );
 
@@ -419,129 +283,160 @@ export default class BulkChangeModal extends React.PureComponent<Props, State> {
   };
 
   renderTransitionsField = () => {
-    const transitions = this.getAvailableTransitions(this.state.issues);
+    const transitions = this.getAvailableTransitions(this.state.issues).filter(
+      (transition) => !isTransitionHidden(transition.transition),
+    );
 
     if (transitions.length === 0) {
       return null;
     }
 
     return (
-      <div className="modal-field">
-        <label>{translate('issue.transition')}</label>
-        {transitions.map(transition => (
-          <span
-            className="bulk-change-radio-button display-flex-center display-flex-space-between"
-            key={transition.transition}>
-            <Radio
-              checked={this.state.transition === transition.transition}
-              onCheck={this.handleRadioTransitionChange}
-              value={transition.transition}>
-              {translate('issue.transition', transition.transition)}
-            </Radio>
-            {this.renderAffected(transition.count)}
-          </span>
-        ))}
+      <div className="sw-mb-6">
+        <fieldset>
+          <Highlight as="legend" className="sw-mb-2">
+            {translate('issue.change_status')}
+          </Highlight>
+          {transitions.map((transition) => (
+            <div
+              className="sw-mb-1 sw-flex sw-items-center sw-justify-between"
+              key={transition.transition}
+            >
+              <RadioButton
+                checked={this.state.transition === transition.transition}
+                onCheck={this.handleRadioTransitionChange}
+                value={transition.transition}
+              >
+                {translate('issue.transition', transition.transition)}
+              </RadioButton>
+              <LightLabel>
+                ({translateWithParameters('issue_bulk_change.x_issues', transition.count)})
+              </LightLabel>
+            </div>
+          ))}
+        </fieldset>
       </div>
     );
   };
 
   renderCommentField = () => {
-    const affected = this.state.issues.filter(hasAction('comment')).length;
+    const affectedIssuesCount = this.state.issues.filter(hasAction('comment')).length;
+    if (affectedIssuesCount === 0) {
+      return null;
+    }
 
-    if (affected === 0) {
+    // Selected transition does not require comment
+    if (!this.state.transition || !transitionRequiresComment(this.state.transition)) {
       return null;
     }
 
     return (
-      <div className="modal-field">
-        <label htmlFor="comment">
-          <span className="text-middle">{translate('issue.comment.formlink')}</span>
-          <HelpTooltip
-            className="spacer-left"
-            overlay={translate('issue_bulk_change.comment.help')}
-          />
-        </label>
-        <textarea
-          id="comment"
+      <FormField label={translate('issue_bulk_change.resolution_comment')}>
+        <InputTextArea
+          autoFocus
+          aria-label={translate('issue_bulk_change.resolution_comment')}
           onChange={this.handleCommentChange}
-          rows={4}
-          value={this.state.comment || ''}
+          placeholder={translate(
+            'issue.transition.comment.placeholder',
+            this.state.transition ?? '',
+          )}
+          rows={5}
+          value={this.state.comment}
+          size="auto"
+          className="sw-resize-y sw-w-full"
         />
-        <FormattingTips className="modal-field-descriptor text-right" />
-      </div>
+        <FormattingTips className="sw-mt-2" />
+      </FormField>
     );
   };
 
   renderNotificationsField = () => (
-    <Checkbox
-      checked={this.state.notifications !== undefined}
-      className="display-inline-block spacer-top"
-      id="send-notifications"
-      onCheck={this.handleFieldCheck('notifications')}
-      right={true}>
-      <strong className="little-spacer-right">{translate('issue.send_notifications')}</strong>
-    </Checkbox>
+    <div>
+      <Checkbox
+        checked={this.state.notifications !== undefined}
+        className="sw-my-2 sw-gap-1/2"
+        id="send-notifications"
+        onCheck={this.handleFieldCheck('notifications')}
+        right
+      >
+        {translate('issue.send_notifications')}
+      </Checkbox>
+    </div>
   );
 
   renderForm = () => {
-    const { issues, paging, submitting } = this.state;
+    const { needIssueSync } = this.props;
+    const { issues, loading, paging } = this.state;
 
     const limitReached = paging && paging.total > MAX_PAGE_SIZE;
 
     return (
-      <form id="bulk-change-form" onSubmit={this.handleSubmit}>
-        <div className="modal-head">
-          <h2>{translateWithParameters('issue_bulk_change.form.title', issues.length)}</h2>
-        </div>
-
-        <div className="modal-body modal-container">
+      <Spinner loading={loading}>
+        <form id="bulk-change-form" onSubmit={this.handleSubmit} className="sw-mr-4">
           {limitReached && (
-            <Alert variant="warning">
-              <FormattedMessage
-                defaultMessage={translate('issue_bulk_change.max_issues_reached')}
-                id="issue_bulk_change.max_issues_reached"
-                values={{ max: <strong>{MAX_PAGE_SIZE}</strong> }}
-              />
-            </Alert>
+            <FlagMessage className="sw-mb-4" variant="warning">
+              <span>
+                <FormattedMessage
+                  defaultMessage={translate('issue_bulk_change.max_issues_reached')}
+                  id="issue_bulk_change.max_issues_reached"
+                  values={{ max: <strong>{MAX_PAGE_SIZE}</strong> }}
+                />
+              </span>
+            </FlagMessage>
           )}
 
           {this.renderAssigneeField()}
-          {this.renderTypeField()}
-          {this.renderSeverityField()}
-          {this.renderTagsField('addTags', 'issue.add_tags', true)}
-          {this.renderTagsField('removeTags', 'issue.remove_tags', false)}
+          {!needIssueSync && this.renderTagsField(InputField.addTags, 'issue.add_tags', true)}
+
+          {!needIssueSync &&
+            this.renderTagsField(InputField.removeTags, 'issue.remove_tags', false)}
+
           {this.renderTransitionsField()}
           {this.renderCommentField()}
           {issues.length > 0 && this.renderNotificationsField()}
-          {issues.length === 0 && (
-            <Alert variant="warning">{translate('issue_bulk_change.no_match')}</Alert>
-          )}
-        </div>
 
-        <div className="modal-foot">
-          {submitting && <i className="spinner spacer-right" />}
-          <SubmitButton disabled={submitting || issues.length === 0} id="bulk-change-submit">
-            {translate('apply')}
-          </SubmitButton>
-          <ResetButtonLink onClick={this.props.onClose}>{translate('cancel')}</ResetButtonLink>
-        </div>
-      </form>
+          {issues.length === 0 && (
+            <FlagMessage variant="warning">{translate('issue_bulk_change.no_match')}</FlagMessage>
+          )}
+        </form>
+      </Spinner>
     );
   };
 
   render() {
+    const { issues, loading, submitting } = this.state;
+
+    const canSubmit = this.canSubmit();
+
     return (
-      <Modal contentLabel="modal" onRequestClose={this.props.onClose} size="small">
-        {this.state.loading ? this.renderLoading() : this.renderForm()}
-      </Modal>
+      <Modal
+        body={this.renderForm()}
+        headerTitle={
+          loading
+            ? translate('bulk_change')
+            : translateWithParameters('issue_bulk_change.form.title', issues.length)
+        }
+        isScrollable
+        loading={submitting}
+        onClose={this.props.onClose}
+        primaryButton={
+          <ButtonPrimary
+            disabled={!canSubmit || submitting || issues.length === 0}
+            form="bulk-change-form"
+            id="bulk-change-submit"
+            type="submit"
+          >
+            {translate('apply')}
+          </ButtonPrimary>
+        }
+        secondaryButtonLabel={translate('cancel')}
+      />
     );
   }
 }
 
 function hasAction(action: string) {
-  return (issue: T.Issue) => issue.actions && issue.actions.includes(action);
+  return (issue: Issue) => issue.actions?.includes(action);
 }
 
-function promptCreateTag(label: string) {
-  return `+ ${label}`;
-}
+export default withBranchStatusRefresh(BulkChangeModal);

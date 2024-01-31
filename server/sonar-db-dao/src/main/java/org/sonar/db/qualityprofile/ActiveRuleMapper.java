@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,8 +43,6 @@ public interface ActiveRuleMapper {
   @CheckForNull
   ActiveRuleDto selectByKey(@Param("ruleProfileUuid") String ruleProfileUuid, @Param("repository") String repository, @Param("rule") String rule);
 
-  List<ActiveRuleDto> selectByKeys(@Param("keys") List<ActiveRuleKey> keys);
-
   List<OrgActiveRuleDto> selectOrgByRuleUuid(@Param("ruleUuid") String ruleUuid);
 
   List<ActiveRuleDto> selectByRuleUuid(String ruleUuid);
@@ -85,4 +83,6 @@ public interface ActiveRuleMapper {
   void scrollByUuidsForIndexing(@Param("uuids") Collection<String> uuids, ResultHandler<IndexedActiveRuleDto> handler);
 
   void scrollByRuleProfileUuidForIndexing(@Param("ruleProfileUuid") String ruleProfileUuid, ResultHandler<IndexedActiveRuleDto> handler);
+
+  int countMissingRules(@Param("rulesProfileUuid") String rulesProfileUuid, @Param("compareToRulesProfileUuid") String compareToRulesProfileUuid);
 }

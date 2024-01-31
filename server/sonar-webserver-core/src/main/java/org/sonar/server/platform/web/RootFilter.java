@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,9 @@
 package org.sonar.server.platform.web;
 
 import com.google.common.annotations.VisibleForTesting;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.StringReader;
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.FilterConfig;
@@ -31,9 +33,11 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.lang.String.format;
+import static java.util.stream.Collectors.joining;
 
 /**
  * <p>Profile HTTP requests using platform profiling utility.</p>
@@ -46,7 +50,7 @@ import static java.lang.String.format;
  */
 public class RootFilter implements Filter {
 
-  private static final org.sonar.api.utils.log.Logger LOGGER = Loggers.get(RootFilter.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(RootFilter.class);
 
   @Override
   public void init(FilterConfig filterConfig) {
@@ -55,8 +59,7 @@ public class RootFilter implements Filter {
 
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-    if (request instanceof HttpServletRequest) {
-      HttpServletRequest httpRequest = (HttpServletRequest) request;
+    if (request instanceof HttpServletRequest httpRequest) {
       HttpServletResponse httpResponse = (HttpServletResponse) response;
       try {
         chain.doFilter(new ServletRequestWrapper(httpRequest), httpResponse);
@@ -91,6 +94,7 @@ public class RootFilter implements Filter {
 
   @VisibleForTesting
   static class ServletRequestWrapper extends HttpServletRequestWrapper {
+    private String body;
 
     ServletRequestWrapper(HttpServletRequest request) {
       super(request);
@@ -112,5 +116,18 @@ public class RootFilter implements Filter {
     private static UnsupportedOperationException notSupported() {
       return new UnsupportedOperationException("Sessions are disabled so that web server is stateless");
     }
+
+    @Override
+    public BufferedReader getReader() throws IOException {
+      if (body == null) {
+        body = getBodyInternal((HttpServletRequest) getRequest());
+      }
+      return new BufferedReader(new StringReader(body));
+    }
+
+    private static String getBodyInternal(HttpServletRequest request) throws IOException {
+      return request.getReader().lines().collect(joining(System.lineSeparator()));
+    }
+
   }
 }

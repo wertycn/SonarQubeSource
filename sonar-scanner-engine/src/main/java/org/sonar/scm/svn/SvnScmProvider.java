@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,8 +32,8 @@ import java.util.Set;
 import javax.annotation.CheckForNull;
 import org.sonar.api.batch.scm.BlameCommand;
 import org.sonar.api.batch.scm.ScmProvider;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.tmatesoft.svn.core.SVNDepth;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNLogEntryPath;
@@ -50,16 +50,14 @@ import static org.sonar.scm.svn.SvnScmSupport.newSvnClientManager;
 
 public class SvnScmProvider extends ScmProvider {
 
-  private static final Logger LOG = Loggers.get(SvnScmProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SvnScmProvider.class);
 
   private final SvnConfiguration configuration;
   private final SvnBlameCommand blameCommand;
-  private final FindFork findFork;
 
-  public SvnScmProvider(SvnConfiguration configuration, SvnBlameCommand blameCommand, FindFork findFork) {
+  public SvnScmProvider(SvnConfiguration configuration, SvnBlameCommand blameCommand) {
     this.configuration = configuration;
     this.blameCommand = blameCommand;
-    this.findFork = findFork;
   }
 
   @Override
@@ -202,12 +200,7 @@ public class SvnScmProvider extends ScmProvider {
   @CheckForNull
   @Override
   public Instant forkDate(String referenceBranch, Path rootBaseDir) {
-    try {
-      return findFork.findDate(rootBaseDir, referenceBranch);
-    } catch (SVNException e) {
-      LOG.warn("Unable to find fork date with '" + referenceBranch + "'", e);
-      return null;
-    }
+    return null;
   }
 
   ChangedLinesComputer newChangedLinesComputer(Path rootBaseDir, Set<Path> changedFiles) {

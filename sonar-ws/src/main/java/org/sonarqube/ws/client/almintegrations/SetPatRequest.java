@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ public class SetPatRequest {
 
   private String almSetting;
   private String pat;
+  private String username;
 
   /**
    * This is a mandatory parameter.
@@ -55,5 +56,14 @@ public class SetPatRequest {
 
   public String getPat() {
     return pat;
+  }
+
+  public SetPatRequest setUsername(String username) {
+    this.username = username;
+    return this;
+  }
+
+  public String getUsername() {
+    return username;
   }
 }

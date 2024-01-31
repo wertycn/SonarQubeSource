@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,14 @@
  */
 package org.sonar.ce.task.projectanalysis.duplication;
 
-import com.google.common.collect.ImmutableList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.PathAwareCrawler;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
@@ -47,12 +48,13 @@ import static org.sonar.api.measures.CoreMetrics.DUPLICATED_LINES_KEY;
 import static org.sonar.api.measures.CoreMetrics.LINES_KEY;
 
 public class DuplicationMeasures {
-  protected final ImmutableList<Formula> formulas;
+  protected final List<Formula<?>> formulas;
   protected final TreeRootHolder treeRootHolder;
   protected final MetricRepository metricRepository;
   protected final MeasureRepository measureRepository;
   private final DuplicationRepository duplicationRepository;
 
+  @Inject
   public DuplicationMeasures(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository,
     @Nullable DuplicationRepository duplicationRepository) {
     this.treeRootHolder = treeRootHolder;
@@ -60,12 +62,9 @@ public class DuplicationMeasures {
     this.measureRepository = measureRepository;
     // will be null for views
     this.duplicationRepository = duplicationRepository;
-    this.formulas = ImmutableList.of(new DuplicationFormula());
+    this.formulas = List.of(new DuplicationFormula());
   }
 
-  /**
-   * Constructor used by Pico in Views where no DuplicationRepository is available.
-   */
   public DuplicationMeasures(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository) {
     this(treeRootHolder, metricRepository, measureRepository, null);
   }
@@ -126,8 +125,8 @@ public class DuplicationMeasures {
         blocks++;
         addLines(duplication.getOriginal(), duplicatedLineNumbers);
         InnerDuplicate[] innerDuplicates = Arrays.stream(duplication.getDuplicates())
-          .filter(x -> x instanceof InnerDuplicate)
-          .map(d -> (InnerDuplicate) d)
+          .filter(InnerDuplicate.class::isInstance)
+          .map(InnerDuplicate.class::cast)
           .toArray(InnerDuplicate[]::new);
 
         for (InnerDuplicate innerDuplicate : innerDuplicates) {

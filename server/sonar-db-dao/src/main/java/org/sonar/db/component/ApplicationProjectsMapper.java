@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.db.component;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import org.apache.ibatis.annotations.Param;
 import org.sonar.db.project.ProjectDto;
@@ -41,10 +42,6 @@ public interface ApplicationProjectsMapper {
 
   Set<ProjectDto> selectProjects(@Param("applicationUuid") String applicationUuid);
 
-  void removeApplicationProjectsByApplication(String applicationUuid);
-
-  void removeApplicationBranchProjectBranchesByApplication(String applicationUuid);
-
   void addProjectBranchToAppBranch(
     @Param("uuid") String uuid,
     @Param("applicationUuid") String applicationUuid,
@@ -55,15 +52,15 @@ public interface ApplicationProjectsMapper {
 
   void removeProjectBranchFromAppBranch(@Param("applicationBranchUuid") String applicationBranchUuid, @Param("projectBranchUuid") String projectBranchUuid);
 
-  Set<BranchDto> selectProjectBranchesFromAppBranch(@Param("applicationBranchUuid") String applicationBranchUuid);
+  Set<BranchDto> selectProjectBranchesFromAppBranchUuid(@Param("applicationBranchUuid") String applicationBranchUuid);
+
+  Set<BranchDto> selectProjectBranchesFromAppBranchKey(@Param("applicationUuid") String applicationUuid, @Param("applicationBranchKey") String applicationBranchKey);
 
   int countApplicationProjects(@Param("applicationUuid") String applicationUuid);
-
-  void updateApplicationBranchName(@Param("uuid") String uuid, @Param("newName") String newName);
 
   Set<ProjectDto> selectApplicationsFromProjectBranch(@Param("projectUuid") String projectUuid, @Param("branchKey") String branchKey);
 
   Set<ProjectDto> selectApplicationsFromProjects(@Param("projectUuids") Collection<String> projectUuids);
 
-  void removeAllProjectBranchesOfAppBranch(@Param("applicationBranchUuid") String applicationBranchUuid);
+  List<BranchDto> selectProjectsMainBranchesOfApplication(String applicationUuid);
 }

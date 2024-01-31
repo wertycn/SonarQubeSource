@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,7 @@ public abstract class Action {
   private final String key;
   private final List<Condition> conditions;
 
-  public Action(String key) {
+  protected Action(String key) {
     Preconditions.checkArgument(!Strings.isNullOrEmpty(key), "Action key must be set");
     this.key = key;
     this.conditions = newArrayList();

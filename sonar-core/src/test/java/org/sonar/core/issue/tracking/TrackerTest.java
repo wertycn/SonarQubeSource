@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,11 +23,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.rule.RuleKey;
 
 import static java.util.Arrays.asList;
@@ -43,8 +42,6 @@ public class TrackerTest {
   public static final RuleKey RULE_USE_DIAMOND = RuleKey.of("java", "UseDiamond");
   public static final RuleKey RULE_MISSING_PACKAGE_INFO = RuleKey.of("java", "MissingPackageInfo");
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   Tracker<Issue, Issue> tracker = new Tracker<>();
 
@@ -185,6 +182,19 @@ public class TrackerTest {
     assertThat(tracking.getUnmatchedBases()).containsOnly(base);
   }
 
+  // SONAR-15091
+  @Test
+  public void do_not_fail_if_message_is_null() {
+    FakeInput baseInput = new FakeInput("H1", "H2");
+    Issue base = baseInput.createIssueOnLine(1, RULE_UNUSED_LOCAL_VARIABLE, null);
+
+    FakeInput rawInput = new FakeInput("H1", "H2");
+    Issue raw = rawInput.createIssueOnLine(1, RULE_UNUSED_LOCAL_VARIABLE, null);
+
+    Tracking<Issue, Issue> tracking = tracker.trackNonClosed(rawInput, baseInput);
+    assertThat(tracking.baseFor(raw)).isNotNull();
+  }
+
   @Test
   public void do_not_fail_if_raw_line_does_not_exist() {
     FakeInput baseInput = new FakeInput();
@@ -272,8 +282,8 @@ public class TrackerTest {
         +
         "    }",
       "}");
-    Issue base1 = baseInput.createIssueOnLine(11, RuleKey.of("squid", "S109"), "Assign this magic number 42 to a well-named constant, and use the constant instead.");
-    Issue base2 = baseInput.createIssueOnLine(13, RuleKey.of("squid", "S00103"), "Split this 163 characters long line (which is greater than 120 authorized).");
+    Issue base1 = baseInput.createIssueOnLine(11, RuleKey.of("java", "S109"), "Assign this magic number 42 to a well-named constant, and use the constant instead.");
+    Issue base2 = baseInput.createIssueOnLine(13, RuleKey.of("java", "S00103"), "Split this 163 characters long line (which is greater than 120 authorized).");
 
     FakeInput rawInput = FakeInput.createForSourceLines(
       "package aa;",
@@ -293,8 +303,8 @@ public class TrackerTest {
       "        int x = a + 123;",
       "    }",
       "}");
-    Issue raw1 = rawInput.createIssueOnLine(11, RuleKey.of("squid", "S00103"), "Split this 139 characters long line (which is greater than 120 authorized).");
-    Issue raw2 = rawInput.createIssueOnLine(15, RuleKey.of("squid", "S109"), "Assign this magic number 123 to a well-named constant, and use the constant instead.");
+    Issue raw1 = rawInput.createIssueOnLine(11, RuleKey.of("java", "S00103"), "Split this 139 characters long line (which is greater than 120 authorized).");
+    Issue raw2 = rawInput.createIssueOnLine(15, RuleKey.of("java", "S109"), "Assign this magic number 123 to a well-named constant, and use the constant instead.");
 
     Tracking<Issue, Issue> tracking = tracker.trackNonClosed(rawInput, baseInput);
     assertThat(tracking.baseFor(raw1)).isNull();
@@ -456,7 +466,7 @@ public class TrackerTest {
     private final String status;
     private final Date updateDate;
 
-    Issue(@Nullable Integer line, String lineHash, RuleKey ruleKey, String message, String status, Date updateDate) {
+    Issue(@Nullable Integer line, String lineHash, RuleKey ruleKey, @Nullable String message, String status, Date updateDate) {
       this.line = line;
       this.lineHash = lineHash;
       this.ruleKey = ruleKey;
@@ -470,6 +480,7 @@ public class TrackerTest {
       return line;
     }
 
+    @CheckForNull
     @Override
     public String getMessage() {
       return message;
@@ -521,7 +532,7 @@ public class TrackerTest {
     /**
      * No line (line 0)
      */
-    Issue createIssue(RuleKey ruleKey, String message) {
+    Issue createIssue(RuleKey ruleKey, @Nullable String message) {
       Issue issue = new Issue(null, "", ruleKey, message, org.sonar.api.issue.Issue.STATUS_OPEN, new Date());
       issues.add(issue);
       return issue;

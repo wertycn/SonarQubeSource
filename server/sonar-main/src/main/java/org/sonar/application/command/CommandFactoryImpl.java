@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.application.command;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,7 @@ import org.sonar.process.ProcessProperties;
 import org.sonar.process.Props;
 import org.sonar.process.System2;
 
+import static org.sonar.process.ProcessProperties.parseTimeoutMs;
 import static org.sonar.process.ProcessProperties.Property.CE_GRACEFUL_STOP_TIMEOUT;
 import static org.sonar.process.ProcessProperties.Property.CE_JAVA_ADDITIONAL_OPTS;
 import static org.sonar.process.ProcessProperties.Property.CE_JAVA_OPTS;
@@ -53,7 +55,6 @@ import static org.sonar.process.ProcessProperties.Property.SOCKS_PROXY_PORT;
 import static org.sonar.process.ProcessProperties.Property.WEB_GRACEFUL_STOP_TIMEOUT;
 import static org.sonar.process.ProcessProperties.Property.WEB_JAVA_ADDITIONAL_OPTS;
 import static org.sonar.process.ProcessProperties.Property.WEB_JAVA_OPTS;
-import static org.sonar.process.ProcessProperties.parseTimeoutMs;
 
 public class CommandFactoryImpl implements CommandFactory {
   private static final String ENV_VAR_JAVA_TOOL_OPTIONS = "JAVA_TOOL_OPTIONS";
@@ -71,17 +72,13 @@ public class CommandFactoryImpl implements CommandFactory {
     SOCKS_PROXY_HOST.getKey(),
     SOCKS_PROXY_PORT.getKey()};
 
-  private static final Version SQ_VERSION = MetadataLoader.loadVersion(org.sonar.api.utils.System2.INSTANCE);
+  private static final Version SQ_VERSION = MetadataLoader.loadSQVersion(org.sonar.api.utils.System2.INSTANCE);
   private final Props props;
   private final File tempDir;
-  private final System2 system2;
-  private final JavaVersion javaVersion;
 
-  public CommandFactoryImpl(Props props, File tempDir, System2 system2, JavaVersion javaVersion) {
+  public CommandFactoryImpl(Props props, File tempDir, System2 system2) {
     this.props = props;
     this.tempDir = tempDir;
-    this.system2 = system2;
-    this.javaVersion = javaVersion;
     String javaToolOptions = system2.getenv(ENV_VAR_JAVA_TOOL_OPTIONS);
     if (javaToolOptions != null && !javaToolOptions.trim().isEmpty()) {
       LoggerFactory.getLogger(CommandFactoryImpl.class)
@@ -94,50 +91,23 @@ public class CommandFactoryImpl implements CommandFactory {
         .warn("ES_JAVA_OPTS is defined but will be ignored. " +
           "Use properties sonar.search.javaOpts and/or sonar.search.javaAdditionalOpts in sonar.properties to change SQ JVM processes options");
     }
-
   }
 
   @Override
-  public AbstractCommand<?> createEsCommand() {
-    if (system2.isOsWindows()) {
-      return createEsCommandForWindows();
-    }
-    return createEsCommandForUnix();
-  }
-
-  private EsScriptCommand createEsCommandForUnix() {
+  public JavaCommand<EsServerCliJvmOptions> createEsCommand() {
     EsInstallation esInstallation = createEsInstallation();
-    return new EsScriptCommand(ProcessId.ELASTICSEARCH, esInstallation.getHomeDirectory())
+    String esHomeDirectoryAbsolutePath = esInstallation.getHomeDirectory().getAbsolutePath();
+    return new JavaCommand<EsServerCliJvmOptions>(ProcessId.ELASTICSEARCH, esInstallation.getHomeDirectory())
       .setEsInstallation(esInstallation)
-      .setEnvVariable("ES_PATH_CONF", esInstallation.getConfDirectory().getAbsolutePath())
-      .setEnvVariable("ES_JVM_OPTIONS", esInstallation.getJvmOptions().getAbsolutePath())
-      .setEnvVariable("JAVA_HOME", System.getProperties().getProperty("java.home"))
-      .suppressEnvVariable(ENV_VAR_JAVA_TOOL_OPTIONS)
-      .suppressEnvVariable(ENV_VAR_ES_JAVA_OPTS);
-  }
-
-  private JavaCommand createEsCommandForWindows() {
-    EsInstallation esInstallation = createEsInstallation();
-    return new JavaCommand<EsJvmOptions>(ProcessId.ELASTICSEARCH, esInstallation.getHomeDirectory())
-      .setEsInstallation(esInstallation)
-      .setReadsArgumentsFromFile(false)
-      .setJvmOptions(esInstallation.getEsJvmOptions()
-        .add("-Delasticsearch")
-        .add("-Des.path.home=" + esInstallation.getHomeDirectory().getAbsolutePath())
-        .add("-Des.path.conf=" + esInstallation.getConfDirectory().getAbsolutePath()))
-      .setEnvVariable("ES_JVM_OPTIONS", esInstallation.getJvmOptions().getAbsolutePath())
-      .setEnvVariable("JAVA_HOME", System.getProperties().getProperty("java.home"))
-      .setClassName("org.elasticsearch.bootstrap.Elasticsearch")
-      .addClasspath("lib/*")
-      .suppressEnvVariable(ENV_VAR_JAVA_TOOL_OPTIONS)
-      .suppressEnvVariable(ENV_VAR_ES_JAVA_OPTS);
+      .setJvmOptions(new EsServerCliJvmOptions(esInstallation))
+      .setEnvVariable("ES_JAVA_HOME", System.getProperties().getProperty("java.home"))
+      .setClassName("org.elasticsearch.launcher.CliToolLauncher")
+      .addClasspath(Paths.get(esHomeDirectoryAbsolutePath, "lib").toAbsolutePath() + File.separator + "*")
+      .addClasspath(Paths.get(esHomeDirectoryAbsolutePath, "lib", "cli-launcher").toAbsolutePath() + File.separator + "*");
   }
 
   private EsInstallation createEsInstallation() {
     EsInstallation esInstallation = new EsInstallation(props);
-    if (!esInstallation.getExecutable().exists()) {
-      throw new IllegalStateException("Cannot find elasticsearch binary");
-    }
     Map<String, String> settingsMap = new EsSettings(props, esInstallation, System2.INSTANCE).build();
 
     esInstallation
@@ -152,10 +122,10 @@ public class CommandFactoryImpl implements CommandFactory {
   }
 
   @Override
-  public JavaCommand createWebCommand(boolean leader) {
+  public JavaCommand<WebJvmOptions> createWebCommand(boolean leader) {
     File homeDir = props.nonNullValueAsFile(PATH_HOME.getKey());
 
-    WebJvmOptions jvmOptions = new WebJvmOptions(tempDir, javaVersion)
+    WebJvmOptions jvmOptions = new WebJvmOptions(tempDir)
       .addFromMandatoryProperty(props, WEB_JAVA_OPTS.getKey())
       .addFromMandatoryProperty(props, WEB_JAVA_ADDITIONAL_OPTS.getKey());
     addProxyJvmOptions(jvmOptions);
@@ -179,10 +149,10 @@ public class CommandFactoryImpl implements CommandFactory {
   }
 
   @Override
-  public JavaCommand createCeCommand() {
+  public JavaCommand<CeJvmOptions> createCeCommand() {
     File homeDir = props.nonNullValueAsFile(PATH_HOME.getKey());
 
-    CeJvmOptions jvmOptions = new CeJvmOptions(tempDir, javaVersion)
+    CeJvmOptions jvmOptions = new CeJvmOptions(tempDir)
       .addFromMandatoryProperty(props, CE_JAVA_OPTS.getKey())
       .addFromMandatoryProperty(props, CE_JAVA_ADDITIONAL_OPTS.getKey());
     addProxyJvmOptions(jvmOptions);

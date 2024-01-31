@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,96 +17,141 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { UserEvent } from '@testing-library/user-event/dist/types/setup/setup';
 import * as React from 'react';
-import { waitAndUpdate } from 'sonar-ui-common/helpers/testUtils';
-import { generateToken, getTokens, revokeToken } from '../../../../api/user-tokens';
-import { mockComponent, mockEvent, mockLoggedInUser } from '../../../../helpers/testMocks';
-import { getUniqueTokenName } from '../../utils';
+import UserTokensMock from '../../../../api/mocks/UserTokensMock';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { mockUserToken } from '../../../../helpers/mocks/token';
+import { mockLoggedInUser } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { computeTokenExpirationDate } from '../../../../helpers/tokens';
+import { Permissions } from '../../../../types/permissions';
+import { TokenType } from '../../../../types/token';
 import EditTokenModal from '../EditTokenModal';
 
-jest.mock('../../../../api/user-tokens', () => ({
-  generateToken: jest.fn().mockResolvedValue({
-    name: 'baz',
-    createdAt: '2019-01-21T08:06:00+0100',
-    login: 'luke',
-    token: 'token_value'
-  }),
-  getTokens: jest.fn().mockResolvedValue([
-    {
-      name: 'foo',
-      createdAt: '2019-01-15T15:06:33+0100',
-      lastConnectionDate: '2019-01-18T15:06:33+0100'
-    },
-    { name: 'bar', createdAt: '2019-01-18T15:06:33+0100' }
-  ]),
-  revokeToken: jest.fn().mockResolvedValue(Promise.resolve())
+jest.mock('../../../../api/settings', () => ({
+  getAllValues: jest.fn().mockResolvedValue([]),
 }));
 
-jest.mock('../../utils', () => ({
-  getUniqueTokenName: jest.fn().mockReturnValue('lightsaber-9000')
-}));
+let tokenMock: UserTokensMock;
 
-beforeEach(() => {
-  jest.clearAllMocks();
+beforeAll(() => {
+  tokenMock = new UserTokensMock();
+  tokenMock.tokens.push(mockUserToken({ name: 'Analyze "Foo"' }));
 });
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
+afterEach(() => {
+  tokenMock.reset();
 });
 
-it('should get tokens and unique name', async () => {
-  const wrapper = shallowRender();
-  const { getTokensAndName } = wrapper.instance();
+it('should behave correctly', async () => {
+  renderEditTokenModal();
+  const user = userEvent.setup();
 
-  getTokensAndName();
-  await waitAndUpdate(wrapper);
+  expect(
+    screen.getByRole('heading', { name: 'onboarding.token.generate.PROJECT_ANALYSIS_TOKEN' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText('onboarding.token.text.PROJECT_ANALYSIS_TOKEN')).toBeInTheDocument();
 
-  expect(getTokens).toHaveBeenCalled();
-  expect(getUniqueTokenName).toHaveBeenCalled();
-  expect(wrapper.state('tokenName')).toBe('lightsaber-9000');
+  // Renders form correctly.
+  await screen.findByLabelText('onboarding.token.name.label');
+  // Should be getByLabelText(), but this is due to a limitation with React Select.
+  expect(screen.getByText('users.tokens.expires_in')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'continue' })).toBeInTheDocument();
+
+  // Sets a default token name.
+  const tokenNameInput = screen.getByLabelText('onboarding.token.name.label');
+  expect(tokenNameInput).toHaveValue('Analyze "Foo" 1');
+
+  // Change name and expiration date.
+  await typeInField(user, tokenNameInput, 'new token name');
+  await user.click(screen.getByText('users.tokens.expiration.30'));
+  await user.click(screen.getByText('users.tokens.expiration.365'));
+
+  // Generate token.
+  await clickButton(user, 'onboarding.token.generate');
+  let lastToken = tokenMock.getLastToken();
+  if (lastToken === undefined) {
+    throw new Error("Couldn't find the latest generated token.");
+  }
+
+  expect(lastToken.type).toBe(TokenType.Project);
+  expect(lastToken.expirationDate).toBe(computeTokenExpirationDate(365));
+  expect(screen.getByText(`users.tokens.new_token_created.${lastToken.token}`)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'copy_to_clipboard' })).toBeInTheDocument();
+
+  // Revoke token.
+  await clickButton(user, 'onboarding.token.delete');
+  expect(tokenMock.tokens.map((t) => t.name)).not.toContain(lastToken.name);
+
+  // Generate a new token.
+  await typeInField(
+    user,
+    screen.getByLabelText('onboarding.token.name.label'),
+    'another token name',
+  );
+  await clickButton(user, 'onboarding.token.generate');
+
+  lastToken = tokenMock.getLastToken();
+  if (lastToken === undefined) {
+    throw new Error("Couldn't find the latest generated token.");
+  }
+  expect(lastToken.type).toBe(TokenType.Project);
+  expect(lastToken.expirationDate).toBe(computeTokenExpirationDate(365));
+  expect(screen.getByText(`users.tokens.new_token_created.${lastToken.token}`)).toBeInTheDocument();
 });
 
-it('should get a new token', async () => {
-  const wrapper = shallowRender();
-  const { getNewToken } = wrapper.instance();
+it('should allow setting a preferred token type', async () => {
+  renderEditTokenModal({
+    preferredTokenType: TokenType.Global,
+    currentUser: mockLoggedInUser({ permissions: { global: [Permissions.Scan] } }),
+  });
+  const user = userEvent.setup();
 
-  getNewToken();
-  await waitAndUpdate(wrapper);
+  await screen.findByLabelText('onboarding.token.name.label');
 
-  expect(generateToken).toHaveBeenCalled();
-  expect(wrapper.state('token')).toBe('token_value');
+  await clickButton(user, 'onboarding.token.generate');
+  const lastToken = tokenMock.getLastToken();
+  if (lastToken === undefined) {
+    throw new Error("Couldn't find the latest generated token.");
+  }
+  expect(lastToken.type).toBe(TokenType.Global);
 });
 
-it('should handle token revocation', async () => {
-  const wrapper = shallowRender();
-  const { getTokensAndName, handleTokenRevoke } = wrapper.instance();
+it('should fallback to project tokens if the user cannot generate global tokens', async () => {
+  renderEditTokenModal({
+    preferredTokenType: TokenType.Global,
+  });
+  const user = userEvent.setup();
 
-  getTokensAndName();
-  await waitAndUpdate(wrapper);
-  handleTokenRevoke();
-  await waitAndUpdate(wrapper);
+  await screen.findByLabelText('onboarding.token.name.label');
 
-  expect(revokeToken).toHaveBeenCalled();
-  expect(wrapper.state('token')).toBe('');
-  expect(wrapper.state('tokenName')).toBe('');
+  await clickButton(user, 'onboarding.token.generate');
+  const lastToken = tokenMock.getLastToken();
+  if (lastToken === undefined) {
+    throw new Error("Couldn't find the latest generated token.");
+  }
+  expect(lastToken.type).toBe(TokenType.Project);
 });
 
-it('should handle change on user input', () => {
-  const wrapper = shallowRender();
-  const instance = wrapper.instance();
-
-  instance.handleChange(mockEvent({ target: { value: 'my-token' } }));
-  expect(wrapper.state('tokenName')).toBe('my-token');
-});
-
-function shallowRender(props: Partial<EditTokenModal['props']> = {}) {
-  return shallow<EditTokenModal>(
+function renderEditTokenModal(props: Partial<EditTokenModal['props']> = {}) {
+  return renderComponent(
     <EditTokenModal
-      component={mockComponent()}
+      component={mockComponent({ name: 'Foo' })}
       currentUser={mockLoggedInUser()}
       onClose={jest.fn()}
       {...props}
-    />
+    />,
   );
+}
+
+async function clickButton(user: UserEvent, name: string) {
+  await user.click(screen.getByRole('button', { name }));
+}
+
+async function typeInField(user: UserEvent, input: HTMLElement, value: string) {
+  await user.clear(input);
+  await user.type(input, value);
 }

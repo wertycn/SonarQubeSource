@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Modal, Note } from 'design-system';
 import { find, without } from 'lodash';
 import * as React from 'react';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import SelectList, {
-  SelectListFilter,
-  SelectListSearchParams
-} from 'sonar-ui-common/components/controls/SelectList';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import {
+  ProfileProject,
   associateProject,
   dissociateProject,
   getProfileProjects,
-  ProfileProject
 } from '../../../api/quality-profiles';
+import SelectList, {
+  SelectListFilter,
+  SelectListSearchParams,
+} from '../../../components/controls/SelectList';
+import { translate } from '../../../helpers/l10n';
 import { Profile } from '../types';
 
 interface Props {
@@ -55,7 +55,7 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
     this.state = {
       needToReload: false,
       projects: [],
-      selectedProjects: []
+      selectedProjects: [],
     };
   }
 
@@ -73,16 +73,16 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
       p: searchParams.page,
       ps: searchParams.pageSize,
       q: searchParams.query !== '' ? searchParams.query : undefined,
-      selected: searchParams.filter
-    }).then(data => {
+      selected: searchParams.filter,
+    }).then((data) => {
       if (this.mounted) {
-        this.setState(prevState => {
+        this.setState((prevState) => {
           const more = searchParams.page != null && searchParams.page > 1;
 
           const projects = more ? [...prevState.projects, ...data.results] : data.results;
           const newSeletedProjects = data.results
-            .filter(project => project.selected)
-            .map(project => project.key);
+            .filter((project) => project.selected)
+            .map((project) => project.key);
           const selectedProjects = more
             ? [...prevState.selectedProjects, ...newSeletedProjects]
             : newSeletedProjects;
@@ -92,7 +92,7 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
             needToReload: false,
             projects,
             projectsTotalCount: data.paging.total,
-            selectedProjects
+            selectedProjects,
           };
         });
       }
@@ -103,7 +103,7 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
       if (this.mounted) {
         this.setState((state: State) => ({
           needToReload: true,
-          selectedProjects: [...state.selectedProjects, key]
+          selectedProjects: [...state.selectedProjects, key],
         }));
       }
     });
@@ -113,30 +113,25 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
       if (this.mounted) {
         this.setState((state: State) => ({
           needToReload: true,
-          selectedProjects: without(state.selectedProjects, key)
+          selectedProjects: without(state.selectedProjects, key),
         }));
       }
     });
 
-  handleCloseClick = (event: React.SyntheticEvent<HTMLElement>) => {
-    event.preventDefault();
-    this.props.onClose();
-  };
-
   renderElement = (key: string): React.ReactNode => {
     const project = find(this.state.projects, { key });
     return (
-      <div className="select-list-list-item">
+      <>
         {project === undefined ? (
           key
         ) : (
           <>
             {project.name}
             <br />
-            <span className="note">{project.key}</span>
+            <Note>{project.key}</Note>
           </>
         )}
-      </div>
+      </>
     );
   };
 
@@ -144,39 +139,34 @@ export default class ChangeProjectsForm extends React.PureComponent<Props, State
     const header = translate('projects');
 
     return (
-      <Modal contentLabel={header} onRequestClose={this.props.onClose}>
-        <div className="modal-head">
-          <h2>{header}</h2>
-        </div>
-
-        <div className="modal-body modal-container" id="profile-projects">
-          <SelectList
-            allowBulkSelection={true}
-            elements={this.state.projects.map(project => project.key)}
-            elementsTotalCount={this.state.projectsTotalCount}
-            labelAll={translate('quality_gates.projects.all')}
-            labelSelected={translate('quality_gates.projects.with')}
-            labelUnselected={translate('quality_gates.projects.without')}
-            needToReload={
-              this.state.needToReload &&
-              this.state.lastSearchParams &&
-              this.state.lastSearchParams.filter !== SelectListFilter.All
-            }
-            onSearch={this.fetchProjects}
-            onSelect={this.handleSelect}
-            onUnselect={this.handleUnselect}
-            renderElement={this.renderElement}
-            selectedElements={this.state.selectedProjects}
-            withPaging={true}
-          />
-        </div>
-
-        <div className="modal-foot">
-          <a href="#" onClick={this.handleCloseClick}>
-            {translate('close')}
-          </a>
-        </div>
-      </Modal>
+      <Modal
+        headerTitle={header}
+        isOverflowVisible
+        onClose={this.props.onClose}
+        body={
+          <div className="sw-mt-1" id="profile-projects">
+            <SelectList
+              allowBulkSelection
+              elements={this.state.projects.map((project) => project.key)}
+              elementsTotalCount={this.state.projectsTotalCount}
+              labelAll={translate('quality_gates.projects.all')}
+              labelSelected={translate('quality_gates.projects.with')}
+              labelUnselected={translate('quality_gates.projects.without')}
+              needToReload={
+                this.state.needToReload &&
+                this.state.lastSearchParams &&
+                this.state.lastSearchParams.filter !== SelectListFilter.All
+              }
+              onSearch={this.fetchProjects}
+              onSelect={this.handleSelect}
+              onUnselect={this.handleUnselect}
+              renderElement={this.renderElement}
+              selectedElements={this.state.selectedProjects}
+              withPaging
+            />
+          </div>
+        }
+      />
     );
   }
 }

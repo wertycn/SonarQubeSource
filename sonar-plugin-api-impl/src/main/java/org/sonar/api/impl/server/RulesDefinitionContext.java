@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import org.sonar.api.server.rule.RulesDefinition;
 import org.sonar.api.server.rule.internal.DefaultNewRepository;
 import org.sonar.api.server.rule.internal.DefaultRepository;
 
-import static java.util.Collections.emptyList;
 import static java.util.Collections.unmodifiableList;
 import static org.sonar.api.utils.Preconditions.checkState;
 
@@ -49,12 +48,6 @@ public class RulesDefinitionContext extends RulesDefinition.Context {
   }
 
   @Override
-  @Deprecated
-  public RulesDefinition.NewRepository extendRepository(String key, String language) {
-    return createRepository(key, language);
-  }
-
-  @Override
   @CheckForNull
   public RulesDefinition.Repository repository(String key) {
     return repositoriesByKey.get(key);
@@ -66,17 +59,6 @@ public class RulesDefinitionContext extends RulesDefinition.Context {
   }
 
   @Override
-  @Deprecated
-  public List<RulesDefinition.ExtendedRepository> extendedRepositories(String repositoryKey) {
-    return emptyList();
-  }
-
-  @Override
-  @Deprecated
-  public List<RulesDefinition.ExtendedRepository> extendedRepositories() {
-    return emptyList();
-  }
-
   public void registerRepository(DefaultNewRepository newRepository) {
     RulesDefinition.Repository existing = repositoriesByKey.get(newRepository.key());
     if (existing != null) {
@@ -88,6 +70,7 @@ public class RulesDefinitionContext extends RulesDefinition.Context {
     repositoriesByKey.put(newRepository.key(), new DefaultRepository(newRepository, existing));
   }
 
+  @Override
   public String currentPluginKey() {
     return currentPluginKey;
   }

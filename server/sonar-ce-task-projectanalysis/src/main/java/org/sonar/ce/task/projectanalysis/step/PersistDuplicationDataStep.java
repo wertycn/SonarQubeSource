@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -106,7 +106,7 @@ public class PersistDuplicationDataStep implements ComputationStep {
     }
 
     private void computeDuplications(Component component, Iterable<Duplication> duplications) {
-      Measure measure = generateMeasure(component.getDbKey(), duplications);
+      Measure measure = generateMeasure(component.getKey(), duplications);
       LiveMeasureDto dto = measureToMeasureDto.toLiveMeasureDto(measure, duplicationDataMetric, component);
       nonPersistedBuffer.add(dto);
       persist(false);
@@ -159,15 +159,15 @@ public class PersistDuplicationDataStep implements ComputationStep {
       if (duplicate instanceof InnerDuplicate) {
         // Duplication is on the same file
         appendDuplication(xml, componentDbKey, duplicate);
-      } else if (duplicate instanceof InExtendedProjectDuplicate) {
+      } else if (duplicate instanceof InExtendedProjectDuplicate inExtendedProjectDuplicate) {
         // Duplication is on a different file that is not saved in the DB
-        appendDuplication(xml, ((InExtendedProjectDuplicate) duplicate).getFile().getDbKey(), duplicate.getTextBlock(), true);
-      } else if (duplicate instanceof InProjectDuplicate) {
+        appendDuplication(xml, inExtendedProjectDuplicate.getFile().getKey(), duplicate.getTextBlock(), true);
+      } else if (duplicate instanceof InProjectDuplicate inProjectDuplicate) {
         // Duplication is on a different file
-        appendDuplication(xml, ((InProjectDuplicate) duplicate).getFile().getDbKey(), duplicate);
-      } else if (duplicate instanceof CrossProjectDuplicate) {
+        appendDuplication(xml, inProjectDuplicate.getFile().getKey(), duplicate);
+      } else if (duplicate instanceof CrossProjectDuplicate crossProjectDuplicate) {
         // Only componentKey is set for cross project duplications
-        String crossProjectComponentKey = ((CrossProjectDuplicate) duplicate).getFileKey();
+        String crossProjectComponentKey = crossProjectDuplicate.getFileKey();
         appendDuplication(xml, crossProjectComponentKey, duplicate);
       } else {
         throw new IllegalArgumentException("Unsupported type of Duplicate " + duplicate.getClass().getName());

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.db.component;
 
 import org.junit.Test;
-import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.resources.Scopes;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +29,7 @@ public class ComponentDtoTest {
   @Test
   public void setters_and_getters() {
     ComponentDto componentDto = new ComponentDto()
-      .setDbKey("org.struts:struts-core:src/org/struts/RequestContext.java")
+      .setKey("org.struts:struts-core:src/org/struts/RequestContext.java")
       .setName("RequestContext.java")
       .setLongName("org.struts.RequestContext")
       .setQualifier("FIL")
@@ -38,11 +37,9 @@ public class ComponentDtoTest {
       .setLanguage("java")
       .setDescription("desc")
       .setPath("src/org/struts/RequestContext.java")
-      .setCopyComponentUuid("uuid_5")
-      .setRootUuid("uuid_3");
+      .setCopyComponentUuid("uuid_5");
 
-    assertThat(componentDto.getDbKey()).isEqualTo("org.struts:struts-core:src/org/struts/RequestContext.java");
-    assertThat(componentDto.getBranch()).isNull();
+    assertThat(componentDto.getKey()).isEqualTo("org.struts:struts-core:src/org/struts/RequestContext.java");
     assertThat(componentDto.name()).isEqualTo("RequestContext.java");
     assertThat(componentDto.longName()).isEqualTo("org.struts.RequestContext");
     assertThat(componentDto.qualifier()).isEqualTo("FIL");
@@ -50,8 +47,7 @@ public class ComponentDtoTest {
     assertThat(componentDto.path()).isEqualTo("src/org/struts/RequestContext.java");
     assertThat(componentDto.language()).isEqualTo("java");
     assertThat(componentDto.description()).isEqualTo("desc");
-    assertThat(componentDto.getRootUuid()).isEqualTo("uuid_3");
-    assertThat(componentDto.getCopyResourceUuid()).isEqualTo("uuid_5");
+    assertThat(componentDto.getCopyComponentUuid()).isEqualTo("uuid_5");
     assertThat(componentDto.isPrivate()).isFalse();
   }
 
@@ -61,12 +57,12 @@ public class ComponentDtoTest {
     ComponentDto dtoWithSameUuid = new ComponentDto().setUuid("u1");
     ComponentDto dtoWithDifferentUuid = new ComponentDto().setUuid("u2");
 
-    assertThat(dto).isEqualTo(dto);
-    assertThat(dto).isEqualTo(dtoWithSameUuid);
-    assertThat(dto).isNotEqualTo(dtoWithDifferentUuid);
-
-    assertThat(dto.hashCode()).isEqualTo(dto.hashCode());
-    assertThat(dto.hashCode()).isEqualTo(dtoWithSameUuid.hashCode());
+    assertThat(dto)
+      .isEqualTo(dto)
+      .isEqualTo(dtoWithSameUuid)
+      .isNotEqualTo(dtoWithDifferentUuid)
+      .hasSameHashCodeAs(dto)
+      .hasSameHashCodeAs(dtoWithSameUuid);
     assertThat(dto.hashCode()).isNotEqualTo(dtoWithDifferentUuid.hashCode());
   }
 
@@ -78,9 +74,9 @@ public class ComponentDtoTest {
 
   @Test
   public void is_root_project() {
-    assertThat(new ComponentDto().setModuleUuid("ABCD").isRootProject()).isFalse();
-    assertThat(new ComponentDto().setModuleUuid("ABCD").setScope(Scopes.DIRECTORY).isRootProject()).isFalse();
-    assertThat(new ComponentDto().setModuleUuid(null).setScope(Scopes.PROJECT).setQualifier(Qualifiers.PROJECT).isRootProject()).isTrue();
+    assertThat(new ComponentDto().setUuid("uuid").setBranchUuid("branch").isRootProject()).isFalse();
+    assertThat(new ComponentDto().setScope(Scopes.DIRECTORY).setUuid("uuid").setBranchUuid("uuid").isRootProject()).isFalse();
+    assertThat(new ComponentDto().setScope(Scopes.PROJECT).setUuid("uuid").setBranchUuid("uuid").isRootProject()).isTrue();
   }
 
   @Test
@@ -94,11 +90,11 @@ public class ComponentDtoTest {
     ComponentDto project = ComponentTesting.newPrivateProjectDto().setUuidPath(ComponentDto.UUID_PATH_OF_ROOT);
     assertThat(project.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + ".%");
 
-    ComponentDto module = ComponentTesting.newModuleDto(project);
-    assertThat(module.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + "." + module.uuid() + ".%");
+    ComponentDto dir = ComponentTesting.newDirectory(project, "path");
+    assertThat(dir.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + "." + dir.uuid() + ".%");
 
-    ComponentDto file = ComponentTesting.newFileDto(module);
-    assertThat(file.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + "." + module.uuid() + "." + file.uuid() + ".%");
+    ComponentDto file = ComponentTesting.newFileDto(project, dir);
+    assertThat(file.getUuidPathLikeIncludingSelf()).isEqualTo("." + project.uuid() + "." + dir.uuid() + "." + file.uuid() + ".%");
   }
 
   @Test
@@ -108,27 +104,5 @@ public class ComponentDtoTest {
 
     ComponentDto nonRoot = new ComponentDto().setUuidPath(".12.34.56.");
     assertThat(nonRoot.getUuidPathAsList()).containsExactly("12", "34", "56");
-  }
-
-  @Test
-  public void getKey_and_getBranch() {
-    ComponentDto underTest = new ComponentDto().setDbKey("my_key:BRANCH:my_branch");
-    assertThat(underTest.getKey()).isEqualTo("my_key");
-    assertThat(underTest.getBranch()).isEqualTo("my_branch");
-
-    underTest = new ComponentDto().setDbKey("my_key");
-    assertThat(underTest.getKey()).isEqualTo("my_key");
-    assertThat(underTest.getBranch()).isNull();
-  }
-
-  @Test
-  public void getKey_and_getPullRequest() {
-    ComponentDto underTest = new ComponentDto().setDbKey("my_key:PULL_REQUEST:pr-123");
-    assertThat(underTest.getKey()).isEqualTo("my_key");
-    assertThat(underTest.getPullRequest()).isEqualTo("pr-123");
-
-    underTest = new ComponentDto().setDbKey("my_key");
-    assertThat(underTest.getKey()).isEqualTo("my_key");
-    assertThat(underTest.getPullRequest()).isNull();
   }
 }

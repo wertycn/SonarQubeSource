@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import java.util.List;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.rule.RuleStatus;
-import org.sonar.core.util.stream.MoreCollectors;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -34,7 +33,7 @@ public class ActiveRuleCountQuery {
   private final String inheritance;
 
   public ActiveRuleCountQuery(Builder builder) {
-    this.profileUuids = builder.profiles.stream().map(QProfileDto::getKee).collect(MoreCollectors.toList());
+    this.profileUuids = builder.profiles.stream().map(QProfileDto::getKee).toList();
     this.ruleStatus = builder.ruleStatus;
     this.inheritance = builder.inheritance;
   }

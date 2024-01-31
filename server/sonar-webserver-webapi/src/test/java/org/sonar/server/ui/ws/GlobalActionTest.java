@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,7 @@ import org.sonar.api.resources.ResourceTypeTree;
 import org.sonar.api.resources.ResourceTypes;
 import org.sonar.api.web.page.Page;
 import org.sonar.api.web.page.PageDefinition;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.core.extension.CoreExtensionRepository;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
@@ -37,10 +38,9 @@ import org.sonar.core.platform.PluginRepository;
 import org.sonar.db.DbClient;
 import org.sonar.db.dialect.H2;
 import org.sonar.db.dialect.PostgreSql;
-import org.sonar.server.almsettings.MultipleAlmFeatureProvider;
 import org.sonar.server.authentication.DefaultAdminCredentialsVerifier;
 import org.sonar.server.issue.index.IssueIndexSyncProgressChecker;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ui.PageRepository;
 import org.sonar.server.ui.WebAnalyticsLoader;
@@ -62,14 +62,14 @@ public class GlobalActionTest {
   private final MapSettings settings = new MapSettings();
 
   private final Server server = mock(Server.class);
-  private final WebServer webServer = mock(WebServer.class);
+  private final NodeInformation nodeInformation = mock(NodeInformation.class);
   private final DbClient dbClient = mock(DbClient.class, RETURNS_DEEP_STUBS);
   private final IssueIndexSyncProgressChecker indexSyncProgressChecker = mock(IssueIndexSyncProgressChecker.class);
   private final BranchFeatureRule branchFeature = new BranchFeatureRule();
   private final PlatformEditionProvider editionProvider = mock(PlatformEditionProvider.class);
-  private final MultipleAlmFeatureProvider multipleAlmFeatureProvider = mock(MultipleAlmFeatureProvider.class);
   private final WebAnalyticsLoader webAnalyticsLoader = mock(WebAnalyticsLoader.class);
   private final DefaultAdminCredentialsVerifier defaultAdminCredentialsVerifier = mock(DefaultAdminCredentialsVerifier.class);
+  private final DocumentationLinkGenerator documentationLinkGenerator = mock(DocumentationLinkGenerator.class);
 
   private WsActionTester ws;
 
@@ -126,23 +126,6 @@ public class GlobalActionTest {
       "    \"sonar.updatecenter.activate\": \"false\"," +
       "    \"sonar.technicalDebt.ratingGrid\": \"0.05,0.1,0.2,0.5\"" +
       "    \"sonar.developerAggregatedInfo.disabled\": \"false\"" +
-      "  }" +
-      "}");
-  }
-
-  @Test
-  public void return_sonarcloud_settings() {
-    settings.setProperty("sonar.sonarcloud.enabled", true);
-    settings.setProperty("sonar.prismic.accessToken", "secret");
-    settings.setProperty("sonar.analytics.gtm.trackingId", "gtm_id");
-    settings.setProperty("sonar.homepage.url", "https://s3/homepage.json");
-    init();
-
-    assertJson(call()).isSimilarTo("{" +
-      "  \"settings\": {" +
-      "    \"sonar.prismic.accessToken\": \"secret\"," +
-      "    \"sonar.analytics.gtm.trackingId\": \"gtm_id\"," +
-      "    \"sonar.homepage.url\": \"https://s3/homepage.json\"" +
       "  }" +
       "}");
   }
@@ -234,27 +217,6 @@ public class GlobalActionTest {
   }
 
   @Test
-  public void branch_support() {
-    init();
-    branchFeature.setEnabled(true);
-    assertJson(call()).isSimilarTo("{\"branchesEnabled\":true}");
-
-    branchFeature.setEnabled(false);
-    assertJson(call()).isSimilarTo("{\"branchesEnabled\":false}");
-  }
-
-  @Test
-  public void multiple_alm_enabled() {
-    init();
-    when(multipleAlmFeatureProvider.enabled()).thenReturn(true);
-    assertJson(call()).isSimilarTo("{\"multipleAlmEnabled\":true}");
-
-    when(multipleAlmFeatureProvider.enabled()).thenReturn(false);
-    assertJson(call()).isSimilarTo("{\"multipleAlmEnabled\":false}");
-
-  }
-
-  @Test
   public void return_need_issue_sync() {
     init();
     when(indexSyncProgressChecker.isIssueSyncInProgress(any())).thenReturn(true);
@@ -262,14 +224,6 @@ public class GlobalActionTest {
 
     when(indexSyncProgressChecker.isIssueSyncInProgress(any())).thenReturn(false);
     assertJson(call()).isSimilarTo("{\"needIssueSync\": false}");
-  }
-
-  @Test
-  public void can_admin_on_global_level() {
-    init();
-    userSession.logIn().setRoot();
-
-    assertJson(call()).isSimilarTo("{\"canAdmin\":true}");
   }
 
   @Test
@@ -291,8 +245,8 @@ public class GlobalActionTest {
   @Test
   public void standalone_flag() {
     init();
-    userSession.logIn().setRoot();
-    when(webServer.isStandalone()).thenReturn(true);
+    userSession.logIn().setSystemAdministrator();
+    when(nodeInformation.isStandalone()).thenReturn(true);
 
     assertJson(call()).isSimilarTo("{\"standalone\":true}");
   }
@@ -300,8 +254,8 @@ public class GlobalActionTest {
   @Test
   public void not_standalone_flag() {
     init();
-    userSession.logIn().setRoot();
-    when(webServer.isStandalone()).thenReturn(false);
+    userSession.logIn().setSystemAdministrator();
+    when(nodeInformation.isStandalone()).thenReturn(false);
 
     assertJson(call()).isSimilarTo("{\"standalone\":false}");
   }
@@ -328,8 +282,9 @@ public class GlobalActionTest {
     });
     when(server.getVersion()).thenReturn("6.2");
     when(dbClient.getDatabase().getDialect()).thenReturn(new PostgreSql());
-    when(webServer.isStandalone()).thenReturn(true);
+    when(nodeInformation.isStandalone()).thenReturn(true);
     when(editionProvider.get()).thenReturn(Optional.of(EditionProvider.Edition.COMMUNITY));
+    when(documentationLinkGenerator.getDocumentationLink(null)).thenReturn("http://docs.example.com/10.0");
 
     String result = call();
     assertJson(result).isSimilarTo(ws.getDef().responseExampleAsString());
@@ -372,6 +327,16 @@ public class GlobalActionTest {
     assertJson(json).isSimilarTo("{\"webAnalyticsJsPath\":\"" + path + "\"}");
   }
 
+  @Test
+  public void call_shouldReturnDocumentationUrl() {
+    init();
+    String url = "https://docs.sonarsource.com/sonarqube/10.0";
+    when(documentationLinkGenerator.getDocumentationLink(null)).thenReturn(url);
+
+    String json = call();
+    assertJson(json).isSimilarTo("{\"documentationUrl\":\"" + url + "\"}");
+  }
+
   private void init() {
     init(new org.sonar.api.web.page.Page[] {}, new ResourceTypeTree[] {});
   }
@@ -391,8 +356,8 @@ public class GlobalActionTest {
     }});
     pageRepository.start();
     GlobalAction wsAction = new GlobalAction(pageRepository, settings.asConfig(), new ResourceTypes(resourceTypeTrees), server,
-      webServer, dbClient, branchFeature, userSession, editionProvider, multipleAlmFeatureProvider, webAnalyticsLoader,
-      indexSyncProgressChecker, defaultAdminCredentialsVerifier);
+      nodeInformation, dbClient, userSession, editionProvider, webAnalyticsLoader,
+      indexSyncProgressChecker, defaultAdminCredentialsVerifier, documentationLinkGenerator);
     ws = new WsActionTester(wsAction);
     wsAction.start();
   }

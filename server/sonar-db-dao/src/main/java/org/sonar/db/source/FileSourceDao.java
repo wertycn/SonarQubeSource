@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.db.source;
 
 import com.google.common.base.Splitter;
-import java.io.Reader;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,9 +27,7 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
 import javax.annotation.CheckForNull;
-import org.apache.commons.io.IOUtils;
 import org.apache.ibatis.session.ResultHandler;
 import org.sonar.db.Dao;
 import org.sonar.db.DatabaseUtils;
@@ -51,6 +48,13 @@ public class FileSourceDao implements Dao {
   public LineHashVersion selectLineHashesVersion(DbSession dbSession, String fileUuid) {
     Integer version = mapper(dbSession).selectLineHashesVersion(fileUuid);
     return version == null ? null : LineHashVersion.valueOf(version);
+  }
+
+  /**
+   * The returning object doesn't contain all fields filled. For example, binary data is not loaded.
+   */
+  public void scrollFileHashesByProjectUuid(DbSession dbSession, String projectUuid, ResultHandler<FileHashesDto> rowHandler) {
+    mapper(dbSession).scrollHashesForProject(projectUuid, rowHandler);
   }
 
   @CheckForNull
@@ -86,31 +90,6 @@ public class FileSourceDao implements Dao {
   public void scrollLineHashes(DbSession dbSession, Collection<String> fileUUids, ResultHandler<LineHashesWithUuidDto> rowHandler) {
     for (List<String> fileUuidsPartition : toUniqueAndSortedPartitions(fileUUids)) {
       mapper(dbSession).scrollLineHashes(fileUuidsPartition, rowHandler);
-    }
-  }
-
-  public void readLineHashesStream(DbSession dbSession, String fileUuid, Consumer<Reader> consumer) {
-    Connection connection = dbSession.getConnection();
-    PreparedStatement pstmt = null;
-    ResultSet rs = null;
-    Reader reader = null;
-    try {
-      pstmt = connection.prepareStatement("SELECT line_hashes FROM file_sources WHERE file_uuid=?");
-      pstmt.setString(1, fileUuid);
-      rs = pstmt.executeQuery();
-      if (rs.next()) {
-        reader = rs.getCharacterStream(1);
-        if (reader != null) {
-          consumer.accept(reader);
-        }
-      }
-    } catch (SQLException e) {
-      throw new IllegalStateException("Fail to read FILE_SOURCES.LINE_HASHES of file " + fileUuid, e);
-    } finally {
-      IOUtils.closeQuietly(reader);
-      DatabaseUtils.closeQuietly(rs);
-      DatabaseUtils.closeQuietly(pstmt);
-      DatabaseUtils.closeQuietly(connection);
     }
   }
 

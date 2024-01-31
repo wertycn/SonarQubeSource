@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
-import { mockComponent } from '../../../../helpers/testMocks';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
 import { AdditionalCategory } from '../AdditionalCategories';
-import { CategoriesList, CategoriesListProps } from '../AllCategoriesList';
+import CategoriesList, { CategoriesListProps } from '../AllCategoriesList';
 
 jest.mock('../AdditionalCategories', () => ({
   ADDITIONAL_CATEGORIES: [
@@ -32,7 +33,7 @@ jest.mock('../AdditionalCategories', () => ({
       availableGlobally: true,
       availableForProject: true,
       displayTab: true,
-      requiresBranchesEnabled: true
+      requiresBranchSupport: true,
     },
     {
       key: 'CAT_2',
@@ -40,7 +41,7 @@ jest.mock('../AdditionalCategories', () => ({
       renderComponent: jest.fn(),
       availableGlobally: true,
       availableForProject: false,
-      displayTab: true
+      displayTab: true,
     },
     {
       key: 'CAT_3',
@@ -48,7 +49,7 @@ jest.mock('../AdditionalCategories', () => ({
       renderComponent: jest.fn(),
       availableGlobally: false,
       availableForProject: true,
-      displayTab: true
+      displayTab: true,
     },
     {
       key: 'CAT_4',
@@ -56,26 +57,46 @@ jest.mock('../AdditionalCategories', () => ({
       renderComponent: jest.fn(),
       availableGlobally: true,
       availableForProject: true,
-      displayTab: false
-    }
-  ] as AdditionalCategory[]
+      displayTab: false,
+    },
+  ] as AdditionalCategory[],
 }));
 
 it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot('global mode');
-  expect(shallowRender({ selectedCategory: 'CAT_2' })).toMatchSnapshot('selected category');
-  expect(shallowRender({ component: mockComponent() })).toMatchSnapshot('project mode');
-  expect(shallowRender({ branchesEnabled: false })).toMatchSnapshot('branches disabled');
+  renderCategoriesList({ selectedCategory: 'CAT_2' });
+
+  expect(screen.getByText('CAT_1_NAME')).toBeInTheDocument();
+  expect(screen.getByText('CAT_2_NAME')).toBeInTheDocument();
+  expect(screen.queryByText('CAT_3_NAME')).not.toBeInTheDocument();
+  expect(screen.queryByText('CAT_4_NAME')).not.toBeInTheDocument();
+  expect(screen.getByText('CAT_2_NAME')).toHaveClass('active');
 });
 
-function shallowRender(props?: Partial<CategoriesListProps>) {
-  return shallow<CategoriesListProps>(
+it('should correctly for project', () => {
+  renderCategoriesList({ component: mockComponent() });
+
+  expect(screen.getByText('CAT_1_NAME')).toBeInTheDocument();
+  expect(screen.queryByText('CAT_2_NAME')).not.toBeInTheDocument();
+  expect(screen.getByText('CAT_3_NAME')).toBeInTheDocument();
+  expect(screen.queryByText('CAT_4_NAME')).not.toBeInTheDocument();
+});
+
+it('should render correctly when branches are disabled', () => {
+  renderCategoriesList({ hasFeature: () => false });
+
+  expect(screen.queryByText('CAT_1_NAME')).not.toBeInTheDocument();
+  expect(screen.getByText('CAT_2_NAME')).toBeInTheDocument();
+  expect(screen.queryByText('CAT_4_NAME')).not.toBeInTheDocument();
+});
+
+function renderCategoriesList(props?: Partial<CategoriesListProps>) {
+  return renderComponent(
     <CategoriesList
-      branchesEnabled={true}
+      hasFeature={jest.fn().mockReturnValue(true)}
       categories={['general']}
       defaultCategory="general"
       selectedCategory=""
       {...props}
-    />
+    />,
   );
 }

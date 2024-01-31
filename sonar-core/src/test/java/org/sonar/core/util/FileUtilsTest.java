@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,23 +28,21 @@ import javax.annotation.CheckForNull;
 import org.apache.commons.lang.SystemUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assume.assumeTrue;
 
 public class FileUtilsTest {
   @Rule
   public TemporaryFolder temporaryFolder = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void cleanDirectory_throws_NPE_if_file_is_null() throws IOException {
-    expectDirectoryCanNotBeNullNPE();
-
-    FileUtils.cleanDirectory(null);
+    assertThatThrownBy(() -> FileUtils.cleanDirectory(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("Directory can not be null");
   }
 
   @Test
@@ -56,10 +54,9 @@ public class FileUtilsTest {
   public void cleanDirectory_throws_IAE_if_argument_is_a_file() throws IOException {
     File file = temporaryFolder.newFile();
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("'" + file.getAbsolutePath() + "' is not a directory");
-
-    FileUtils.cleanDirectory(file);
+    assertThatThrownBy(() -> FileUtils.cleanDirectory(file))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("'" + file.getAbsolutePath() + "' is not a directory");
   }
 
   @Test
@@ -160,6 +157,31 @@ public class FileUtilsTest {
   }
 
   @Test
+  public void humanReadableByteCountSI_returns_bytes() {
+    assertThat(FileUtils.humanReadableByteCountSI(123)).isEqualTo("123 bytes");
+    assertThat(FileUtils.humanReadableByteCountSI(0)).isEqualTo("0 bytes");
+    assertThat(FileUtils.humanReadableByteCountSI(1)).isEqualTo("1 byte");
+  }
+
+  @Test
+  public void humanReadableByteCountSI_returns_kbs() {
+    assertThat(FileUtils.humanReadableByteCountSI(1_234)).isEqualTo("1.2 kB");
+    assertThat(FileUtils.humanReadableByteCountSI(1_000)).isEqualTo("1.0 kB");
+    assertThat(FileUtils.humanReadableByteCountSI(9_999)).isEqualTo("10.0 kB");
+    assertThat(FileUtils.humanReadableByteCountSI(999_949)).isEqualTo("999.9 kB");
+  }
+
+  @Test
+  public void humanReadableByteCountSI_returns_tbs() {
+    assertThat(FileUtils.humanReadableByteCountSI(1_234_000_000_000L)).isEqualTo("1.2 TB");
+  }
+
+  @Test
+  public void humanReadableByteCountSI_returns_mbs() {
+    assertThat(FileUtils.humanReadableByteCountSI(1234567)).isEqualTo("1.2 MB");
+  }
+
+  @Test
   public void deleteQuietly_deletes_symbolicLink() throws IOException {
     assumeTrue(SystemUtils.IS_OS_UNIX);
     Path folder = temporaryFolder.newFolder().toPath();
@@ -177,9 +199,9 @@ public class FileUtilsTest {
 
   @Test
   public void deleteDirectory_throws_NPE_if_argument_is_null() throws IOException {
-    expectDirectoryCanNotBeNullNPE();
-
-    FileUtils.deleteDirectory((File) null);
+    assertThatThrownBy(() -> FileUtils.deleteDirectory((File) null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("Directory can not be null");
   }
 
   @Test
@@ -193,10 +215,9 @@ public class FileUtilsTest {
   public void deleteDirectory_throws_IOE_if_argument_is_a_file() throws IOException {
     File file = temporaryFolder.newFile();
 
-    expectedException.expect(IOException.class);
-    expectedException.expectMessage("Directory '" + file.getAbsolutePath() + "' is a file");
-
-    FileUtils.deleteDirectory(file);
+    assertThatThrownBy(() -> FileUtils.deleteDirectory(file))
+      .isInstanceOf(IOException.class)
+      .hasMessage("Directory '" + file.getAbsolutePath() + "' is a file");
   }
 
   @Test
@@ -209,10 +230,9 @@ public class FileUtilsTest {
     assertThat(file1).isRegularFile();
     assertThat(symLink).isSymbolicLink();
 
-    expectedException.expect(IOException.class);
-    expectedException.expectMessage("Directory '" + symLink.toFile().getAbsolutePath() + "' is a symbolic link");
-
-    FileUtils.deleteDirectory(symLink.toFile());
+    assertThatThrownBy(() -> FileUtils.deleteDirectory(symLink.toFile()))
+      .isInstanceOf(IOException.class)
+      .hasMessage("Directory '" + symLink.toFile().getAbsolutePath() + "' is a symbolic link");
   }
 
   @Test
@@ -236,11 +256,6 @@ public class FileUtilsTest {
     assertThat(childDir1).doesNotExist();
     assertThat(childFile2).doesNotExist();
     assertThat(childDir2).doesNotExist();
-  }
-
-  private void expectDirectoryCanNotBeNullNPE() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("Directory can not be null");
   }
 
   @CheckForNull

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ public class PermissionsWsParameters {
 
   public static final String PARAM_PERMISSION = "permission";
   public static final String PARAM_GROUP_NAME = "groupName";
-  public static final String PARAM_GROUP_ID = "groupId";
+
   public static final String PARAM_PROJECT_ID = "projectId";
   public static final String PARAM_PROJECT_KEY = "projectKey";
   public static final String PARAM_USER_LOGIN = "login";

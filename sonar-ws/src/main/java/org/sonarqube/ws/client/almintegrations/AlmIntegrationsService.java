@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -71,6 +71,22 @@ public class AlmIntegrationsService extends BaseService {
   }
 
   /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/import_bitbucketcloud_project">Further information about this action online (including a response example)</a>
+   * @since 8.2
+   */
+  public Projects.CreateWsResponse importBitbucketcloudProject(ImportBitbucketcloudRepoRequest request) {
+    return call(
+      new PostRequest(path("import_bitbucketcloud_repo"))
+        .setParam("almSetting", request.getAlmSetting())
+        .setParam("repositorySlug", request.getRepositorySlug())
+        .setMediaType(MediaTypes.JSON),
+      Projects.CreateWsResponse.parser());
+  }
+
+  /**
    * This is a POST request.
    *
    * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/import_gitlab_project">Further information about this action online (including a response example)</a>
@@ -81,6 +97,34 @@ public class AlmIntegrationsService extends BaseService {
       new PostRequest(path("import_gitlab_project"))
         .setParam("almSetting", request.getAlmSetting())
         .setParam("gitlabProjectId", request.getGitlabProjectId())
+        .setMediaType(MediaTypes.JSON),
+      Projects.CreateWsResponse.parser());
+  }
+
+  /**
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/import_github_project">Further information about this action online (including a response example)</a>
+   */
+  public Projects.CreateWsResponse importGithubProject(ImportGithubProjectRequest request) {
+    return call(
+      new PostRequest(path("import_github_project"))
+        .setParam("almSetting", request.getAlmSetting())
+        .setParam("repositoryKey", request.getRepositoryKey())
+        .setMediaType(MediaTypes.JSON),
+      Projects.CreateWsResponse.parser());
+  }
+
+  /**
+   * This is a GET request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/list_github_organizations">Further information about this action online (including a response example)</a>
+   */
+  public void listGithubOrganizations(ListGithubOrganizationsRequest request) {
+    call(
+      new GetRequest(path("list_github_organizations"))
+        .setParam("almSetting", request.getAlmSetting())
+        .setParam("token", request.getToken())
         .setMediaType(MediaTypes.JSON),
       Projects.CreateWsResponse.parser());
   }
@@ -168,6 +212,40 @@ public class AlmIntegrationsService extends BaseService {
 
   /**
    * This is part of the internal API.
+   * This is a GET request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/search_bitbucketcloud_repos">Further information about this action online (including a response example)</a>
+   * @since 8.2
+   */
+  public AlmIntegrations.SearchBitbucketcloudReposWsResponse searchBitbucketcloudRepos(SearchBitbucketcloudReposRequest request) {
+    return call(
+      new GetRequest(path("search_bitbucketcloud_repos"))
+        .setParam("almSetting", request.getAlmSetting())
+        .setMediaType(MediaTypes.JSON),
+      AlmIntegrations.SearchBitbucketcloudReposWsResponse.parser());
+  }
+
+  /**
+   * This is part of the internal API.
+   * This is a POST request.
+   *
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/webhook_github">Further information about this action online (including a response example)</a>
+   * @since 9.7
+   */
+  public void sendGitubCodeScanningAlertWebhookPayload(SendGithubCodeScanningAlertWebhookPayloadRequest request) {
+    call(
+      new PostRequest(path("webhook_github"))
+        .setHeader("X-GitHub-Event", request.getGithubEventHeader())
+        .setHeader("X-Hub-Signature", request.getGithubSignatureHeader())
+        .setHeader("X-Hub-Signature-256", request.getGithubSignature256Header())
+        .setHeader("x-github-hook-installation-target-id", request.getGithubAppId())
+        .setBody(request.getPayload())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
+  }
+
+  /**
+   * This is part of the internal API.
    * This is a POST request.
    *
    * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/alm_integrations/set_pat">Further information about this action online (including a response example)</a>
@@ -178,6 +256,7 @@ public class AlmIntegrationsService extends BaseService {
       new PostRequest(path("set_pat"))
         .setParam("almSetting", request.getAlmSetting())
         .setParam("pat", request.getPat())
+        .setParam("username", request.getUsername())
         .setMediaType(MediaTypes.JSON)
     ).content();
   }

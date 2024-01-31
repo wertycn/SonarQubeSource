@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,74 +17,80 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, FormField, InputTextArea, Modal, Note, SelectionCard } from 'design-system';
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Radio from 'sonar-ui-common/components/controls/Radio';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import FormattingTips from '../../../../components/common/FormattingTips';
+import { translate } from '../../../../helpers/l10n';
 import { HotspotStatusOption } from '../../../../types/security-hotspots';
-import StatusDescription from './StatusDescription';
 
 export interface StatusSelectionRendererProps {
-  selectedStatus: HotspotStatusOption;
+  status: HotspotStatusOption;
   onStatusChange: (statusOption: HotspotStatusOption) => void;
-
   comment?: string;
   onCommentChange: (comment: string) => void;
-
-  onSubmit: () => void;
-
+  onCancel: () => void;
+  onSubmit: () => Promise<void>;
   loading: boolean;
   submitDisabled: boolean;
 }
 
 export default function StatusSelectionRenderer(props: StatusSelectionRendererProps) {
-  const { comment, loading, selectedStatus, submitDisabled } = props;
+  const { comment, loading, status, submitDisabled } = props;
 
-  const renderOption = (status: HotspotStatusOption) => {
+  const renderOption = (statusOption: HotspotStatusOption) => {
     return (
-      <Radio
-        checked={selectedStatus === status}
-        className="big-spacer-bottom"
-        onCheck={props.onStatusChange}
-        value={status}>
-        <StatusDescription statusOption={status} />
-      </Radio>
+      <SelectionCard
+        className="sw-mb-3"
+        key={statusOption}
+        onClick={() => props.onStatusChange(statusOption)}
+        selected={statusOption === status}
+        title={translate('hotspots.status_option', statusOption)}
+        vertical
+      >
+        <Note className="sw-mt-1 sw-mr-12">
+          {translate('hotspots.status_option', statusOption, 'description')}
+        </Note>
+      </SelectionCard>
     );
   };
 
   return (
-    <>
-      <div className="big-padded">
-        {renderOption(HotspotStatusOption.TO_REVIEW)}
-        {renderOption(HotspotStatusOption.FIXED)}
-        {renderOption(HotspotStatusOption.SAFE)}
-      </div>
-
-      <hr />
-      <div className="big-padded display-flex-column">
-        <label className="text-bold" htmlFor="comment-textarea">
-          {translate('hotspots.status.add_comment')}
-        </label>
-        <textarea
-          className="spacer-top form-field fixed-width spacer-bottom"
-          id="comment-textarea"
-          onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
-            props.onCommentChange(event.currentTarget.value)
-          }
-          rows={4}
-          value={comment}
-        />
-        <FormattingTips />
-
-        <div className="big-spacer-top display-flex-justify-end display-flex-center">
-          <SubmitButton disabled={submitDisabled || loading} onClick={props.onSubmit}>
-            {translate('hotspots.status.change_status')}
-          </SubmitButton>
-
-          {loading && <i className="spacer-left spinner" />}
-        </div>
-      </div>
-    </>
+    <Modal
+      headerTitle={translate('hotspots.status.review_title')}
+      headerDescription={translate('hotspots.status.select')}
+      loading={loading}
+      isScrollable
+      onClose={props.onCancel}
+      secondaryButtonLabel={translate('cancel')}
+      body={
+        <>
+          {renderOption(HotspotStatusOption.TO_REVIEW)}
+          {renderOption(HotspotStatusOption.ACKNOWLEDGED)}
+          {renderOption(HotspotStatusOption.FIXED)}
+          {renderOption(HotspotStatusOption.SAFE)}
+          <FormField
+            htmlFor="comment-textarea"
+            label={translate('hotspots.status.add_comment_optional')}
+          >
+            <InputTextArea
+              className="sw-mb-2 sw-resize-y"
+              id="comment-textarea"
+              onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) =>
+                props.onCommentChange(event.currentTarget.value)
+              }
+              rows={4}
+              size="full"
+              value={comment}
+            />
+            <FormattingTips />
+          </FormField>
+        </>
+      }
+      primaryButton={
+        <ButtonPrimary disabled={submitDisabled || loading} onClick={props.onSubmit}>
+          {translate('hotspots.status.change_status')}
+        </ButtonPrimary>
+      }
+    />
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -113,16 +113,6 @@ public class AlterColumnsBuilder {
       sqls.add(defaultQuery.toString());
     }
     return sqls;
-  }
-
-  private void addColumns(StringBuilder sql, String updateKeyword, String typePrefix, boolean addNotNullableProperty) {
-    for (Iterator<ColumnDef> columnDefIterator = columnDefs.iterator(); columnDefIterator.hasNext();) {
-      sql.append(updateKeyword);
-      addColumn(sql, columnDefIterator.next(), typePrefix, addNotNullableProperty);
-      if (columnDefIterator.hasNext()) {
-        sql.append(", ");
-      }
-    }
   }
 
   private void addColumn(StringBuilder sql, ColumnDef columnDef, String typePrefix, boolean addNotNullableProperty) {

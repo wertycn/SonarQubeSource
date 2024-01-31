@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,8 @@ public class SamlModule extends Module {
     add(
       SamlIdentityProvider.class,
       SamlMessageIdChecker.class,
-      SamlSettings.class);
+      SamlSettings.class,
+      SamlAuthenticator.class);
     List<PropertyDefinition> definitions = SamlSettings.definitions();
     add(definitions.toArray(new Object[definitions.size()]));
   }

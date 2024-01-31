@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,38 +19,47 @@
  */
 package org.sonar.ce.task.projectanalysis.component;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class FileAttributesTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   @Test
   public void create_production_file() {
-    FileAttributes underTest = new FileAttributes(true, "java", 10);
+    FileAttributes underTest = new FileAttributes(false, "java", 10, true,"C");
 
-    assertThat(underTest.isUnitTest()).isTrue();
+    assertThat(underTest.isUnitTest()).isFalse();
     assertThat(underTest.getLanguageKey()).isEqualTo("java");
     assertThat(underTest.getLines()).isEqualTo(10);
+    assertThat(underTest.isMarkedAsUnchanged()).isTrue();
+    assertThat(underTest.getOldRelativePath()).isEqualTo("C");
   }
 
   @Test
   public void create_unit_test() {
-    FileAttributes underTest = new FileAttributes(true, "java", 10);
+    FileAttributes underTest = new FileAttributes(true, "java", 10, false,"oldName");
 
     assertThat(underTest.isUnitTest()).isTrue();
     assertThat(underTest.getLanguageKey()).isEqualTo("java");
     assertThat(underTest.getLines()).isEqualTo(10);
+    assertThat(underTest.isMarkedAsUnchanged()).isFalse();
+    assertThat(underTest.getOldRelativePath()).isEqualTo("oldName");
+  }
+
+  @Test
+  public void create_without_oldName() {
+    FileAttributes underTest = new FileAttributes(true, "TypeScript", 10, false, null);
+
+    assertThat(underTest.isUnitTest()).isTrue();
+    assertThat(underTest.getLanguageKey()).isEqualTo("TypeScript");
+    assertThat(underTest.getLines()).isEqualTo(10);
+    assertThat(underTest.getOldRelativePath()).isNull();
   }
 
   @Test
   public void create_without_language() {
-    FileAttributes underTest = new FileAttributes(true, null, 10);
+    FileAttributes underTest = new FileAttributes(true, null, 10, false, null);
 
     assertThat(underTest.isUnitTest()).isTrue();
     assertThat(underTest.getLanguageKey()).isNull();
@@ -59,21 +68,23 @@ public class FileAttributesTest {
 
   @Test
   public void fail_with_IAE_when_lines_is_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Number of lines must be greater than zero");
-    new FileAttributes(true, "java", 0);
+    assertThatThrownBy(() -> new FileAttributes(true, "java", 0, false, null))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Number of lines must be greater than zero");
   }
 
   @Test
   public void fail_with_IAE_when_lines_is_less_than_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Number of lines must be greater than zero");
-    new FileAttributes(true, "java", -10);
+    assertThatThrownBy(() -> new FileAttributes(true, "java", -10, false, null))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Number of lines must be greater than zero");
   }
 
   @Test
   public void test_toString() {
-    assertThat(new FileAttributes(true, "java", 10).toString()).isEqualTo("FileAttributes{languageKey='java', unitTest=true, lines=10}");
-    assertThat(new FileAttributes(false, null, 1).toString()).isEqualTo("FileAttributes{languageKey='null', unitTest=false, lines=1}");
+    assertThat(new FileAttributes(true, "java", 10, true, "bobo"))
+      .hasToString("FileAttributes{languageKey='java', unitTest=true, lines=10, markedAsUnchanged=true, oldRelativePath='bobo'}");
+    assertThat(new FileAttributes(false, null, 1, false, null))
+      .hasToString("FileAttributes{languageKey='null', unitTest=false, lines=1, markedAsUnchanged=false, oldRelativePath='null'}");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.ce.task.projectanalysis.measure;
 
-import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import java.util.HashMap;
 import java.util.Map;
@@ -169,7 +168,7 @@ public class MeasureRepositoryRule extends ExternalResource implements MeasureRe
   @Override
   public Map<String, Measure> getRawMeasures(Component component) {
     return filterKeys(rawMeasures, hasComponentRef(component)).entrySet().stream()
-      .collect(Collectors.toMap(k -> k.getKey().getMetricKey(), e -> e.getValue()));
+      .collect(Collectors.toMap(k -> k.getKey().getMetricKey(), Map.Entry::getValue));
   }
 
   private HasComponentRefPredicate hasComponentRef(Component component) {
@@ -272,30 +271,6 @@ public class MeasureRepositoryRule extends ExternalResource implements MeasureRe
   }
 
   private static String getRef(Component component) {
-    return component.getType().isReportType() ? String.valueOf(component.getReportAttributes().getRef()) : component.getDbKey();
+    return component.getType().isReportType() ? String.valueOf(component.getReportAttributes().getRef()) : component.getKey();
   }
-
-  private static class MatchMetric implements Predicate<Map.Entry<InternalKey, Measure>> {
-    private final Metric metric;
-
-    public MatchMetric(Metric metric) {
-      this.metric = metric;
-    }
-
-    @Override
-    public boolean apply(@Nonnull Map.Entry<InternalKey, Measure> input) {
-      return input.getKey().getMetricKey().equals(metric.getKey());
-    }
-  }
-
-  private enum ToMeasure implements Function<Map.Entry<InternalKey, Measure>, Measure> {
-    INSTANCE;
-
-    @Nullable
-    @Override
-    public Measure apply(@Nonnull Map.Entry<InternalKey, Measure> input) {
-      return input.getValue();
-    }
-  }
-
 }

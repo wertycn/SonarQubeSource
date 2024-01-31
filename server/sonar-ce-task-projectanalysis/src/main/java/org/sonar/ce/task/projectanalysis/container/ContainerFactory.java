@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,9 +22,9 @@ package org.sonar.ce.task.projectanalysis.container;
 import javax.annotation.Nullable;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.container.TaskContainer;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.SpringComponentContainer;
 
 public interface ContainerFactory {
 
-  TaskContainer create(ComponentContainer parent, CeTask task, @Nullable ReportAnalysisComponentProvider[] componentProviders);
+  TaskContainer create(SpringComponentContainer parent, CeTask task, @Nullable ReportAnalysisComponentProvider[] componentProviders);
 }

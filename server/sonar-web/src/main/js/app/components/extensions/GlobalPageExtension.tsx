@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,24 +18,34 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { getAppState, Store } from '../../../store/rootReducer';
+import { useParams } from 'react-router-dom';
+import { AppState } from '../../../types/appstate';
 import NotFound from '../NotFound';
+import withAppStateContext from '../app-state/withAppStateContext';
 import Extension from './Extension';
 
-interface Props {
-  globalPages: T.Extension[] | undefined;
-  params: { extensionKey: string; pluginKey: string };
+export interface GlobalPageExtensionProps {
+  appState: AppState;
+  params?: {
+    extensionKey: string;
+    pluginKey: string;
+  };
 }
 
-function GlobalPageExtension(props: Props) {
-  const { extensionKey, pluginKey } = props.params;
-  const extension = (props.globalPages || []).find(p => p.key === `${pluginKey}/${extensionKey}`);
-  return extension ? <Extension extension={extension} /> : <NotFound withContainer={false} />;
+function GlobalPageExtension(props: GlobalPageExtensionProps) {
+  const {
+    appState: { globalPages },
+    params,
+  } = props;
+  const { extensionKey, pluginKey } = useParams();
+
+  const fullKey =
+    params !== undefined
+      ? `${params.pluginKey}/${params.extensionKey}`
+      : `${pluginKey}/${extensionKey}`;
+
+  const extension = globalPages?.find((p) => p.key === fullKey);
+  return extension ? <Extension extension={extension} /> : <NotFound />;
 }
 
-const mapStateToProps = (state: Store) => ({
-  globalPages: getAppState(state).globalPages
-});
-
-export default connect(mapStateToProps)(GlobalPageExtension);
+export default withAppStateContext(GlobalPageExtension);

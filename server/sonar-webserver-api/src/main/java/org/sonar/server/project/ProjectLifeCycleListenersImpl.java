@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,32 +22,35 @@ package org.sonar.server.project;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.function.Consumer;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ProjectLifeCycleListenersImpl implements ProjectLifeCycleListeners {
-  private static final Logger LOG = Loggers.get(ProjectLifeCycleListenersImpl.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProjectLifeCycleListenersImpl.class);
 
   private final ProjectLifeCycleListener[] listeners;
 
   /**
-   * Used by Pico when there is no ProjectLifeCycleListener implementation in container.
+   * Used by the container when there is no ProjectLifeCycleListener implementation in container.
    */
+  @Autowired(required = false)
   public ProjectLifeCycleListenersImpl() {
     this.listeners = new ProjectLifeCycleListener[0];
   }
 
   /**
-   * Used by Pico when there is at least one ProjectLifeCycleListener implementation in container.
+   * Used by the container when there is at least one ProjectLifeCycleListener implementation in container.
    */
+  @Autowired(required = false)
   public ProjectLifeCycleListenersImpl(ProjectLifeCycleListener[] listeners) {
     this.listeners = listeners;
   }
 
   @Override
-  public void onProjectsDeleted(Set<Project> projects) {
+  public void onProjectsDeleted(Set<DeletedProject> projects) {
     checkNotNull(projects, "projects can't be null");
     if (projects.isEmpty()) {
       return;
@@ -58,14 +61,14 @@ public class ProjectLifeCycleListenersImpl implements ProjectLifeCycleListeners 
   }
 
   @Override
-  public void onProjectBranchesDeleted(Set<Project> projects) {
+  public void onProjectBranchesChanged(Set<Project> projects, Set<String> impactedBranches) {
     checkNotNull(projects, "projects can't be null");
     if (projects.isEmpty()) {
       return;
     }
 
     Arrays.stream(listeners)
-      .forEach(safelyCallListener(listener -> listener.onProjectBranchesDeleted(projects)));
+      .forEach(safelyCallListener(listener -> listener.onProjectBranchesChanged(projects, impactedBranches)));
   }
 
   @Override

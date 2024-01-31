@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,7 @@ package org.sonar.server.util;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * ScheduledExecutorService that exposes a {@code stop} method which can be invoked by Pico container to shutdown
+ * ScheduledExecutorService that exposes a {@code stop} method which can be invoked by the ioc container to shutdown
  * properly the service.
  */
 public interface StoppableScheduledExecutorService extends ScheduledExecutorService, StoppableExecutorService {

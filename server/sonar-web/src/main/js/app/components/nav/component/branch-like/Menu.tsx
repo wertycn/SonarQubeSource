@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,31 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DropdownMenu, InputSearch, ItemDivider, Link } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { DropdownOverlay } from 'sonar-ui-common/components/controls/Dropdown';
-import SearchBox from 'sonar-ui-common/components/controls/SearchBox';
-import { KeyCodes } from 'sonar-ui-common/helpers/keycodes';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { Router, withRouter } from '../../../../../components/hoc/withRouter';
 import {
   getBrancheLikesAsTree,
   isBranch,
   isPullRequest,
-  isSameBranchLike
+  isSameBranchLike,
 } from '../../../../../helpers/branch-like';
-import { getBranchLikeUrl } from '../../../../../helpers/urls';
+import { KeyboardKeys } from '../../../../../helpers/keycodes';
+import { translate } from '../../../../../helpers/l10n';
+import { getBranchLikeUrl, queryToSearch } from '../../../../../helpers/urls';
 import { BranchLike, BranchLikeTree } from '../../../../../types/branch-like';
 import { ComponentQualifier } from '../../../../../types/component';
+import { Component } from '../../../../../types/types';
 import MenuItemList from './MenuItemList';
 
 interface Props {
   branchLikes: BranchLike[];
   canAdminComponent?: boolean;
-  component: T.Component;
+  component: Component;
   currentBranchLike: BranchLike;
   onClose: () => void;
-  router: Pick<Router, 'push'>;
+  router: Router;
 }
 
 interface State {
@@ -57,7 +56,7 @@ export class Menu extends React.PureComponent<Props, State> {
 
     let selectedBranchLike = undefined;
 
-    if (props.branchLikes.some(b => isSameBranchLike(b, props.currentBranchLike))) {
+    if (props.branchLikes.some((b) => isSameBranchLike(b, props.currentBranchLike))) {
       selectedBranchLike = props.currentBranchLike;
     } else if (props.branchLikes.length > 0) {
       selectedBranchLike = props.branchLikes[0];
@@ -66,7 +65,7 @@ export class Menu extends React.PureComponent<Props, State> {
     this.state = {
       query: '',
       selectedBranchLike,
-      ...this.processBranchLikes(props.branchLikes)
+      ...this.processBranchLikes(props.branchLikes),
     };
   }
 
@@ -79,9 +78,9 @@ export class Menu extends React.PureComponent<Props, State> {
           : []),
         ...tree.branchTree.reduce((prev, t) => [...prev, t.branch, ...t.pullRequests], []),
         ...tree.parentlessPullRequests,
-        ...tree.orphanPullRequests
+        ...tree.orphanPullRequests,
       ],
-      branchLikesToDisplayTree: tree
+      branchLikesToDisplayTree: tree,
     };
   };
 
@@ -92,8 +91,8 @@ export class Menu extends React.PureComponent<Props, State> {
   };
 
   highlightSiblingBranchlike = (indexDelta: number) => {
-    const selectBranchLikeIndex = this.state.branchLikesToDisplay.findIndex(b =>
-      isSameBranchLike(b, this.state.selectedBranchLike)
+    const selectBranchLikeIndex = this.state.branchLikesToDisplay.findIndex((b) =>
+      isSameBranchLike(b, this.state.selectedBranchLike),
     );
     const newIndex = selectBranchLikeIndex + indexDelta;
 
@@ -103,22 +102,22 @@ export class Menu extends React.PureComponent<Props, State> {
       newIndex < this.state.branchLikesToDisplay.length
     ) {
       this.setState(({ branchLikesToDisplay }) => ({
-        selectedBranchLike: branchLikesToDisplay[newIndex]
+        selectedBranchLike: branchLikesToDisplay[newIndex],
       }));
     }
   };
 
   handleKeyDown = (event: React.KeyboardEvent) => {
-    switch (event.keyCode) {
-      case KeyCodes.Enter:
+    switch (event.nativeEvent.key) {
+      case KeyboardKeys.Enter:
         event.preventDefault();
         this.openHighlightedBranchLike();
         break;
-      case KeyCodes.UpArrow:
+      case KeyboardKeys.UpArrow:
         event.preventDefault();
         this.highlightSiblingBranchlike(-1);
         break;
-      case KeyCodes.DownArrow:
+      case KeyboardKeys.DownArrow:
         event.preventDefault();
         this.highlightSiblingBranchlike(+1);
         break;
@@ -134,13 +133,13 @@ export class Menu extends React.PureComponent<Props, State> {
       isPullRequest(pr) && (pr.title.toLowerCase().includes(q) || pr.key.toLowerCase().includes(q));
 
     const filteredBranchLikes = this.props.branchLikes.filter(
-      bl => filterBranch(bl) || filterPullRequest(bl)
+      (bl) => filterBranch(bl) || filterPullRequest(bl),
     );
 
     this.setState({
       query: q,
       selectedBranchLike: filteredBranchLikes.length > 0 ? filteredBranchLikes[0] : undefined,
-      ...this.processBranchLikes(filteredBranchLikes)
+      ...this.processBranchLikes(filteredBranchLikes),
     });
   };
 
@@ -153,48 +152,49 @@ export class Menu extends React.PureComponent<Props, State> {
 
   render() {
     const { canAdminComponent, component, onClose } = this.props;
-    const {
-      branchLikesToDisplay,
-      branchLikesToDisplayTree,
-      query,
-      selectedBranchLike
-    } = this.state;
-
+    const { branchLikesToDisplay, branchLikesToDisplayTree, query, selectedBranchLike } =
+      this.state;
     const showManageLink = component.qualifier === ComponentQualifier.Project && canAdminComponent;
     const hasResults = branchLikesToDisplay.length > 0;
 
     return (
-      <DropdownOverlay className="branch-like-navigation-menu" noPadding={true}>
-        <div className="search-box-container">
-          <SearchBox
-            autoFocus={true}
-            onChange={this.handleSearchChange}
-            onKeyDown={this.handleKeyDown}
-            placeholder={translate('branch_like_navigation.search_for_branch_like')}
-            value={query}
-          />
-        </div>
-
-        <div className="item-list-container">
-          <MenuItemList
-            branchLikeTree={branchLikesToDisplayTree}
-            component={component}
-            hasResults={hasResults}
-            onSelect={this.handleOnSelect}
-            selectedBranchLike={selectedBranchLike}
-          />
-        </div>
-
+      <DropdownMenu
+        className="sw-overflow-y-auto sw-overflow-x-hidden sw-min-w-abs-350 it__branch-like-navigation-menu"
+        maxHeight="38rem"
+        size="auto"
+      >
+        <InputSearch
+          className="sw-mx-3 sw-my-2"
+          autoFocus
+          onChange={this.handleSearchChange}
+          onKeyDown={this.handleKeyDown}
+          placeholder={translate('branch_like_navigation.search_for_branch_like')}
+          size="auto"
+          value={query}
+          searchInputAriaLabel={translate('search_verb')}
+        />
+        <MenuItemList
+          branchLikeTree={branchLikesToDisplayTree}
+          hasResults={hasResults}
+          onSelect={this.handleOnSelect}
+          selectedBranchLike={selectedBranchLike}
+        />
         {showManageLink && (
-          <div className="hint-container text-right">
-            <Link
-              onClick={() => onClose()}
-              to={{ pathname: '/project/branches', query: { id: component.key } }}>
-              {translate('branch_like_navigation.manage')}
-            </Link>
-          </div>
+          <>
+            <ItemDivider />
+            <li className="sw-px-3 sw-py-2">
+              <Link
+                onClick={() => {
+                  onClose();
+                }}
+                to={{ pathname: '/project/branches', search: queryToSearch({ id: component.key }) }}
+              >
+                {translate('branch_like_navigation.manage')}
+              </Link>
+            </li>
+          </>
         )}
-      </DropdownOverlay>
+      </DropdownMenu>
     );
   }
 }

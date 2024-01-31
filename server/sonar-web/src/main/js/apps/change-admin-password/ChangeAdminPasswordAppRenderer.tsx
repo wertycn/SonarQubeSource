@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,14 +18,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import MandatoryFieldsExplanation from 'sonar-ui-common/components/ui/MandatoryFieldsExplanation';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getReturnUrl } from 'sonar-ui-common/helpers/urls';
-import GlobalMessagesContainer from '../../app/components/GlobalMessagesContainer';
+import { Helmet } from 'react-helmet-async';
+import { SubmitButton } from '../../components/controls/buttons';
 import { Location } from '../../components/hoc/withRouter';
+import { Alert } from '../../components/ui/Alert';
+import MandatoryFieldMarker from '../../components/ui/MandatoryFieldMarker';
+import MandatoryFieldsExplanation from '../../components/ui/MandatoryFieldsExplanation';
+import { translate } from '../../helpers/l10n';
+import { getReturnUrl } from '../../helpers/urls';
 import Unauthorized from '../sessions/components/Unauthorized';
 import { DEFAULT_ADMIN_PASSWORD } from './constants';
 
@@ -50,7 +50,7 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
     passwordValue,
     location,
     submitting,
-    success
+    success,
   } = props;
 
   if (!canAdmin) {
@@ -59,6 +59,7 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
 
   return (
     <div className="page-wrapper-simple">
+      <Helmet defer={false} title={translate('users.change_admin_password.page')} />
       <div className="page-simple">
         {success ? (
           <Alert variant="success">
@@ -70,8 +71,6 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
           </Alert>
         ) : (
           <>
-            <GlobalMessagesContainer />
-
             <h1 className="text-center bg-danger big padded">
               {translate('users.change_admin_password.instance_is_at_risk')}
             </h1>
@@ -87,7 +86,8 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
               onSubmit={(e: React.SyntheticEvent<HTMLFormElement>) => {
                 e.preventDefault();
                 props.onSubmit();
-              }}>
+              }}
+            >
               <h2 className="big-spacer-bottom big">
                 {translate('users.change_admin_password.form.header')}
               </h2>
@@ -105,7 +105,7 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
                   onChange={(e: React.SyntheticEvent<HTMLInputElement>) => {
                     props.onPasswordChange(e.currentTarget.value);
                   }}
-                  required={true}
+                  required
                   type="password"
                   value={passwordValue}
                 />
@@ -122,7 +122,7 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
                   onChange={(e: React.SyntheticEvent<HTMLInputElement>) => {
                     props.onConfirmPasswordChange(e.currentTarget.value);
                   }}
-                  required={true}
+                  required
                   type="password"
                   value={confirmPasswordValue}
                 />
@@ -137,7 +137,7 @@ export default function ChangeAdminPasswordAppRenderer(props: ChangeAdminPasswor
 
               <div className="form-field">
                 <SubmitButton disabled={!canSubmit || submitting}>
-                  {translate('change_verb')}
+                  {translate('update_verb')}
                   {submitting && <i className="spinner spacer-left" />}
                 </SubmitButton>
               </div>

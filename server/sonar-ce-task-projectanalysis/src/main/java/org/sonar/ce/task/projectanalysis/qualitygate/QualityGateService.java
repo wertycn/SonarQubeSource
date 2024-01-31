@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,25 +19,11 @@
  */
 package org.sonar.ce.task.projectanalysis.qualitygate;
 
-import java.util.Optional;
 import org.sonar.server.project.Project;
 
 public interface QualityGateService {
-
   /**
-   * Retrieve the {@link QualityGate} from the database with the specified uuid, if it exists.
+   * Retrieve the {@link QualityGate} from the database associated with project. If there's none, it returns the default quality gate.
    */
-  Optional<QualityGate> findByUuid(String uuid);
-
-  /**
-   * Retrieve the {@link QualityGate} from the database.
-   * @throws IllegalStateException if database is corrupted and default gate can't be found.
-   */
-  QualityGate findDefaultQualityGate();
-
-  /**
-   * Retrieve the {@link QualityGate} from the database associated with project.
-   */
-  Optional<QualityGate> findQualityGate(Project project);
-
+  QualityGate findEffectiveQualityGate(Project project);
 }

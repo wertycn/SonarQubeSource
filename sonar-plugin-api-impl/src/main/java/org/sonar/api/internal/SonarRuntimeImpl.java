@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,24 +36,24 @@ import static org.sonar.api.utils.Preconditions.checkArgument;
 @Immutable
 public class SonarRuntimeImpl implements SonarRuntime {
 
-  private final Version version;
+  private final Version apiVersion;
   private final SonarProduct product;
   private final SonarQubeSide sonarQubeSide;
   private final SonarEdition edition;
 
-  private SonarRuntimeImpl(Version version, SonarProduct product, @Nullable SonarQubeSide sonarQubeSide, @Nullable SonarEdition edition) {
+  private SonarRuntimeImpl(Version apiVersion, SonarProduct product, @Nullable SonarQubeSide sonarQubeSide, @Nullable SonarEdition edition) {
     this.edition = edition;
     requireNonNull(product);
     checkArgument((product == SonarProduct.SONARQUBE) == (sonarQubeSide != null), "sonarQubeSide should be provided only for SonarQube product");
     checkArgument((product == SonarProduct.SONARQUBE) == (edition != null), "edition should be provided only for SonarQube product");
-    this.version = requireNonNull(version);
+    this.apiVersion = requireNonNull(apiVersion);
     this.product = product;
     this.sonarQubeSide = sonarQubeSide;
   }
 
   @Override
   public Version getApiVersion() {
-    return version;
+    return apiVersion;
   }
 
   @Override
@@ -80,8 +80,8 @@ public class SonarRuntimeImpl implements SonarRuntime {
   /**
    * Create an instance for SonarQube runtime environment.
    */
-  public static SonarRuntime forSonarQube(Version version, SonarQubeSide side, SonarEdition edition) {
-    return new SonarRuntimeImpl(version, SonarProduct.SONARQUBE, side, edition);
+  public static SonarRuntime forSonarQube(Version apiVersion, SonarQubeSide side, SonarEdition edition) {
+    return new SonarRuntimeImpl(apiVersion, SonarProduct.SONARQUBE, side, edition);
   }
 
   /**

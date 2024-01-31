@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,9 +24,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.sonar.api.utils.log.LogTester;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.source.linereader.RangeOffsetConverter.RangeOffsetConverterException;
 import org.sonar.db.protobuf.DbFileSources;
@@ -39,14 +41,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.api.utils.log.LoggerLevel.DEBUG;
+import static org.slf4j.event.Level.DEBUG;
 import static org.sonar.ce.task.projectanalysis.component.ReportComponent.builder;
 import static org.sonar.ce.task.projectanalysis.source.linereader.LineReader.Data.HIGHLIGHTING;
 import static org.sonar.db.protobuf.DbFileSources.Data.newBuilder;
 import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.ANNOTATION;
 import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.COMMENT;
 import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.CONSTANT;
-import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.CPP_DOC;
 import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.HIGHLIGHTING_STRING;
 import static org.sonar.scanner.protocol.output.ScannerReport.SyntaxHighlightingRule.HighlightingType.KEYWORD;
 
@@ -77,6 +78,11 @@ public class HighlightingLineReaderTest {
   private DbFileSources.Line.Builder line2 = sourceData.addLinesBuilder().setSource("line2").setLine(2);
   private DbFileSources.Line.Builder line3 = sourceData.addLinesBuilder().setSource("line3").setLine(3);
   private DbFileSources.Line.Builder line4 = sourceData.addLinesBuilder().setSource("line4").setLine(4);
+
+  @Before
+  public void before() {
+    logTester.setLevel(Level.TRACE);
+  }
 
   @Test
   public void nothing_to_read() {
@@ -119,7 +125,7 @@ public class HighlightingLineReaderTest {
   public void supports_highlighting_over_multiple_lines_including_an_empty_one() {
     List<ScannerReport.SyntaxHighlightingRule> syntaxHighlightingList = new ArrayList<>();
     addHighlighting(syntaxHighlightingList, 1, 0, 1, 7, KEYWORD); // package
-    addHighlighting(syntaxHighlightingList, 2, 0, 4, 6, CPP_DOC); // comment over 3 lines
+    addHighlighting(syntaxHighlightingList, 2, 0, 4, 6, COMMENT); // comment over 3 lines
     addHighlighting(syntaxHighlightingList, 5, 0, 5, 6, KEYWORD); // public
     addHighlighting(syntaxHighlightingList, 5, 7, 5, 12, KEYWORD); // class
     HighlightingLineReader highlightingLineReader = new HighlightingLineReader(FILE, syntaxHighlightingList.iterator(), new RangeOffsetConverter());
@@ -137,9 +143,9 @@ public class HighlightingLineReaderTest {
       .extracting("highlighting")
       .containsExactly(
         "0,7,k",
-        "0,2,cppd",
+        "0,2,cd",
         "",
-        "0,6,cppd",
+        "0,6,cd",
         "0,6,k;7,12,k",
         "");
   }

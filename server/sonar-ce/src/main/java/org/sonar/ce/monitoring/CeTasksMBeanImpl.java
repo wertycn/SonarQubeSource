@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,10 +20,8 @@
 package org.sonar.ce.monitoring;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import org.picocontainer.Startable;
+import org.sonar.api.Startable;
 import org.sonar.ce.configuration.CeConfiguration;
 import org.sonar.ce.taskprocessor.CeWorker;
 import org.sonar.ce.taskprocessor.CeWorkerController;
@@ -64,8 +62,8 @@ public class CeTasksMBeanImpl implements CeTasksMBean, Startable, SystemInfoSect
   }
 
   @Override
-  public Optional<Long> getLongestTimePending() {
-    return queueStatus.getLongestTimePending();
+  public long getLongestTimePending() {
+    return queueStatus.getLongestTimePending().orElse(0L);
   }
 
   @Override
@@ -104,7 +102,7 @@ public class CeTasksMBeanImpl implements CeTasksMBean, Startable, SystemInfoSect
     return workers.stream()
       .map(CeWorker::getUUID)
       .sorted()
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @Override
@@ -114,7 +112,7 @@ public class CeTasksMBeanImpl implements CeTasksMBean, Startable, SystemInfoSect
       .filter(ceWorkerController::isEnabled)
       .map(CeWorker::getUUID)
       .sorted()
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @Override
@@ -122,7 +120,7 @@ public class CeTasksMBeanImpl implements CeTasksMBean, Startable, SystemInfoSect
     ProtobufSystemInfo.Section.Builder builder = ProtobufSystemInfo.Section.newBuilder();
     builder.setName("Compute Engine Tasks");
     builder.addAttributesBuilder().setKey("Pending").setLongValue(getPendingCount()).build();
-    builder.addAttributesBuilder().setKey("Longest Time Pending (ms)").setLongValue(getLongestTimePending().orElse(0L)).build();
+    builder.addAttributesBuilder().setKey("Longest Time Pending (ms)").setLongValue(getLongestTimePending()).build();
     builder.addAttributesBuilder().setKey("In Progress").setLongValue(getInProgressCount()).build();
     builder.addAttributesBuilder().setKey("Processed With Error").setLongValue(getErrorCount()).build();
     builder.addAttributesBuilder().setKey("Processed With Success").setLongValue(getSuccessCount()).build();

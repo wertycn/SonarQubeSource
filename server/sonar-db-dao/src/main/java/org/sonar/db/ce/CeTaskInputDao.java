@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,9 +27,9 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import org.apache.commons.io.IOUtils;
 import org.sonar.api.utils.System2;
 import org.sonar.db.Dao;
+import org.sonar.db.DbInputStream;
 import org.sonar.db.DatabaseUtils;
 import org.sonar.db.DbSession;
 
@@ -57,16 +57,16 @@ public class CeTaskInputDao implements Dao {
     }
   }
 
-  public Optional<DataStream> selectData(DbSession dbSession, String taskUuid) {
+  public Optional<DbInputStream> selectData(DbSession dbSession, String taskUuid) {
     PreparedStatement stmt = null;
     ResultSet rs = null;
-    DataStream result = null;
+    DbInputStream result = null;
     try {
       stmt = dbSession.getConnection().prepareStatement("SELECT input_data FROM ce_task_input WHERE task_uuid=? AND input_data IS NOT NULL");
       stmt.setString(1, taskUuid);
       rs = stmt.executeQuery();
       if (rs.next()) {
-        result = new DataStream(stmt, rs, rs.getBinaryStream(1));
+        result = new DbInputStream(stmt, rs, rs.getBinaryStream(1));
         return Optional.of(result);
       }
       return Optional.empty();
@@ -87,28 +87,5 @@ public class CeTaskInputDao implements Dao {
   public void deleteByUuids(DbSession dbSession, Collection<String> uuids) {
     CeTaskInputMapper mapper = dbSession.getMapper(CeTaskInputMapper.class);
     DatabaseUtils.executeLargeUpdates(uuids, mapper::deleteByUuids);
-  }
-
-  public static class DataStream implements AutoCloseable {
-    private final PreparedStatement stmt;
-    private final ResultSet rs;
-    private final InputStream stream;
-
-    private DataStream(PreparedStatement stmt, ResultSet rs, InputStream stream) {
-      this.stmt = stmt;
-      this.rs = rs;
-      this.stream = stream;
-    }
-
-    public InputStream getInputStream() {
-      return stream;
-    }
-
-    @Override
-    public void close() {
-      IOUtils.closeQuietly(stream);
-      DatabaseUtils.closeQuietly(rs);
-      DatabaseUtils.closeQuietly(stmt);
-    }
   }
 }

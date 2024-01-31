@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,13 @@
  */
 package org.sonar.db.user;
 
+import java.util.Locale;
 import javax.annotation.Nullable;
-import org.sonar.core.util.Uuids;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.apache.commons.lang.math.RandomUtils.nextBoolean;
-import static org.apache.commons.lang.math.RandomUtils.nextInt;
 import static org.apache.commons.lang.math.RandomUtils.nextLong;
 
 public class UserTesting {
@@ -38,8 +38,7 @@ public class UserTesting {
       .setLogin(randomAlphanumeric(30))
       .setName(randomAlphanumeric(30))
       .setEmail(randomAlphanumeric(30))
-      .setOnboarded(nextBoolean())
-      .setScmAccounts(singletonList(randomAlphanumeric(40)))
+      .setScmAccounts(singletonList(randomAlphanumeric(40).toLowerCase(Locale.ENGLISH)))
       .setExternalId(randomAlphanumeric(40))
       .setExternalLogin(randomAlphanumeric(40))
       .setExternalIdentityProvider(randomAlphanumeric(40))
@@ -82,17 +81,9 @@ public class UserTesting {
     return newUserDto()
       .setActive(false)
       // All these fields are reset when disabling a user
-      .setScmAccounts((String) null)
+      .setScmAccounts(emptyList())
       .setEmail(null)
       .setCryptedPassword(null)
       .setSalt(null);
-  }
-
-  public static UserPropertyDto newUserSettingDto(UserDto user) {
-    return new UserPropertyDto()
-      .setUuid(Uuids.createFast())
-      .setUserUuid(user.getUuid())
-      .setKey(randomAlphanumeric(20))
-      .setValue(randomAlphanumeric(100));
   }
 }

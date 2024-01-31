@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.ce.task.projectanalysis.batch;
 
+import java.io.InputStream;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
 import org.sonar.core.util.CloseableIterator;
@@ -26,6 +27,9 @@ import org.sonar.scanner.protocol.output.ScannerReport;
 
 public interface BatchReportReader {
   ScannerReport.Metadata readMetadata();
+
+  @CheckForNull
+  InputStream getAnalysisCache();
 
   CloseableIterator<String> readScannerLogs();
 

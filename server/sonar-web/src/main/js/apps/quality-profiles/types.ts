@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,6 +18,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { Profile as BaseProfile } from '../../api/quality-profiles';
+import {
+  CleanCodeAttribute,
+  CleanCodeAttributeCategory,
+  SoftwareImpactSeverity,
+  SoftwareQuality,
+} from '../../types/clean-code-taxonomy';
+import { IssueSeverity } from '../../types/issues';
+import { Dict } from '../../types/types';
 
 export interface Profile extends BaseProfile {
   depth: number;
@@ -30,18 +38,39 @@ export interface Exporter {
   languages: string[];
 }
 
+export interface ProfileChangelogEventImpactChange {
+  oldSoftwareQuality?: SoftwareQuality;
+  newSoftwareQuality?: SoftwareQuality;
+  oldSeverity?: SoftwareImpactSeverity;
+  newSeverity?: SoftwareImpactSeverity;
+}
+
 export interface ProfileChangelogEvent {
   action: string;
-  authorName: string;
+  authorName?: string;
+  cleanCodeAttributeCategory?: CleanCodeAttributeCategory;
+  // impacts should be always set in the wild. But Next currently has a specific database state for which this field is undefined. May be possible to make this field required in the future.
+  impacts?: {
+    softwareQuality: SoftwareQuality;
+    severity: SoftwareImpactSeverity;
+  }[];
   date: string;
-  params?: T.Dict<string | null>;
+  params?: {
+    severity?: IssueSeverity;
+    oldCleanCodeAttribute?: CleanCodeAttribute;
+    oldCleanCodeAttributeCategory?: CleanCodeAttributeCategory;
+    newCleanCodeAttribute?: CleanCodeAttribute;
+    newCleanCodeAttributeCategory?: CleanCodeAttributeCategory;
+    impactChanges?: ProfileChangelogEventImpactChange[];
+  } & Dict<string | ProfileChangelogEventImpactChange[] | null>;
   ruleKey: string;
   ruleName: string;
+  sonarQubeVersion: string;
 }
 
 export enum ProfileActionModals {
-  Copy,
-  Extend,
-  Rename,
-  Delete
+  Copy = 'COPY',
+  Extend = 'EXTEND',
+  Rename = 'RENAME',
+  Delete = 'DELETE',
 }

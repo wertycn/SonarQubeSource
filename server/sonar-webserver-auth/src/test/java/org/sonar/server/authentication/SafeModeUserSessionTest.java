@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,14 +37,17 @@ public class SafeModeUserSessionTest {
     assertThat(underTest.shouldResetPassword()).isFalse();
     assertThat(underTest.getName()).isNull();
     assertThat(underTest.getGroups()).isEmpty();
+    assertThat(underTest.isActive()).isFalse();
+    assertThat(underTest.isAuthenticatedBrowserSession()).isFalse();
   }
 
   @Test
   public void session_has_no_permissions() {
     assertThat(underTest.shouldResetPassword()).isFalse();
-    assertThat(underTest.isRoot()).isFalse();
     assertThat(underTest.isSystemAdministrator()).isFalse();
     assertThat(underTest.hasPermissionImpl(GlobalPermission.ADMINISTER)).isFalse();
-    assertThat(underTest.hasProjectUuidPermission(UserRole.USER, "foo")).isFalse();
+    assertThat(underTest.hasEntityUuidPermission(UserRole.USER, "foo")).isFalse();
+    assertThat(underTest.hasChildProjectsPermission(UserRole.USER, "foo")).isFalse();
+    assertThat(underTest.hasPortfolioChildProjectsPermission(UserRole.USER, "foo")).isFalse();
   }
 }

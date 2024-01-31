@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,22 +21,17 @@ package org.sonar.ce.taskprocessor;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.CeTaskResult;
 import org.sonar.ce.task.taskprocessor.CeTaskProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CeTaskProcessorRepositoryImplTest {
   private static final String SOME_CE_TASK_TYPE = "some type";
   private static final String SOME_COMPONENT_KEY = "key";
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   @Test
   public void constructor_accepts_empty_array_argument() {
     new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {});
@@ -44,28 +39,30 @@ public class CeTaskProcessorRepositoryImplTest {
 
   @Test
   public void constructor_throws_IAE_if_two_TaskProcessor_handle_the_same_CeTask_type() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage(
-      "There can be only one CeTaskProcessor instance registered as the processor for CeTask type " + SOME_CE_TASK_TYPE + ". " +
-        "More than one found. Please fix your configuration: " + SomeProcessor1.class.getName() + ", " + SomeProcessor2.class.getName());
-
-    new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {
-      new SomeProcessor1(SOME_CE_TASK_TYPE),
-      new SomeProcessor2(SOME_CE_TASK_TYPE)
-    });
+    assertThatThrownBy(() -> {
+      new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {
+        new SomeProcessor1(SOME_CE_TASK_TYPE),
+        new SomeProcessor2(SOME_CE_TASK_TYPE)
+      });
+    }).isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(
+        "There can be only one CeTaskProcessor instance registered as the processor for CeTask type " + SOME_CE_TASK_TYPE + ". " +
+        "More than one found. Please fix your configuration: " + SomeProcessor1.class.getName() + ", " + SomeProcessor2.class.getName()
+      );
   }
 
   @Test
   public void constructor_throws_IAE_if_multiple_TaskProcessor_overlap_their_supported_CeTask_type() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage(
-      "There can be only one CeTaskProcessor instance registered as the processor for CeTask type " + SOME_CE_TASK_TYPE + ". " +
-        "More than one found. Please fix your configuration: " + SomeProcessor1.class.getName() + ", " + SomeProcessor2.class.getName());
-
-    new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {
-      new SomeProcessor2(SOME_CE_TASK_TYPE + "_2", SOME_CE_TASK_TYPE),
-      new SomeProcessor1(SOME_CE_TASK_TYPE, SOME_CE_TASK_TYPE + "_3")
-    });
+    assertThatThrownBy(() -> {
+      new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {
+        new SomeProcessor2(SOME_CE_TASK_TYPE + "_2", SOME_CE_TASK_TYPE),
+        new SomeProcessor1(SOME_CE_TASK_TYPE, SOME_CE_TASK_TYPE + "_3")
+      });
+    }).isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(
+        "There can be only one CeTaskProcessor instance registered as the processor for CeTask type " + SOME_CE_TASK_TYPE + ". " +
+        "More than one found. Please fix your configuration: " + SomeProcessor1.class.getName() + ", " + SomeProcessor2.class.getName()
+      );
   }
 
   @Test
@@ -90,8 +87,8 @@ public class CeTaskProcessorRepositoryImplTest {
     CeTaskProcessor taskProcessor = createCeTaskProcessor(SOME_CE_TASK_TYPE);
     CeTaskProcessorRepositoryImpl underTest = new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {taskProcessor});
 
-    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY)).get()).isSameAs(taskProcessor);
-    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY + "2")).get()).isSameAs(taskProcessor);
+    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY))).containsSame(taskProcessor);
+    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY + "2"))).containsSame(taskProcessor);
   }
 
   @Test
@@ -99,7 +96,7 @@ public class CeTaskProcessorRepositoryImplTest {
     CeTaskProcessor taskProcessor = createCeTaskProcessor(SOME_CE_TASK_TYPE + "_1", SOME_CE_TASK_TYPE, SOME_CE_TASK_TYPE + "_3");
     CeTaskProcessorRepositoryImpl underTest = new CeTaskProcessorRepositoryImpl(new CeTaskProcessor[] {taskProcessor});
 
-    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY)).get()).isSameAs(taskProcessor);
+    assertThat(underTest.getForCeTask(createCeTask(SOME_CE_TASK_TYPE, SOME_COMPONENT_KEY))).containsSame(taskProcessor);
   }
 
   private CeTaskProcessor createCeTaskProcessor(final String... ceTaskTypes) {
@@ -108,11 +105,13 @@ public class CeTaskProcessorRepositoryImplTest {
 
   private static CeTask createCeTask(String ceTaskType, String key) {
     CeTask.Component component = new CeTask.Component("uuid_" + key, key, "name_" + key);
+    CeTask.Component entity = new CeTask.Component("uuid_entity_" + key, key, "name_" + key);
+
     return new CeTask.Builder()
       .setType(ceTaskType)
       .setUuid("task_uuid_" + key)
       .setComponent(component)
-      .setMainComponent(component)
+      .setEntity(entity)
       .build();
   }
 

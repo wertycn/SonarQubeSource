@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,12 @@
  */
 package org.sonar.ce.task.projectanalysis.api.measurecomputer;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicates;
-import com.google.common.collect.FluentIterable;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -120,10 +119,11 @@ public class MeasureComputerContextImpl implements MeasureComputerContext {
   @Override
   public Iterable<Measure> getChildrenMeasures(String metric) {
     validateInputMetric(metric);
-    return FluentIterable.from(internalComponent.getChildren())
-      .transform(new ComponentToMeasure(metricRepository.getByKey(metric)))
-      .transform(ToMeasureAPI.INSTANCE)
-      .filter(Predicates.notNull());
+    return () -> internalComponent.getChildren().stream()
+      .map(new ComponentToMeasure(metricRepository.getByKey(metric)))
+      .map(ToMeasureAPI.INSTANCE)
+      .filter(Objects::nonNull)
+      .iterator();
   }
 
   @Override
@@ -169,7 +169,7 @@ public class MeasureComputerContextImpl implements MeasureComputerContext {
     checkArgument(definition.getOutputMetrics().contains(metric.getKey()), "Only metrics in %s can be used to add measures. Metric '%s' is not allowed.",
       definition.getOutputMetrics(), metric.getKey());
     if (measureRepository.getRawMeasure(internalComponent, metric).isPresent()) {
-      throw new UnsupportedOperationException(String.format("A measure on metric '%s' already exists on component '%s'", metric.getKey(), internalComponent.getDbKey()));
+      throw new UnsupportedOperationException(String.format("A measure on metric '%s' already exists on component '%s'", metric.getKey(), internalComponent.getKey()));
     }
   }
 
@@ -180,7 +180,7 @@ public class MeasureComputerContextImpl implements MeasureComputerContext {
 
   private static Component newComponent(org.sonar.ce.task.projectanalysis.component.Component component) {
     return new ComponentImpl(
-      component.getDbKey(),
+      component.getKey(),
       Component.Type.valueOf(component.getType().name()),
       component.getType() == org.sonar.ce.task.projectanalysis.component.Component.Type.FILE
         ? new ComponentImpl.FileAttributesImpl(component.getFileAttributes().getLanguageKey(), component.getFileAttributes().isUnitTest())

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,9 +18,9 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 export function getWrappedDisplayName<P>(
-  WrappedComponent: React.ComponentType<P>,
-  hocName: string
+  WrappedComponent: React.ComponentType<React.PropsWithChildren<P>>,
+  hocName: string,
 ) {
-  const wrappedDisplayName = WrappedComponent.displayName || WrappedComponent.name || 'Component';
+  const wrappedDisplayName = WrappedComponent.displayName ?? WrappedComponent.name ?? 'Component';
   return `${hocName}(${wrappedDisplayName})`;
 }

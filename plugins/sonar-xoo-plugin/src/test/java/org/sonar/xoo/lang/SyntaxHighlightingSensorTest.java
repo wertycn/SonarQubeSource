@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,9 +26,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.sonar.api.batch.sensor.highlighting.TypeOfText;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
+import org.sonar.api.batch.sensor.highlighting.TypeOfText;
 import org.sonar.api.batch.sensor.internal.DefaultSensorDescriptor;
 import org.sonar.api.batch.sensor.internal.SensorContextTester;
 
@@ -68,7 +68,7 @@ public class SyntaxHighlightingSensorTest {
   @Test
   public void testExecution() throws IOException {
     File symbol = new File(baseDir, "src/foo.xoo.highlighting");
-    FileUtils.write(symbol, "1:4:k\n12:15:cd\n\n#comment");
+    FileUtils.write(symbol, "1:1:1:4:k\n2:7:2:10:cd\n\n#comment");
     DefaultInputFile inputFile = new TestInputFileBuilder("foo", "src/foo.xoo")
       .setLanguage("xoo")
       .setModuleBaseDir(baseDir.toPath())

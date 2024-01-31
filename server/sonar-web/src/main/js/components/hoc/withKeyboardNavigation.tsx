@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,71 +17,72 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as key from 'keymaster';
 import * as React from 'react';
-import PageActions from 'sonar-ui-common/components/ui/PageActions';
+import { getComponentMeasureUniqueKey } from '../../helpers/component';
+import { isInput, isShortcut } from '../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../helpers/keycodes';
+import { ComponentMeasure } from '../../types/types';
 import { getWrappedDisplayName } from './utils';
 
 export interface WithKeyboardNavigationProps {
-  components?: T.ComponentMeasure[];
+  components?: ComponentMeasure[];
   cycle?: boolean;
   isFile?: boolean;
   onEndOfList?: () => void;
   onGoToParent?: () => void;
-  onHighlight?: (item: T.ComponentMeasure) => void;
-  onSelect?: (item: T.ComponentMeasure) => void;
-  selected?: T.ComponentMeasure;
+  onHighlight?: (item: ComponentMeasure) => void;
+  onSelect?: (item: ComponentMeasure) => void;
+  selected?: ComponentMeasure;
 }
 
-const KEY_SCOPE = 'key_nav';
-
 export default function withKeyboardNavigation<P>(
-  WrappedComponent: React.ComponentClass<P & Partial<WithKeyboardNavigationProps>>
+  WrappedComponent: React.ComponentType<
+    React.PropsWithChildren<P & Partial<WithKeyboardNavigationProps>>
+  >,
 ) {
   return class Wrapper extends React.Component<P & WithKeyboardNavigationProps> {
     static displayName = getWrappedDisplayName(WrappedComponent, 'withKeyboardNavigation');
 
     componentDidMount() {
-      this.attachShortcuts();
+      document.addEventListener('keydown', this.handleKeyDown);
     }
 
     componentWillUnmount() {
-      this.detachShortcuts();
+      document.removeEventListener('keydown', this.handleKeyDown);
     }
 
-    attachShortcuts = () => {
-      key.setScope(KEY_SCOPE);
-      key('up', KEY_SCOPE, () => {
+    handleKeyDown = (event: KeyboardEvent) => {
+      if (isInput(event) || isShortcut(event)) {
+        return true;
+      }
+      if (event.key === KeyboardKeys.UpArrow) {
         return this.skipIfFile(this.handleHighlightPrevious);
-      });
-      key('down', KEY_SCOPE, () => {
+      } else if (event.key === KeyboardKeys.DownArrow) {
         return this.skipIfFile(this.handleHighlightNext);
-      });
-      key('right,enter', KEY_SCOPE, () => {
+      } else if (event.key === KeyboardKeys.RightArrow || event.key === KeyboardKeys.Enter) {
         return this.skipIfFile(this.handleSelectCurrent);
-      });
-      key('left', KEY_SCOPE, () => {
+      } else if (event.key === KeyboardKeys.LeftArrow) {
         this.handleSelectParent();
-        return false; // always hijack left
-      });
-    };
-
-    detachShortcuts = () => {
-      key.deleteScope(KEY_SCOPE);
+      }
+      return true;
     };
 
     getCurrentIndex = () => {
       const { selected, components = [] } = this.props;
-      return selected ? components.findIndex(component => component.key === selected.key) : -1;
+      return selected
+        ? components.findIndex(
+            (component) =>
+              getComponentMeasureUniqueKey(component) === getComponentMeasureUniqueKey(selected),
+          )
+        : -1;
     };
 
     skipIfFile = (handler: () => void) => {
       if (this.props.isFile) {
         return true;
-      } else {
-        handler();
-        return false;
       }
+      handler();
+      return false;
     };
 
     handleHighlightNext = () => {
@@ -94,7 +95,7 @@ export default function withKeyboardNavigation<P>(
       const first = cycle ? 0 : index;
 
       this.props.onHighlight(
-        index < components.length - 1 ? components[index + 1] : components[first]
+        index < components.length - 1 ? components[index + 1] : components[first],
       );
 
       if (index + 1 === components.length - 1 && this.props.onEndOfList) {
@@ -120,7 +121,7 @@ export default function withKeyboardNavigation<P>(
 
       const { selected } = this.props;
       if (selected !== undefined) {
-        this.props.onSelect(selected as T.ComponentMeasure);
+        this.props.onSelect(selected as ComponentMeasure);
       }
     };
 
@@ -157,13 +158,7 @@ export default function withKeyboardNavigation<P>(
     };
 
     render() {
-      return (
-        <>
-          <PageActions showShortcuts={!this.props.isFile} />
-
-          <WrappedComponent {...this.props} />
-        </>
-      );
+      return <WrappedComponent {...this.props} />;
     }
   };
 }

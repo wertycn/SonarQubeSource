@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -105,7 +105,7 @@ public class BundleSynchronizedMatcher extends BaseMatcher<String> {
     return details;
   }
 
-  private void print(String title, SortedMap<String, String> translations, StringBuilder to) {
+  private static void print(String title, SortedMap<String, String> translations, StringBuilder to) {
     if (!translations.isEmpty()) {
       to.append(title);
       for (Map.Entry<String, String> entry : translations.entrySet()) {

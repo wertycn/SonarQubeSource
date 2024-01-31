@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { ComponentQualifier } from '../../types/component';
+import { ComponentQualifier, Visibility } from '../../types/component';
+import { Dict } from '../../types/types';
 
 export interface Project {
   analysisDate?: string;
   isFavorite?: boolean;
   key: string;
   leakPeriodDate?: string;
-  measures: T.Dict<string>;
+  measures: Dict<string>;
   name: string;
   projects?: number;
   qualifier: ComponentQualifier;
   tags: string[];
-  visibility: T.Visibility;
-  needIssueSync?: boolean;
+  visibility: Visibility;
+  isScannable: boolean;
 }
 
 export interface Facet {

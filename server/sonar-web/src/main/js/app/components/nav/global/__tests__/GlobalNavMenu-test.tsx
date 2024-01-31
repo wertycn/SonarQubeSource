@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,35 +17,47 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
+import { mockAppState, mockCurrentUser } from '../../../../../helpers/testMocks';
+import { renderApp } from '../../../../../helpers/testReactTestingUtils';
 import GlobalNavMenu from '../GlobalNavMenu';
 
 it('should work with extensions', () => {
-  const appState = {
+  const appState = mockAppState({
     globalPages: [{ key: 'foo', name: 'Foo' }],
-    qualifiers: ['TRK']
-  };
-  const currentUser = {
-    isLoggedIn: false
-  };
-  const wrapper = shallow(
-    <GlobalNavMenu appState={appState} currentUser={currentUser} location={{ pathname: '' }} />
-  );
-  expect(wrapper.find('Dropdown')).toMatchSnapshot();
+    qualifiers: ['TRK'],
+  });
+
+  const currentUser = mockCurrentUser({
+    isLoggedIn: false,
+    dismissedNotices: {},
+  });
+  renderGlobalNavMenu({ appState, currentUser });
+  expect(screen.getByText('more')).toBeInTheDocument();
 });
 
 it('should show administration menu if the user has the rights', () => {
-  const appState = {
+  const appState = mockAppState({
     canAdmin: true,
     globalPages: [],
-    qualifiers: ['TRK']
-  };
-  const currentUser = {
-    isLoggedIn: false
-  };
-  const wrapper = shallow(
-    <GlobalNavMenu appState={appState} currentUser={currentUser} location={{ pathname: '' }} />
-  );
-  expect(wrapper).toMatchSnapshot();
+    qualifiers: ['TRK'],
+  });
+  const currentUser = mockCurrentUser({
+    isLoggedIn: false,
+    dismissedNotices: {},
+  });
+
+  renderGlobalNavMenu({ appState, currentUser });
+  expect(screen.getByText('layout.settings')).toBeInTheDocument();
 });
+
+function renderGlobalNavMenu({
+  appState = mockAppState(),
+  currentUser = mockCurrentUser(),
+  location = { pathname: '' },
+}) {
+  renderApp('/', <GlobalNavMenu currentUser={currentUser} location={location} />, {
+    appState,
+  });
+}

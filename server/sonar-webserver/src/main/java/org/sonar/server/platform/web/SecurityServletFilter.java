@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.platform.web;
 
-import com.google.common.collect.ImmutableSet;
 import java.io.IOException;
 import java.util.Set;
 import javax.servlet.Filter;
@@ -36,7 +35,7 @@ import javax.servlet.http.HttpServletResponse;
  */
 public class SecurityServletFilter implements Filter {
 
-  private static final Set<String> ALLOWED_HTTP_METHODS = ImmutableSet.of("DELETE", "GET", "HEAD", "POST", "PUT");
+  private static final Set<String> ALLOWED_HTTP_METHODS = Set.of("DELETE", "GET", "HEAD", "POST", "PUT", "PATCH");
 
   @Override
   public void init(FilterConfig filterConfig) {
@@ -56,24 +55,40 @@ public class SecurityServletFilter implements Filter {
     }
 
     // WARNING, headers must be added before the doFilter, otherwise they won't be added when response is already committed (for instance when a WS is called)
+    addSecurityHeaders(httpRequest, httpResponse);
+
+    chain.doFilter(httpRequest, httpResponse);
+  }
+
+  /**
+   * Adds security HTTP headers in the response. The headers are added using {@code setHeader()}, which overwrites existing headers.
+   */
+  public static void addSecurityHeaders(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+    if (httpRequest.getRequestURI() == null) {
+      httpResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+      return;
+    }
 
     // Clickjacking protection
     // See https://www.owasp.org/index.php/Clickjacking_Protection_for_Java_EE
     // The protection is disabled on purpose for integration in external systems like Github (/integration/github).
     String path = httpRequest.getRequestURI().replaceFirst(httpRequest.getContextPath(), "");
     if (!path.startsWith("/integration/")) {
-      httpResponse.addHeader("X-Frame-Options", "SAMEORIGIN");
+      httpResponse.setHeader("X-Frame-Options", "SAMEORIGIN");
+    }
+
+    // If the request is secure, the Strict-Transport-Security header is added.
+    if ("https".equals(httpRequest.getHeader("x-forwarded-proto"))) {
+      httpResponse.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains;");
     }
 
     // Cross-site scripting
     // See https://www.owasp.org/index.php/List_of_useful_HTTP_headers
-    httpResponse.addHeader("X-XSS-Protection", "1; mode=block");
+    httpResponse.setHeader("X-XSS-Protection", "1; mode=block");
 
     // MIME-sniffing
     // See https://www.owasp.org/index.php/List_of_useful_HTTP_headers
-    httpResponse.addHeader("X-Content-Type-Options", "nosniff");
-
-    chain.doFilter(httpRequest, httpResponse);
+    httpResponse.setHeader("X-Content-Type-Options", "nosniff");
   }
 
   @Override

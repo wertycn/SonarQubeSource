@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,8 +27,9 @@ import java.util.Iterator;
 import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
+import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.server.platform.db.migration.engine.MigrationContainer;
 import org.sonar.server.platform.db.migration.engine.SimpleMigrationContainer;
 import org.sonar.server.platform.db.migration.history.MigrationHistory;
@@ -52,26 +53,27 @@ public class MigrationStepsExecutorImplTest {
     underTest.execute(Collections.emptyList());
 
     assertThat(logTester.logs()).hasSize(2);
-    assertLogLevel(LoggerLevel.INFO, "Executing DB migrations...", "Executed DB migrations: success | time=");
+    assertLogLevel(Level.INFO, "Executing DB migrations...", "Executed DB migrations: success | time=");
   }
 
   @Test
   public void execute_fails_with_ISE_if_no_instance_of_computation_step_exist_in_container() {
     List<RegisteredMigrationStep> steps = asList(registeredStepOf(1, MigrationStep1.class));
 
+    ((SpringComponentContainer) migrationContainer).startComponents();
     try {
       underTest.execute(steps);
       fail("execute should have thrown a IllegalStateException");
     } catch (IllegalStateException e) {
-      assertThat(e).hasMessage("Can not find instance of " + MigrationStep1.class);
+      assertThat(e).hasMessage("Unable to load component " + MigrationStep1.class);
     } finally {
       assertThat(logTester.logs()).hasSize(2);
-      assertLogLevel(LoggerLevel.INFO, "Executing DB migrations...");
-      assertLogLevel(LoggerLevel.ERROR, "Executed DB migrations: failure | time=");
+      assertLogLevel(Level.INFO, "Executing DB migrations...");
+      assertLogLevel(Level.ERROR, "Executed DB migrations: failure | time=");
     }
   }
 
-  private void assertLogLevel(LoggerLevel level, String... expected) {
+  private void assertLogLevel(Level level, String... expected) {
     List<String> logs = logTester.logs(level);
     assertThat(logs).hasSize(expected.length);
     Iterator<String> iterator = logs.iterator();
@@ -87,6 +89,7 @@ public class MigrationStepsExecutorImplTest {
   @Test
   public void execute_execute_the_instance_of_type_specified_in_step_in_stream_order() {
     migrationContainer.add(MigrationStep1.class, MigrationStep2.class, MigrationStep3.class);
+    ((SpringComponentContainer) migrationContainer).startComponents();
 
     underTest.execute(asList(
       registeredStepOf(1, MigrationStep2.class),
@@ -96,7 +99,7 @@ public class MigrationStepsExecutorImplTest {
     assertThat(SingleCallCheckerMigrationStep.calledSteps)
       .containsExactly(MigrationStep2.class, MigrationStep1.class, MigrationStep3.class);
     assertThat(logTester.logs()).hasSize(8);
-    assertLogLevel(LoggerLevel.INFO,
+    assertLogLevel(Level.INFO,
       "Executing DB migrations...",
       "#1 '1-MigrationStep2'...",
       "#1 '1-MigrationStep2': success | time=",
@@ -119,6 +122,7 @@ public class MigrationStepsExecutorImplTest {
       registeredStepOf(2, SqlExceptionFailingMigrationStep.class),
       registeredStepOf(3, MigrationStep3.class));
 
+    ((SpringComponentContainer) migrationContainer).startComponents();
     try {
       underTest.execute(steps);
       fail("a MigrationStepExecutionException should have been thrown");
@@ -127,12 +131,12 @@ public class MigrationStepsExecutorImplTest {
       assertThat(e).hasCause(SqlExceptionFailingMigrationStep.THROWN_EXCEPTION);
     } finally {
       assertThat(logTester.logs()).hasSize(6);
-      assertLogLevel(LoggerLevel.INFO,
+      assertLogLevel(Level.INFO,
         "Executing DB migrations...",
         "#1 '1-MigrationStep2'...",
         "#1 '1-MigrationStep2': success | time=",
         "#2 '2-SqlExceptionFailingMigrationStep'...");
-      assertLogLevel(LoggerLevel.ERROR,
+      assertLogLevel(Level.ERROR,
         "#2 '2-SqlExceptionFailingMigrationStep': failure | time=",
         "Executed DB migrations: failure | time=");
     }
@@ -147,6 +151,7 @@ public class MigrationStepsExecutorImplTest {
       registeredStepOf(2, RuntimeExceptionFailingMigrationStep.class),
       registeredStepOf(3, MigrationStep3.class));
 
+    ((SpringComponentContainer) migrationContainer).startComponents();
     try {
       underTest.execute(steps);
       fail("should throw MigrationStepExecutionException");

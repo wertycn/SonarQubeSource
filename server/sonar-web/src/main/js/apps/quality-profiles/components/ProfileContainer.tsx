@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,67 +19,62 @@
  */
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { WithRouterProps } from 'react-router';
+import { Outlet, useSearchParams } from 'react-router-dom';
+import { useLocation } from '../../../components/hoc/withRouter';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import ProfileHeader from '../details/ProfileHeader';
-import { Profile } from '../types';
+import { useQualityProfilesContext } from '../qualityProfilesContext';
 import ProfileNotFound from './ProfileNotFound';
 
-interface Props {
-  children: React.ReactElement<any>;
-  profiles: Profile[];
-  updateProfiles: () => Promise<void>;
-}
+export default function ProfileContainer() {
+  const [_, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
-export default class ProfileContainer extends React.PureComponent<Props & WithRouterProps> {
-  componentDidMount() {
-    const { location, profiles, router } = this.props;
-    if (location.query.key) {
-      // try to find a quality profile with the given key
-      // if managed to find one, redirect to a new version
-      // otherwise do nothing, `render` will show not found page
-      const profile = profiles.find(profile => profile.key === location.query.key);
-      if (profile) {
-        router.replace({
-          pathname: location.pathname,
-          query: { language: profile.language, name: profile.name }
-        });
-      }
+  const { key, language, name } = location.query;
+
+  const context = useQualityProfilesContext();
+  const { profiles } = context;
+
+  // try to find a quality profile with the given key
+  // if managed to find one, redirect to a new version
+  // otherwise show not found page
+  const profileForKey = key && profiles.find((p) => p.key === location.query.key);
+
+  React.useEffect(() => {
+    if (profileForKey) {
+      setSearchParams({ language: profileForKey.language, name: profileForKey.name });
     }
+  });
+
+  if (key) {
+    return profileForKey ? null : <ProfileNotFound />;
   }
 
-  render() {
-    const { profiles, location, ...other } = this.props;
-    const { key, language, name } = location.query;
+  const filteredProfiles = profiles.filter((p) => p.language === language);
+  const profile = filteredProfiles.find((p) => p.name === name);
 
-    if (key) {
-      // if there is a `key` parameter,
-      // then if we managed to find a quality profile with this key
-      // then we will be redirected in `componentDidMount`
-      // otherwise show `ProfileNotFound`
-      const profile = profiles.find(profile => profile.key === location.query.key);
-      return profile ? null : <ProfileNotFound />;
-    }
-
-    const profile = profiles.find(
-      profile => profile.language === language && profile.name === name
-    );
-
-    if (!profile) {
-      return <ProfileNotFound />;
-    }
-
-    const child = React.cloneElement(this.props.children, {
-      profile,
-      profiles,
-      ...other
-    });
-
-    return (
-      <div id="quality-profile">
-        <Helmet defer={false} title={profile.name} />
-        <ProfileHeader profile={profile} updateProfiles={this.props.updateProfiles} />
-        {child}
-      </div>
-    );
+  if (!profile) {
+    return <ProfileNotFound />;
   }
+
+  return (
+    <div id="quality-profile">
+      <Helmet
+        defer={false}
+        title={profile.name}
+        titleTemplate={translateWithParameters(
+          'page_title.template.with_category',
+          translate('quality_profiles.page'),
+        )}
+      />
+      <ProfileHeader
+        profile={profile}
+        isComparable={filteredProfiles.length > 1}
+        updateProfiles={context.updateProfiles}
+      />
+      <main>
+        <Outlet context={{ profile, ...context }} />
+      </main>
+    </div>
+  );
 }

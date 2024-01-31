@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,8 +21,6 @@ package org.sonar.server.almintegration.ws.azure;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
-
 import org.sonar.alm.client.azure.AzureDevOpsHttpClient;
 import org.sonar.alm.client.azure.GsonAzureProject;
 import org.sonar.alm.client.azure.GsonAzureProjectList;
@@ -65,12 +63,13 @@ public class ListAzureProjectsAction implements AlmIntegrationsWsAction {
         "Requires the 'Create Projects' permission")
       .setPost(false)
       .setSince("8.6")
+      .setResponseExample(getClass().getResource("example-list_azure_projects.json"))
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
   }
 
   @Override
@@ -88,7 +87,7 @@ public class ListAzureProjectsAction implements AlmIntegrationsWsAction {
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID is not null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
       Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
       String pat = almPatDto.map(AlmPatDto::getPersonalAccessToken).orElseThrow(() -> new IllegalArgumentException("No personal access token found"));
 
@@ -98,7 +97,7 @@ public class ListAzureProjectsAction implements AlmIntegrationsWsAction {
       List<AzureProject> values = projectList.getValues().stream()
         .map(ListAzureProjectsAction::toAzureProject)
         .sorted(comparing(AzureProject::getName, String::compareToIgnoreCase))
-        .collect(Collectors.toList());
+        .toList();
       ListAzureProjectsWsResponse.Builder builder = ListAzureProjectsWsResponse.newBuilder()
         .addAllProjects(values);
       return builder.build();

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -34,19 +35,21 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
 import org.sonar.alm.client.TimeoutConfiguration;
 import org.sonar.api.server.ServerSide;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonarqube.ws.client.OkHttpClientBuilder;
 
+import static java.util.stream.Collectors.joining;
 import static org.sonar.api.internal.apachecommons.lang.StringUtils.isBlank;
 import static org.sonar.api.internal.apachecommons.lang.StringUtils.substringBeforeLast;
 
 @ServerSide
 public class AzureDevOpsHttpClient {
 
-  private static final Logger LOG = Loggers.get(AzureDevOpsHttpClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AzureDevOpsHttpClient.class);
 
   public static final String API_VERSION_3 = "api-version=3.0";
 
@@ -59,6 +62,7 @@ public class AzureDevOpsHttpClient {
     client = new OkHttpClientBuilder()
       .setConnectTimeoutMs(timeoutConfiguration.getConnectTimeout())
       .setReadTimeoutMs(timeoutConfiguration.getReadTimeout())
+      .setFollowRedirects(false)
       .build();
   }
 
@@ -74,19 +78,25 @@ public class AzureDevOpsHttpClient {
     return doGet(token, url, r -> buildGson().fromJson(r.body().charStream(), GsonAzureProjectList.class));
   }
 
+  public GsonAzureProject getProject(String serverUrl, String token, String projectName) {
+    String url = String.format("%s/_apis/projects/%s?%s", getTrimmedUrl(serverUrl), projectName, API_VERSION_3);
+    LOG.debug(String.format("get project : [%s]", url));
+    return doGet(token, url, r -> buildGson().fromJson(r.body().charStream(), GsonAzureProject.class));
+
+  }
+
   public GsonAzureRepoList getRepos(String serverUrl, String token, @Nullable String projectName) {
-    String url;
-    if (projectName != null && !projectName.isEmpty()) {
-      url = String.format("%s/%s/_apis/git/repositories?%s", getTrimmedUrl(serverUrl), projectName, API_VERSION_3);
-    } else {
-      url = String.format("%s/_apis/git/repositories?%s", getTrimmedUrl(serverUrl), API_VERSION_3);
-    }
+    String url = Stream.of(getTrimmedUrl(serverUrl), projectName, "_apis/git/repositories?" + API_VERSION_3)
+      .filter(StringUtils::isNotBlank)
+      .collect(joining("/"));
     LOG.debug(String.format("get repos : [%s]", url));
     return doGet(token, url, r -> buildGson().fromJson(r.body().charStream(), GsonAzureRepoList.class));
   }
 
   public GsonAzureRepo getRepo(String serverUrl, String token, String projectName, String repositoryName) {
-    String url = String.format("%s/%s/_apis/git/repositories/%s?%s", getTrimmedUrl(serverUrl), projectName, repositoryName, API_VERSION_3);
+    String url = Stream.of(getTrimmedUrl(serverUrl), projectName, "_apis/git/repositories",  repositoryName + "?" + API_VERSION_3)
+      .filter(StringUtils::isNotBlank)
+      .collect(joining("/"));
     LOG.debug(String.format("get repo : [%s]", url));
     return doGet(token, url, r -> buildGson().fromJson(r.body().charStream(), GsonAzureRepo.class));
   }
@@ -100,6 +110,7 @@ public class AzureDevOpsHttpClient {
     try (Response response = client.newCall(request).execute()) {
       checkResponseIsSuccessful(response);
     } catch (IOException e) {
+      LOG.error(String.format(UNABLE_TO_CONTACT_AZURE_SERVER + " for request [%s]: [%s]", request.url(), e.getMessage()));
       throw new IllegalArgumentException(UNABLE_TO_CONTACT_AZURE_SERVER, e);
     }
   }
@@ -114,8 +125,12 @@ public class AzureDevOpsHttpClient {
       checkResponseIsSuccessful(response);
       return handler.apply(response);
     } catch (JsonSyntaxException e) {
+      LOG.error(String.format("Response from Azure for request [%s] could not be parsed: [%s]",
+        request.url(),
+        e.getMessage()));
       throw new IllegalArgumentException(UNABLE_TO_CONTACT_AZURE_SERVER + ", got an unexpected response", e);
     } catch (IOException e) {
+      LOG.error(String.format(UNABLE_TO_CONTACT_AZURE_SERVER + " for request [%s]: [%s]", request.url(), e.getMessage()));
       throw new IllegalArgumentException(UNABLE_TO_CONTACT_AZURE_SERVER, e);
     }
   }
@@ -130,15 +145,23 @@ public class AzureDevOpsHttpClient {
 
   protected static void checkResponseIsSuccessful(Response response) throws IOException {
     if (!response.isSuccessful()) {
-      LOG.debug(UNABLE_TO_CONTACT_AZURE_SERVER + ": {} {}", response.request().url().toString(), response.code());
       if (response.code() == HttpURLConnection.HTTP_UNAUTHORIZED) {
-        throw new IllegalArgumentException("Invalid personal access token");
+        LOG.error(String.format(UNABLE_TO_CONTACT_AZURE_SERVER + " for request [%s]: Invalid personal access token",
+          response.request().url()));
+        throw new AzureDevopsServerException(response.code(), "Invalid personal access token");
       }
+
+      if (response.code() == HttpURLConnection.HTTP_NOT_FOUND) {
+        LOG.error(String.format(UNABLE_TO_CONTACT_AZURE_SERVER + " for request [%s]: URL Not Found",
+          response.request().url()));
+        throw new AzureDevopsServerException(response.code(), "Invalid Azure URL");
+      }
+
       ResponseBody responseBody = response.body();
       String body = responseBody == null ? "" : responseBody.string();
       String errorMessage = generateErrorMessage(body, UNABLE_TO_CONTACT_AZURE_SERVER);
-      LOG.info(String.format("Azure API call to [%s] failed with %s http code. Azure response content : [%s]", response.request().url().toString(), response.code(), body));
-      throw new IllegalArgumentException(errorMessage);
+      LOG.error(String.format("Azure API call to [%s] failed with %s http code. Azure response content : [%s]", response.request().url(), response.code(), body));
+      throw new AzureDevopsServerException(response.code(), errorMessage);
     }
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,33 +18,25 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import InputValidationField from 'sonar-ui-common/components/controls/InputValidationField';
-import ValidationModal from 'sonar-ui-common/components/controls/ValidationModal';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import MandatoryFieldsExplanation from 'sonar-ui-common/components/ui/MandatoryFieldsExplanation';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { isWebUri } from 'valid-url';
+import InputValidationField from '../../../components/controls/InputValidationField';
+import ValidationModal from '../../../components/controls/ValidationModal';
+import { translate } from '../../../helpers/l10n';
+import { WebhookBasePayload, WebhookResponse } from '../../../types/webhook';
+import UpdateWebhookSecretField from './UpdateWebhookSecretField';
 
 interface Props {
   onClose: () => void;
-  onDone: (data: Values) => Promise<void>;
-  webhook?: T.Webhook;
+  onDone: (data: WebhookBasePayload) => Promise<void>;
+  webhook?: WebhookResponse;
 }
 
-interface Values {
-  name: string;
-  secret: string;
-  url: string;
-}
+export default function CreateWebhookForm({ webhook, onClose, onDone }: Props) {
+  const isUpdate = !!webhook;
+  const modalHeader = isUpdate ? translate('webhooks.update') : translate('webhooks.create');
+  const confirmButtonText = isUpdate ? translate('update_verb') : translate('create');
 
-export default class CreateWebhookForm extends React.PureComponent<Props> {
-  handleCancelClick = (event: React.SyntheticEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.currentTarget.blur();
-    this.props.onClose();
-  };
-
-  handleValidate = (data: Values) => {
+  function handleValidate(data: WebhookBasePayload) {
     const { name, secret, url } = data;
     const errors: { name?: string; secret?: string; url?: string } = {};
     if (!name.trim()) {
@@ -61,86 +53,72 @@ export default class CreateWebhookForm extends React.PureComponent<Props> {
       errors.secret = translate('webhooks.secret.bad_format');
     }
     return errors;
-  };
-
-  render() {
-    const { webhook } = this.props;
-    const isUpdate = !!webhook;
-    const modalHeader = isUpdate ? translate('webhooks.update') : translate('webhooks.create');
-    const confirmButtonText = isUpdate ? translate('update_verb') : translate('create');
-    return (
-      <ValidationModal
-        confirmButtonText={confirmButtonText}
-        header={modalHeader}
-        initialValues={{
-          name: (webhook && webhook.name) || '',
-          secret: (webhook && webhook.secret) || '',
-          url: (webhook && webhook.url) || ''
-        }}
-        isInitialValid={isUpdate}
-        onClose={this.props.onClose}
-        onSubmit={this.props.onDone}
-        size="small"
-        validate={this.handleValidate}>
-        {({ dirty, errors, handleBlur, handleChange, isSubmitting, touched, values }) => (
-          <>
-            <MandatoryFieldsExplanation className="big-spacer-bottom" />
-
-            <InputValidationField
-              autoFocus={true}
-              dirty={dirty}
-              disabled={isSubmitting}
-              error={errors.name}
-              id="webhook-name"
-              label={
-                <label htmlFor="webhook-name">
-                  {translate('webhooks.name')}
-                  <MandatoryFieldMarker />
-                </label>
-              }
-              name="name"
-              onBlur={handleBlur}
-              onChange={handleChange}
-              touched={touched.name}
-              type="text"
-              value={values.name}
-            />
-            <InputValidationField
-              description={translate('webhooks.url.description')}
-              dirty={dirty}
-              disabled={isSubmitting}
-              error={errors.url}
-              id="webhook-url"
-              label={
-                <label htmlFor="webhook-url">
-                  {translate('webhooks.url')}
-                  <MandatoryFieldMarker />
-                </label>
-              }
-              name="url"
-              onBlur={handleBlur}
-              onChange={handleChange}
-              touched={touched.url}
-              type="text"
-              value={values.url}
-            />
-            <InputValidationField
-              description={translate('webhooks.secret.description')}
-              dirty={dirty}
-              disabled={isSubmitting}
-              error={errors.secret}
-              id="webhook-secret"
-              label={<label htmlFor="webhook-secret">{translate('webhooks.secret')}</label>}
-              name="secret"
-              onBlur={handleBlur}
-              onChange={handleChange}
-              touched={touched.secret}
-              type="password"
-              value={values.secret}
-            />
-          </>
-        )}
-      </ValidationModal>
-    );
   }
+
+  return (
+    <ValidationModal
+      confirmButtonText={confirmButtonText}
+      header={modalHeader}
+      initialValues={{
+        name: webhook?.name ?? '',
+        url: webhook?.url ?? '',
+        secret: isUpdate ? undefined : '',
+      }}
+      onClose={onClose}
+      onSubmit={onDone}
+      validate={handleValidate}
+    >
+      {({ dirty, errors, handleBlur, handleChange, isSubmitting, touched, values }) => (
+        <>
+          <InputValidationField
+            required
+            autoFocus
+            dirty={dirty}
+            disabled={isSubmitting}
+            error={errors.name}
+            id="webhook-name"
+            label={translate('webhooks.name')}
+            name="name"
+            onBlur={handleBlur}
+            onChange={handleChange}
+            touched={touched.name}
+            type="text"
+            value={values.name}
+          />
+          <InputValidationField
+            required
+            description={translate('webhooks.url.description')}
+            dirty={dirty}
+            disabled={isSubmitting}
+            error={errors.url}
+            id="webhook-url"
+            label={translate('webhooks.url')}
+            name="url"
+            onBlur={handleBlur}
+            onChange={handleChange}
+            touched={touched.url}
+            type="text"
+            value={values.url}
+          />
+          <UpdateWebhookSecretField
+            description={`${translate('webhooks.secret.description')}${
+              isUpdate ? ` ${translate('webhooks.secret.description.update')}` : ''
+            }`}
+            dirty={dirty}
+            disabled={isSubmitting}
+            error={errors.secret}
+            id="webhook-secret"
+            isUpdateForm={isUpdate}
+            label={translate('webhooks.secret')}
+            name="secret"
+            onBlur={handleBlur}
+            onChange={handleChange}
+            touched={touched.secret}
+            type="password"
+            value={values.secret}
+          />
+        </>
+      )}
+    </ValidationModal>
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@ package org.sonar.server.ui;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.api.utils.MessageException;
 import org.sonar.api.web.WebAnalytics;
@@ -32,16 +31,16 @@ public class WebAnalyticsLoaderImpl implements WebAnalyticsLoader {
   @Nullable
   private final WebAnalytics analytics;
 
-  public WebAnalyticsLoaderImpl(WebAnalytics[] analytics) {
-    if (analytics.length > 1) {
-      List<String> classes = Arrays.stream(analytics).map(a -> a.getClass().getName()).collect(Collectors.toList());
-      throw MessageException.of("Limited to only one web analytics plugin. Found multiple implementations: " + classes);
+  public WebAnalyticsLoaderImpl(@Nullable WebAnalytics[] analytics) {
+    if (analytics == null) {
+      this.analytics = null;
+    } else {
+      if (analytics.length > 1) {
+        List<String> classes = Arrays.stream(analytics).map(a -> a.getClass().getName()).toList();
+        throw MessageException.of("Limited to only one web analytics plugin. Found multiple implementations: " + classes);
+      }
+      this.analytics = analytics.length == 1 ? analytics[0] : null;
     }
-    this.analytics = analytics.length == 1 ? analytics[0] : null;
-  }
-
-  public WebAnalyticsLoaderImpl() {
-    this.analytics = null;
   }
 
   @Override

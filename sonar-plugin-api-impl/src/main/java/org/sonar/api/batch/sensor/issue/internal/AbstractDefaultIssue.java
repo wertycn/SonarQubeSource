@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,29 +27,26 @@ import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
 import org.sonar.api.batch.fs.InputComponent;
-import org.sonar.api.batch.sensor.internal.SensorStorage;
-import org.sonar.api.batch.sensor.issue.Issue.Flow;
-import org.sonar.api.batch.sensor.issue.IssueLocation;
-import org.sonar.api.batch.sensor.issue.NewIssueLocation;
 import org.sonar.api.batch.fs.internal.DefaultInputDir;
 import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.batch.sensor.internal.DefaultStorable;
+import org.sonar.api.batch.sensor.internal.SensorStorage;
+import org.sonar.api.batch.sensor.issue.Issue.Flow;
+import org.sonar.api.batch.sensor.issue.IssueLocation;
+import org.sonar.api.batch.sensor.issue.MessageFormatting;
+import org.sonar.api.batch.sensor.issue.NewIssue.FlowType;
+import org.sonar.api.batch.sensor.issue.NewIssueLocation;
+import org.sonar.api.batch.sensor.issue.NewMessageFormatting;
 import org.sonar.api.utils.PathUtils;
 
-import static java.util.Collections.unmodifiableList;
-import static java.util.stream.Collectors.toList;
 import static org.sonar.api.utils.Preconditions.checkArgument;
 import static org.sonar.api.utils.Preconditions.checkState;
 
 public abstract class AbstractDefaultIssue<T extends AbstractDefaultIssue> extends DefaultStorable {
   protected IssueLocation primaryLocation;
-  protected List<List<IssueLocation>> flows = new ArrayList<>();
+  protected List<DefaultIssueFlow> flows = new ArrayList<>();
   protected DefaultInputProject project;
-
-  protected AbstractDefaultIssue(DefaultInputProject project) {
-    this(project, null);
-  }
 
   public AbstractDefaultIssue(DefaultInputProject project, @Nullable SensorStorage storage) {
     super(storage);
@@ -61,9 +58,7 @@ public abstract class AbstractDefaultIssue<T extends AbstractDefaultIssue> exten
   }
 
   public List<Flow> flows() {
-    return this.flows.stream()
-      .<Flow>map(l -> () -> unmodifiableList(new ArrayList<>(l)))
-      .collect(toList());
+    return Collections.unmodifiableList(flows);
   }
 
   public NewIssueLocation newLocation() {
@@ -79,16 +74,21 @@ public abstract class AbstractDefaultIssue<T extends AbstractDefaultIssue> exten
   }
 
   public T addLocation(NewIssueLocation secondaryLocation) {
-    flows.add(Collections.singletonList(rewriteLocation((DefaultIssueLocation) secondaryLocation)));
+    flows.add(new DefaultIssueFlow(List.of(rewriteLocation((DefaultIssueLocation) secondaryLocation)), FlowType.UNDEFINED, null));
     return (T) this;
   }
 
   public T addFlow(Iterable<NewIssueLocation> locations) {
+    return addFlow(locations, FlowType.UNDEFINED, null);
+  }
+
+  public T addFlow(Iterable<NewIssueLocation> flowLocations, FlowType type, @Nullable String flowDescription) {
+    checkArgument(type != null, "Type can't be null");
     List<IssueLocation> flowAsList = new ArrayList<>();
-    for (NewIssueLocation issueLocation : locations) {
+    for (NewIssueLocation issueLocation : flowLocations) {
       flowAsList.add(rewriteLocation((DefaultIssueLocation) issueLocation));
     }
-    flows.add(flowAsList);
+    flows.add(new DefaultIssueFlow(flowAsList, type, flowDescription));
     return (T) this;
   }
 
@@ -96,12 +96,10 @@ public abstract class AbstractDefaultIssue<T extends AbstractDefaultIssue> exten
     InputComponent component = location.inputComponent();
     Optional<Path> dirOrModulePath = Optional.empty();
 
-    if (component instanceof DefaultInputDir) {
-      DefaultInputDir dirComponent = (DefaultInputDir) component;
-      dirOrModulePath = Optional.of(project.getBaseDir().relativize(dirComponent.path()));
-    } else if (component instanceof DefaultInputModule && !Objects.equals(project.key(), component.key())) {
-      DefaultInputModule moduleComponent = (DefaultInputModule) component;
-      dirOrModulePath = Optional.of(project.getBaseDir().relativize(moduleComponent.getBaseDir()));
+    if (component instanceof DefaultInputDir defaultInputDir) {
+      dirOrModulePath = Optional.of(project.getBaseDir().relativize(defaultInputDir.path()));
+    } else if (component instanceof DefaultInputModule defaultInputModule && !Objects.equals(project.key(), component.key())) {
+      dirOrModulePath = Optional.of(project.getBaseDir().relativize(defaultInputModule.getBaseDir()));
     }
 
     if (dirOrModulePath.isPresent()) {
@@ -109,14 +107,31 @@ public abstract class AbstractDefaultIssue<T extends AbstractDefaultIssue> exten
       DefaultIssueLocation fixedLocation = new DefaultIssueLocation();
       fixedLocation.on(project);
       StringBuilder fullMessage = new StringBuilder();
+      String prefixMessage;
       if (path != null && !path.isEmpty()) {
-        fullMessage.append("[").append(path).append("] ");
+        prefixMessage = "[" + path + "] ";
+      } else {
+        prefixMessage = "";
       }
+
+      fullMessage.append(prefixMessage);
       fullMessage.append(location.message());
-      fixedLocation.message(fullMessage.toString());
+
+      List<NewMessageFormatting> paddedFormattings = location.messageFormattings().stream()
+        .map(m -> padMessageFormatting(m, prefixMessage.length()))
+        .toList();
+
+      fixedLocation.message(fullMessage.toString(), paddedFormattings);
+
       return fixedLocation;
     } else {
       return location;
     }
+  }
+
+  private static NewMessageFormatting padMessageFormatting(MessageFormatting messageFormatting, int length) {
+    return new DefaultMessageFormatting().type(messageFormatting.type())
+      .start(messageFormatting.start() + length)
+      .end(messageFormatting.end() + length);
   }
 }

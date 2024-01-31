@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,21 +34,18 @@ public interface MovedFilesRepository {
    */
   Optional<OriginalFile> getOriginalFile(Component file);
 
-  final class OriginalFile {
-    private final String uuid;
-    private final String key;
+  /**
+   * The original file for the specified component if it was registered as a moved file inside the scope of a Pull Request.
+   * <p>
+   * Calling this method with a Component which is not a file, will always return {@link Optional#empty()}.
+   * </p>
+   */
+  Optional<OriginalFile> getOriginalPullRequestFile(Component file);
 
+  record OriginalFile(String uuid, String key) {
     public OriginalFile(String uuid, String key) {
       this.uuid = requireNonNull(uuid, "uuid can not be null");
       this.key = requireNonNull(key, "key can not be null");
-    }
-
-    public String getUuid() {
-      return uuid;
-    }
-
-    public String getKey() {
-      return key;
     }
 
     @Override
@@ -71,9 +68,9 @@ public interface MovedFilesRepository {
     @Override
     public String toString() {
       return "OriginalFile{" +
-          "uuid='" + uuid + '\'' +
-          ", key='" + key + '\'' +
-          '}';
+        "uuid='" + uuid + '\'' +
+        ", key='" + key + '\'' +
+        '}';
     }
   }
 }

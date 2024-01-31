@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,37 +23,32 @@ import com.google.common.collect.ImmutableMap;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.entry;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @RunWith(DataProviderRunner.class)
 public class CeTaskTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private CeTask.Builder underTest = new CeTask.Builder();
 
   @Test
-  @UseDataProvider("oneAndOnlyOneOfComponentAndMainComponent")
-  public void build_fails_with_IAE_if_only_one_of_component_and_main_component_is_non_null(CeTask.Component component, CeTask.Component mainComponent) {
+  @UseDataProvider("oneAndOnlyOneOfComponentAndEntity")
+  public void build_fails_with_IAE_if_only_one_of_component_and_main_component_is_non_null(CeTask.Component component, CeTask.Component entity) {
     underTest.setType("TYPE_1");
     underTest.setUuid("UUID_1");
     underTest.setComponent(component);
-    underTest.setMainComponent(mainComponent);
+    underTest.setEntity(entity);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("None or both component and main component must be non null");
-
-    underTest.build();
+    assertThatThrownBy(() -> underTest.build())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("None or both component and entity must be non null");
   }
 
   @DataProvider
-  public static Object[][] oneAndOnlyOneOfComponentAndMainComponent() {
+  public static Object[][] oneAndOnlyOneOfComponentAndEntity() {
     CeTask.Component component = new CeTask.Component("COMPONENT_UUID_1", "COMPONENT_KEY_1", "The component");
     return new Object[][] {
       {component, null},
@@ -64,13 +59,13 @@ public class CeTaskTest {
   @Test
   public void verify_getters() {
     CeTask.Component component = new CeTask.Component("COMPONENT_UUID_1", "COMPONENT_KEY_1", "The component");
-    CeTask.Component mainComponent = new CeTask.Component("MAIN_COMPONENT_UUID_1", "MAIN_COMPONENT_KEY_1", "The main component");
+    CeTask.Component entity = new CeTask.Component("ENTITY_UUID_1", "ENTITY_KEY_1", "The entity");
     CeTask.User submitter = new CeTask.User("UUID_USER_1", "LOGIN_1");
     underTest.setType("TYPE_1");
     underTest.setUuid("UUID_1");
     underTest.setSubmitter(submitter);
     underTest.setComponent(component);
-    underTest.setMainComponent(mainComponent);
+    underTest.setEntity(entity);
     underTest.setCharacteristics(ImmutableMap.of("k1", "v1", "k2", "v2"));
 
     CeTask task = underTest.build();
@@ -79,18 +74,21 @@ public class CeTaskTest {
     assertThat(task.getType()).isEqualTo("TYPE_1");
     assertThat(task.getSubmitter()).isEqualTo(submitter);
     assertThat(task.getComponent()).contains(component);
-    assertThat(task.getMainComponent()).contains(mainComponent);
-    assertThat(task.getCharacteristics()).containsExactly(entry("k1", "v1"), entry("k2", "v2"));
+    assertThat(task.getEntity()).contains(entity);
+    assertThat(task.getCharacteristics())
+      .hasSize(2)
+      .containsEntry("k1", "v1")
+      .containsEntry("k2", "v2");
   }
 
   @Test
   public void verify_toString() {
     CeTask.Component component = new CeTask.Component("COMPONENT_UUID_1", "COMPONENT_KEY_1", "The component");
-    CeTask.Component mainComponent = new CeTask.Component("MAIN_COMPONENT_UUID_1", "MAIN_COMPONENT_KEY_1", "The main component");
+    CeTask.Component entity = new CeTask.Component("ENTITY_UUID_1", "ENTITY_KEY_1", "The entity");
     underTest.setType("TYPE_1");
     underTest.setUuid("UUID_1");
     underTest.setComponent(component);
-    underTest.setMainComponent(mainComponent);
+    underTest.setEntity(entity);
     underTest.setSubmitter(new CeTask.User("UUID_USER_1", "LOGIN_1"));
     underTest.setCharacteristics(ImmutableMap.of("k1", "v1", "k2", "v2"));
 
@@ -101,7 +99,7 @@ public class CeTaskTest {
       "type=TYPE_1, " +
       "uuid=UUID_1, " +
       "component=Component{uuid='COMPONENT_UUID_1', key='COMPONENT_KEY_1', name='The component'}, " +
-      "mainComponent=Component{uuid='MAIN_COMPONENT_UUID_1', key='MAIN_COMPONENT_KEY_1', name='The main component'}, " +
+      "entity=Component{uuid='ENTITY_UUID_1', key='ENTITY_KEY_1', name='The entity'}, " +
       "submitter=User{uuid='UUID_USER_1', login='LOGIN_1'}" +
       "}");
   }
@@ -112,7 +110,7 @@ public class CeTaskTest {
       .setSubmitter(new CeTask.User("USER_ID", ""))
       .build();
 
-    assertThat(ceTask.getSubmitter().getLogin()).isNull();
+    assertThat(ceTask.getSubmitter().login()).isNull();
   }
 
   @Test
@@ -125,8 +123,9 @@ public class CeTaskTest {
     assertThat(task1.equals(task1)).isTrue();
     assertThat(task1.equals(task1bis)).isTrue();
     assertThat(task1.equals(task2)).isFalse();
-    assertThat(task1.hashCode()).isEqualTo(task1.hashCode());
-    assertThat(task1.hashCode()).isEqualTo(task1bis.hashCode());
+    assertThat(task1)
+      .hasSameHashCodeAs(task1)
+      .hasSameHashCodeAs(task1bis);
   }
 
   @Test
@@ -141,8 +140,8 @@ public class CeTaskTest {
   public void verify_submitter_getters() {
     CeTask.User user = new CeTask.User("UUID", "LOGIN");
 
-    assertThat(user.getUuid()).isEqualTo("UUID");
-    assertThat(user.getLogin()).isEqualTo("LOGIN");
+    assertThat(user.uuid()).isEqualTo("UUID");
+    assertThat(user.login()).isEqualTo("LOGIN");
   }
 
   @Test
@@ -152,12 +151,13 @@ public class CeTaskTest {
     CeTask.User user2 = new CeTask.User("UUID_2", null);
     CeTask.User user1_diff_login = new CeTask.User("UUID_1", "LOGIN");
 
-    assertThat(user1).isEqualTo(user1);
-    assertThat(user1).isEqualTo(user1bis);
-    assertThat(user1).isNotEqualTo(user2);
     assertThat(user1.equals(null)).isFalse();
-    assertThat(user1.hashCode()).isEqualTo(user1.hashCode());
-    assertThat(user1.hashCode()).isEqualTo(user1bis.hashCode());
-    assertThat(user1.hashCode()).isEqualTo(user1_diff_login.hashCode());
+    assertThat(user1)
+      .isEqualTo(user1)
+      .isEqualTo(user1bis)
+      .isNotEqualTo(user2)
+      .hasSameHashCodeAs(user1)
+      .hasSameHashCodeAs(user1bis)
+      .hasSameHashCodeAs(user1_diff_login);
   }
 }

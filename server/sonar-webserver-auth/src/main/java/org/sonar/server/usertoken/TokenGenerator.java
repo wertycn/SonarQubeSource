@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,8 @@
  */
 package org.sonar.server.usertoken;
 
+import org.sonar.db.user.TokenType;
+
 public interface TokenGenerator {
   /**
    * Generate a token. It must be unique and non deterministic.<br />
@@ -35,7 +37,7 @@ public interface TokenGenerator {
    * must not contain colon character ":".
    *
    */
-  String generate();
+  String generate(TokenType tokenType);
 
   /**
    * Hash a token.<br/>

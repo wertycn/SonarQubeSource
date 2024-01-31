@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.component.ws;
 
-import com.google.common.collect.ImmutableSet;
 import java.util.Arrays;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -39,7 +38,7 @@ class ComponentDtoToWsComponent {
   /**
    * The concept of "visibility" will only be configured for these qualifiers.
    */
-  private static final Set<String> QUALIFIERS_WITH_VISIBILITY = ImmutableSet.of(Qualifiers.PROJECT, Qualifiers.VIEW, Qualifiers.APP);
+  private static final Set<String> QUALIFIERS_WITH_VISIBILITY = Set.of(Qualifiers.PROJECT, Qualifiers.VIEW, Qualifiers.APP);
 
   private ComponentDtoToWsComponent() {
     // prevent instantiation
@@ -67,13 +66,13 @@ class ComponentDtoToWsComponent {
   }
 
   public static Components.Component.Builder componentDtoToWsComponent(ComponentDto dto, @Nullable ProjectDto parentProjectDto,
-    @Nullable SnapshotDto lastAnalysis) {
+    @Nullable SnapshotDto lastAnalysis, boolean isMainBranch, @Nullable String branch, @Nullable String pullRequest) {
     Components.Component.Builder wsComponent = Components.Component.newBuilder()
-      .setKey(dto.getKey())
+      .setKey(ComponentDto.removeBranchAndPullRequestFromKey(dto.getKey()))
       .setName(dto.name())
       .setQualifier(dto.qualifier());
-    ofNullable(emptyToNull(dto.getBranch())).ifPresent(wsComponent::setBranch);
-    ofNullable(emptyToNull(dto.getPullRequest())).ifPresent(wsComponent::setPullRequest);
+    ofNullable(emptyToNull(branch)).ifPresent(wsComponent::setBranch);
+    ofNullable(emptyToNull(pullRequest)).ifPresent(wsComponent::setPullRequest);
     ofNullable(emptyToNull(dto.path())).ifPresent(wsComponent::setPath);
     ofNullable(emptyToNull(dto.description())).ifPresent(wsComponent::setDescription);
     ofNullable(emptyToNull(dto.language())).ifPresent(wsComponent::setLanguage);
@@ -85,7 +84,7 @@ class ComponentDtoToWsComponent {
       });
     if (QUALIFIERS_WITH_VISIBILITY.contains(dto.qualifier())) {
       wsComponent.setVisibility(Visibility.getLabel(dto.isPrivate()));
-      if (Arrays.asList(Qualifiers.PROJECT, Qualifiers.APP).contains(dto.qualifier()) && dto.getBranch() != null && parentProjectDto != null) {
+      if (Arrays.asList(Qualifiers.PROJECT, Qualifiers.APP).contains(dto.qualifier()) && parentProjectDto != null && isMainBranch) {
         wsComponent.getTagsBuilder().addAllTags(parentProjectDto.getTags());
       }
     }

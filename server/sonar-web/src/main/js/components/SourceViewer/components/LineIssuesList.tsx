@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,39 +19,63 @@
  */
 import * as React from 'react';
 import { BranchLike } from '../../../types/branch-like';
+import { LinearIssueLocation, SourceLine, Issue as TypeIssue } from '../../../types/types';
 import Issue from '../../issue/Issue';
 
-interface Props {
+export interface LineIssuesListProps {
   branchLike: BranchLike | undefined;
-  displayIssueLocationsCount?: boolean;
-  displayIssueLocationsLink?: boolean;
+  displayAllIssues?: boolean;
+  displayWhyIsThisAnIssue: boolean;
+  issuesForLine: TypeIssue[];
   issuePopup: { issue: string; name: string } | undefined;
-  issues: T.Issue[];
-  onIssueChange: (issue: T.Issue) => void;
+  issueLocationsByLine: { [line: number]: LinearIssueLocation[] };
+  line: SourceLine;
+  onIssueChange: (issue: TypeIssue) => void;
   onIssueClick: (issueKey: string) => void;
   onIssuePopupToggle: (issue: string, popupName: string, open?: boolean) => void;
+  openIssuesByLine: { [line: number]: boolean };
   selectedIssue: string | undefined;
 }
 
-export default function LineIssuesList(props: Props) {
-  const { issuePopup } = props;
+export default function LineIssuesList(props: LineIssuesListProps) {
+  const {
+    line,
+    displayWhyIsThisAnIssue,
+    displayAllIssues,
+    openIssuesByLine,
+    selectedIssue,
+    issuesForLine,
+    issueLocationsByLine,
+    issuePopup,
+  } = props;
 
+  const showIssues = openIssuesByLine[line.line] || displayAllIssues;
+  const issueLocations = issueLocationsByLine[line.line] || [];
+  let displayedIssue: TypeIssue[] = [];
+  if (showIssues && issuesForLine.length > 0) {
+    displayedIssue = issuesForLine;
+  } else if (selectedIssue && !showIssues && issueLocations.length) {
+    displayedIssue = issuesForLine.filter((i) => i.key === selectedIssue);
+  }
+
+  if (displayedIssue.length === 0) {
+    return null;
+  }
   return (
-    <div className="issue-list">
-      {props.issues.map(issue => (
+    <ul className="sw-my-4 sw-max-w-[980px]">
+      {displayedIssue.map((issue) => (
         <Issue
           branchLike={props.branchLike}
-          displayLocationsCount={props.displayIssueLocationsCount}
-          displayLocationsLink={props.displayIssueLocationsLink}
+          displayWhyIsThisAnIssue={displayWhyIsThisAnIssue}
           issue={issue}
           key={issue.key}
           onChange={props.onIssueChange}
-          onClick={props.onIssueClick}
+          onSelect={props.onIssueClick}
           onPopupToggle={props.onIssuePopupToggle}
           openPopup={issuePopup && issuePopup.issue === issue.key ? issuePopup.name : undefined}
           selected={props.selectedIssue === issue.key}
         />
       ))}
-    </div>
+    </ul>
   );
 }

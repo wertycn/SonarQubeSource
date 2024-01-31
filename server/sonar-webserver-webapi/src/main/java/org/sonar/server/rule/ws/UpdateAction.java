@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,13 +30,13 @@ import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.server.debt.DebtRemediationFunction;
 import org.sonar.api.server.debt.internal.DefaultDebtRemediationFunction;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.KeyValueFormat;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.exceptions.NotFoundException;
@@ -63,7 +63,7 @@ public class UpdateAction implements RulesWsAction {
   public static final String PARAM_REMEDIATION_FN_BASE_EFFORT = "remediation_fn_base_effort";
   public static final String PARAM_REMEDIATION_FN_GAP_MULTIPLIER = "remediation_fy_gap_multiplier";
   public static final String PARAM_NAME = "name";
-  public static final String PARAM_DESCRIPTION = "markdown_description";
+  public static final String PARAM_DESCRIPTION = "markdownDescription";
   public static final String PARAM_SEVERITY = "severity";
   public static final String PARAM_STATUS = "status";
   public static final String PARAMS = "params";
@@ -90,7 +90,14 @@ public class UpdateAction implements RulesWsAction {
       .setResponseExample(Resources.getResource(getClass(), "update-example.json"))
       .setDescription("Update an existing rule.<br>" +
         "Requires the 'Administer Quality Profiles' permission")
+      .setChangelog(
+        new Change("10.2", "The field 'severity' and 'type' in the response have been deprecated, use 'impacts' instead."),
+        new Change("10.4", String.format("The parameter '%s' is deprecated.", PARAM_SEVERITY)),
+        new Change("10.4", "Updating a removed rule is now possible.")
+      )
       .setSince("4.4")
+      .setChangelog(
+        new Change("10.2", "Add 'impacts', 'cleanCodeAttribute', 'cleanCodeAttributeCategory' fields to the response"))
       .setHandler(this);
 
     action.createParam(PARAM_KEY)
@@ -105,7 +112,7 @@ public class UpdateAction implements RulesWsAction {
       .setExampleValue("java8,security");
 
     action.createParam(PARAM_MARKDOWN_NOTE)
-      .setDescription("Optional note in markdown format. Use empty value to remove current note. Note is not changed " +
+      .setDescription("Optional note in <a href='/formatting/help'>markdown format</a>. Use empty value to remove current note. Note is not changed " +
         "if the parameter is not set.")
       .setExampleValue("my *note*");
 
@@ -132,12 +139,14 @@ public class UpdateAction implements RulesWsAction {
 
     action
       .createParam(PARAM_DESCRIPTION)
-      .setDescription("Rule description (mandatory for custom rule and manual rule)")
-      .setExampleValue("Description of my custom rule");
+      .setDescription("Rule description (mandatory for custom rule and manual rule) in <a href='/formatting/help'>markdown format</a>")
+      .setExampleValue("Description of my custom rule")
+      .setDeprecatedKey("markdown_description", "10.2");
 
     action
       .createParam(PARAM_SEVERITY)
       .setDescription("Rule severity (Only when updating a custom rule)")
+      .setDeprecatedSince("10.4")
       .setPossibleValues(Severity.ALL);
 
     action
@@ -238,19 +247,19 @@ public class UpdateAction implements RulesWsAction {
   private UpdateResponse buildResponse(DbSession dbSession, RuleKey key) {
     RuleDto rule = dbClient.ruleDao().selectByKey(dbSession, key)
       .orElseThrow(() -> new NotFoundException(format("Rule not found: %s", key)));
-    List<RuleDefinitionDto> templateRules = new ArrayList<>(1);
-    if (rule.getDefinition().isCustomRule()) {
-      dbClient.ruleDao().selectDefinitionByUuid(rule.getTemplateUuid(), dbSession).ifPresent(templateRules::add);
+    List<RuleDto> templateRules = new ArrayList<>(1);
+    if (rule.isCustomRule()) {
+      dbClient.ruleDao().selectByUuid(rule.getTemplateUuid(), dbSession).ifPresent(templateRules::add);
     }
     List<RuleParamDto> ruleParameters = dbClient.ruleDao().selectRuleParamsByRuleUuids(dbSession, singletonList(rule.getUuid()));
     UpdateResponse.Builder responseBuilder = UpdateResponse.newBuilder();
-    SearchAction.SearchResult searchResult = new SearchAction.SearchResult()
+    RulesResponseFormatter.SearchResult searchResult = new RulesResponseFormatter.SearchResult()
       .setRules(singletonList(rule))
       .setTemplateRules(templateRules)
       .setRuleParameters(ruleParameters)
       .setTotal(1L);
     responseBuilder
-      .setRule(mapper.toWsRule(rule.getDefinition(), searchResult, Collections.emptySet(), rule.getMetadata(),
+      .setRule(mapper.toWsRule(rule, searchResult, Collections.emptySet(),
         ruleWsSupport.getUsersByUuid(dbSession, singletonList(rule)), emptyMap()));
 
     return responseBuilder.build();

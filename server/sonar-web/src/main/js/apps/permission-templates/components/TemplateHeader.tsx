@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,35 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Link, Title } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { PermissionTemplate } from '../../../types/types';
 import { PERMISSION_TEMPLATES_PATH } from '../utils';
 import ActionsCell from './ActionsCell';
 
 interface Props {
-  loading: boolean;
   refresh: () => void;
-  template: T.PermissionTemplate;
+  template: PermissionTemplate;
   topQualifiers: string[];
 }
 
 export default function TemplateHeader(props: Props) {
   const { template } = props;
   return (
-    <header className="page-header" id="project-permissions-header">
-      <div className="note spacer-bottom">
-        <Link className="text-muted" to={PERMISSION_TEMPLATES_PATH}>
-          {translate('permission_templates.page')}
-        </Link>
+    <header className="sw-mb-2 sw-flex sw-justify-between" id="project-permissions-header">
+      <div>
+        <div className="sw-mb-2">
+          <Link to={PERMISSION_TEMPLATES_PATH}>{translate('permission_templates.page')}</Link>
+        </div>
+        <div>
+          <Title>{template.name}</Title>
+        </div>
+        <div>{translate('global_permissions.page.description')}</div>
       </div>
-
-      <h1 className="page-title">{template.name}</h1>
-
-      {props.loading && <i className="spinner" />}
-
-      <div className="pull-right">
+      <div>
         <ActionsCell
-          fromDetails={true}
+          fromDetails
           permissionTemplate={template}
           refresh={props.refresh}
           topQualifiers={props.topQualifiers}

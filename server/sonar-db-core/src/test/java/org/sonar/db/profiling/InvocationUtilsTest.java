@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,6 @@ import org.junit.Test;
 import org.sonar.test.TestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -50,16 +49,6 @@ public class InvocationUtilsTest {
     Method prepareStatement = Connection.class.getMethod("prepareStatement", String.class);
 
     Assert.assertThrows(SQLException.class, () -> InvocationUtils.invokeQuietly(target, prepareStatement, new Object[] {failSql}));
-  }
-
-  @Test
-  public void should_wrap_undeclared_exception() throws Throwable {
-    Connection target = mock(Connection.class);
-    String failSql = "any sql";
-    when(target.prepareStatement(failSql)).thenThrow(new SQLException("Expected"));
-    Method wait = Object.class.getMethod("wait");
-
-    Assert.assertThrows(IllegalStateException.class, () -> InvocationUtils.invokeQuietly(target, wait, new Object[0]));
   }
 
   @Test

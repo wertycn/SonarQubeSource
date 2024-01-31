@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,12 +23,10 @@ import com.google.common.collect.ImmutableMap;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Optional;
@@ -42,15 +40,17 @@ import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.fs.internal.DefaultInputModule;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.batch.scm.ScmProvider;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.scanner.ProjectInfo;
 import org.sonar.scanner.bootstrap.ScannerPlugin;
 import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 import org.sonar.scanner.cpd.CpdSettings;
 import org.sonar.scanner.fs.InputModuleHierarchy;
+import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReportReader;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
-import org.sonar.scanner.repository.ForkDateSupplier;
+import org.sonar.scanner.repository.ReferenceBranchSupplier;
 import org.sonar.scanner.rule.QProfile;
 import org.sonar.scanner.rule.QualityProfiles;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
@@ -77,16 +77,21 @@ public class MetadataPublisherTest {
   private final QualityProfiles qProfiles = mock(QualityProfiles.class);
   private final ProjectInfo projectInfo = mock(ProjectInfo.class);
   private final CpdSettings cpdSettings = mock(CpdSettings.class);
-  private final ForkDateSupplier forkDateSupplier = mock(ForkDateSupplier.class);
+  private final ReferenceBranchSupplier referenceBranchSupplier = mock(ReferenceBranchSupplier.class);
   private final ScannerPluginRepository pluginRepository = mock(ScannerPluginRepository.class);
   private BranchConfiguration branches;
   private ScmConfiguration scmConfiguration;
   private final ScmProvider scmProvider = mock(ScmProvider.class);
   private final ScmRevision scmRevision = mock(ScmRevision.class);
   private final InputComponentStore componentStore = mock(InputComponentStore.class);
+  private ScannerReportWriter writer;
+  private ScannerReportReader reader;
 
   @Before
   public void prepare() throws IOException {
+    FileStructure fileStructure = new FileStructure(temp.newFolder());
+    writer = new ScannerReportWriter(fileStructure);
+    reader = new ScannerReportReader(fileStructure);
     when(projectInfo.getAnalysisDate()).thenReturn(new Date(1234567L));
     when(scmProvider.relativePathFromScmRoot(any(Path.class))).thenReturn(Paths.get("dummy/path"));
     when(scmProvider.revisionId(any(Path.class))).thenReturn("dummy-sha1");
@@ -116,28 +121,23 @@ public class MetadataPublisherTest {
     scmConfiguration = mock(ScmConfiguration.class);
     when(scmConfiguration.provider()).thenReturn(scmProvider);
     underTest = new MetadataPublisher(projectInfo, inputModuleHierarchy, qProfiles, cpdSettings,
-      pluginRepository, branches, scmRevision, forkDateSupplier, componentStore, scmConfiguration);
+      pluginRepository, branches, scmRevision, componentStore, scmConfiguration, referenceBranchSupplier);
   }
 
   @Test
-  public void write_metadata() throws Exception {
+  public void write_metadata() {
     Date date = new Date();
-    when(forkDateSupplier.get()).thenReturn(Instant.ofEpochMilli(123456789L));
     when(qProfiles.findAll()).thenReturn(Collections.singletonList(new QProfile("q1", "Q1", "java", date)));
     when(pluginRepository.getPluginsByKey()).thenReturn(ImmutableMap.of(
-      "java", new ScannerPlugin("java", 12345L, null),
-      "php", new ScannerPlugin("php", 45678L, null)));
-    File outputDir = temp.newFolder();
-    ScannerReportWriter writer = new ScannerReportWriter(outputDir);
-
+      "java", new ScannerPlugin("java", 12345L, PluginType.BUNDLED, null),
+      "php", new ScannerPlugin("php", 45678L, PluginType.BUNDLED, null)));
+    when(referenceBranchSupplier.getFromProperties()).thenReturn("newCodeReference");
     underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
-    assertThat(metadata.getForkDate()).isEqualTo(123456789L);
     assertThat(metadata.getAnalysisDate()).isEqualTo(1234567L);
+    assertThat(metadata.getNewCodeReferenceBranch()).isEqualTo("newCodeReference");
     assertThat(metadata.getProjectKey()).isEqualTo("root");
-    assertThat(metadata.getModulesProjectRelativePathByKeyMap()).containsOnly(entry("module", "modulePath"), entry("root", ""));
     assertThat(metadata.getProjectVersion()).isEmpty();
     assertThat(metadata.getNotAnalyzedFilesByLanguageCount()).isZero();
     assertThat(metadata.getQprofilesPerLanguageMap()).containsOnly(entry("java", org.sonar.scanner.protocol.output.ScannerReport.Metadata.QProfile.newBuilder()
@@ -147,9 +147,9 @@ public class MetadataPublisherTest {
       .setRulesUpdatedAt(date.getTime())
       .build()));
     assertThat(metadata.getPluginsByKey()).containsOnly(entry("java", org.sonar.scanner.protocol.output.ScannerReport.Metadata.Plugin.newBuilder()
-      .setKey("java")
-      .setUpdatedAt(12345)
-      .build()),
+        .setKey("java")
+        .setUpdatedAt(12345)
+        .build()),
       entry("php", org.sonar.scanner.protocol.output.ScannerReport.Metadata.Plugin.newBuilder()
         .setKey("php")
         .setUpdatedAt(45678)
@@ -157,30 +157,22 @@ public class MetadataPublisherTest {
   }
 
   @Test
-  public void write_not_analysed_file_counts() throws Exception {
+  public void write_not_analysed_file_counts() {
     when(componentStore.getNotAnalysedFilesByLanguage()).thenReturn(ImmutableMap.of("c", 10, "cpp", 20));
-
-    File outputDir = temp.newFolder();
-    ScannerReportWriter writer = new ScannerReportWriter(outputDir);
 
     underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getNotAnalyzedFilesByLanguageMap()).contains(entry("c", 10), entry("cpp", 20));
   }
 
   @Test
   @UseDataProvider("projectVersions")
-  public void write_project_version(@Nullable String projectVersion, String expected) throws Exception {
+  public void write_project_version(@Nullable String projectVersion, String expected) {
     when(projectInfo.getProjectVersion()).thenReturn(Optional.ofNullable(projectVersion));
-
-    File outputDir = temp.newFolder();
-    ScannerReportWriter writer = new ScannerReportWriter(outputDir);
 
     underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getProjectVersion()).isEqualTo(expected);
   }
@@ -198,15 +190,11 @@ public class MetadataPublisherTest {
 
   @Test
   @UseDataProvider("buildStrings")
-  public void write_buildString(@Nullable String buildString, String expected) throws Exception {
+  public void write_buildString(@Nullable String buildString, String expected) {
     when(projectInfo.getBuildString()).thenReturn(Optional.ofNullable(buildString));
-
-    File outputDir = temp.newFolder();
-    ScannerReportWriter writer = new ScannerReportWriter(outputDir);
 
     underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getBuildString()).isEqualTo(expected);
   }
@@ -223,7 +211,7 @@ public class MetadataPublisherTest {
   }
 
   @Test
-  public void write_branch_info() throws Exception {
+  public void write_branch_info() {
     String branchName = "name";
     String targetName = "target";
 
@@ -231,10 +219,8 @@ public class MetadataPublisherTest {
     when(branches.branchType()).thenReturn(BranchType.BRANCH);
     when(branches.targetBranchName()).thenReturn(targetName);
 
-    File outputDir = temp.newFolder();
-    underTest.publish(new ScannerReportWriter(outputDir));
+    underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getBranchName()).isEqualTo(branchName);
     assertThat(metadata.getBranchType()).isEqualTo(ScannerReport.Metadata.BranchType.BRANCH);
@@ -243,15 +229,25 @@ public class MetadataPublisherTest {
   }
 
   @Test
-  public void write_project_basedir() throws Exception {
+  public void dont_write_new_code_reference_if_not_specified_in_properties() {
+    when(referenceBranchSupplier.get()).thenReturn("ref");
+    when(referenceBranchSupplier.getFromProperties()).thenReturn(null);
+
+    underTest.publish(writer);
+
+    ScannerReport.Metadata metadata = reader.readMetadata();
+
+    assertThat(metadata.getNewCodeReferenceBranch()).isEmpty();
+  }
+
+  @Test
+  public void write_project_basedir() {
     String path = "some/dir";
     Path relativePathFromScmRoot = Paths.get(path);
     when(scmProvider.relativePathFromScmRoot(any(Path.class))).thenReturn(relativePathFromScmRoot);
 
-    File outputDir = temp.newFolder();
-    underTest.publish(new ScannerReportWriter(outputDir));
+    underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getRelativePathFromScmRoot()).isEqualTo(path);
   }
@@ -261,16 +257,14 @@ public class MetadataPublisherTest {
     String revisionId = "some-sha1";
     when(scmRevision.get()).thenReturn(Optional.of(revisionId));
 
-    File outputDir = temp.newFolder();
-    underTest.publish(new ScannerReportWriter(outputDir));
+    underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getScmRevisionId()).isEqualTo(revisionId);
   }
 
   @Test
-  public void should_not_crash_when_scm_provider_does_not_support_relativePathFromScmRoot() throws IOException {
+  public void should_not_crash_when_scm_provider_does_not_support_relativePathFromScmRoot() {
     ScmProvider fakeScmProvider = new ScmProvider() {
       @Override
       public String key() {
@@ -279,10 +273,8 @@ public class MetadataPublisherTest {
     };
     when(scmConfiguration.provider()).thenReturn(fakeScmProvider);
 
-    File outputDir = temp.newFolder();
-    underTest.publish(new ScannerReportWriter(outputDir));
+    underTest.publish(writer);
 
-    ScannerReportReader reader = new ScannerReportReader(outputDir);
     ScannerReport.Metadata metadata = reader.readMetadata();
     assertThat(metadata.getRelativePathFromScmRoot()).isEmpty();
   }

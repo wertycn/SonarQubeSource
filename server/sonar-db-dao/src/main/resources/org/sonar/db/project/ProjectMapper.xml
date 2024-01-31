@@ -10,6 +10,7 @@
       p.description as description,
       p.tags as tagsString,
       p.private as isPrivate,
+      p.creation_method as creationMethod,
       p.created_at as createdAt,
       p.updated_at as updatedAt
     </sql>
@@ -31,6 +32,19 @@
       <foreach collection="uuids" open="(" close=")" item="uuid" separator=",">
         #{uuid,jdbcType=VARCHAR}
       </foreach>
+  </select>
+
+    <select id="selectByUuidsWithPagination" resultType="Project">
+    select
+      <include refid="projectColumns"/>
+    from projects p
+    where
+      p.uuid in
+      <foreach collection="uuids" open="(" close=")" item="uuid" separator=",">
+        #{uuid,jdbcType=VARCHAR}
+      </foreach>
+      order by p.name, uuid desc
+      <include refid="org.sonar.db.common.Common.pagination"/>
   </select>
 
   <select id="selectProjectsByKeys" resultType="Project">
@@ -55,6 +69,13 @@
       <foreach collection="kees" open="(" close=")" item="k" separator=",">
         #{k,jdbcType=VARCHAR}
       </foreach>
+  </select>
+
+    <select id="selectByBranchUuid" parameterType="String" resultType="Project">
+    SELECT
+      <include refid="projectColumns"/>
+    FROM projects p inner join project_branches pb on pb.project_uuid = p.uuid
+    where pb.uuid=#{branchUuid,jdbcType=VARCHAR}
   </select>
 
     <select id="selectProjects" resultType="Project">
@@ -105,6 +126,27 @@
       p.kee=#{key,jdbcType=VARCHAR}
   </select>
 
+  <select id="selectProjectUuidsAssociatedToDefaultQualityProfileByLanguage" parameterType="map" resultType="string">
+    select
+      lm.project_uuid
+    from
+      live_measures lm
+    inner join
+      projects p on p.uuid = lm.project_uuid
+    inner join
+      metrics m on m.uuid = lm.metric_uuid
+    inner join
+      project_branches pb on pb.uuid = lm.component_uuid
+    where
+      m.name = 'ncloc_language_distribution'
+      and pb.is_main = ${_true}
+      and p.uuid not in (select project_uuid from project_qprofiles)
+      and
+      <foreach collection="languageFilters" index="index" item="languageFilter" open="(" separator=" or " close=")">
+        lm.text_value like #{languageFilter, jdbcType=VARCHAR} escape '/'
+      </foreach>
+  </select>
+
   <insert id="insert" parameterType="Project">
     INSERT INTO projects (
       kee,
@@ -114,6 +156,7 @@
       description,
       private,
       tags,
+      creation_method,
       created_at,
       updated_at
     )
@@ -125,6 +168,7 @@
     #{description,jdbcType=VARCHAR},
     #{isPrivate,jdbcType=BOOLEAN},
     #{tagsString, jdbcType=VARCHAR},
+    #{creationMethod, jdbcType=VARCHAR},
     #{createdAt,jdbcType=BIGINT},
     #{updatedAt,jdbcType=BIGINT}
     )
@@ -147,20 +191,40 @@
     uuid = #{uuid,jdbcType=VARCHAR}
   </update>
 
-  <update id="updateKey">
-    update projects set
-    kee = #{newKey,jdbcType=VARCHAR},
-    updated_at = #{updatedAt,jdbcType=BIGINT}
-    where
-    uuid = #{uuid,jdbcType=VARCHAR}
-  </update>
-
-    <update id="updateVisibility">
+  <update id="updateVisibility">
     update projects set
     private = #{isPrivate,jdbcType=BOOLEAN},
     updated_at = #{updatedAt,jdbcType=BIGINT}
     where
     uuid = #{uuid,jdbcType=VARCHAR}
   </update>
+
+
+  <update id="updateNcloc">
+    update projects set
+    ncloc = #{ncloc,jdbcType=BIGINT}
+    where
+    uuid = #{projectUuid,jdbcType=VARCHAR}
+  </update>
+
+  <select id="getNclocSum" parameterType="string" resultType="long">
+    select sum(ncloc) from projects where qualifier = 'TRK'
+    <if test="projectUuidToExclude != null">
+      and uuid &lt;&gt; #{projectUuidToExclude,jdbcType=VARCHAR}
+    </if>
+  </select>
+
+  <select id="countIndexedProjects" resultType="int">
+    select count(p.uuid)
+    from projects p
+    where p.qualifier = 'TRK'
+    and not exists (select 1 from project_branches pb where pb.project_uuid = p.uuid and pb.need_issue_sync = ${_true})
+  </select>
+
+  <select id="countProjects" resultType="int">
+    select count(p.uuid)
+    from projects p
+    where p.qualifier = 'TRK'
+  </select>
 
 </mapper>

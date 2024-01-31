@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,51 +19,45 @@
  */
 package org.sonar.db.ce;
 
-import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.apache.commons.lang.StringUtils.repeat;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.sonar.db.ce.CeTaskMessageDto.MAX_MESSAGE_SIZE;
 
 public class CeTaskMessageDtoTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private CeTaskMessageDto underTest = new CeTaskMessageDto();
 
   @Test
   public void setMessage_fails_with_IAE_if_argument_is_null() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("message can't be null nor empty");
-
-    underTest.setMessage(null);
+    assertThatThrownBy(() -> underTest.setMessage(null))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("message can't be null nor empty");
   }
 
   @Test
   public void setMessage_fails_with_IAE_if_argument_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("message can't be null nor empty");
-
-    underTest.setMessage("");
+    assertThatThrownBy(() -> underTest.setMessage(""))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("message can't be null nor empty");
   }
 
   @Test
   public void setMessage_accept_argument_of_size_4000() {
-    String str = repeat("a", 4000);
+    String str = repeat("a", MAX_MESSAGE_SIZE);
     underTest.setMessage(str);
 
     assertThat(underTest.getMessage()).isEqualTo(str);
   }
 
   @Test
-  public void setMessage_fails_with_IAE_if_argument_has_size_bigger_then_4000() {
-    int size = 4000 + 1 + new Random().nextInt(100);
-    String str = repeat("a", size);
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("message is too long: " + size);
+  public void setMessage_truncates_the_message_if_argument_has_size_bigger_then_4000() {
+    String str = repeat("a", MAX_MESSAGE_SIZE) + "extra long tail!!!";
 
     underTest.setMessage(str);
+
+    assertThat(underTest.getMessage()).isEqualTo(repeat("a", MAX_MESSAGE_SIZE - 3) + "...");
   }
 }

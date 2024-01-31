@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { ContentCell, NumericalCell, RatingCell } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { isPortfolioLike } from '../../../types/component';
+import { MetricKey } from '../../../types/metrics';
+import { ComponentMeasure } from '../../../types/types';
 
-interface Props {
-  baseComponent?: T.ComponentMeasure;
+interface ComponentsHeaderProps {
+  baseComponent?: ComponentMeasure;
   canBePinned?: boolean;
   metrics: string[];
-  rootComponent: T.ComponentMeasure;
+  rootComponent: ComponentMeasure;
+  showAnalysisDate?: boolean;
 }
 
 const SHORT_NAME_METRICS = [
-  'duplicated_lines_density',
-  'new_lines',
-  'new_coverage',
-  'new_duplicated_lines_density'
+  MetricKey.duplicated_lines_density,
+  MetricKey.new_lines,
+  MetricKey.new_coverage,
+  MetricKey.new_duplicated_lines_density,
 ];
 
-export default function ComponentsHeader({
-  baseComponent,
-  canBePinned = true,
-  metrics,
-  rootComponent
-}: Props) {
-  const isPortfolio = ['VW', 'SVW'].includes(rootComponent.qualifier);
+export default function ComponentsHeader(props: ComponentsHeaderProps) {
+  const { baseComponent, canBePinned = true, metrics, rootComponent, showAnalysisDate } = props;
+  const isPortfolio = isPortfolioLike(rootComponent.qualifier);
   let columns: string[] = [];
+  let Cell: typeof NumericalCell;
   if (isPortfolio) {
     columns = [
       translate('metric_domain.Releasability'),
@@ -50,34 +51,36 @@ export default function ComponentsHeader({
       translate('portfolio.metric_domain.vulnerabilities'),
       translate('portfolio.metric_domain.security_hotspots'),
       translate('metric_domain.Maintainability'),
-      translate('metric', 'ncloc', 'name')
+      translate('metric.ncloc.name'),
     ];
+
+    if (showAnalysisDate) {
+      columns.push(translate('code.last_analysis_date'));
+    }
+
+    Cell = RatingCell;
   } else {
-    columns = metrics.map(metric =>
-      translate('metric', metric, SHORT_NAME_METRICS.includes(metric) ? 'short_name' : 'name')
+    columns = metrics.map((metric) =>
+      translate(
+        'metric',
+        metric,
+        SHORT_NAME_METRICS.includes(metric as MetricKey) ? 'short_name' : 'name',
+      ),
     );
+
+    Cell = NumericalCell;
   }
 
   return (
-    <thead>
-      <tr className="code-components-header">
-        <th className="thin nowrap" colSpan={canBePinned ? 2 : 1} />
-        <th />
-        {baseComponent &&
-          columns.map((column, index) => (
-            <th
-              className={classNames('thin', {
-                'code-components-cell': !isPortfolio && index > 0,
-                nowrap: !isPortfolio,
-                'text-center': isPortfolio && index < columns.length - 1,
-                'text-right': !isPortfolio || index === columns.length - 1
-              })}
-              key={column}>
-              {column}
-            </th>
-          ))}
-        <th />
-      </tr>
-    </thead>
+    <>
+      {canBePinned && <ContentCell aria-label={translate('code.pin')} />}
+      <ContentCell aria-label={translate('code.name')} />
+      {baseComponent &&
+        columns.map((column) => (
+          <Cell className="sw-whitespace-nowrap" key={column}>
+            {column}
+          </Cell>
+        ))}
+    </>
   );
 }

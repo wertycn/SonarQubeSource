@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,15 +33,17 @@ public class ProjectsWsModule extends Module {
   protected void configureModule() {
     add(
       ProjectDefaultVisibility.class,
+      ProjectFinder.class,
       ProjectLifeCycleListenersImpl.class,
       ProjectsWs.class,
+      ProjectCreator.class,
       CreateAction.class,
       BulkDeleteAction.class,
       DeleteAction.class,
       UpdateKeyAction.class,
-      BulkUpdateKeyAction.class,
       SearchMyProjectsAction.class,
       SearchAction.class,
+      SearchMyScannableProjectsAction.class,
       UpdateVisibilityAction.class,
       UpdateDefaultVisibilityAction.class);
   }

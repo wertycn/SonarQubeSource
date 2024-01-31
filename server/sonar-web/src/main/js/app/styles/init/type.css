@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -124,14 +124,6 @@ h6 svg,
   transform: translateY(-1px);
 }
 
-sup {
-  vertical-align: text-top;
-}
-
-sub {
-  vertical-align: text-bottom;
-}
-
 em {
   font-style: italic;
 }
@@ -164,19 +156,23 @@ blockquote cite {
 
 small,
 .small {
-  font-size: var(--smallFontSize);
+  font-size: var(--smallFontSize) !important;
 }
 
 .medium {
-  font-size: var(--mediumFontSize);
+  font-size: var(--mediumFontSize) !important;
 }
 
 .big {
-  font-size: var(--bigFontSize);
+  font-size: var(--bigFontSize) !important;
 }
 
 .huge {
-  font-size: var(--hugeFontSize);
+  font-size: var(--hugeFontSize) !important;
+}
+
+.gigantic {
+  font-size: var(--giganticFontSize) !important;
 }
 
 .zero-font-size {
@@ -297,4 +293,12 @@ small,
   line-height: 18px;
   font-family: var(--sourceCodeFontFamily);
   font-size: var(--smallFontSize);
+}
+
+.new-background {
+  background-color: #fcfcfd;
+}
+
+.white-background {
+  background-color: #ffffff;
 }

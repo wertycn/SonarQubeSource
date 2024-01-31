@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,8 @@ import org.sonar.api.server.ws.WebService;
 
 public class ProjectBadgesWs implements WebService {
 
+  static final String PROJECT_OR_APP_NOT_FOUND = "Project or Application not found";
+
   private final List<ProjectBadgesWsAction> actions;
 
   public ProjectBadgesWs(List<ProjectBadgesWsAction> actions) {
@@ -32,7 +34,7 @@ public class ProjectBadgesWs implements WebService {
 
   @Override
   public void define(Context context) {
-    NewController controller = context.createController("api/project_badges");
+      NewController controller = context.createController("api/project_badges");
     controller.setDescription("Generate badges based on quality gates or measures");
     controller.setSince("7.1");
     actions.forEach(action -> action.define(controller));

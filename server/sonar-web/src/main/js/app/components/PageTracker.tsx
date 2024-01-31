@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,75 +19,58 @@
  */
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { connect } from 'react-redux';
 import { Location, withRouter } from '../../components/hoc/withRouter';
-import { gtm } from '../../helpers/analytics';
 import { installScript } from '../../helpers/extensions';
 import { getWebAnalyticsPageHandlerFromCache } from '../../helpers/extensionsHandler';
 import { getInstance } from '../../helpers/system';
-import { getAppState, getGlobalSettingValue, Store } from '../../store/rootReducer';
+import { AppState } from '../../types/appstate';
+import withAppStateContext from './app-state/withAppStateContext';
 
 interface Props {
   location: Location;
-  trackingIdGTM?: string;
-  webAnalytics?: string;
+  appState: AppState;
 }
 
 interface State {
   lastLocation?: string;
 }
 
-export class PageTracker extends React.Component<Props, State> {
+export class PageTracker extends React.Component<React.PropsWithChildren<Props>, State> {
   state: State = {};
 
   componentDidMount() {
-    const { trackingIdGTM, webAnalytics } = this.props;
+    const { appState } = this.props;
 
-    if (webAnalytics && !getWebAnalyticsPageHandlerFromCache()) {
-      installScript(webAnalytics, 'head');
-    }
-
-    if (trackingIdGTM) {
-      gtm(trackingIdGTM);
+    if (appState.webAnalyticsJsPath && !getWebAnalyticsPageHandlerFromCache()) {
+      installScript(appState.webAnalyticsJsPath, 'head');
     }
   }
 
   trackPage = () => {
-    const { location, trackingIdGTM } = this.props;
+    const { location } = this.props;
     const { lastLocation } = this.state;
-    const { dataLayer } = window as any;
     const locationChanged = location.pathname !== lastLocation;
     const webAnalyticsPageChange = getWebAnalyticsPageHandlerFromCache();
 
     if (webAnalyticsPageChange && locationChanged) {
       this.setState({ lastLocation: location.pathname });
       setTimeout(() => webAnalyticsPageChange(location.pathname), 500);
-    } else if (dataLayer && dataLayer.push && trackingIdGTM && location.pathname !== '/') {
-      this.setState({ lastLocation: location.pathname });
-      setTimeout(() => dataLayer.push({ event: 'render-end' }), 500);
     }
   };
 
   render() {
-    const { trackingIdGTM, webAnalytics } = this.props;
+    const { appState } = this.props;
 
     return (
       <Helmet
         defaultTitle={getInstance()}
         defer={false}
-        onChangeClientState={trackingIdGTM || webAnalytics ? this.trackPage : undefined}>
+        onChangeClientState={appState.webAnalyticsJsPath ? this.trackPage : undefined}
+      >
         {this.props.children}
       </Helmet>
     );
   }
 }
 
-const mapStateToProps = (state: Store) => {
-  const trackingIdGTM = getGlobalSettingValue(state, 'sonar.analytics.gtm.trackingId');
-  return {
-    trackingIdGTM: trackingIdGTM && trackingIdGTM.value,
-    webAnalytics: getAppState(state).webAnalyticsJsPath
-  };
-};
-
-export default withRouter(connect(mapStateToProps)(PageTracker));
+export default withRouter(withAppStateContext(PageTracker));

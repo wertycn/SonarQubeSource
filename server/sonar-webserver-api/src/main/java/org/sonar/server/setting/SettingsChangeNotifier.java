@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,16 +23,19 @@ import com.google.common.annotations.VisibleForTesting;
 import org.sonar.api.config.GlobalPropertyChangeHandler;
 
 import javax.annotation.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class SettingsChangeNotifier {
 
   @VisibleForTesting
   GlobalPropertyChangeHandler[] changeHandlers;
 
+  @Autowired(required = false)
   public SettingsChangeNotifier(GlobalPropertyChangeHandler[] changeHandlers) {
     this.changeHandlers = changeHandlers;
   }
 
+  @Autowired(required = false)
   public SettingsChangeNotifier() {
     this(new GlobalPropertyChangeHandler[0]);
   }

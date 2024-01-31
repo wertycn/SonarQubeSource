@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.db.component;
 
+import java.util.List;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +31,7 @@ public class SnapshotQueryTest {
   @Test
   public void test_setters_and_getters() {
     SnapshotQuery query = new SnapshotQuery()
-      .setComponentUuid("abcd")
+      .setRootComponentUuid("abcd")
       .setIsLast(true)
       .setStatus("P")
       .setProjectVersion("1.0")
@@ -38,13 +39,17 @@ public class SnapshotQueryTest {
       .setCreatedBefore(20L)
       .setSort(BY_DATE, ASC);
 
-    assertThat(query.getComponentUuid()).isEqualTo("abcd");
+    assertThat(query.getRootComponentUuid()).isEqualTo("abcd");
     assertThat(query.getIsLast()).isTrue();
-    assertThat(query.getStatus()).isEqualTo("P");
+    assertThat(query.getStatus()).isEqualTo(List.of("P"));
     assertThat(query.getProjectVersion()).isEqualTo("1.0");
     assertThat(query.getCreatedAfter()).isEqualTo(10L);
     assertThat(query.getCreatedBefore()).isEqualTo(20L);
     assertThat(query.getSortField()).isEqualTo("created_at");
     assertThat(query.getSortOrder()).isEqualTo("asc");
+
+    query.setStatuses(List.of("P", "L"));
+
+    assertThat(query.getStatus()).isEqualTo(List.of("P", "L"));
   }
 }

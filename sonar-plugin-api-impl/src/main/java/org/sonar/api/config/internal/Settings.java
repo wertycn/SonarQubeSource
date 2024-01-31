@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -457,7 +457,7 @@ public abstract class Settings extends org.sonar.api.config.Settings {
   public List<String> getKeysStartingWith(String prefix) {
     return getProperties().keySet().stream()
       .filter(key -> StringUtils.startsWith(key, prefix))
-      .collect(Collectors.toList());
+      .toList();
   }
 
 }

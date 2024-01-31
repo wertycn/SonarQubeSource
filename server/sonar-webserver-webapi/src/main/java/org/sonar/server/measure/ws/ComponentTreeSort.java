@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -237,10 +237,10 @@ public class ComponentTreeSort {
     @Override
     public Double apply(@Nonnull ComponentDto input) {
       ComponentTreeData.Measure measure = measuresByComponentUuidAndMetric.get(input.uuid(), metric);
-      if (measure == null || !measure.isVariationSet()) {
+      if (measure == null || !metric.getKey().startsWith("new_")) {
         return null;
       }
-      return measure.getVariation();
+      return measure.getValue();
     }
   }
 

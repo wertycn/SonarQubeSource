@@ -30,6 +30,9 @@ message GenerateWsResponse {
   optional string name = 2;
   optional string token = 3;
   optional string createdAt = 4;
+  optional string type = 5;
+  optional string projectKey = 6;
+  optional string expirationDate = 7;
 }
 
 // WS api/user_tokens/search
@@ -41,5 +44,14 @@ message SearchWsResponse {
     optional string name = 1;
     optional string createdAt = 2;
     optional string lastConnectionDate = 3;
+    optional string type = 4;
+    optional Project project = 5;
+    optional string expirationDate = 6;
+    optional bool isExpired = 7;
+
+    message Project {
+      optional string key = 1;
+      optional string name = 2;
+    }
   }
 }

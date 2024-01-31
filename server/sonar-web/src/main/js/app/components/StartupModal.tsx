@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as differenceInDays from 'date-fns/difference_in_days';
+import { differenceInDays } from 'date-fns';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
-import { parseDate, toShortNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import { hasMessage } from 'sonar-ui-common/helpers/l10n';
-import { get, save } from 'sonar-ui-common/helpers/storage';
-import { showLicense } from '../../api/marketplace';
-import { Location, Router, withRouter } from '../../components/hoc/withRouter';
-import { isLoggedIn } from '../../helpers/users';
-import { getAppState, getCurrentUser, Store } from '../../store/rootReducer';
+import { showLicense } from '../../api/editions';
+import { parseDate, toShortISO8601String } from '../../helpers/dates';
+import { hasMessage } from '../../helpers/l10n';
+import { get, save } from '../../helpers/storage';
+import { AppState } from '../../types/appstate';
 import { EditionKey } from '../../types/editions';
+import { CurrentUser, isLoggedIn } from '../../types/users';
+import LicensePromptModal from './LicensePromptModal';
+import withAppStateContext from './app-state/withAppStateContext';
+import withCurrentUserContext from './current-user/withCurrentUserContext';
 
-const LicensePromptModal = lazyLoadComponent(
-  () => import('../../apps/marketplace/components/LicensePromptModal'),
-  'LicensePromptModal'
-);
-
-interface StateProps {
-  canAdmin?: boolean;
-  currentEdition?: EditionKey;
-  currentUser: T.CurrentUser;
+interface Props {
+  currentUser: CurrentUser;
+  appState: AppState;
 }
-
-interface OwnProps {
-  children?: React.ReactNode;
-}
-
-interface WithRouterProps {
-  location: Pick<Location, 'pathname'>;
-  router: Pick<Router, 'push'>;
-}
-
-type Props = StateProps & OwnProps & WithRouterProps;
 
 interface State {
   open?: boolean;
@@ -58,7 +41,7 @@ interface State {
 
 const LICENSE_PROMPT = 'sonarqube.license.prompt';
 
-export class StartupModal extends React.PureComponent<Props, State> {
+export class StartupModal extends React.PureComponent<React.PropsWithChildren<Props>, State> {
   state: State = {};
 
   componentDidMount() {
@@ -70,18 +53,18 @@ export class StartupModal extends React.PureComponent<Props, State> {
   };
 
   tryAutoOpenLicense = () => {
-    const { canAdmin, currentEdition, currentUser } = this.props;
+    const { appState, currentUser } = this.props;
     const hasLicenseManager = hasMessage('license.prompt.title');
-    const hasLicensedEdition = currentEdition && currentEdition !== EditionKey.community;
+    const hasLicensedEdition = appState.edition && appState.edition !== EditionKey.community;
 
-    if (canAdmin && hasLicensedEdition && isLoggedIn(currentUser) && hasLicenseManager) {
+    if (appState.canAdmin && hasLicensedEdition && isLoggedIn(currentUser) && hasLicenseManager) {
       const lastPrompt = get(LICENSE_PROMPT, currentUser.login);
 
       if (!lastPrompt || differenceInDays(new Date(), parseDate(lastPrompt)) >= 1) {
         showLicense()
-          .then(license => {
+          .then((license) => {
             if (!license || !license.isValidEdition) {
-              save(LICENSE_PROMPT, toShortNotSoISOString(new Date()), currentUser.login);
+              save(LICENSE_PROMPT, toShortISO8601String(new Date()), currentUser.login);
               this.setState({ open: true });
             }
           })
@@ -92,19 +75,8 @@ export class StartupModal extends React.PureComponent<Props, State> {
 
   render() {
     const { open } = this.state;
-    return (
-      <>
-        {this.props.children}
-        {open && <LicensePromptModal onClose={this.closeLicense} />}
-      </>
-    );
+    return open ? <LicensePromptModal onClose={this.closeLicense} /> : null;
   }
 }
 
-const mapStateToProps = (state: Store): StateProps => ({
-  canAdmin: getAppState(state).canAdmin,
-  currentEdition: getAppState(state).edition as EditionKey, // TODO: Fix once AppState is no longer ambiant.
-  currentUser: getCurrentUser(state)
-});
-
-export default connect(mapStateToProps)(withRouter(StartupModal));
+export default withCurrentUserContext(withAppStateContext(StartupModal));

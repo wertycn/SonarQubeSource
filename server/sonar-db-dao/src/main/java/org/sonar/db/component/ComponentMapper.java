@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,61 +26,46 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.session.ResultHandler;
-import org.apache.ibatis.session.RowBounds;
+import org.sonar.db.Pagination;
 
 public interface ComponentMapper {
+  @CheckForNull
+  List<ComponentDto> selectByKeyCaseInsensitive(@Param("key") String key);
 
   @CheckForNull
-  ComponentDto selectByKey(String key);
+  ComponentDto selectByKeyAndBranchOrPr(@Param("key") String key, @Nullable @Param("branch") String branch, @Nullable @Param("pullRequest") String pullRequest);
 
   @CheckForNull
-  ComponentDto selectBranchByKeyAndBranchKey(@Param("key") String key, @Param("dbKey") String dbKey, @Param("branch") String branch);
-
-  @CheckForNull
-  ComponentDto selectPrByKeyAndBranchKey(@Param("key") String key, @Param("dbKey") String dbKey, @Param("branch") String branch);
-
-  @CheckForNull
-  ComponentDto selectByUuid(String uuid);
+  ComponentDto selectByUuid(@Param("uuid") String uuid);
 
   /**
    * Return sub project of component keys
    */
   List<ComponentDto> selectSubProjectsByComponentUuids(@Param("uuids") Collection<String> uuids);
 
-  List<ComponentDto> selectByKeys(@Param("keys") Collection<String> keys);
-
-  List<ComponentDto> selectByDbKeys(@Param("dbKeys") Collection<String> dbKeys);
-
-  List<ComponentDto> selectByKeysAndBranch(@Param("keys") Collection<String> keys, @Param("branch") String branch);
+  List<ComponentDto> selectByKeysAndBranchOrPr(@Param("keys") Collection<String> keys,
+    @Nullable @Param("branch") String branch, @Nullable @Param("pullRequest") String pullRequest);
 
   List<ComponentDto> selectByUuids(@Param("uuids") Collection<String> uuids);
 
-  List<ComponentDto> selectByProjectUuid(@Param("projectUuid") String projectUuid);
+  List<ComponentDto> selectByBranchUuid(@Param("branchUuid") String branchUuid);
 
   List<String> selectExistingUuids(@Param("uuids") Collection<String> uuids);
 
   List<ComponentDto> selectComponentsByQualifiers(@Param("qualifiers") Collection<String> qualifiers);
 
-  int countEnabledModulesByProjectUuid(@Param("projectUuid") String projectUuid);
-
-  List<ComponentDto> selectByQuery(@Param("query") ComponentQuery query, RowBounds rowBounds);
+  List<ComponentDto> selectByQuery(@Param("query") ComponentQuery query, @Param("pagination") Pagination pagination);
 
   int countByQuery(@Param("query") ComponentQuery query);
 
   List<ComponentDto> selectDescendants(@Param("query") ComponentTreeQuery query, @Param("baseUuid") String baseUuid, @Param("baseUuidPath") String baseUuidPath);
 
-  /**
-   * Returns all enabled projects (Scope {@link org.sonar.api.resources.Scopes#PROJECT} and qualifier
-   * {@link org.sonar.api.resources.Qualifiers#PROJECT}) no matter if they are ghost project, provisioned projects or
-   * regular ones.
-   */
-  List<ComponentDto> selectProjects();
+  List<ComponentDto> selectChildren(@Param("branchUuid") String branchUuid, @Param("uuidPaths") Set<String> uuidPaths);
 
   /**
-   * Return all descendant modules (including itself) from a given component uuid and scope
+   * Return all descendant views (including itself) from a given root view
    */
-  List<ComponentDto> selectDescendantModules(@Param("moduleUuid") String moduleUuid, @Param(value = "scope") String scope,
-    @Param(value = "excludeDisabled") boolean excludeDisabled);
+  List<ComponentDto> selectEnabledViewsFromRootView(@Param("rootViewUuid") String rootViewUuid);
 
   /**
    * Return all files from a given project uuid and scope
@@ -88,41 +73,26 @@ public interface ComponentMapper {
   List<FilePathWithHashDto> selectEnabledFilesFromProject(@Param("projectUuid") String projectUuid);
 
   /**
-   * Return all descendant files from a given module uuid and scope
-   */
-  List<FilePathWithHashDto> selectDescendantFiles(@Param("moduleUuid") String moduleUuid, @Param(value = "scope") String scope,
-    @Param(value = "excludeDisabled") boolean excludeDisabled);
-
-  /**
    * Return uuids and project uuids from list of qualifiers
    * <p/>
    * It's using a join on snapshots in order to use he indexed columns snapshots.qualifier
    */
-  List<UuidWithProjectUuidDto> selectUuidsForQualifiers(@Param("qualifiers") String... qualifiers);
-
-  /**
-   * Return components of a given scope of a project
-   *
-   * @param scope scope of components to return. If null, all components are returned
-   */
-  List<ComponentDto> selectComponentsFromProjectKeyAndScope(@Param("projectKey") String projectKey, @Nullable @Param("scope") String scope,
-    @Param(value = "excludeDisabled") boolean excludeDisabled);
+  List<UuidWithBranchUuidDto> selectUuidsForQualifiers(@Param("qualifiers") String... qualifiers);
 
   /**
    * Return keys and UUIDs of all components belonging to a project
    */
-  List<KeyWithUuidDto> selectUuidsByKeyFromProjectKey(@Param("projectKey") String projectKey);
+  List<KeyWithUuidDto> selectUuidsByKeyFromProjectKeyAndBranchOrPr(@Param("projectKey") String projectKey,
+    @Nullable @Param("branch") String branch, @Nullable @Param("pullRequest") String pullRequest);
 
-  Set<String> selectViewKeysWithEnabledCopyOfProject(@Param("projectUuids") Collection<String> projectUuids);
+  Set<String> selectViewKeysWithEnabledCopyOfProject(@Param("branchUuids") Collection<String> branchUuids);
 
   /**
    * Return technical projects from a view or a sub-view
    */
-  List<String> selectProjectsFromView(@Param("viewUuidLikeQuery") String viewUuidLikeQuery, @Param("projectViewUuid") String projectViewUuid);
+  List<String> selectProjectsFromView(@Param("viewUuidLikeQuery") String viewUuidLikeQuery, @Param("rootViewUuid") String rootViewUuid);
 
-  void scrollForIndexing(@Param("projectUuid") @Nullable String projectUuid, ResultHandler<ComponentDto> handler);
-
-  void scrollAllFilesForFileMove(@Param("projectUuid") String projectUuid, ResultHandler<FileMoveRowDto> handler);
+  void scrollAllFilesForFileMove(@Param("branchUuid") String branchUuid, ResultHandler<FileMoveRowDto> handler);
 
   void insert(ComponentDto componentDto);
 
@@ -130,22 +100,16 @@ public interface ComponentMapper {
 
   void updateBEnabledToFalse(@Param("uuids") List<String> uuids);
 
-  void applyBChangesForRootComponentUuid(@Param("projectUuid") String projectUuid);
+  void applyBChangesForBranchUuid(@Param("branchUuid") String branchUuid);
 
-  void resetBChangedForRootComponentUuid(@Param("projectUuid") String projectUuid);
+  void resetBChangedForBranchUuid(@Param("branchUuid") String branchUuid);
 
-  void setPrivateForRootComponentUuid(@Param("projectUuid") String projectUuid, @Param("isPrivate") boolean isPrivate);
-
-  void delete(String componentUuid);
+  void setPrivateForBranchUuid(@Param("branchUuid") String branchUuid, @Param("isPrivate") boolean isPrivate);
 
   List<KeyWithUuidDto> selectComponentsFromPullRequestsTargetingCurrentBranchThatHaveOpenIssues(@Param("referenceBranchUuid") String referenceBranchUuid,
-                                                                                                @Param("currentBranchUuid") String currentBranchUuid);
+    @Param("currentBranchUuid") String currentBranchUuid);
 
   List<KeyWithUuidDto> selectComponentsFromBranchesThatHaveOpenIssues(@Param("branchUuids") List<String> branchUuids);
-
-  List<ProjectNclocDistributionDto> selectPrivateProjectsWithNcloc();
-
-  List<ComponentWithModuleUuidDto> selectEnabledComponentsWithModuleUuidFromProjectKey(String projectKey);
 
   short checkIfAnyOfComponentsWithQualifiers(@Param("componentKeys") Collection<String> componentKeys, @Param("qualifiers") Set<String> qualifiers);
 }

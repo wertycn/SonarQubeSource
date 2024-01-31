@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,47 +17,44 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DangerButtonPrimary, Modal, Spinner } from 'design-system';
 import * as React from 'react';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import SimpleModal from 'sonar-ui-common/components/controls/SimpleModal';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { useState } from 'react';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { PermissionTemplate } from '../../../types/types';
 
 interface Props {
   onClose: () => void;
   onSubmit: () => Promise<void>;
-  permissionTemplate: T.PermissionTemplate;
+  permissionTemplate: PermissionTemplate;
 }
 
 export default function DeleteForm({ onClose, onSubmit, permissionTemplate: t }: Props) {
+  const [submitting, setSubmitting] = useState(false);
   const header = translate('permission_template.delete_confirm_title');
 
+  const handleClick = React.useCallback(() => {
+    setSubmitting(true);
+    onSubmit();
+  }, [onSubmit]);
+
   return (
-    <SimpleModal header={header} onClose={onClose} onSubmit={onSubmit}>
-      {({ onCloseClick, onFormSubmit, submitting }) => (
-        <form onSubmit={onFormSubmit}>
-          <header className="modal-head">
-            <h2>{header}</h2>
-          </header>
-
-          <div className="modal-body">
-            {translateWithParameters(
-              'permission_template.do_you_want_to_delete_template_xxx',
-              t.name
-            )}
-          </div>
-
-          <footer className="modal-foot">
-            <DeferredSpinner className="spacer-right" loading={submitting} />
-            <SubmitButton className="button-red" disabled={submitting}>
-              {translate('delete')}
-            </SubmitButton>
-            <ResetButtonLink disabled={submitting} onClick={onCloseClick}>
-              {translate('cancel')}
-            </ResetButtonLink>
-          </footer>
-        </form>
+    <Modal
+      onClose={onClose}
+      headerTitle={header}
+      secondaryButtonLabel={translate('cancel')}
+      body={translateWithParameters(
+        'permission_template.do_you_want_to_delete_template_xxx',
+        t.name,
       )}
-    </SimpleModal>
+      primaryButton={
+        <>
+          <Spinner loading={submitting} />
+          <DangerButtonPrimary onClick={handleClick} disabled={submitting}>
+            {translate('delete')}
+          </DangerButtonPrimary>
+        </>
+      }
+    />
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,8 @@
  */
 package org.sonar.server.issue;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.HashMap;
 import org.sonar.api.resources.Scopes;
@@ -35,22 +37,45 @@ import static org.sonar.api.issue.Issue.STATUS_OPEN;
 
 public class IssueDocTesting {
 
-  public static IssueDoc newDoc(ComponentDto componentDto) {
-    return newDoc(Uuids.createFast(), componentDto);
+  public static IssueDoc newDoc(ComponentDto componentDto, String projectUuid) {
+    return newDoc(Uuids.createFast(), projectUuid, componentDto);
   }
 
-  public static IssueDoc newDoc(String key, ComponentDto componentDto) {
-    String mainBranchProjectUuid = componentDto.getMainBranchProjectUuid();
+  public static IssueDoc newDocForProject(ComponentDto project) {
+    return newDocForProject(Uuids.createFast(), project);
+  }
+
+  /**
+   * main branch definition should not be done based on main branch uuid.
+   * Use org.sonar.server.issue.IssueDocTesting#newDoc(java.lang.String, java.lang.String, boolean, org.sonar.db.component.ComponentDto) instead.
+   */
+  @Deprecated
+  public static IssueDoc newDoc(String key, String projectUuid, ComponentDto componentDto) {
+    return newDoc(key, projectUuid, componentDto.branchUuid().equals(projectUuid), componentDto);
+  }
+
+  public static IssueDoc newDoc(String key, String projectUuid, boolean isMainBranch, ComponentDto componentDto) {
     return newDoc()
       .setKey(key)
-      .setBranchUuid(componentDto.projectUuid())
+      .setBranchUuid(componentDto.branchUuid())
       .setComponentUuid(componentDto.uuid())
-      .setModuleUuid(!componentDto.scope().equals(Scopes.PROJECT) ? componentDto.moduleUuid() : componentDto.uuid())
-      .setModuleUuidPath(componentDto.moduleUuidPath())
-      .setProjectUuid(mainBranchProjectUuid == null ? componentDto.projectUuid() : mainBranchProjectUuid)
+      .setProjectUuid(projectUuid)
       // File path make no sens on modules and projects
       .setFilePath(!componentDto.scope().equals(Scopes.PROJECT) ? componentDto.path() : null)
-      .setIsMainBranch(mainBranchProjectUuid == null);
+      .setIsMainBranch(isMainBranch)
+      .setFuncCreationDate(Date.from(LocalDateTime.of(1970, 1, 1, 1, 1).toInstant(ZoneOffset.UTC)));
+  }
+
+  public static IssueDoc newDocForProject(String key, ComponentDto project) {
+    return newDoc()
+      .setKey(key)
+      .setBranchUuid(project.branchUuid())
+      .setComponentUuid(project.uuid())
+      .setProjectUuid(project.branchUuid())
+      // File path make no sens on modules and projects
+      .setFilePath(!project.scope().equals(Scopes.PROJECT) ? project.path() : null)
+      .setIsMainBranch(true)
+      .setFuncCreationDate(Date.from(LocalDateTime.of(1970, 1, 1, 1, 1).toInstant(ZoneOffset.UTC)));
   }
 
   public static IssueDoc newDoc() {
@@ -65,8 +90,6 @@ public class IssueDocTesting {
     doc.setComponentUuid(Uuids.createFast());
     doc.setFilePath("filePath_" + randomAlphabetic(5));
     doc.setDirectoryPath("directory_" + randomAlphabetic(5));
-    doc.setModuleUuid(Uuids.createFast());
-    doc.setModuleUuidPath(Uuids.createFast());
     doc.setProjectUuid(Uuids.createFast());
     doc.setLine(nextInt(1_000) + 1);
     doc.setStatus(STATUS_OPEN);

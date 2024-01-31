@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@
 package org.sonar.server.authentication;
 
 import java.util.Optional;
-import javax.servlet.http.HttpServletRequest;
+import org.sonar.api.server.http.HttpRequest;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.user.UserDto;
@@ -35,42 +35,53 @@ import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
  * delegated to an external system, e.g. LDAP.
  */
 public class CredentialsAuthentication {
-
+  static final String ERROR_PASSWORD_CANNOT_BE_NULL = "Password cannot be null";
   private final DbClient dbClient;
   private final AuthenticationEvent authenticationEvent;
   private final CredentialsExternalAuthentication externalAuthentication;
   private final CredentialsLocalAuthentication localAuthentication;
+  private final LdapCredentialsAuthentication ldapCredentialsAuthentication;
 
   public CredentialsAuthentication(DbClient dbClient, AuthenticationEvent authenticationEvent,
-    CredentialsExternalAuthentication externalAuthentication, CredentialsLocalAuthentication localAuthentication) {
+    CredentialsExternalAuthentication externalAuthentication, CredentialsLocalAuthentication localAuthentication,
+    LdapCredentialsAuthentication ldapCredentialsAuthentication) {
     this.dbClient = dbClient;
     this.authenticationEvent = authenticationEvent;
     this.externalAuthentication = externalAuthentication;
     this.localAuthentication = localAuthentication;
+    this.ldapCredentialsAuthentication = ldapCredentialsAuthentication;
   }
 
-  public UserDto authenticate(Credentials credentials, HttpServletRequest request, Method method) {
+  public UserDto authenticate(Credentials credentials, HttpRequest request, Method method) {
     try (DbSession dbSession = dbClient.openSession(false)) {
       return authenticate(dbSession, credentials, request, method);
     }
   }
 
-  private UserDto authenticate(DbSession dbSession, Credentials credentials, HttpServletRequest request, Method method) {
+  private UserDto authenticate(DbSession dbSession, Credentials credentials, HttpRequest request, Method method) {
     UserDto localUser = dbClient.userDao().selectActiveUserByLogin(dbSession, credentials.getLogin());
     if (localUser != null && localUser.isLocal()) {
-      localAuthentication.authenticate(dbSession, localUser, credentials.getPassword().orElse(null), method);
+      String password = getNonNullPassword(credentials);
+      localAuthentication.authenticate(dbSession, localUser, password, method);
       dbSession.commit();
       authenticationEvent.loginSuccess(request, localUser.getLogin(), Source.local(method));
       return localUser;
     }
-    Optional<UserDto> externalUser = externalAuthentication.authenticate(credentials, request, method);
+    Optional<UserDto> externalUser = externalAuthentication.authenticate(credentials, request, method)
+      .or(() -> ldapCredentialsAuthentication.authenticate(credentials, request, method));
     if (externalUser.isPresent()) {
       return externalUser.get();
     }
+    localAuthentication.generateHashToAvoidEnumerationAttack();
     throw AuthenticationException.newBuilder()
       .setSource(Source.local(method))
       .setLogin(credentials.getLogin())
       .setMessage(localUser != null && !localUser.isLocal() ? "User is not local" : "No active user for login")
       .build();
   }
+
+  private static String getNonNullPassword(Credentials credentials) {
+    return credentials.getPassword().orElseThrow(() -> new IllegalArgumentException(ERROR_PASSWORD_CANNOT_BE_NULL));
+  }
+
 }

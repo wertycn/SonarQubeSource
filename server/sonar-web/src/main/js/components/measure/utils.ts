@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,43 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getRatingTooltip as nextGetRatingTooltip, isDiffMetric } from '../../helpers/measures';
+import { Dict, Measure, MeasureEnhanced, MeasureIntern, Metric } from '../../types/types';
 
-const KNOWN_RATINGS = [
+export const KNOWN_RATINGS = [
   'sqale_rating',
   'maintainability_rating', // Needed to provide the label for "new_maintainability_rating"
   'reliability_rating',
   'security_rating',
-  'security_review_rating'
+  'security_review_rating',
 ];
 
-export function enhanceMeasure(measure: T.Measure, metrics: T.Dict<T.Metric>): T.MeasureEnhanced {
+export function enhanceMeasure(measure: Measure, metrics: Dict<Metric>): MeasureEnhanced {
   return {
     ...measure,
     metric: metrics[measure.metric],
-    leak: getLeakValue(measure)
+    leak: getLeakValue(measure),
   };
 }
 
-export function getLeakValue(measure: T.MeasureIntern | undefined): string | undefined {
+export function getLeakValue(measure: MeasureIntern | undefined): string | undefined {
   return measure?.period?.value;
 }
 
-export function getRatingTooltip(metricKey: string, value: number): string | undefined {
-  const finalMetricKey = isDiffMetric(metricKey) ? metricKey.substr(4) : metricKey;
-  if (KNOWN_RATINGS.includes(finalMetricKey)) {
-    return nextGetRatingTooltip(finalMetricKey, value);
+export function duplicationRatingConverter(val: number) {
+  const value = val || 0;
+  const THRESHOLD_A = 3;
+  const THRESHOLD_B = 5;
+  const THRESHOLD_C = 10;
+  const THRESHOLD_D = 20;
+
+  if (value < THRESHOLD_A) {
+    return 'A';
+  } else if (value < THRESHOLD_B) {
+    return 'B';
+  } else if (value < THRESHOLD_C) {
+    return 'C';
+  } else if (value < THRESHOLD_D) {
+    return 'D';
   }
-  return undefined;
+  return 'E';
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,10 +34,11 @@ export default function GlobalFooterBranding() {
     <div>
       This application is based on{' '}
       <a
-        href="https://www.sonarqube.org/?referrer=sonarqube"
+        href="https://www.sonarsource.com/products/sonarqube/?referrer=sonarqube"
         rel="noopener noreferrer"
         target="_blank"
-        title="SonarQube™">
+        title="SonarQube™"
+      >
         SonarQube™
       </a>{' '}
       but is <strong>not</strong> an official version provided by{' '}
@@ -45,7 +46,8 @@ export default function GlobalFooterBranding() {
         href="https://www.sonarsource.com"
         rel="noopener noreferrer"
         target="_blank"
-        title="SonarSource SA">
+        title="SonarSource SA"
+      >
         SonarSource SA
       </a>
       .

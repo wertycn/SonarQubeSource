@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.server.rule;
 import org.sonar.api.server.rule.RulesDefinition;
 import org.sonar.api.impl.server.RulesDefinitionContext;
 import org.sonar.server.plugins.ServerPluginRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Loads all instances of {@link RulesDefinition}. Used during server startup
@@ -29,12 +30,11 @@ import org.sonar.server.plugins.ServerPluginRepository;
  */
 public class RuleDefinitionsLoader {
 
-  private final CommonRuleDefinitions coreCommonDefs;
   private final RulesDefinition[] pluginDefs;
   private final ServerPluginRepository serverPluginRepository;
 
-  public RuleDefinitionsLoader(CommonRuleDefinitions coreCommonDefs, ServerPluginRepository serverPluginRepository, RulesDefinition[] pluginDefs) {
-    this.coreCommonDefs = coreCommonDefs;
+  @Autowired(required = false)
+  public RuleDefinitionsLoader(ServerPluginRepository serverPluginRepository, RulesDefinition[] pluginDefs) {
     this.serverPluginRepository = serverPluginRepository;
     this.pluginDefs = pluginDefs;
   }
@@ -42,8 +42,9 @@ public class RuleDefinitionsLoader {
   /**
    * Used when no definitions at all.
    */
-  public RuleDefinitionsLoader(CommonRuleDefinitions coreCommonDefs, ServerPluginRepository serverPluginRepository) {
-    this(coreCommonDefs, serverPluginRepository, new RulesDefinition[0]);
+  @Autowired(required = false)
+  public RuleDefinitionsLoader(ServerPluginRepository serverPluginRepository) {
+    this(serverPluginRepository, new RulesDefinition[0]);
   }
 
   public RulesDefinition.Context load() {
@@ -53,7 +54,6 @@ public class RuleDefinitionsLoader {
       pluginDefinition.define(context);
     }
     context.setCurrentPluginKey(null);
-    coreCommonDefs.define(context);
     return context;
   }
 }

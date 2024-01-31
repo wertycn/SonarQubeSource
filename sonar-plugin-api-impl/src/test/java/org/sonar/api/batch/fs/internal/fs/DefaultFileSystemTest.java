@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,20 +24,17 @@ import java.nio.charset.StandardCharsets;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.batch.fs.internal.DefaultFileSystem;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class DefaultFileSystemTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private DefaultFileSystem fs;
 
@@ -115,24 +112,47 @@ public class DefaultFileSystemTest {
   }
 
   @Test
-  public void input_file_returns_null_if_file_not_found() {
+  public void inputFiles_using_optimized_predicates() {
+    fs.add(new TestInputFileBuilder("foo", "src/Foo.php").setLanguage("php").build());
+    fs.add(new TestInputFileBuilder("foo", "src/Bar.java").setLanguage("java").build());
+    fs.add(new TestInputFileBuilder("foo", "src/Baz.java").setLanguage("java").build());
+
+    assertThat(fs.inputFiles(fs.predicates().hasFilename("Foo.php"))).hasSize(1);
+    assertThat(fs.inputFiles(fs.predicates().hasFilename("unknown"))).isEmpty();
+    assertThat(fs.inputFiles(fs.predicates().hasExtension("java"))).hasSize(2);
+    assertThat(fs.inputFiles(fs.predicates().hasExtension("unknown"))).isEmpty();
+  }
+
+  @Test
+  public void hasFiles_using_optimized_predicates() {
+    fs.add(new TestInputFileBuilder("foo", "src/Foo.php").setLanguage("php").build());
+    fs.add(new TestInputFileBuilder("foo", "src/Bar.java").setLanguage("java").build());
+    fs.add(new TestInputFileBuilder("foo", "src/Baz.java").setLanguage("java").build());
+
+    assertThat(fs.hasFiles(fs.predicates().hasFilename("Foo.php"))).isTrue();
+    assertThat(fs.hasFiles(fs.predicates().hasFilename("unknown"))).isFalse();
+    assertThat(fs.hasFiles(fs.predicates().hasExtension("java"))).isTrue();
+    assertThat(fs.hasFiles(fs.predicates().hasExtension("unknown"))).isFalse();
+  }
+
+  @Test
+  public void inputFile_returns_null_if_file_not_found() {
     assertThat(fs.inputFile(fs.predicates().hasRelativePath("src/Bar.java"))).isNull();
     assertThat(fs.inputFile(fs.predicates().hasLanguage("cobol"))).isNull();
   }
 
   @Test
-  public void input_file_fails_if_too_many_results() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("expected one element");
-
+  public void inputFile_fails_if_too_many_results() {
     fs.add(new TestInputFileBuilder("foo", "src/Bar.java").setLanguage("java").build());
     fs.add(new TestInputFileBuilder("foo", "src/Baz.java").setLanguage("java").build());
 
-    fs.inputFile(fs.predicates().all());
+    assertThatThrownBy(() -> fs.inputFile(fs.predicates().all()))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("expected one element");
   }
 
   @Test
-  public void input_file_supports_non_indexed_predicates() {
+  public void inputFile_supports_non_indexed_predicates() {
     fs.add(new TestInputFileBuilder("foo", "src/Bar.java").setLanguage("java").build());
 
     // it would fail if more than one java file

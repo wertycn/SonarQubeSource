@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ import org.sonar.api.utils.log.Logger;
 import org.sonar.api.utils.log.Loggers;
 import org.sonar.api.utils.log.Profiler;
 import org.sonar.scanner.bootstrap.GlobalConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class ProjectBuildersExecutor {
 
@@ -36,18 +37,24 @@ public class ProjectBuildersExecutor {
   private final GlobalConfiguration globalConfig;
   private final ProjectBuilder[] projectBuilders;
 
+  @Autowired(required = false)
   public ProjectBuildersExecutor(GlobalConfiguration globalConfig, ProjectBuilder... projectBuilders) {
     this.globalConfig = globalConfig;
     this.projectBuilders = projectBuilders;
   }
 
+  @Autowired(required = false)
   public ProjectBuildersExecutor(GlobalConfiguration globalConfig) {
     this(globalConfig, new ProjectBuilder[0]);
   }
 
   public void execute(ProjectReactor reactor) {
+    executeProjectBuilders(projectBuilders, reactor, "Execute project builders");
+  }
+
+  public void executeProjectBuilders(ProjectBuilder[] projectBuilders, ProjectReactor reactor, String profilerMessage) {
     if (projectBuilders.length > 0) {
-      Profiler profiler = Profiler.create(LOG).startInfo("Execute project builders");
+      Profiler profiler = Profiler.create(LOG).startInfo(profilerMessage);
       ProjectBuilderContext context = new ProjectBuilderContext(reactor, globalConfig);
 
       for (ProjectBuilder projectBuilder : projectBuilders) {

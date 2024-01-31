@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.server.platform.ws;
 import com.google.common.io.Resources;
 import java.util.Comparator;
 import org.sonar.api.server.ws.WebService;
+import org.sonar.process.ProcessProperties;
 import org.sonar.process.cluster.health.NodeDetails;
 import org.sonar.process.cluster.health.NodeHealth;
 import org.sonar.server.health.ClusterHealth;
@@ -45,14 +46,17 @@ public class HealthActionSupport {
   void define(WebService.NewController controller, SystemWsAction handler) {
     controller.createAction("health")
       .setDescription("Provide health status of SonarQube." +
-        "<p>Require 'Administer System' permission or authentication with passcode</p>" +
+        "<p>Although global health is calculated based on both application and search nodes, detailed information is returned only for application nodes.</p>" +
         "<p> " +
         " <ul>" +
         " <li>GREEN: SonarQube is fully operational</li>" +
         " <li>YELLOW: SonarQube is usable, but it needs attention in order to be fully operational</li>" +
         " <li>RED: SonarQube is not operational</li>" +
         " </ul>" +
-        "</p>")
+        "</p><br>" +
+        "Requires the 'Administer System' permission or " +
+        "system passcode (see " + ProcessProperties.Property.WEB_SYSTEM_PASS_CODE + " in sonar.properties).<br>" +
+        "When SonarQube is in safe mode (waiting or running a database upgrade), only the authentication with a system passcode is supported.")
       .setSince("6.6")
       .setResponseExample(Resources.getResource(this.getClass(), "example-health.json"))
       .setHandler(handler);

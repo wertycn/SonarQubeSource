@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.sonar.api.resources.Language;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class LanguageRepositoryImplTest {
 
@@ -31,29 +32,31 @@ public class LanguageRepositoryImplTest {
   private static final String SOME_LANGUAGE_KEY = "SoMe language_Key";
   private static final Language SOME_LANGUAGE = createLanguage(SOME_LANGUAGE_KEY, "_name");
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void constructor_fails_is_language_have_the_same_key() {
-    new LanguageRepositoryImpl(createLanguage(SOME_LANGUAGE_KEY, " 1"), createLanguage(SOME_LANGUAGE_KEY, " 2"));
+    assertThatThrownBy(() -> new LanguageRepositoryImpl(createLanguage(SOME_LANGUAGE_KEY, " 1"), createLanguage(SOME_LANGUAGE_KEY, " 2")))
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
   public void find_on_empty_LanguageRepository_returns_absent() {
-    assertThat(new LanguageRepositoryImpl().find(ANY_KEY).isPresent()).isFalse();
+    assertThat(new LanguageRepositoryImpl().find(ANY_KEY)).isEmpty();
   }
 
   @Test
   public void find_by_key_returns_the_same_object() {
     LanguageRepositoryImpl languageRepository = new LanguageRepositoryImpl(SOME_LANGUAGE);
     Optional<Language> language = languageRepository.find(SOME_LANGUAGE_KEY);
-    assertThat(language.isPresent()).isTrue();
-    assertThat(language.get()).isSameAs(SOME_LANGUAGE);
+    assertThat(language)
+      .isPresent()
+      .containsSame(SOME_LANGUAGE);
   }
 
   @Test
   public void find_by_other_key_returns_absent() {
     LanguageRepositoryImpl languageRepository = new LanguageRepositoryImpl(SOME_LANGUAGE);
     Optional<Language> language = languageRepository.find(ANY_KEY);
-    assertThat(language.isPresent()).isFalse();
+    assertThat(language).isEmpty();
   }
 
   private static Language createLanguage(final String key, final String nameSuffix) {
@@ -71,6 +74,11 @@ public class LanguageRepositoryImplTest {
       @Override
       public String[] getFileSuffixes() {
         return new String[0];
+      }
+
+      @Override
+      public boolean publishAllFiles() {
+        return true;
       }
     };
   }

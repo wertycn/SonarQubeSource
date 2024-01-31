@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,17 +43,17 @@ public abstract class FieldAware<U extends FieldAware<U>> {
 
   @SuppressWarnings("unchecked")
   public KeywordFieldBuilder<U> keywordFieldBuilder(String fieldName) {
-    return (KeywordFieldBuilder<U>) new KeywordFieldBuilder(this, fieldName);
+    return new KeywordFieldBuilder(this, fieldName);
   }
 
   @SuppressWarnings("unchecked")
   public TextFieldBuilder<U> textFieldBuilder(String fieldName) {
-    return (TextFieldBuilder<U>) new TextFieldBuilder(this, fieldName);
+    return new TextFieldBuilder(this, fieldName);
   }
 
   @SuppressWarnings("unchecked")
   public NestedFieldBuilder<U> nestedFieldBuilder(String fieldName) {
-    return (NestedFieldBuilder<U>) new NestedFieldBuilder(this, fieldName);
+    return new NestedFieldBuilder(this, fieldName);
   }
 
   public U createBooleanField(String fieldName) {
@@ -67,7 +67,7 @@ public abstract class FieldAware<U extends FieldAware<U>> {
   public U createDateTimeField(String fieldName) {
     Map<String, String> hash = new TreeMap<>();
     hash.put("type", "date");
-    hash.put("format", "date_time||epoch_second");
+    hash.put("format", "date_time||epoch_millis");
     return setField(fieldName, hash);
   }
 

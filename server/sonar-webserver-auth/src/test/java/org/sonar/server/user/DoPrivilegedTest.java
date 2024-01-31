@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.server.tester.MockUserSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.sonar.api.web.UserRole.USER;
 
 public class DoPrivilegedTest {
 
@@ -51,6 +51,10 @@ public class DoPrivilegedTest {
     assertThat(catcher.userSession.hasComponentPermission("any permission", new ComponentDto())).isTrue();
     assertThat(catcher.userSession.isSystemAdministrator()).isTrue();
     assertThat(catcher.userSession.shouldResetPassword()).isFalse();
+    assertThat(catcher.userSession.isActive()).isTrue();
+    assertThat(catcher.userSession.hasChildProjectsPermission(USER, new ComponentDto().setUuid("uuid"))).isTrue();
+    assertThat(catcher.userSession.hasPortfolioChildProjectsPermission(USER, new ComponentDto())).isTrue();
+    assertThat(catcher.userSession.isAuthenticatedBrowserSession()).isFalse();
 
     // verify session in place after task is done
     assertThat(threadLocalUserSession.get()).isSameAs(session);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,31 +18,32 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { chunk, flatMap, groupBy, sortBy } from 'lodash';
-import { getLocalizedMetricName, translate } from 'sonar-ui-common/helpers/l10n';
-import { get, save } from 'sonar-ui-common/helpers/storage';
+import { getLocalizedMetricName, translate } from '../../helpers/l10n';
 import { localizeMetric } from '../../helpers/measures';
-import { MetricKey } from '../../types/metrics';
-import { GraphType, MeasureHistory, Serie } from '../../types/project-activity';
+import { get, save } from '../../helpers/storage';
+import { MetricKey, MetricType } from '../../types/metrics';
+import { GraphType, MeasureHistory, ParsedAnalysis, Serie } from '../../types/project-activity';
+import { Dict, Metric } from '../../types/types';
 
 export const DEFAULT_GRAPH = GraphType.issues;
 
-const GRAPHS_METRICS_DISPLAYED: T.Dict<string[]> = {
-  [GraphType.issues]: [MetricKey.bugs, MetricKey.code_smells, MetricKey.vulnerabilities],
+const GRAPHS_METRICS_DISPLAYED: Dict<string[]> = {
+  [GraphType.issues]: [MetricKey.violations],
   [GraphType.coverage]: [MetricKey.lines_to_cover, MetricKey.uncovered_lines],
-  [GraphType.duplications]: [MetricKey.ncloc, MetricKey.duplicated_lines]
+  [GraphType.duplications]: [MetricKey.ncloc, MetricKey.duplicated_lines],
 };
 
-const GRAPHS_METRICS: T.Dict<string[]> = {
+const GRAPHS_METRICS: Dict<string[]> = {
   [GraphType.issues]: GRAPHS_METRICS_DISPLAYED[GraphType.issues].concat([
     MetricKey.reliability_rating,
     MetricKey.security_rating,
-    MetricKey.sqale_rating
+    MetricKey.sqale_rating,
   ]),
   [GraphType.coverage]: [...GRAPHS_METRICS_DISPLAYED[GraphType.coverage], MetricKey.coverage],
   [GraphType.duplications]: [
     ...GRAPHS_METRICS_DISPLAYED[GraphType.duplications],
-    MetricKey.duplicated_lines_density
-  ]
+    MetricKey.duplicated_lines_density,
+  ],
 };
 
 export function isCustomGraph(graph: GraphType) {
@@ -51,19 +52,20 @@ export function isCustomGraph(graph: GraphType) {
 
 export function getGraphTypes(ignoreCustom = false) {
   const graphs = [GraphType.issues, GraphType.coverage, GraphType.duplications];
+
   return ignoreCustom ? graphs : [...graphs, GraphType.custom];
 }
 
 export function hasDataValues(serie: Serie) {
-  return serie.data.some(point => Boolean(point.y || point.y === 0));
+  return serie.data.some((point) => Boolean(point.y || point.y === 0));
 }
 
 export function hasHistoryData(series: Serie[]) {
-  return series.some(serie => serie.data && serie.data.length > 1);
+  return series.some((serie) => serie.data && serie.data.length > 1);
 }
 
 export function getSeriesMetricType(series: Serie[]) {
-  return series.length > 0 ? series[0].type : 'INT';
+  return series.length > 0 ? series[0].type : MetricType.Integer;
 }
 
 export function getDisplayedHistoryMetrics(graph: GraphType, customMetrics: string[]) {
@@ -75,63 +77,69 @@ export function getHistoryMetrics(graph: GraphType, customMetrics: string[]) {
 }
 
 export function hasHistoryDataValue(series: Serie[]) {
-  return series.some(serie => serie.data && serie.data.length > 1 && hasDataValues(serie));
+  return series.some((serie) => serie.data && serie.data.length > 1 && hasDataValues(serie));
 }
 
 export function splitSeriesInGraphs(series: Serie[], maxGraph: number, maxSeries: number) {
   return flatMap(
-    groupBy(series, serie => serie.type),
-    type => chunk(type, maxSeries)
+    groupBy(series, (serie) => serie.type),
+    (type) => chunk(type, maxSeries),
   ).slice(0, maxGraph);
 }
 
 export function generateCoveredLinesMetric(
   uncoveredLines: MeasureHistory,
-  measuresHistory: MeasureHistory[]
-) {
-  const linesToCover = measuresHistory.find(measure => measure.metric === MetricKey.lines_to_cover);
+  measuresHistory: MeasureHistory[],
+): Serie {
+  const linesToCover = measuresHistory.find(
+    (measure) => measure.metric === MetricKey.lines_to_cover,
+  );
+
   return {
     data: linesToCover
       ? uncoveredLines.history.map((analysis, idx) => ({
           x: analysis.date,
-          y: Number(linesToCover.history[idx].value) - Number(analysis.value)
+          y: Number(linesToCover.history[idx].value) - Number(analysis.value),
         }))
       : [],
     name: 'covered_lines',
     translatedName: translate('project_activity.custom_metric.covered_lines'),
-    type: 'INT'
+    type: MetricType.Integer,
   };
 }
 
 export function generateSeries(
   measuresHistory: MeasureHistory[],
   graph: GraphType,
-  metrics: T.Metric[] | T.Dict<T.Metric>,
-  displayedMetrics: string[]
+  metrics: Metric[],
+  displayedMetrics: string[],
 ): Serie[] {
   if (displayedMetrics.length <= 0 || measuresHistory === undefined) {
     return [];
   }
+
   return sortBy(
     measuresHistory
-      .filter(measure => displayedMetrics.indexOf(measure.metric) >= 0)
-      .map(measure => {
+      .filter((measure) => displayedMetrics.indexOf(measure.metric) >= 0)
+      .map((measure) => {
         if (measure.metric === MetricKey.uncovered_lines && !isCustomGraph(graph)) {
           return generateCoveredLinesMetric(measure, measuresHistory);
         }
         const metric = findMetric(measure.metric, metrics);
         return {
-          data: measure.history.map(analysis => ({
+          data: measure.history.map((analysis) => ({
             x: analysis.date,
-            y: metric && metric.type === 'LEVEL' ? analysis.value : Number(analysis.value)
+            y: metric && metric.type === MetricType.Level ? analysis.value : Number(analysis.value),
           })),
           name: measure.metric,
           translatedName: metric ? getLocalizedMetricName(metric) : localizeMetric(measure.metric),
-          type: metric ? metric.type : 'INT'
+          type: metric ? metric.type : MetricType.Integer,
         };
       }),
-    serie =>
-      displayedMetrics.indexOf(serie.name === 'covered_lines' ? 'uncovered_lines' : serie.name)
+    (serie) =>
+      displayedMetrics.indexOf(
+        serie.name === 'covered_lines' ? MetricKey.uncovered_lines : serie.name,
+      ),
   );
 }
 
@@ -139,28 +147,38 @@ export function saveActivityGraph(
   namespace: string,
   project: string,
   graph: GraphType,
-  metrics: string[] = []
+  metrics?: string[],
 ) {
   save(namespace, graph, project);
-  if (isCustomGraph(graph)) {
+
+  if (isCustomGraph(graph) && metrics) {
     save(`${namespace}.custom`, metrics.join(','), project);
   }
 }
 
 export function getActivityGraph(
   namespace: string,
-  project: string
+  project: string,
 ): { graph: GraphType; customGraphs: string[] } {
   const customGraphs = get(`${namespace}.custom`, project);
+
   return {
     graph: (get(namespace, project) as GraphType) || DEFAULT_GRAPH,
-    customGraphs: customGraphs ? customGraphs.split(',') : []
+    customGraphs: customGraphs ? customGraphs.split(',') : [],
   };
 }
 
-function findMetric(key: string, metrics: T.Metric[] | T.Dict<T.Metric>) {
-  if (Array.isArray(metrics)) {
-    return metrics.find(metric => metric.key === key);
+export function getAnalysisEventsForDate(analyses: ParsedAnalysis[], date?: Date) {
+  if (date) {
+    const analysis = analyses.find((a) => a.date.valueOf() === date.valueOf());
+    if (analysis) {
+      return analysis.events;
+    }
   }
-  return metrics[key];
+
+  return [];
+}
+
+function findMetric(key: string, metrics: Metric[]) {
+  return metrics.find((metric) => metric.key === key);
 }

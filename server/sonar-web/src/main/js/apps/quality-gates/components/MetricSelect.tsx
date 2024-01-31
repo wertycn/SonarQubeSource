@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,70 +17,83 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { LabelValueSelectOption, SearchSelectDropdown } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { getLocalizedMetricDomain, translate } from 'sonar-ui-common/helpers/l10n';
+import { Options } from 'react-select';
+import withMetricsContext from '../../../app/components/metrics/withMetricsContext';
+import { getLocalizedMetricDomain, translate } from '../../../helpers/l10n';
+import { Dict, Metric } from '../../../types/types';
 import { getLocalizedMetricNameNoDiffMetric } from '../utils';
 
 interface Props {
-  metric?: T.Metric;
-  metrics: T.Metric[];
-  onMetricChange: (metric: T.Metric) => void;
+  metric?: Metric;
+  metricsArray: Metric[];
+  metrics: Dict<Metric>;
+  onMetricChange: (metric: Metric) => void;
 }
 
 interface Option {
-  disabled?: boolean;
+  isDisabled?: boolean;
   label: string;
   value: string;
 }
 
-export default class MetricSelect extends React.PureComponent<Props> {
-  handleChange = (option: Option | null) => {
+export function MetricSelect({ metric, metricsArray, metrics, onMetricChange }: Readonly<Props>) {
+  const handleChange = (option: Option | null) => {
     if (option) {
-      const { metrics } = this.props;
-      const selectedMetric = metrics.find(metric => metric.key === option.value);
+      const selectedMetric = metricsArray.find((metric) => metric.key === option.value);
       if (selectedMetric) {
-        this.props.onMetricChange(selectedMetric);
+        onMetricChange(selectedMetric);
       }
     }
   };
 
-  render() {
-    const { metric, metrics } = this.props;
+  const options: Array<Option & { domain?: string }> = sortBy(
+    metricsArray.map((m) => ({
+      value: m.key,
+      label: getLocalizedMetricNameNoDiffMetric(m, metrics),
+      domain: m.domain,
+    })),
+    'domain',
+  );
 
-    const options: Array<Option & { domain?: string }> = sortBy(
-      metrics.map(metric => ({
-        value: metric.key,
-        label: getLocalizedMetricNameNoDiffMetric(metric),
-        domain: metric.domain
-      })),
-      'domain'
-    );
+  // Use "disabled" property to emulate optgroups.
+  const optionsWithDomains: Option[] = [];
+  options.forEach((option, index, options) => {
+    const previous = index > 0 ? options[index - 1] : null;
+    if (option.domain && (!previous || previous.domain !== option.domain)) {
+      optionsWithDomains.push({
+        value: '<domain>',
+        label: getLocalizedMetricDomain(option.domain),
+        isDisabled: true,
+      });
+    }
+    optionsWithDomains.push(option);
+  });
 
-    // Use "disabled" property to emulate optgroups.
-    const optionsWithDomains: Option[] = [];
-    options.forEach((option, index, options) => {
-      const previous = index > 0 ? options[index - 1] : null;
-      if (option.domain && (!previous || previous.domain !== option.domain)) {
-        optionsWithDomains.push({
-          value: '<domain>',
-          label: getLocalizedMetricDomain(option.domain),
-          disabled: true
-        });
+  const handleAssigneeSearch = React.useCallback(
+    (query: string, resolve: (options: Options<LabelValueSelectOption<string>>) => void) => {
+      resolve(options.filter((opt) => opt.label.toLowerCase().includes(query.toLowerCase())));
+    },
+    [options],
+  );
+
+  return (
+    <SearchSelectDropdown
+      aria-label={translate('search.search_for_metrics')}
+      size="large"
+      controlSize="full"
+      inputId="condition-metric"
+      defaultOptions={optionsWithDomains}
+      loadOptions={handleAssigneeSearch}
+      onChange={handleChange}
+      placeholder={translate('search.search_for_metrics')}
+      controlLabel={
+        optionsWithDomains.find((o) => o.value === metric?.key)?.label ?? translate('select_verb')
       }
-      optionsWithDomains.push(option);
-    });
-
-    return (
-      <Select
-        className="text-middle quality-gate-metric-select"
-        id="condition-metric"
-        onChange={this.handleChange}
-        options={optionsWithDomains}
-        placeholder={translate('search.search_for_metrics')}
-        value={metric && metric.key}
-      />
-    );
-  }
+    />
+  );
 }
+
+export default withMetricsContext(MetricSelect);

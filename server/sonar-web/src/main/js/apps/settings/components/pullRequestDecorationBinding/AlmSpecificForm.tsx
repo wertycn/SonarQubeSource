@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,56 +17,89 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, InputField, Note, SubHeading, Switch } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import withAvailableFeatures, {
+  WithAvailableFeaturesProps,
+} from '../../../../app/components/available-features/withAvailableFeatures';
+import DocumentationLink from '../../../../components/common/DocumentationLink';
+import MandatoryFieldMarker from '../../../../components/ui/MandatoryFieldMarker';
 import { ALM_DOCUMENTATION_PATHS } from '../../../../helpers/constants';
-import { AlmKeys, ProjectAlmBindingResponse } from '../../../../types/alm-settings';
-import InputForBoolean from '../inputs/InputForBoolean';
+import { translate } from '../../../../helpers/l10n';
+import { convertGithubApiUrlToLink, stripTrailingSlash } from '../../../../helpers/urls';
+import {
+  AlmKeys,
+  AlmSettingsInstance,
+  ProjectAlmBindingResponse,
+} from '../../../../types/alm-settings';
+import { Feature } from '../../../../types/features';
+import { Dict } from '../../../../types/types';
 
-export interface AlmSpecificFormProps {
+export interface AlmSpecificFormProps extends WithAvailableFeaturesProps {
   alm: AlmKeys;
-  formData: T.Omit<ProjectAlmBindingResponse, 'alm'>;
+  instances: AlmSettingsInstance[];
+  formData: Omit<ProjectAlmBindingResponse, 'alm'>;
   onFieldChange: (id: keyof ProjectAlmBindingResponse, value: string | boolean) => void;
-  monorepoEnabled: boolean;
 }
 
 interface LabelProps {
-  help?: boolean;
-  helpParams?: T.Dict<string | JSX.Element>;
   id: string;
   optional?: boolean;
 }
 
 interface CommonFieldProps extends LabelProps {
+  help?: boolean;
+  helpParams?: Dict<string | JSX.Element>;
+  helpExample?: JSX.Element;
   onFieldChange: (id: keyof ProjectAlmBindingResponse, value: string | boolean) => void;
   propKey: keyof ProjectAlmBindingResponse;
 }
 
-function renderLabel(props: LabelProps) {
-  const { help, helpParams, optional, id } = props;
+function renderFieldWrapper(
+  label: React.ReactNode,
+  input: React.ReactNode,
+  help?: React.ReactNode,
+) {
   return (
-    <label className="display-flex-center" htmlFor={id}>
-      {translate('settings.pr_decoration.binding.form', id)}
-      {!optional && <MandatoryFieldMarker />}
-      {help && (
-        <HelpTooltip
-          className="spacer-left"
-          overlay={
-            <FormattedMessage
-              defaultMessage={translate('settings.pr_decoration.binding.form', id, 'help')}
-              id={`settings.pr_decoration.binding.form.${id}.help`}
-              values={helpParams}
-            />
-          }
-          placement="right"
+    <div className="sw-p-6 sw-flex sw-gap-12">
+      <div className="sw-w-abs-300">
+        <SubHeading>{label}</SubHeading>
+        {help && <div className="markdown">{help}</div>}
+      </div>
+      <div className="sw-flex-1">{input}</div>
+    </div>
+  );
+}
+
+function renderHelp({ help, helpExample, helpParams = {}, id }: CommonFieldProps) {
+  return (
+    help && (
+      <>
+        <FormattedMessage
+          defaultMessage={translate('settings.pr_decoration.binding.form', id, 'help')}
+          id={`settings.pr_decoration.binding.form.${id}.help`}
+          values={helpParams}
         />
-      )}
-    </label>
+        {helpExample && (
+          <div className="sw-mt-2 sw-whitespace-nowrap">
+            {translate('example')}: <em>{helpExample}</em>
+          </div>
+        )}
+      </>
+    )
+  );
+}
+
+function renderLabel(props: LabelProps) {
+  const { optional, id } = props;
+  return (
+    <SubHeading>
+      <label htmlFor={id}>
+        {translate('settings.pr_decoration.binding.form', id)}
+        {!optional && <MandatoryFieldMarker />}
+      </label>
+    </SubHeading>
   );
 }
 
@@ -74,55 +107,58 @@ function renderBooleanField(
   props: Omit<CommonFieldProps, 'optional'> & {
     value: boolean;
     inputExtra?: React.ReactNode;
-  }
+  },
 ) {
   const { id, value, onFieldChange, propKey, inputExtra } = props;
-  return (
-    <div className="form-field">
-      {renderLabel({ ...props, optional: true })}
-      <div className="display-flex-center">
-        <InputForBoolean
-          isDefault={true}
-          name={id}
-          onChange={v => onFieldChange(propKey, v)}
-          value={value}
-        />
-        {inputExtra}
-      </div>
-    </div>
+
+  const label = translate('settings.pr_decoration.binding.form', id);
+
+  return renderFieldWrapper(
+    renderLabel({ ...props, optional: true }),
+    <div className="sw-flex sw-items-start">
+      <Switch
+        name={id}
+        labels={{ on: label, off: label }}
+        onChange={(v) => onFieldChange(propKey, v)}
+        value={value}
+      />
+      {value == null && <Note className="sw-ml-2">{translate('settings.not_set')}</Note>}
+      {inputExtra}
+    </div>,
+    renderHelp(props),
   );
 }
 
 function renderField(
   props: CommonFieldProps & {
     value: string;
-  }
+  },
 ) {
   const { id, propKey, value, onFieldChange } = props;
-  return (
-    <div className="form-field">
-      {renderLabel(props)}
-      <input
-        className="input-super-large"
-        id={id}
-        maxLength={256}
-        name={id}
-        onChange={e => onFieldChange(propKey, e.currentTarget.value)}
-        type="text"
-        value={value}
-      />
-    </div>
+  return renderFieldWrapper(
+    renderLabel(props),
+    <InputField
+      id={id}
+      maxLength={256}
+      name={id}
+      onChange={(e) => onFieldChange(propKey, e.currentTarget.value)}
+      size="large"
+      type="text"
+      value={value}
+    />,
+    renderHelp(props),
   );
 }
 
-export default function AlmSpecificForm(props: AlmSpecificFormProps) {
+export function AlmSpecificForm(props: AlmSpecificFormProps) {
   const {
     alm,
+    instances,
     formData: { repository, slug, summaryCommentEnabled, monorepo },
-    monorepoEnabled
   } = props;
 
   let formFields: JSX.Element;
+  const instance = instances.find((i) => i.alm === alm);
 
   switch (alm) {
     case AlmKeys.Azure:
@@ -130,17 +166,20 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
         <>
           {renderField({
             help: true,
+            helpExample: <strong>My Project</strong>,
             id: 'azure.project',
             onFieldChange: props.onFieldChange,
             propKey: 'slug',
-            value: slug || ''
+            value: slug || '',
           })}
+
           {renderField({
             help: true,
+            helpExample: <strong>My Repository</strong>,
             id: 'azure.repository',
             onFieldChange: props.onFieldChange,
             propKey: 'repository',
-            value: repository || ''
+            value: repository || '',
           })}
         </>
       );
@@ -150,35 +189,36 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
         <>
           {renderField({
             help: true,
-            helpParams: {
-              example: (
-                <>
-                  {'.../projects/'}
-                  <strong>{'{KEY}'}</strong>
-                  {'/repos/{SLUG}/browse'}
-                </>
-              )
-            },
+            helpExample: (
+              <>
+                {instance?.url
+                  ? `${stripTrailingSlash(instance.url)}/projects/`
+                  : 'https://bb.company.com/projects/'}
+                <strong>{'MY_PROJECT_KEY'}</strong>
+                {'/repos/my-repository-slug/browse'}
+              </>
+            ),
             id: 'bitbucket.repository',
             onFieldChange: props.onFieldChange,
             propKey: 'repository',
-            value: repository || ''
+            value: repository || '',
           })}
+
           {renderField({
             help: true,
-            helpParams: {
-              example: (
-                <>
-                  {'.../projects/{KEY}/repos/'}
-                  <strong>{'{SLUG}'}</strong>
-                  {'/browse'}
-                </>
-              )
-            },
+            helpExample: (
+              <>
+                {instance?.url
+                  ? `${stripTrailingSlash(instance.url)}/projects/MY_PROJECT_KEY/repos/`
+                  : 'https://bb.company.com/projects/MY_PROJECT_KEY/repos/'}
+                <strong>{'my-repository-slug'}</strong>
+                {'/browse'}
+              </>
+            ),
             id: 'bitbucket.slug',
             onFieldChange: props.onFieldChange,
             propKey: 'slug',
-            value: slug || ''
+            value: slug || '',
           })}
         </>
       );
@@ -188,18 +228,16 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
         <>
           {renderField({
             help: true,
-            helpParams: {
-              example: (
-                <>
-                  {'https://bitbucket.org/{workspace}/'}
-                  <strong>{'{repository}'}</strong>
-                </>
-              )
-            },
+            helpExample: (
+              <>
+                {'https://bitbucket.org/my-workspace/'}
+                <strong>{'my-repository-slug'}</strong>
+              </>
+            ),
             id: 'bitbucketcloud.repository',
             onFieldChange: props.onFieldChange,
             propKey: 'repository',
-            value: repository || ''
+            value: repository || '',
           })}
         </>
       );
@@ -209,18 +247,26 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
         <>
           {renderField({
             help: true,
-            helpParams: { example: 'SonarSource/sonarqube' },
+            helpExample: (
+              <>
+                {instance?.url
+                  ? `${stripTrailingSlash(convertGithubApiUrlToLink(instance.url))}/`
+                  : 'https://github.com/'}
+                <strong>{'sonarsource/sonarqube'}</strong>
+              </>
+            ),
             id: 'github.repository',
             onFieldChange: props.onFieldChange,
             propKey: 'repository',
-            value: repository || ''
+            value: repository || '',
           })}
+
           {renderBooleanField({
             help: true,
             id: 'github.summary_comment_setting',
             onFieldChange: props.onFieldChange,
             propKey: 'summaryCommentEnabled',
-            value: summaryCommentEnabled === undefined ? true : summaryCommentEnabled
+            value: summaryCommentEnabled === undefined ? true : summaryCommentEnabled,
           })}
         </>
       );
@@ -229,15 +275,19 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
       formFields = (
         <>
           {renderField({
+            help: true,
+            helpExample: <strong>123456</strong>,
             id: 'gitlab.repository',
             onFieldChange: props.onFieldChange,
             propKey: 'repository',
-            value: repository || ''
+            value: repository || '',
           })}
         </>
       );
       break;
   }
+
+  const monorepoEnabled = props.hasFeature(Feature.MonoRepositoryPullRequestDecoration);
 
   return (
     <>
@@ -247,21 +297,23 @@ export default function AlmSpecificForm(props: AlmSpecificFormProps) {
           help: true,
           helpParams: {
             doc_link: (
-              <Link to={ALM_DOCUMENTATION_PATHS[alm]} target="_blank">
+              <DocumentationLink to={ALM_DOCUMENTATION_PATHS[alm]}>
                 {translate('learn_more')}
-              </Link>
-            )
+              </DocumentationLink>
+            ),
           },
           id: 'monorepo',
           onFieldChange: props.onFieldChange,
           propKey: 'monorepo',
           value: monorepo,
           inputExtra: monorepo && (
-            <Alert className="no-margin-bottom spacer-left" variant="warning" display="inline">
+            <FlagMessage className="sw-ml-2" variant="warning">
               {translate('settings.pr_decoration.binding.form.monorepo.warning')}
-            </Alert>
-          )
+            </FlagMessage>
+          ),
         })}
     </>
   );
 }
+
+export default withAvailableFeatures(AlmSpecificForm);

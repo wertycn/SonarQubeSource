@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Task } from './tasks';
+import { Component, LightComponent } from './types';
+
 export enum Visibility {
   Public = 'public',
-  Private = 'private'
+  Private = 'private',
 }
 
 export enum ComponentQualifier {
   Application = 'APP',
   Directory = 'DIR',
-  Developper = 'DEV',
   File = 'FIL',
   Portfolio = 'VW',
   Project = 'TRK',
   SubPortfolio = 'SVW',
-  SubProject = 'BRC',
-  TestFile = 'UTS'
+  TestFile = 'UTS',
 }
 
 export enum ProjectKeyValidationResult {
@@ -39,17 +40,17 @@ export enum ProjectKeyValidationResult {
   Empty = 'empty',
   TooLong = 'too_long',
   InvalidChar = 'invalid_char',
-  OnlyDigits = 'only_digits'
+  OnlyDigits = 'only_digits',
 }
 
-export interface TreeComponent extends T.LightComponent {
+export interface TreeComponent extends LightComponent {
   id?: string;
   name: string;
   path?: string;
   refId?: string;
   refKey?: string;
   tags?: string[];
-  visibility: T.Visibility;
+  visibility: Visibility;
 }
 
 export interface TreeComponentWithPath extends TreeComponent {
@@ -57,19 +58,48 @@ export interface TreeComponentWithPath extends TreeComponent {
 }
 
 export function isPortfolioLike(
-  componentQualifier?: string | ComponentQualifier
+  componentQualifier?: string | ComponentQualifier,
 ): componentQualifier is ComponentQualifier.Portfolio | ComponentQualifier.SubPortfolio {
-  return Boolean(
-    componentQualifier &&
-      [
-        ComponentQualifier.Portfolio.toString(),
-        ComponentQualifier.SubPortfolio.toString()
-      ].includes(componentQualifier)
+  return (
+    componentQualifier === ComponentQualifier.Portfolio ||
+    componentQualifier === ComponentQualifier.SubPortfolio
   );
 }
 
 export function isApplication(
-  componentQualifier?: string | ComponentQualifier
+  componentQualifier?: string | ComponentQualifier,
 ): componentQualifier is ComponentQualifier.Application {
   return componentQualifier === ComponentQualifier.Application;
+}
+
+export function isProject(
+  componentQualifier?: string | ComponentQualifier,
+): componentQualifier is ComponentQualifier.Project {
+  return componentQualifier === ComponentQualifier.Project;
+}
+
+export function isFile(
+  componentQualifier?: string | ComponentQualifier,
+): componentQualifier is ComponentQualifier.File {
+  return [ComponentQualifier.File, ComponentQualifier.TestFile].includes(
+    componentQualifier as ComponentQualifier,
+  );
+}
+
+export function isView(
+  componentQualifier?: string | ComponentQualifier,
+): componentQualifier is
+  | ComponentQualifier.Application
+  | ComponentQualifier.Portfolio
+  | ComponentQualifier.SubPortfolio {
+  return isPortfolioLike(componentQualifier) || isApplication(componentQualifier);
+}
+
+export interface ComponentContextShape {
+  component?: Component;
+  currentTask?: Task;
+  isInProgress?: boolean;
+  isPending?: boolean;
+  onComponentChange: (changes: Partial<Component>) => void;
+  fetchComponent: () => Promise<void>;
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,19 +19,17 @@
  */
 import { uniq } from 'lodash';
 import * as React from 'react';
-import TagsIcon from 'sonar-ui-common/components/icons/TagsIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { highlightTerm } from 'sonar-ui-common/helpers/search';
 import { getRuleTags } from '../../../api/rules';
-import { colors } from '../../../app/theme';
-import ListStyleFacet from '../../../components/facet/ListStyleFacet';
+import { translate } from '../../../helpers/l10n';
+import { highlightTerm } from '../../../helpers/search';
+import { ListStyleFacet } from '../../issues/sidebar/ListStyleFacet';
 import { BasicProps } from './Facet';
 
 export default class TagFacet extends React.PureComponent<BasicProps> {
   handleSearch = (query: string) => {
-    return getRuleTags({ ps: 50, q: query }).then(tags => ({
+    return getRuleTags({ ps: 50, q: query }).then((tags) => ({
       paging: { pageIndex: 1, pageSize: tags.length, total: tags.length },
-      results: tags
+      results: tags,
     }));
   };
 
@@ -43,19 +41,9 @@ export default class TagFacet extends React.PureComponent<BasicProps> {
     return tag;
   };
 
-  renderTag = (tag: string) => (
-    <>
-      <TagsIcon className="little-spacer-right" fill={colors.gray60} />
-      {tag}
-    </>
-  );
+  renderTag = (tag: string) => <>{tag}</>;
 
-  renderSearchResult = (tag: string, term: string) => (
-    <>
-      <TagsIcon className="little-spacer-right" fill={colors.gray60} />
-      {highlightTerm(tag, term)}
-    </>
-  );
+  renderSearchResult = (tag: string, term: string) => <>{highlightTerm(tag, term)}</>;
 
   render() {
     return (
@@ -63,8 +51,10 @@ export default class TagFacet extends React.PureComponent<BasicProps> {
         facetHeader={translate('coding_rules.facet.tags')}
         fetching={false}
         getFacetItemText={this.getTagName}
-        getSearchResultKey={tag => tag}
-        getSearchResultText={tag => tag}
+        getSearchResultKey={(tag) => tag}
+        getSearchResultText={(tag) => tag}
+        showMoreAriaLabel={translate('coding_rules.facet.tag.show_more')}
+        showLessAriaLabel={translate('coding_rules.facet.tag.show_less')}
         onChange={this.props.onChange}
         onSearch={this.handleSearch}
         onToggle={this.props.onToggle}
@@ -73,6 +63,7 @@ export default class TagFacet extends React.PureComponent<BasicProps> {
         renderFacetItem={this.renderTag}
         renderSearchResult={this.renderSearchResult}
         searchPlaceholder={translate('search.search_for_tags')}
+        searchInputAriaLabel={translate('search.search_for_tags')}
         stats={this.props.stats}
         values={this.props.values}
       />

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,26 +22,30 @@ package org.sonar.application.command;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.Properties;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.sonar.process.Props;
-import org.sonar.test.ExceptionCauseMatcher;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @RunWith(DataProviderRunner.class)
 public class EsJvmOptionsTest {
   @Rule
-  public TemporaryFolder temporaryFolder = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+  public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
-  private Properties properties = new Properties();
+  private final Properties properties = new Properties();
+
+  @Before
+  public void before() {
+    properties.put("sonar.path.logs", "path_to_logs");
+  }
 
   @Test
   public void constructor_sets_mandatory_JVM_options() throws IOException {
@@ -49,12 +53,10 @@ public class EsJvmOptionsTest {
     EsJvmOptions underTest = new EsJvmOptions(new Props(properties), tmpDir);
 
     assertThat(underTest.getAll())
-      .containsExactly(
-        "-XX:+UseConcMarkSweepGC",
-        "-XX:CMSInitiatingOccupancyFraction=75",
-        "-XX:+UseCMSInitiatingOccupancyOnly",
+      .containsExactlyInAnyOrder(
+        "-XX:+UseG1GC",
         "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath(),
-        "-XX:ErrorFile=../logs/es_hs_err_pid%p.log",
+        "-XX:ErrorFile=" + Paths.get("path_to_logs/es_hs_err_pid%p.log").toAbsolutePath(),
         "-Des.networkaddress.cache.ttl=60",
         "-Des.networkaddress.cache.negative.ttl=10",
         "-XX:+AlwaysPreTouch",
@@ -62,6 +64,7 @@ public class EsJvmOptionsTest {
         "-Djava.awt.headless=true",
         "-Dfile.encoding=UTF-8",
         "-Djna.nosys=true",
+        "-Djna.tmpdir=" + tmpDir.getAbsolutePath(),
         "-XX:-OmitStackTraceInFastThrow",
         "-Dio.netty.noUnsafe=true",
         "-Dio.netty.noKeySetOptimization=true",
@@ -69,8 +72,11 @@ public class EsJvmOptionsTest {
         "-Dio.netty.allocator.numDirectArenas=0",
         "-Dlog4j.shutdownHookEnabled=false",
         "-Dlog4j2.disable.jmx=true",
+        "-Dlog4j2.formatMsgNoLookups=true",
         "-Djava.locale.providers=COMPAT",
-        "-Des.enforce.bootstrap.checks=true");
+        "-Dcom.redhat.fips=false",
+        "-Des.enforce.bootstrap.checks=true",
+        "-Xlog:disable");
   }
 
   @Test
@@ -114,6 +120,58 @@ public class EsJvmOptionsTest {
       .doesNotContain("-Des.enforce.bootstrap.checks=true");
   }
 
+  @Test
+  public void boostrap_checks_can_be_set_true_if_h2() throws IOException {
+    properties.put("sonar.jdbc.url", "jdbc:h2:tcp://ffoo:bar/sonar");
+    properties.put("sonar.es.bootstrap.checks.disable", "true");
+
+    File tmpDir = temporaryFolder.newFolder();
+    EsJvmOptions underTest = new EsJvmOptions(new Props(properties), tmpDir);
+
+    assertThat(underTest.getAll())
+      .isNotEmpty()
+      .doesNotContain("-Des.enforce.bootstrap.checks=true");
+  }
+
+  @Test
+  public void boostrap_checks_can_be_set_false_if_h2() throws IOException {
+    properties.put("sonar.jdbc.url", "jdbc:h2:tcp://ffoo:bar/sonar");
+    properties.put("sonar.es.bootstrap.checks.disable", "false");
+
+    File tmpDir = temporaryFolder.newFolder();
+    EsJvmOptions underTest = new EsJvmOptions(new Props(properties), tmpDir);
+
+    assertThat(underTest.getAll())
+      .isNotEmpty()
+      .contains("-Des.enforce.bootstrap.checks=true");
+  }
+
+  @Test
+  public void boostrap_checks_can_be_set_true_if_jdbc_other_than_h2() throws IOException {
+    properties.put("sonar.jdbc.url", randomAlphanumeric(53));
+    properties.put("sonar.es.bootstrap.checks.disable", "true");
+
+    File tmpDir = temporaryFolder.newFolder();
+    EsJvmOptions underTest = new EsJvmOptions(new Props(properties), tmpDir);
+
+    assertThat(underTest.getAll())
+      .isNotEmpty()
+      .doesNotContain("-Des.enforce.bootstrap.checks=true");
+  }
+
+  @Test
+  public void boostrap_checks_can_be_set_false_if_jdbc_other_than_h2() throws IOException {
+    properties.put("sonar.jdbc.url", randomAlphanumeric(53));
+    properties.put("sonar.es.bootstrap.checks.disable", "false");
+
+    File tmpDir = temporaryFolder.newFolder();
+    EsJvmOptions underTest = new EsJvmOptions(new Props(properties), tmpDir);
+
+    assertThat(underTest.getAll())
+      .isNotEmpty()
+      .contains("-Des.enforce.bootstrap.checks=true");
+  }
+
   /**
    * This test may fail if SQ's test are not executed with target Java version 8.
    */
@@ -133,11 +191,10 @@ public class EsJvmOptionsTest {
         "\n" +
         "# DO NOT EDIT THIS FILE\n" +
         "\n" +
-        "-XX:+UseConcMarkSweepGC\n" +
-        "-XX:CMSInitiatingOccupancyFraction=75\n" +
-        "-XX:+UseCMSInitiatingOccupancyOnly\n" +
+        "-XX:+UseG1GC\n" +
         "-Djava.io.tmpdir=" + tmpDir.getAbsolutePath() + "\n" +
-        "-XX:ErrorFile=../logs/es_hs_err_pid%p.log\n" +
+        "-XX:ErrorFile=" + Paths.get("path_to_logs/es_hs_err_pid%p.log").toAbsolutePath() + "\n" +
+        "-Xlog:disable\n" +
         "-Des.networkaddress.cache.ttl=60\n" +
         "-Des.networkaddress.cache.negative.ttl=10\n" +
         "-XX:+AlwaysPreTouch\n" +
@@ -145,6 +202,7 @@ public class EsJvmOptionsTest {
         "-Djava.awt.headless=true\n" +
         "-Dfile.encoding=UTF-8\n" +
         "-Djna.nosys=true\n" +
+        "-Djna.tmpdir=" + tmpDir.getAbsolutePath() + "\n" +
         "-XX:-OmitStackTraceInFastThrow\n" +
         "-Dio.netty.noUnsafe=true\n" +
         "-Dio.netty.noKeySetOptimization=true\n" +
@@ -152,7 +210,9 @@ public class EsJvmOptionsTest {
         "-Dio.netty.allocator.numDirectArenas=0\n" +
         "-Dlog4j.shutdownHookEnabled=false\n" +
         "-Dlog4j2.disable.jmx=true\n" +
+        "-Dlog4j2.formatMsgNoLookups=true\n" +
         "-Djava.locale.providers=COMPAT\n" +
+        "-Dcom.redhat.fips=false\n" +
         "-Des.enforce.bootstrap.checks=true\n" +
         "-foo\n" +
         "-bar");
@@ -164,10 +224,9 @@ public class EsJvmOptionsTest {
     File notAFile = temporaryFolder.newFolder();
     EsJvmOptions underTest = new EsJvmOptions(new Props(properties), temporaryFolder.newFolder());
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Cannot write Elasticsearch jvm options file");
-    expectedException.expectCause(ExceptionCauseMatcher.hasType(IOException.class));
-
-    underTest.writeToJvmOptionFile(notAFile);
+    assertThatThrownBy(() -> underTest.writeToJvmOptionFile(notAFile))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Cannot write Elasticsearch jvm options file")
+      .hasRootCauseInstanceOf(IOException.class);
   }
 }

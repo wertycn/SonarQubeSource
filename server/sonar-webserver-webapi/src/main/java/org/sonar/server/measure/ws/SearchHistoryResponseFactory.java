@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,10 +22,11 @@ package org.sonar.server.measure.ws;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.measure.MeasureDto;
 import org.sonar.db.metric.MetricDto;
@@ -34,8 +35,8 @@ import org.sonarqube.ws.Measures.SearchHistoryResponse.HistoryMeasure;
 import org.sonarqube.ws.Measures.SearchHistoryResponse.HistoryValue;
 
 import static org.sonar.api.utils.DateUtils.formatDateTime;
+import static org.sonar.server.measure.ws.ComponentResponseCommon.addMetricToSearchHistoryResponseIncludingRenamedMetric;
 import static org.sonar.server.measure.ws.MeasureValueFormatter.formatMeasureValue;
-import static org.sonar.server.measure.ws.MeasureValueFormatter.formatNumericalValue;
 
 class SearchHistoryResponseFactory {
   private final SearchHistoryResult result;
@@ -49,11 +50,11 @@ class SearchHistoryResponseFactory {
   }
 
   public SearchHistoryResponse apply() {
-    return Stream.of(SearchHistoryResponse.newBuilder())
+    return Optional.of(SearchHistoryResponse.newBuilder())
       .map(addPaging())
       .map(addMeasures())
       .map(SearchHistoryResponse.Builder::build)
-      .collect(MoreCollectors.toOneElement());
+      .orElseThrow();
   }
 
   private UnaryOperator<SearchHistoryResponse.Builder> addPaging() {
@@ -61,26 +62,20 @@ class SearchHistoryResponseFactory {
   }
 
   private UnaryOperator<SearchHistoryResponse.Builder> addMeasures() {
-    Map<String, MetricDto> metricsByUuid = result.getMetrics().stream().collect(MoreCollectors.uniqueIndex(MetricDto::getUuid));
-    Map<String, SnapshotDto> analysesByUuid = result.getAnalyses().stream().collect(MoreCollectors.uniqueIndex(SnapshotDto::getUuid));
+    Map<String, MetricDto> metricsByUuid = result.getMetrics().stream().collect(Collectors.toMap(MetricDto::getUuid, Function.identity()));
+    Map<String, SnapshotDto> analysesByUuid = result.getAnalyses().stream().collect(Collectors.toMap(SnapshotDto::getUuid, Function.identity()));
     Table<MetricDto, SnapshotDto, MeasureDto> measuresByMetricByAnalysis = HashBasedTable.create(result.getMetrics().size(), result.getAnalyses().size());
     result.getMeasures().forEach(m -> measuresByMetricByAnalysis.put(metricsByUuid.get(m.getMetricUuid()), analysesByUuid.get(m.getAnalysisUuid()), m));
 
     return response -> {
-      result.getMetrics().stream()
-        .map(clearMetric())
-        .map(addMetric())
-        .map(metric -> addValues(measuresByMetricByAnalysis.row(metric)).apply(metric))
-        .forEach(metric -> response.addMeasures(measure));
+      for (MetricDto metric : result.getMetrics()) {
+        measure.setMetric(metric.getKey());
+        addValues(measuresByMetricByAnalysis.row(metric)).apply(metric);
+        addMetricToSearchHistoryResponseIncludingRenamedMetric(response, result.getRequestedMetrics(), measure);
+        measure.clear();
+      }
 
       return response;
-    };
-  }
-
-  private UnaryOperator<MetricDto> addMetric() {
-    return metric -> {
-      measure.setMetric(metric.getKey());
-      return metric;
     };
   }
 
@@ -105,22 +100,13 @@ class SearchHistoryResponseFactory {
 
   private SnapshotDto addValue(SnapshotDto analysis, MetricDto dbMetric, @Nullable MeasureDto dbMeasure) {
     if (dbMeasure != null) {
-      String measureValue = dbMetric.getKey().startsWith("new_")
-        ? formatNumericalValue(dbMeasure.getVariation(), dbMetric)
-        : formatMeasureValue(dbMeasure, dbMetric);
+      String measureValue = formatMeasureValue(dbMeasure, dbMetric);
       if (measureValue != null) {
         value.setValue(measureValue);
       }
     }
 
     return analysis;
-  }
-
-  private UnaryOperator<MetricDto> clearMetric() {
-    return metric -> {
-      measure.clear();
-      return metric;
-    };
   }
 
   private UnaryOperator<SnapshotDto> clearValue() {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,9 +22,11 @@ package org.sonar.server.issue.index;
 import com.google.common.collect.Maps;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
@@ -33,6 +35,8 @@ import org.sonar.server.permission.index.AuthorizationDoc;
 import org.sonar.server.security.SecurityStandards;
 import org.sonar.server.security.SecurityStandards.VulnerabilityProbability;
 
+import static org.sonar.server.issue.index.IssueIndexDefinition.SUB_FIELD_SEVERITY;
+import static org.sonar.server.issue.index.IssueIndexDefinition.SUB_FIELD_SOFTWARE_QUALITY;
 import static org.sonar.server.issue.index.IssueIndexDefinition.TYPE_ISSUE;
 
 public class IssueDoc extends BaseDoc {
@@ -56,15 +60,6 @@ public class IssueDoc extends BaseDoc {
 
   public String componentUuid() {
     return getField(IssueIndexDefinition.FIELD_ISSUE_COMPONENT_UUID);
-  }
-
-  @CheckForNull
-  public String moduleUuid() {
-    return getField(IssueIndexDefinition.FIELD_ISSUE_MODULE_UUID);
-  }
-
-  public String modulePath() {
-    return getField(IssueIndexDefinition.FIELD_ISSUE_MODULE_PATH);
   }
 
   public String projectUuid() {
@@ -95,6 +90,14 @@ public class IssueDoc extends BaseDoc {
     return getField(IssueIndexDefinition.FIELD_ISSUE_SEVERITY);
   }
 
+  public String cleanCodeAttributeCategory() {
+    return getField(IssueIndexDefinition.FIELD_ISSUE_CLEAN_CODE_ATTRIBUTE_CATEGORY);
+  }
+
+  public Collection<Map<String, String>> impacts() {
+    return getField(IssueIndexDefinition.FIELD_ISSUE_IMPACTS);
+  }
+
   @CheckForNull
   public Integer line() {
     return getNullableField(IssueIndexDefinition.FIELD_ISSUE_LINE);
@@ -107,6 +110,11 @@ public class IssueDoc extends BaseDoc {
   @CheckForNull
   public String resolution() {
     return getNullableField(IssueIndexDefinition.FIELD_ISSUE_RESOLUTION);
+  }
+
+  @CheckForNull
+  public String issueStatus() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_NEW_STATUS);
   }
 
   @CheckForNull
@@ -138,6 +146,10 @@ public class IssueDoc extends BaseDoc {
     return getNullableField(IssueIndexDefinition.FIELD_ISSUE_AUTHOR_LOGIN);
   }
 
+  /**
+   * @deprecated since 10.2
+   */
+  @Deprecated(since = "10.2")
   public RuleType type() {
     return RuleType.valueOf(getField(IssueIndexDefinition.FIELD_ISSUE_TYPE));
   }
@@ -165,11 +177,6 @@ public class IssueDoc extends BaseDoc {
 
   public IssueDoc setComponentUuid(@Nullable String s) {
     setField(IssueIndexDefinition.FIELD_ISSUE_COMPONENT_UUID, s);
-    return this;
-  }
-
-  public IssueDoc setModuleUuid(@Nullable String s) {
-    setField(IssueIndexDefinition.FIELD_ISSUE_MODULE_UUID, s);
     return this;
   }
 
@@ -204,9 +211,18 @@ public class IssueDoc extends BaseDoc {
     return this;
   }
 
+  /**
+   * @deprecated since 10.2
+   */
+  @Deprecated(since = "10.2")
   public IssueDoc setSeverity(@Nullable String s) {
     setField(IssueIndexDefinition.FIELD_ISSUE_SEVERITY, s);
     setField(IssueIndexDefinition.FIELD_ISSUE_SEVERITY_VALUE, Severity.ALL.indexOf(s));
+    return this;
+  }
+
+  public IssueDoc setCleanCodeAttributeCategory(@Nullable String s) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_CLEAN_CODE_ATTRIBUTE_CATEGORY, s);
     return this;
   }
 
@@ -222,6 +238,11 @@ public class IssueDoc extends BaseDoc {
 
   public IssueDoc setResolution(@Nullable String s) {
     setField(IssueIndexDefinition.FIELD_ISSUE_RESOLUTION, s);
+    return this;
+  }
+
+  public IssueDoc setIssueStatus(String s) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_NEW_STATUS, s);
     return this;
   }
 
@@ -265,11 +286,6 @@ public class IssueDoc extends BaseDoc {
     return this;
   }
 
-  public IssueDoc setModuleUuidPath(@Nullable String s) {
-    setField(IssueIndexDefinition.FIELD_ISSUE_MODULE_PATH, s);
-    return this;
-  }
-
   @CheckForNull
   public Collection<String> getTags() {
     return getNullableField(IssueIndexDefinition.FIELD_ISSUE_TAGS);
@@ -280,9 +296,52 @@ public class IssueDoc extends BaseDoc {
     return this;
   }
 
+  @Deprecated(since = "10.2")
   public IssueDoc setType(RuleType type) {
     setField(IssueIndexDefinition.FIELD_ISSUE_TYPE, type.toString());
     return this;
+  }
+
+  public IssueDoc setImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> impacts) {
+    List<Map<String, String>> convertedMap = impacts
+      .entrySet()
+      .stream()
+      .map(entry -> Map.of(
+        SUB_FIELD_SOFTWARE_QUALITY, entry.getKey().name(),
+        SUB_FIELD_SEVERITY, entry.getValue().name()))
+      .toList();
+    setField(IssueIndexDefinition.FIELD_ISSUE_IMPACTS, convertedMap);
+    return this;
+  }
+
+  @CheckForNull
+  public Collection<String> getPciDss32() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_PCI_DSS_32);
+  }
+
+  public IssueDoc setPciDss32(@Nullable Collection<String> o) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_PCI_DSS_32, o);
+    return this;
+  }
+
+  public IssueDoc setPciDss40(@Nullable Collection<String> o) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_PCI_DSS_40, o);
+    return this;
+  }
+
+  @CheckForNull
+  public Collection<String> getPciDss40() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_PCI_DSS_40);
+  }
+
+  public IssueDoc setOwaspAsvs40(@Nullable Collection<String> o) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_OWASP_ASVS_40, o);
+    return this;
+  }
+
+  @CheckForNull
+  public Collection<String> getOwaspAsvs40() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_OWASP_ASVS_40);
   }
 
   @CheckForNull
@@ -292,6 +351,16 @@ public class IssueDoc extends BaseDoc {
 
   public IssueDoc setOwaspTop10(@Nullable Collection<String> o) {
     setField(IssueIndexDefinition.FIELD_ISSUE_OWASP_TOP_10, o);
+    return this;
+  }
+
+  @CheckForNull
+  public Collection<String> getOwaspTop10For2021() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_OWASP_TOP_10_2021);
+  }
+
+  public IssueDoc setOwaspTop10For2021(@Nullable Collection<String> o) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_OWASP_TOP_10_2021, o);
     return this;
   }
 
@@ -334,6 +403,25 @@ public class IssueDoc extends BaseDoc {
 
   public IssueDoc setVulnerabilityProbability(@Nullable VulnerabilityProbability v) {
     setField(IssueIndexDefinition.FIELD_ISSUE_VULNERABILITY_PROBABILITY, v == null ? null : v.getScore());
+    return this;
+  }
+
+  public boolean isNewCodeReference() {
+    return getField(IssueIndexDefinition.FIELD_ISSUE_NEW_CODE_REFERENCE);
+  }
+
+  public IssueDoc setIsNewCodeReference(boolean b) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_NEW_CODE_REFERENCE, b);
+    return this;
+  }
+
+  @CheckForNull
+  public Collection<String> getCodeVariants() {
+    return getNullableField(IssueIndexDefinition.FIELD_ISSUE_CODE_VARIANTS);
+  }
+
+  public IssueDoc setCodeVariants(@Nullable Collection<String> codeVariants) {
+    setField(IssueIndexDefinition.FIELD_ISSUE_CODE_VARIANTS, codeVariants);
     return this;
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,7 @@ package org.sonar.scanner.scan.filesystem;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.apache.commons.io.FileUtils;
@@ -98,7 +99,7 @@ public class MetadataGeneratorTest {
     DefaultInputFile inputFile = createInputFileWithMetadata(tempFile);
     assertThat(inputFile.lines()).isEqualTo(3);
     assertThat(inputFile.nonBlankLines()).isEqualTo(3);
-    assertThat(inputFile.hash()).isEqualTo(md5Hex("foo\nbar\nbaz"));
+    assertThat(inputFile.md5Hash()).isEqualTo(md5Hex("foo\nbar\nbaz"));
     assertThat(inputFile.originalLineStartOffsets()).containsOnly(0, 4, 9);
     assertThat(inputFile.originalLineEndOffsets()).containsOnly(3, 7, 12);
   }
@@ -127,7 +128,7 @@ public class MetadataGeneratorTest {
   @Test
   public void complete_input_file() throws Exception {
     // file system
-    Path baseDir = temp.newFolder().toPath();
+    Path baseDir = temp.newFolder().toPath().toRealPath(LinkOption.NOFOLLOW_LINKS);
     Path srcFile = baseDir.resolve("src/main/java/foo/Bar.java");
     FileUtils.touch(srcFile.toFile());
     FileUtils.write(srcFile.toFile(), "single line");
@@ -142,6 +143,6 @@ public class MetadataGeneratorTest {
     assertThat(inputFile.absolutePath()).isEqualTo(PathUtils.sanitize(srcFile.toAbsolutePath().toString()));
     assertThat(inputFile.key()).isEqualTo("struts:src/main/java/foo/Bar.java");
     assertThat(inputFile.relativePath()).isEqualTo("src/main/java/foo/Bar.java");
-    assertThat(inputFile.lines()).isEqualTo(1);
+    assertThat(inputFile.lines()).isOne();
   }
 }

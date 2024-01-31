@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,11 +24,11 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService.NewAction;
 import org.sonar.api.server.ws.WebService.NewController;
-import org.sonar.api.user.UserGroupValidation;
-import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.user.GroupDto;
+import org.sonar.server.common.group.service.GroupService;
+import org.sonar.server.common.management.ManagedInstanceChecker;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.UserGroups;
 
@@ -45,14 +45,14 @@ public class CreateAction implements UserGroupsWsAction {
 
   private final DbClient dbClient;
   private final UserSession userSession;
-  private final GroupWsSupport support;
-  private final UuidFactory uuidFactory;
+  private final GroupService groupService;
+  private final ManagedInstanceChecker managedInstanceChecker;
 
-  public CreateAction(DbClient dbClient, UserSession userSession, GroupWsSupport support, UuidFactory uuidFactory) {
+  public CreateAction(DbClient dbClient, UserSession userSession, GroupService groupService, ManagedInstanceChecker managedInstanceService) {
     this.dbClient = dbClient;
     this.userSession = userSession;
-    this.support = support;
-    this.uuidFactory = uuidFactory;
+    this.groupService = groupService;
+    this.managedInstanceChecker = managedInstanceService;
   }
 
   @Override
@@ -64,7 +64,9 @@ public class CreateAction implements UserGroupsWsAction {
       .setPost(true)
       .setResponseExample(getClass().getResource("create-example.json"))
       .setSince("5.2")
+      .setDeprecatedSince("10.4")
       .setChangelog(
+        new Change("10.4", "Deprecated. Use POST /api/v2/authorizations/groups instead"),
         new Change("8.4", "Field 'id' format in the response changes from integer to string."));
 
     action.createParam(PARAM_GROUP_NAME)
@@ -85,18 +87,11 @@ public class CreateAction implements UserGroupsWsAction {
 
     try (DbSession dbSession = dbClient.openSession(false)) {
       userSession.checkPermission(ADMINISTER);
-      GroupDto group = new GroupDto()
-        .setUuid(uuidFactory.create())
-        .setName(request.mandatoryParam(PARAM_GROUP_NAME))
-        .setDescription(request.param(PARAM_GROUP_DESCRIPTION));
-
-      // validations
-      UserGroupValidation.validateGroupName(group.getName());
-      support.checkNameDoesNotExist(dbSession, group.getName());
-
-      dbClient.groupDao().insert(dbSession, group);
+      managedInstanceChecker.throwIfInstanceIsManaged();
+      String groupName = request.mandatoryParam(PARAM_GROUP_NAME);
+      String groupDescription = request.param(PARAM_GROUP_DESCRIPTION);
+      GroupDto group = groupService.createGroup(dbSession, groupName, groupDescription).groupDto();
       dbSession.commit();
-
       writeResponse(request, response, group);
     }
   }

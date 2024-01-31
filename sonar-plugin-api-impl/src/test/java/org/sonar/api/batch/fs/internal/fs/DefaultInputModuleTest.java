@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import org.junit.Rule;
 import org.junit.Test;
@@ -57,11 +58,12 @@ public class DefaultInputModuleTest {
 
     assertThat(module.key()).isEqualTo("moduleKey");
     assertThat(module.definition()).isEqualTo(def);
-    assertThat(module.getBaseDir()).isEqualTo(baseDir.toPath());
+    assertThat(module.getBaseDir())
+      .isEqualTo(baseDir.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS));
     assertThat(module.getWorkDir()).isEqualTo(workDir.toPath());
     assertThat(module.getEncoding()).isEqualTo(Charset.defaultCharset());
-    assertThat(module.getSourceDirsOrFiles().get()).containsExactlyInAnyOrder(src);
-    assertThat(module.getTestDirsOrFiles().get()).containsExactlyInAnyOrder(test);
+    assertThat(module.getSourceDirsOrFiles().get()).containsExactlyInAnyOrder(src.toRealPath(LinkOption.NOFOLLOW_LINKS));
+    assertThat(module.getTestDirsOrFiles().get()).containsExactlyInAnyOrder(test.toRealPath(LinkOption.NOFOLLOW_LINKS));
     assertThat(module.getEncoding()).isEqualTo(Charset.defaultCharset());
 
     assertThat(module.isFile()).isFalse();
@@ -83,7 +85,7 @@ public class DefaultInputModuleTest {
 
     assertThat(module.key()).isEqualTo("moduleKey");
     assertThat(module.definition()).isEqualTo(def);
-    assertThat(module.getBaseDir()).isEqualTo(baseDir.toPath());
+    assertThat(module.getBaseDir()).isEqualTo(baseDir.toPath().toRealPath(LinkOption.NOFOLLOW_LINKS));
     assertThat(module.getWorkDir()).isEqualTo(workDir.toPath());
     assertThat(module.getEncoding()).isEqualTo(Charset.defaultCharset());
     assertThat(module.getSourceDirsOrFiles()).isNotPresent();

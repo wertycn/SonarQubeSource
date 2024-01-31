@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,47 +20,46 @@
 package org.sonar.server.platform.serverid;
 
 import java.util.Optional;
-import org.picocontainer.Startable;
 import org.sonar.api.SonarQubeSide;
 import org.sonar.api.SonarRuntime;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.sonar.api.Startable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.platform.ServerId;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.property.PropertyDto;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.property.InternalProperties;
 
 import static com.google.common.base.Preconditions.checkState;
 import static org.apache.commons.lang.StringUtils.isEmpty;
 import static org.apache.commons.lang.StringUtils.isNotEmpty;
 import static org.sonar.api.CoreProperties.SERVER_ID;
-import static org.sonar.core.platform.ServerId.Format.DEPRECATED;
-import static org.sonar.core.platform.ServerId.Format.NO_DATABASE_ID;
 import static org.sonar.server.property.InternalProperties.SERVER_ID_CHECKSUM;
 
 public class ServerIdManager implements Startable {
-  private static final Logger LOGGER = Loggers.get(ServerIdManager.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerIdManager.class);
 
   private final ServerIdChecksum serverIdChecksum;
   private final ServerIdFactory serverIdFactory;
   private final DbClient dbClient;
   private final SonarRuntime runtime;
-  private final WebServer webServer;
+  private final NodeInformation nodeInformation;
 
-  public ServerIdManager(ServerIdChecksum serverIdChecksum, ServerIdFactory serverIdFactory, DbClient dbClient, SonarRuntime runtime, WebServer webServer) {
+  public ServerIdManager(ServerIdChecksum serverIdChecksum, ServerIdFactory serverIdFactory, DbClient dbClient, SonarRuntime runtime,
+    NodeInformation nodeInformation) {
     this.serverIdChecksum = serverIdChecksum;
     this.serverIdFactory = serverIdFactory;
     this.dbClient = dbClient;
     this.runtime = runtime;
-    this.webServer = webServer;
+    this.nodeInformation = nodeInformation;
   }
 
   @Override
   public void start() {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      if (runtime.getSonarQubeSide() == SonarQubeSide.SERVER && webServer.isStartupLeader()) {
+      if (runtime.getSonarQubeSide() == SonarQubeSide.SERVER && nodeInformation.isStartupLeader()) {
         Optional<String> checksum = dbClient.internalPropertiesDao().selectByKey(dbSession, SERVER_ID_CHECKSUM);
 
         ServerId serverId = readCurrentServerId(dbSession)
@@ -86,12 +85,6 @@ public class ServerIdManager implements Startable {
   }
 
   private boolean keepServerId(ServerId serverId, Optional<String> checksum) {
-    ServerId.Format format = serverId.getFormat();
-    if (format == DEPRECATED || format == NO_DATABASE_ID) {
-      LOGGER.info("Server ID is changed to new format.");
-      return false;
-    }
-
     if (checksum.isPresent()) {
       String expectedChecksum = serverIdChecksum.computeFor(serverId.toString());
       if (!expectedChecksum.equals(checksum.get())) {
@@ -105,9 +98,6 @@ public class ServerIdManager implements Startable {
   }
 
   private ServerId replaceCurrentServerId(ServerId currentServerId) {
-    if (currentServerId.getFormat() == DEPRECATED) {
-      return serverIdFactory.create();
-    }
     return serverIdFactory.create(currentServerId);
   }
 

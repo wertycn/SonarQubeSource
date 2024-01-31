@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,34 +22,30 @@ package org.sonar.core.hash;
 import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class SourceLinesHashesComputerTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void addLine_throws_NPE_is_line_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("line can not be null");
-
-    new SourceLineHashesComputer(1).addLine(null);
+    assertThatThrownBy(() -> new SourceLineHashesComputer(1).addLine(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("line can not be null");
   }
 
   @Test
   public void hash_of_empty_string_is_empty_string() {
-    assertThat(hashSingleLine("")).isEqualTo("");
+    assertThat(hashSingleLine("")).isEmpty();
   }
 
   @Test
   public void tab_and_spaces_are_ignored_from_hash() {
-    assertThat(hashSingleLine(" ")).isEqualTo("");
-    assertThat(hashSingleLine("\t")).isEqualTo("");
-    assertThat(hashSingleLine("\t \t \t\t  ")).isEqualTo("");
+    assertThat(hashSingleLine(" ")).isEmpty();
+    assertThat(hashSingleLine("\t")).isEmpty();
+    assertThat(hashSingleLine("\t \t \t\t  ")).isEmpty();
 
     String abHash = hashSingleLine("ab");
     assertThat(hashSingleLine("a b")).isEqualTo(abHash);

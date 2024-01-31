@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.scanner.repository;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.CheckForNull;
 import javax.annotation.concurrent.Immutable;
@@ -32,7 +30,7 @@ public class MultiModuleProjectRepository extends ProjectRepositories {
 
   public MultiModuleProjectRepository(Map<String, SingleProjectRepository> repositoriesPerModule) {
     super(true);
-    this.repositoriesPerModule = Collections.unmodifiableMap(new HashMap<>(repositoriesPerModule));
+    this.repositoriesPerModule = Map.copyOf(repositoriesPerModule);
   }
 
   @CheckForNull

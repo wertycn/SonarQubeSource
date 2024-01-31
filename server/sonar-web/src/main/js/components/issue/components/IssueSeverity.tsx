@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,67 +17,40 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import DropdownIcon from 'sonar-ui-common/components/icons/DropdownIcon';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { setIssueSeverity } from '../../../api/issues';
-import { IssueResponse } from '../../../types/issues';
-import SeverityHelper from '../../shared/SeverityHelper';
-import SetSeverityPopup from '../popups/SetSeverityPopup';
 
-interface Props {
-  canSetSeverity: boolean;
-  isOpen: boolean;
-  issue: Pick<T.Issue, 'severity'>;
-  setIssueProperty: (
-    property: keyof T.Issue,
-    popup: string,
-    apiCall: (query: T.RawQuery) => Promise<IssueResponse>,
-    value: string
-  ) => void;
-  togglePopup: (popup: string, show?: boolean) => void;
+import { IconProps, TextSubdued } from 'design-system';
+import * as React from 'react';
+import { translate } from '../../../helpers/l10n';
+import { IssueSeverity as IssueSeverityType } from '../../../types/issues';
+import { Issue } from '../../../types/types';
+import DocumentationTooltip from '../../common/DocumentationTooltip';
+import IssueSeverityIcon from '../../icon-mappers/IssueSeverityIcon';
+import { DeprecatedFieldTooltip } from './DeprecatedFieldTooltip';
+
+interface Props extends IconProps {
+  issue: Pick<Issue, 'severity'>;
 }
 
-export default class IssueSeverity extends React.PureComponent<Props> {
-  toggleSetSeverity = (open?: boolean) => {
-    this.props.togglePopup('set-severity', open);
-  };
-
-  setSeverity = (severity: string) => {
-    this.props.setIssueProperty('severity', 'set-severity', setIssueSeverity, severity);
-  };
-
-  handleClose = () => {
-    this.toggleSetSeverity(false);
-  };
-
-  render() {
-    const { issue } = this.props;
-    if (this.props.canSetSeverity) {
-      return (
-        <div className="dropdown">
-          <Toggler
-            onRequestClose={this.handleClose}
-            open={this.props.isOpen && this.props.canSetSeverity}
-            overlay={<SetSeverityPopup issue={issue} onSelect={this.setSeverity} />}>
-            <ButtonLink
-              aria-label={translateWithParameters(
-                'issue.severity.severity_x_click_to_change',
-                translate('severity', issue.severity)
-              )}
-              aria-expanded={this.props.isOpen}
-              className="issue-action issue-action-with-options js-issue-set-severity"
-              onClick={this.toggleSetSeverity}>
-              <SeverityHelper className="issue-meta-label" severity={issue.severity} />
-              <DropdownIcon className="little-spacer-left" />
-            </ButtonLink>
-          </Toggler>
-        </div>
-      );
-    }
-
-    return <SeverityHelper className="issue-meta-label" severity={issue.severity} />;
-  }
+export default function IssueSeverity({ issue, ...iconProps }: Readonly<Props>) {
+  return (
+    <DocumentationTooltip
+      content={<DeprecatedFieldTooltip field="severity" />}
+      links={[
+        {
+          href: '/user-guide/issues',
+          label: translate('learn_more'),
+        },
+      ]}
+    >
+      <TextSubdued className="sw-flex sw-items-center sw-gap-1/2">
+        <IssueSeverityIcon
+          fill="iconSeverityDisabled"
+          severity={issue.severity as IssueSeverityType}
+          aria-hidden
+          {...iconProps}
+        />
+        {translate('severity', issue.severity)}
+      </TextSubdued>
+    </DocumentationTooltip>
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,22 +19,15 @@
  */
 package org.sonar.xoo.rule;
 
-import org.sonar.api.profiles.ProfileDefinition;
-import org.sonar.api.profiles.RulesProfile;
-import org.sonar.api.rules.Rule;
-import org.sonar.api.rules.RulePriority;
-import org.sonar.api.utils.ValidationMessages;
+import org.sonar.api.server.profile.BuiltInQualityProfilesDefinition;
 import org.sonar.xoo.Xoo;
 
-public class XooBasicProfile extends ProfileDefinition {
-
+public class XooBasicProfile implements BuiltInQualityProfilesDefinition {
   @Override
-  public RulesProfile createProfile(ValidationMessages validation) {
-    final RulesProfile profile = RulesProfile.create("Basic", Xoo.KEY);
-    profile.setDefaultProfile(true);
-
-    profile.activateRule(Rule.create(XooRulesDefinition.XOO_REPOSITORY, HasTagSensor.RULE_KEY), RulePriority.MAJOR);
-
-    return profile;
+  public void define(Context context) {
+    NewBuiltInQualityProfile qProfile = context.createBuiltInQualityProfile("Basic", Xoo.KEY);
+    qProfile.setDefault(true);
+    qProfile.activateRule(XooRulesDefinition.XOO_REPOSITORY, HasTagSensor.RULE_KEY);
+    qProfile.done();
   }
 }

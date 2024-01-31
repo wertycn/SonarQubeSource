@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,20 +29,22 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.UserIdentity;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.db.user.UserGroupDto;
-import org.sonar.server.authentication.UserRegistration.ExistingEmailStrategy;
+import org.sonar.server.authentication.event.AuthenticationEvent.Source;
 import org.sonar.server.authentication.event.AuthenticationException;
-import org.sonar.server.authentication.exception.EmailAlreadyExistsRedirectionException;
+import org.sonar.server.management.ManagedInstanceService;
 import org.sonar.server.user.ExternalIdentity;
 import org.sonar.server.user.NewUser;
 import org.sonar.server.user.UpdateUser;
@@ -51,50 +53,119 @@ import org.sonar.server.usergroups.DefaultGroupFinder;
 
 import static java.lang.String.format;
 import static java.util.Collections.singletonList;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
+import static org.sonar.server.user.UserSession.IdentityProvider.SONARQUBE;
 
 public class UserRegistrarImpl implements UserRegistrar {
 
-  private static final Logger LOGGER = Loggers.get(UserRegistrarImpl.class);
-  private static final String SQ_AUTHORITY = "sonarqube";
+  public static final String SQ_AUTHORITY = "sonarqube";
+  public static final String LDAP_PROVIDER_PREFIX = "LDAP_";
+  private static final Logger LOGGER = LoggerFactory.getLogger(UserRegistrarImpl.class);
+  public static final String GITHUB_PROVIDER = "github";
+  public static final String GITLAB_PROVIDER = "gitlab";
 
   private final DbClient dbClient;
   private final UserUpdater userUpdater;
   private final DefaultGroupFinder defaultGroupFinder;
+  private final ManagedInstanceService managedInstanceService;
 
-  public UserRegistrarImpl(DbClient dbClient, UserUpdater userUpdater, DefaultGroupFinder defaultGroupFinder) {
+  public UserRegistrarImpl(DbClient dbClient, UserUpdater userUpdater, DefaultGroupFinder defaultGroupFinder,
+    ManagedInstanceService managedInstanceService) {
     this.dbClient = dbClient;
     this.userUpdater = userUpdater;
     this.defaultGroupFinder = defaultGroupFinder;
+    this.managedInstanceService = managedInstanceService;
   }
 
   @Override
   public UserDto register(UserRegistration registration) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      UserDto userDto = getUser(dbSession, registration.getUserIdentity(), registration.getProvider());
+      UserDto userDto = getUser(dbSession, registration.getUserIdentity(), registration.getProvider(), registration.getSource());
       if (userDto == null) {
         return registerNewUser(dbSession, null, registration);
       }
       if (!userDto.isActive()) {
         return registerNewUser(dbSession, userDto, registration);
       }
-      return registerExistingUser(dbSession, userDto, registration);
+      return updateExistingUser(dbSession, userDto, registration);
     }
   }
 
   @CheckForNull
-  private UserDto getUser(DbSession dbSession, UserIdentity userIdentity, IdentityProvider provider) {
+  private UserDto getUser(DbSession dbSession, UserIdentity userIdentity, IdentityProvider provider, Source source) {
     // First, try to authenticate using the external ID
-    UserDto user = dbClient.userDao().selectByExternalIdAndIdentityProvider(dbSession, getProviderIdOrProviderLogin(userIdentity), provider.getKey());
-    if (user != null) {
-      return user;
+    // Then, try with the external login, for instance when external ID has changed or is not used by the provider
+    return retrieveUserByExternalIdAndIdentityProvider(dbSession, userIdentity, provider)
+      .or(() -> retrieveUserByExternalLoginAndIdentityProvider(dbSession, userIdentity, provider, source))
+      .or(() -> retrieveUserByLogin(dbSession, userIdentity, provider))
+      .orElse(null);
+  }
+
+  private Optional<UserDto> retrieveUserByExternalIdAndIdentityProvider(DbSession dbSession, UserIdentity userIdentity, IdentityProvider provider) {
+    return Optional.ofNullable(dbClient.userDao().selectByExternalIdAndIdentityProvider(dbSession, getProviderIdOrProviderLogin(userIdentity), provider.getKey()));
+  }
+
+  private Optional<UserDto> retrieveUserByExternalLoginAndIdentityProvider(DbSession dbSession, UserIdentity userIdentity, IdentityProvider provider, Source source) {
+    return Optional.ofNullable(dbClient.userDao().selectByExternalLoginAndIdentityProvider(dbSession, userIdentity.getProviderLogin(), provider.getKey()))
+      .filter(user -> validateAlmSpecificData(user, provider.getKey(), userIdentity, source));
+  }
+
+  private Optional<UserDto> retrieveUserByLogin(DbSession dbSession, UserIdentity userIdentity, IdentityProvider provider) {
+    return Optional.ofNullable(dbClient.userDao().selectByLogin(dbSession, userIdentity.getProviderLogin()))
+      .filter(user -> shouldPerformLdapIdentityProviderMigration(user, provider));
+  }
+
+  private static boolean shouldPerformLdapIdentityProviderMigration(UserDto user, IdentityProvider identityProvider) {
+    boolean isLdapIdentityProvider = identityProvider.getKey().startsWith(LDAP_PROVIDER_PREFIX);
+    boolean hasSonarQubeExternalIdentityProvider = SONARQUBE.getKey().equals(user.getExternalIdentityProvider());
+
+    return isLdapIdentityProvider && hasSonarQubeExternalIdentityProvider && !user.isLocal();
+  }
+
+  private static boolean validateAlmSpecificData(UserDto user, String key, UserIdentity userIdentity, Source source) {
+    // All gitlab users have an external ID, so the other two authentication methods should never be used
+    if (GITLAB_PROVIDER.equals(key)) {
+      throw failAuthenticationException(userIdentity, source);
     }
-    // Then, try with the external login, for instance when external ID has changed
-    return dbClient.userDao().selectByExternalLoginAndIdentityProvider(dbSession, userIdentity.getProviderLogin(), provider.getKey());
+
+    if (GITHUB_PROVIDER.equals(key)) {
+      validateEmailToAvoidLoginRecycling(userIdentity, user, source);
+    }
+
+    return true;
+  }
+
+  private static void validateEmailToAvoidLoginRecycling(UserIdentity userIdentity, UserDto user, Source source) {
+    String dbEmail = user.getEmail();
+
+    if (dbEmail == null) {
+      return;
+    }
+
+    String externalEmail = userIdentity.getEmail();
+
+    if (!dbEmail.equalsIgnoreCase(externalEmail)) {
+      LOGGER.warn("User with login '{}' tried to login with email '{}' which doesn't match the email on record '{}'", userIdentity.getProviderLogin(), externalEmail, dbEmail);
+      throw failAuthenticationException(userIdentity, source);
+    }
+  }
+
+  private static AuthenticationException failAuthenticationException(UserIdentity userIdentity, Source source) {
+    String message = String.format("Failed to authenticate with login '%s'", userIdentity.getProviderLogin());
+    return authException(userIdentity, source, message, message);
+  }
+
+  private static AuthenticationException authException(UserIdentity userIdentity, Source source, String message, String publicMessage) {
+    return AuthenticationException.newBuilder()
+      .setSource(source)
+      .setLogin(userIdentity.getProviderLogin())
+      .setMessage(message)
+      .setPublicMessage(publicMessage)
+      .build();
   }
 
   private UserDto registerNewUser(DbSession dbSession, @Nullable UserDto disabledUser, UserRegistration authenticatorParameters) {
-    Optional<UserDto> otherUserToIndex = detectEmailUpdate(dbSession, authenticatorParameters);
+    blockUnmanagedUserCreationOnManagedInstance(authenticatorParameters);
+    Optional<UserDto> otherUserToIndex = detectEmailUpdate(dbSession, authenticatorParameters, disabledUser != null ? disabledUser.getUuid() : null);
     NewUser newUser = createNewUser(authenticatorParameters);
     if (disabledUser == null) {
       return userUpdater.createAndCommit(dbSession, newUser, beforeCommit(dbSession, authenticatorParameters), toArray(otherUserToIndex));
@@ -102,15 +173,25 @@ public class UserRegistrarImpl implements UserRegistrar {
     return userUpdater.reactivateAndCommit(dbSession, disabledUser, newUser, beforeCommit(dbSession, authenticatorParameters), toArray(otherUserToIndex));
   }
 
-  private UserDto registerExistingUser(DbSession dbSession, UserDto userDto, UserRegistration authenticatorParameters) {
+  private void blockUnmanagedUserCreationOnManagedInstance(UserRegistration userRegistration) {
+    if (managedInstanceService.isInstanceExternallyManaged() && !userRegistration.managed()) {
+      throw AuthenticationException.newBuilder()
+        .setMessage("No account found for this user. As the instance is managed, make sure to provision the user from your IDP.")
+        .setPublicMessage("You have no account on SonarQube. Please make sure with your administrator that your account is provisioned.")
+        .setLogin(userRegistration.getUserIdentity().getProviderLogin())
+        .setSource(userRegistration.getSource())
+        .build();
+    }
+  }
+
+  private UserDto updateExistingUser(DbSession dbSession, UserDto userDto, UserRegistration authenticatorParameters) {
     UpdateUser update = new UpdateUser()
       .setEmail(authenticatorParameters.getUserIdentity().getEmail())
       .setName(authenticatorParameters.getUserIdentity().getName())
-      .setExternalIdentity(new ExternalIdentity(
-        authenticatorParameters.getProvider().getKey(),
-        authenticatorParameters.getUserIdentity().getProviderLogin(),
-        authenticatorParameters.getUserIdentity().getProviderId()));
-    Optional<UserDto> otherUserToIndex = detectEmailUpdate(dbSession, authenticatorParameters);
+      .setExternalIdentityProvider(authenticatorParameters.getProvider().getKey())
+      .setExternalIdentityProviderId(authenticatorParameters.getUserIdentity().getProviderId())
+      .setExternalIdentityProviderLogin(authenticatorParameters.getUserIdentity().getProviderLogin());
+    Optional<UserDto> otherUserToIndex = detectEmailUpdate(dbSession, authenticatorParameters, userDto.getUuid());
     userUpdater.updateAndCommit(dbSession, userDto, update, beforeCommit(dbSession, authenticatorParameters), toArray(otherUserToIndex));
     return userDto;
   }
@@ -119,7 +200,7 @@ public class UserRegistrarImpl implements UserRegistrar {
     return user -> syncGroups(dbSession, authenticatorParameters.getUserIdentity(), user);
   }
 
-  private Optional<UserDto> detectEmailUpdate(DbSession dbSession, UserRegistration authenticatorParameters) {
+  private Optional<UserDto> detectEmailUpdate(DbSession dbSession, UserRegistration authenticatorParameters, @Nullable String authenticatingUserUuid) {
     String email = authenticatorParameters.getUserIdentity().getEmail();
     if (email == null) {
       return Optional.empty();
@@ -133,29 +214,10 @@ public class UserRegistrarImpl implements UserRegistrar {
     }
 
     UserDto existingUser = existingUsers.get(0);
-    if (existingUser == null || isSameUser(existingUser, authenticatorParameters)) {
+    if (existingUser == null || existingUser.getUuid().equals(authenticatingUserUuid)) {
       return Optional.empty();
     }
-    ExistingEmailStrategy existingEmailStrategy = authenticatorParameters.getExistingEmailStrategy();
-    switch (existingEmailStrategy) {
-      case ALLOW:
-        existingUser.setEmail(null);
-        dbClient.userDao().update(dbSession, existingUser);
-        return Optional.of(existingUser);
-      case WARN:
-        throw new EmailAlreadyExistsRedirectionException(email, existingUser, authenticatorParameters.getUserIdentity(), authenticatorParameters.getProvider());
-      case FORBID:
-        throw generateExistingEmailError(authenticatorParameters, email);
-      default:
-        throw new IllegalStateException(format("Unknown strategy %s", existingEmailStrategy));
-    }
-  }
-
-  private static boolean isSameUser(UserDto existingUser, UserRegistration authenticatorParameters) {
-    // Check if same identity provider and same provider id or provider login
-    return (Objects.equals(existingUser.getExternalIdentityProvider(), authenticatorParameters.getProvider().getKey()) &&
-      (Objects.equals(existingUser.getExternalId(), getProviderIdOrProviderLogin(authenticatorParameters.getUserIdentity()))
-        || Objects.equals(existingUser.getExternalLogin(), authenticatorParameters.getUserIdentity().getProviderLogin())));
+    throw generateExistingEmailError(authenticatorParameters, email);
   }
 
   private void syncGroups(DbSession dbSession, UserIdentity userIdentity, UserDto userDto) {
@@ -173,7 +235,7 @@ public class UserRegistrarImpl implements UserRegistrar {
     allGroups.addAll(groupsToRemove);
     Map<String, GroupDto> groupsByName = dbClient.groupDao().selectByNames(dbSession, allGroups)
       .stream()
-      .collect(uniqueIndex(GroupDto::getName));
+      .collect(Collectors.toMap(GroupDto::getName, Function.identity()));
 
     addGroups(dbSession, userDto, groupsToAdd, groupsByName);
     removeGroups(dbSession, userDto, groupsToRemove, groupsByName);
@@ -182,8 +244,9 @@ public class UserRegistrarImpl implements UserRegistrar {
   private void addGroups(DbSession dbSession, UserDto userDto, Collection<String> groupsToAdd, Map<String, GroupDto> groupsByName) {
     groupsToAdd.stream().map(groupsByName::get).filter(Objects::nonNull).forEach(
       groupDto -> {
-        LOGGER.debug("Adding group '{}' to user '{}'", groupDto.getName(), userDto.getLogin());
-        dbClient.userGroupDao().insert(dbSession, new UserGroupDto().setGroupUuid(groupDto.getUuid()).setUserUuid(userDto.getUuid()));
+        LOGGER.debug("Adding user '{}' to group '{}'", userDto.getLogin(), groupDto.getName());
+        dbClient.userGroupDao().insert(dbSession, new UserGroupDto().setGroupUuid(groupDto.getUuid()).setUserUuid(userDto.getUuid()),
+          groupDto.getName(), userDto.getLogin());
       });
   }
 
@@ -193,10 +256,10 @@ public class UserRegistrarImpl implements UserRegistrar {
       .filter(Objects::nonNull)
       // user should be member of default group only when organizations are disabled, as the IdentityProvider API doesn't handle yet
       // organizations
-      .filter(group -> !defaultGroup.isPresent() || !group.getUuid().equals(defaultGroup.get().getUuid()))
+      .filter(group -> defaultGroup.isEmpty() || !group.getUuid().equals(defaultGroup.get().getUuid()))
       .forEach(groupDto -> {
         LOGGER.debug("Removing group '{}' from user '{}'", groupDto.getName(), userDto.getLogin());
-        dbClient.userGroupDao().delete(dbSession, groupDto.getUuid(), userDto.getUuid());
+        dbClient.userGroupDao().delete(dbSession, groupDto, userDto);
       });
   }
 
@@ -204,9 +267,9 @@ public class UserRegistrarImpl implements UserRegistrar {
     return Optional.of(defaultGroupFinder.findDefaultGroup(dbSession));
   }
 
-  private static NewUser createNewUser(UserRegistration authenticatorParameters) {
+  private NewUser createNewUser(UserRegistration authenticatorParameters) {
     String identityProviderKey = authenticatorParameters.getProvider().getKey();
-    if (!authenticatorParameters.getProvider().allowsUsersToSignUp()) {
+    if (!managedInstanceService.isInstanceExternallyManaged() && !authenticatorParameters.getProvider().allowsUsersToSignUp()) {
       throw AuthenticationException.newBuilder()
         .setSource(authenticatorParameters.getSource())
         .setLogin(authenticatorParameters.getUserIdentity().getProviderLogin())
@@ -228,7 +291,7 @@ public class UserRegistrarImpl implements UserRegistrar {
   }
 
   private static UserDto[] toArray(Optional<UserDto> userDto) {
-    return userDto.map(u -> new UserDto[] {u}).orElse(new UserDto[] {});
+    return userDto.map(u -> new UserDto[]{u}).orElse(new UserDto[]{});
   }
 
   private static AuthenticationException generateExistingEmailError(UserRegistration authenticatorParameters, String email) {
@@ -236,9 +299,10 @@ public class UserRegistrarImpl implements UserRegistrar {
       .setSource(authenticatorParameters.getSource())
       .setLogin(authenticatorParameters.getUserIdentity().getProviderLogin())
       .setMessage(format("Email '%s' is already used", email))
-      .setPublicMessage(format(
-        "You can't sign up because email '%s' is already used by an existing user. This means that you probably already registered with another account.",
-        email))
+      .setPublicMessage(
+        "This account is already associated with another authentication method. "
+          + "Sign in using the current authentication method, "
+          + "or contact your administrator to transfer your account to a different authentication method.")
       .build();
   }
 

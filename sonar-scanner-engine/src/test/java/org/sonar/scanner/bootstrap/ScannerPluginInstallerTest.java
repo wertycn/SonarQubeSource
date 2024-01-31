@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.jar.Attributes;
@@ -31,11 +33,11 @@ import java.util.jar.Manifest;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.scanner.WsTestUtil;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -44,8 +46,6 @@ public class ScannerPluginInstallerTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private PluginFiles pluginFiles = mock(PluginFiles.class);
   private DefaultScannerWsClient wsClient = mock(DefaultScannerWsClient.class);
@@ -53,11 +53,36 @@ public class ScannerPluginInstallerTest {
 
   @Test
   public void download_installed_plugins() throws IOException {
-    WsTestUtil.mockReader(wsClient, "api/plugins/installed", new InputStreamReader(getClass().getResourceAsStream("ScannerPluginInstallerTest/installed-plugins-ws.json")));
+    WsTestUtil.mockReader(wsClient, "api/plugins/installed",
+      new InputStreamReader(getClass().getResourceAsStream("ScannerPluginInstallerTest/installed-plugins-ws.json")));
     enqueueDownload("scmgit", "abc");
     enqueueDownload("java", "def");
 
-    Map<String, ScannerPlugin> result = underTest.installRemotes();
+    Map<String, ScannerPlugin> result = underTest.installRequiredPlugins();
+
+    assertThat(result.keySet()).containsExactlyInAnyOrder("scmgit");
+    ScannerPlugin gitPlugin = result.get("scmgit");
+    assertThat(gitPlugin.getKey()).isEqualTo("scmgit");
+    assertThat(gitPlugin.getInfo().getNonNullJarFile()).exists().isFile();
+    assertThat(gitPlugin.getUpdatedAt()).isEqualTo(100L);
+
+    Map<String, ScannerPlugin> result2 = underTest.installPluginsForLanguages(new HashSet<>(List.of("java")));
+
+    assertThat(result2.keySet()).containsExactlyInAnyOrder("java");
+    ScannerPlugin javaPlugin = result2.get("java");
+    assertThat(javaPlugin.getKey()).isEqualTo("java");
+    assertThat(javaPlugin.getInfo().getNonNullJarFile()).exists().isFile();
+    assertThat(javaPlugin.getUpdatedAt()).isEqualTo(200L);
+  }
+
+  @Test
+  public void download_all_plugins() throws IOException {
+    WsTestUtil.mockReader(wsClient, "api/plugins/installed",
+      new InputStreamReader(getClass().getResourceAsStream("ScannerPluginInstallerTest/installed-plugins-ws.json")));
+    enqueueDownload("scmgit", "abc");
+    enqueueDownload("java", "def");
+
+    Map<String, ScannerPlugin> result = underTest.installAllPlugins();
 
     assertThat(result.keySet()).containsExactlyInAnyOrder("scmgit", "java");
     ScannerPlugin gitPlugin = result.get("scmgit");
@@ -75,10 +100,9 @@ public class ScannerPluginInstallerTest {
   public void fail_if_json_of_installed_plugins_is_not_valid() {
     WsTestUtil.mockReader(wsClient, "api/plugins/installed", new StringReader("not json"));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Fail to parse response of api/plugins/installed");
-
-    underTest.installRemotes();
+    assertThatThrownBy(() -> underTest.installRequiredPlugins())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Fail to parse response of api/plugins/installed");
   }
 
   @Test
@@ -90,7 +114,7 @@ public class ScannerPluginInstallerTest {
     enqueueDownload("java", "def");
     enqueueDownload("cobol", "ghi");
 
-    Map<String, ScannerPlugin> result = underTest.installRemotes();
+    Map<String, ScannerPlugin> result = underTest.installRequiredPlugins();
 
     assertThat(result.keySet()).containsExactlyInAnyOrder("java", "cobol");
   }
@@ -104,10 +128,9 @@ public class ScannerPluginInstallerTest {
     enqueueDownload("cobol", "ghi");
     enqueueNotFoundDownload("java", "def");
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Fail to download plugin [java]. Not found.");
-
-    underTest.installRemotes();
+    assertThatThrownBy(() -> underTest.installRequiredPlugins())
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Fail to download plugin [java]. Not found.");
   }
 
   @Test

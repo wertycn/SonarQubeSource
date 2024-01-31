@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,19 +17,32 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON, RequestData } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON, RequestData } from '../helpers/request';
 import { BranchParameters } from '../types/branch-like';
+import {
+  Analysis,
+  ApplicationAnalysisEventCategory,
+  ProjectAnalysisEventCategory,
+} from '../types/project-activity';
+import { Paging } from '../types/types';
+
+export enum ProjectActivityStatuses {
+  STATUS_PROCESSED = 'P',
+  STATUS_UNPROCESSED = 'U',
+  STATUS_LIVE_MEASURE_COMPUTE = 'L',
+}
 
 export function getProjectActivity(
   data: {
     project: string;
+    statuses?: string;
     category?: string;
     from?: string;
     p?: number;
     ps?: number;
-  } & BranchParameters
-): Promise<{ analyses: T.Analysis[]; paging: T.Paging }> {
+  } & BranchParameters,
+): Promise<{ analyses: Analysis[]; paging: Paging }> {
   return getJSON('/api/project_analyses/search', data).catch(throwGlobalError);
 }
 
@@ -37,7 +50,7 @@ interface CreateEventResponse {
   analysis: string;
   key: string;
   name: string;
-  category: string;
+  category: ProjectAnalysisEventCategory | ApplicationAnalysisEventCategory;
   description?: string;
 }
 
@@ -45,7 +58,7 @@ export function createEvent(
   analysis: string,
   name: string,
   category?: string,
-  description?: string
+  description?: string,
 ): Promise<CreateEventResponse> {
   const data: RequestData = { analysis, name };
   if (category) {
@@ -54,7 +67,10 @@ export function createEvent(
   if (description) {
     data.description = description;
   }
-  return postJSON('/api/project_analyses/create_event', data).then(r => r.event, throwGlobalError);
+  return postJSON('/api/project_analyses/create_event', data).then(
+    (r) => r.event,
+    throwGlobalError,
+  );
 }
 
 export function deleteEvent(event: string): Promise<void | Response> {
@@ -64,7 +80,7 @@ export function deleteEvent(event: string): Promise<void | Response> {
 export function changeEvent(
   event: string,
   name?: string,
-  description?: string
+  description?: string,
 ): Promise<CreateEventResponse> {
   const data: RequestData = { event };
   if (name) {
@@ -73,7 +89,10 @@ export function changeEvent(
   if (description) {
     data.description = description;
   }
-  return postJSON('/api/project_analyses/update_event', data).then(r => r.event, throwGlobalError);
+  return postJSON('/api/project_analyses/update_event', data).then(
+    (r) => r.event,
+    throwGlobalError,
+  );
 }
 
 export function deleteAnalysis(analysis: string): Promise<void | Response> {

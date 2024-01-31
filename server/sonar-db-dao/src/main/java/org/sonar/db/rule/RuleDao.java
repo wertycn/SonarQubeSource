@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,26 +20,35 @@
 package org.sonar.db.rule;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
-import org.apache.ibatis.session.ResultHandler;
+import java.util.function.Function;
+import javax.annotation.Nullable;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleQuery;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
+import org.sonar.db.Pagination;
 import org.sonar.db.RowNotFoundException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Collections.emptyList;
-import static java.util.Optional.ofNullable;
+import static java.util.stream.Collectors.toMap;
+import static org.apache.commons.lang.StringUtils.isBlank;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 import static org.sonar.db.DatabaseUtils.executeLargeInputsWithoutOutput;
 import static org.sonar.db.DatabaseUtils.executeLargeUpdates;
 
 public class RuleDao implements Dao {
+
+  private static final String PERCENT_SIGN = "%";
 
   private final UuidFactory uuidFactory;
 
@@ -48,55 +57,23 @@ public class RuleDao implements Dao {
   }
 
   public Optional<RuleDto> selectByKey(DbSession session, RuleKey key) {
-    RuleDto res = mapper(session).selectByKey(key);
-    return ofNullable(res);
-  }
-
-  public Optional<RuleDefinitionDto> selectDefinitionByKey(DbSession session, RuleKey key) {
-    return ofNullable(mapper(session).selectDefinitionByKey(key));
-  }
-
-  public Optional<RuleMetadataDto> selectMetadataByKey(DbSession session, RuleKey key) {
-    return ofNullable(mapper(session).selectMetadataByKey(key));
+    return Optional.ofNullable(mapper(session).selectByKey(key));
   }
 
   public RuleDto selectOrFailByKey(DbSession session, RuleKey key) {
-    RuleDto rule = mapper(session).selectByKey(key);
-    if (rule == null) {
-      throw new RowNotFoundException(String.format("Rule with key '%s' does not exist", key));
-    }
-    return rule;
-  }
-
-  public RuleDefinitionDto selectOrFailDefinitionByKey(DbSession session, RuleKey key) {
-    RuleDefinitionDto rule = mapper(session).selectDefinitionByKey(key);
-    if (rule == null) {
-      throw new RowNotFoundException(String.format("Rule with key '%s' does not exist", key));
-    }
-    return rule;
+    return Optional.ofNullable(mapper(session).selectByKey(key))
+      .orElseThrow(() -> new RowNotFoundException(String.format("Rule with key '%s' does not exist", key)));
   }
 
   public Optional<RuleDto> selectByUuid(String uuid, DbSession session) {
-    RuleDto res = mapper(session).selectByUuid(uuid);
-    return ofNullable(res);
+    return Optional.ofNullable(mapper(session).selectByUuid(uuid));
   }
 
-  public Optional<RuleDefinitionDto> selectDefinitionByUuid(String uuid, DbSession session) {
-    return ofNullable(mapper(session).selectDefinitionByUuid(uuid));
-  }
-
-  public List<RuleDto> selectByUuids(DbSession session, List<String> uuids) {
+  public List<RuleDto> selectByUuids(DbSession session, Collection<String> uuids) {
     if (uuids.isEmpty()) {
       return emptyList();
     }
     return executeLargeInputs(uuids, chunk -> mapper(session).selectByUuids(chunk));
-  }
-
-  public List<RuleDefinitionDto> selectDefinitionByUuids(DbSession session, Collection<String> uuids) {
-    if (uuids.isEmpty()) {
-      return emptyList();
-    }
-    return executeLargeInputs(uuids, mapper(session)::selectDefinitionByUuids);
   }
 
   public List<RuleDto> selectByKeys(DbSession session, Collection<RuleKey> keys) {
@@ -106,78 +83,121 @@ public class RuleDao implements Dao {
     return executeLargeInputs(keys, chunk -> mapper(session).selectByKeys(chunk));
   }
 
-  public List<RuleDefinitionDto> selectDefinitionByKeys(DbSession session, Collection<RuleKey> keys) {
-    if (keys.isEmpty()) {
-      return emptyList();
-    }
-    return executeLargeInputs(keys, mapper(session)::selectDefinitionByKeys);
-  }
-
-  public void selectEnabled(DbSession session, ResultHandler<RuleDefinitionDto> resultHandler) {
-    mapper(session).selectEnabled(resultHandler);
+  public List<RuleDto> selectEnabled(DbSession session) {
+    return mapper(session).selectEnabled();
   }
 
   public List<RuleDto> selectAll(DbSession session) {
     return mapper(session).selectAll();
   }
 
-  public List<RuleDefinitionDto> selectAllDefinitions(DbSession session) {
-    return mapper(session).selectAllDefinitions();
-  }
-
   public List<RuleDto> selectByTypeAndLanguages(DbSession session, List<Integer> types, List<String> languages) {
     return executeLargeInputs(languages, chunk -> mapper(session).selectByTypeAndLanguages(types, chunk));
+  }
+
+  public List<RuleDto> selectByLanguage(DbSession session, String language) {
+    return mapper(session).selectByLanguage(language);
   }
 
   public List<RuleDto> selectByQuery(DbSession session, RuleQuery ruleQuery) {
     return mapper(session).selectByQuery(ruleQuery);
   }
 
-  public void insert(DbSession session, RuleDefinitionDto dto) {
-    checkNotNull(dto.getUuid(), "RuleDefinitionDto has no 'uuid'.");
-    mapper(session).insertDefinition(dto);
+  public void insert(DbSession session, RuleDto ruleDto) {
+    checkNotNull(ruleDto.getUuid(), "RuleDto has no 'uuid'.");
+    RuleMapper mapper = mapper(session);
+    mapper.insertRule(ruleDto);
+    updateRuleDescriptionSectionDtos(ruleDto, mapper);
+    updateRuleDefaultImpacts(ruleDto, mapper);
+    updateRuleTags(ruleDto, mapper);
   }
 
-  public void insert(DbSession session, RuleMetadataDto dto) {
-    checkNotNull(dto.getRuleUuid(), "RuleMetadataDto has no 'ruleUuid'.");
-    mapper(session).insertMetadata(dto);
+  public void update(DbSession session, RuleDto ruleDto) {
+    RuleMapper mapper = mapper(session);
+    mapper.updateRule(ruleDto);
+    updateRuleDescriptionSectionDtos(ruleDto, mapper);
+    updateRuleDefaultImpacts(ruleDto, mapper);
+    updateRuleTags(ruleDto, mapper);
   }
 
-  public void update(DbSession session, RuleDefinitionDto dto) {
-    mapper(session).updateDefinition(dto);
+  public List<String> selectTags(DbSession session, @Nullable String query, Pagination pagination) {
+    String queryUpgraded = toLowerCaseAndSurroundWithPercentSigns(query);
+    return mapper(session).selectTags(queryUpgraded, pagination);
   }
 
-  public void insertOrUpdate(DbSession session, RuleMetadataDto dto) {
-    if (mapper(session).countMetadata(dto) > 0) {
-      mapper(session).updateMetadata(dto);
-    } else {
-      mapper(session).insertMetadata(dto);
-    }
+  private static void updateRuleDescriptionSectionDtos(RuleDto ruleDto, RuleMapper mapper) {
+    mapper.deleteRuleDescriptionSection(ruleDto.getUuid());
+    insertRuleDescriptionSectionDtos(ruleDto, mapper);
   }
 
-  public void scrollIndexingRuleExtensionsByIds(DbSession dbSession, Collection<String> ruleExtensionIds, Consumer<RuleExtensionForIndexingDto> consumer) {
-    RuleMapper mapper = mapper(dbSession);
-
-    executeLargeInputsWithoutOutput(ruleExtensionIds,
-      pageOfRuleExtensionIds -> mapper
-        .selectIndexingRuleExtensionsByIds(pageOfRuleExtensionIds)
-        .forEach(consumer));
+  private static void insertRuleDescriptionSectionDtos(RuleDto ruleDto, RuleMapper mapper) {
+    ruleDto.getRuleDescriptionSectionDtos()
+      .forEach(section -> mapper.insertRuleDescriptionSection(ruleDto.getUuid(), section));
   }
 
-  public void scrollIndexingRulesByKeys(DbSession dbSession, Collection<String> ruleUuids, Consumer<RuleForIndexingDto> consumer) {
+  private static void updateRuleDefaultImpacts(RuleDto ruleDto, RuleMapper mapper) {
+    mapper.deleteRuleDefaultImpacts(ruleDto.getUuid());
+    insertRuleDefaultImpacts(ruleDto, mapper);
+  }
+
+  private static void updateRuleTags(RuleDto ruleDto, RuleMapper mapper) {
+    mapper.deleteRuleTags(ruleDto.getUuid());
+    insertRuleTags(ruleDto, mapper);
+  }
+
+  private static void insertRuleDefaultImpacts(RuleDto ruleDto, RuleMapper mapper) {
+    ruleDto.getDefaultImpacts()
+      .forEach(impact -> mapper.insertRuleDefaultImpact(ruleDto.getUuid(), impact));
+  }
+
+  private static void insertRuleTags(RuleDto ruleDto, RuleMapper mapper) {
+    ruleDto.getSystemTags()
+      .forEach(tag -> mapper.insertRuleTag(ruleDto.getUuid(), tag, true));
+    ruleDto.getTags()
+      .forEach(tag -> mapper.insertRuleTag(ruleDto.getUuid(), tag, false));
+  }
+
+  public void selectIndexingRulesByKeys(DbSession dbSession, Collection<String> ruleUuids, Consumer<RuleForIndexingDto> consumer) {
     RuleMapper mapper = mapper(dbSession);
 
     executeLargeInputsWithoutOutput(ruleUuids,
-      pageOfRuleUuids -> mapper
-        .selectIndexingRulesByUuids(pageOfRuleUuids)
-        .forEach(consumer));
+      pageOfRuleUuids -> {
+        List<RuleDto> ruleDtos = mapper.selectByUuids(pageOfRuleUuids);
+        processRuleDtos(ruleDtos, consumer, mapper);
+      });
   }
 
-  public void scrollIndexingRules(DbSession dbSession, Consumer<RuleForIndexingDto> consumer) {
-    mapper(dbSession).scrollIndexingRules(context -> {
-      RuleForIndexingDto dto = context.getResultObject();
-      consumer.accept(dto);
-    });
+  public void selectIndexingRules(DbSession dbSession, Consumer<RuleForIndexingDto> consumer) {
+    RuleMapper mapper = mapper(dbSession);
+    executeLargeInputsWithoutOutput(mapper.selectAll(),
+      ruleDtos -> processRuleDtos(ruleDtos, consumer, mapper));
+  }
+
+  private static RuleForIndexingDto toRuleForIndexingDto(RuleDto r, Map<String, RuleDto> templateDtos) {
+    RuleForIndexingDto ruleForIndexingDto = RuleForIndexingDto.fromRuleDto(r);
+    if (templateDtos.containsKey(r.getTemplateUuid())) {
+      ruleForIndexingDto.setTemplateRuleKey(templateDtos.get(r.getTemplateUuid()).getRuleKey());
+      ruleForIndexingDto.setTemplateRepository(templateDtos.get(r.getTemplateUuid()).getRepositoryKey());
+    }
+    return ruleForIndexingDto;
+  }
+
+  private static void processRuleDtos(List<RuleDto> ruleDtos, Consumer<RuleForIndexingDto> consumer, RuleMapper mapper) {
+    List<String> templateRuleUuids = ruleDtos.stream()
+      .map(RuleDto::getTemplateUuid)
+      .filter(Objects::nonNull)
+      .toList();
+
+    Map<String, RuleDto> templateDtos = findTemplateDtos(mapper, templateRuleUuids);
+    ruleDtos.stream().map(r -> toRuleForIndexingDto(r, templateDtos)).forEach(consumer);
+  }
+
+  private static Map<String, RuleDto> findTemplateDtos(RuleMapper mapper, List<String> templateRuleUuids) {
+    if (!templateRuleUuids.isEmpty()) {
+      return mapper.selectByUuids(templateRuleUuids).stream().collect(toMap(RuleDto::getUuid, Function.identity()));
+    } else {
+      return Collections.emptyMap();
+    }
   }
 
   private static RuleMapper mapper(DbSession session) {
@@ -196,11 +216,15 @@ public class RuleDao implements Dao {
     return executeLargeInputs(ruleKeys, mapper(session)::selectParamsByRuleKeys);
   }
 
+  public List<RuleParamDto> selectAllRuleParams(DbSession session) {
+    return mapper(session).selectAllRuleParams();
+  }
+
   public List<RuleParamDto> selectRuleParamsByRuleUuids(DbSession dbSession, Collection<String> ruleUuids) {
     return executeLargeInputs(ruleUuids, mapper(dbSession)::selectParamsByRuleUuids);
   }
 
-  public void insertRuleParam(DbSession session, RuleDefinitionDto rule, RuleParamDto param) {
+  public void insertRuleParam(DbSession session, RuleDto rule, RuleParamDto param) {
     checkNotNull(rule.getUuid(), "Rule uuid must be set");
     param.setRuleUuid(rule.getUuid());
 
@@ -208,7 +232,7 @@ public class RuleDao implements Dao {
     mapper(session).insertParameter(param);
   }
 
-  public RuleParamDto updateRuleParam(DbSession session, RuleDefinitionDto rule, RuleParamDto param) {
+  public RuleParamDto updateRuleParam(DbSession session, RuleDto rule, RuleParamDto param) {
     checkNotNull(rule.getUuid(), "Rule uuid must be set");
     checkNotNull(param.getUuid(), "Rule parameter is not yet persisted must be set");
     param.setRuleUuid(rule.getUuid());
@@ -238,4 +262,19 @@ public class RuleDao implements Dao {
   public void insert(DbSession dbSession, DeprecatedRuleKeyDto deprecatedRuleKey) {
     mapper(dbSession).insertDeprecatedRuleKey(deprecatedRuleKey);
   }
+
+  public long countByLanguage(DbSession dbSession, String language) {
+    return mapper(dbSession).countByLanguage(language);
+  }
+
+  private static String toLowerCaseAndSurroundWithPercentSigns(@Nullable String query) {
+    return isBlank(query) ? PERCENT_SIGN : (PERCENT_SIGN + query.toLowerCase(Locale.ENGLISH) + PERCENT_SIGN);
+  }
+
+  public RuleListResult selectRules(DbSession dbSession, RuleListQuery ruleListQuery, Pagination pagination) {
+    return new RuleListResult(
+      mapper(dbSession).selectRules(ruleListQuery, pagination),
+      mapper(dbSession).countByQuery(ruleListQuery));
+  }
+
 }

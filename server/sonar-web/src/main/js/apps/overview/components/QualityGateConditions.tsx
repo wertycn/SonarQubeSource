@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,50 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator, Link } from 'design-system';
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import ChevronDownIcon from 'sonar-ui-common/components/icons/ChevronDownIcon';
-import { translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
+import { MetricKey } from '../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../types/quality-gates';
+import { Component } from '../../../types/types';
 import QualityGateCondition from './QualityGateCondition';
+import QualityGateSimplifiedCondition from './QualityGateSimplifiedCondition';
 
 const LEVEL_ORDER = ['ERROR', 'WARN'];
 
 export interface QualityGateConditionsProps {
   branchLike?: BranchLike;
-  component: Pick<T.Component, 'key'>;
+  component: Pick<Component, 'key'>;
   collapsible?: boolean;
   failedConditions: QualityGateStatusConditionEnhanced[];
+  isBuiltInQualityGate?: boolean;
 }
 
 const MAX_CONDITIONS = 5;
 
 export function QualityGateConditions(props: QualityGateConditionsProps) {
-  const { branchLike, collapsible, component, failedConditions } = props;
+  const { branchLike, collapsible, component, failedConditions, isBuiltInQualityGate } = props;
   const [collapsed, toggleCollapsed] = React.useState(Boolean(collapsible));
 
-  if (failedConditions.length === 0) {
-    return null;
-  }
+  const handleToggleCollapsed = React.useCallback(() => toggleCollapsed(!collapsed), [collapsed]);
 
-  const sortedConditions = sortBy(failedConditions, condition =>
-    LEVEL_ORDER.indexOf(condition.level)
+  const isSimplifiedCondition = React.useCallback(
+    (condition: QualityGateStatusConditionEnhanced) => {
+      const { metric } = condition.measure;
+      return metric.key === MetricKey.new_violations && isBuiltInQualityGate;
+    },
+    [isBuiltInQualityGate],
+  );
+
+  const sortedConditions = sortBy(failedConditions, (condition) =>
+    LEVEL_ORDER.indexOf(condition.level),
   );
 
   let renderConditions;
   let renderCollapsed;
+
   if (collapsed && sortedConditions.length > MAX_CONDITIONS) {
     renderConditions = sortedConditions.slice(0, MAX_CONDITIONS);
     renderCollapsed = true;
@@ -60,29 +70,33 @@ export function QualityGateConditions(props: QualityGateConditionsProps) {
   }
 
   return (
-    <div
-      className="overview-quality-gate-conditions-list"
-      id="overview-quality-gate-conditions-list">
-      {renderConditions.map(condition => (
-        <QualityGateCondition
-          branchLike={branchLike}
-          component={component}
-          condition={condition}
-          key={condition.measure.metric.key}
-        />
+    <ul id="overview-quality-gate-conditions-list" className="sw-mb-2">
+      {renderConditions.map((condition) => (
+        <div key={condition.measure.metric.key}>
+          {isSimplifiedCondition(condition) ? (
+            <QualityGateSimplifiedCondition
+              branchLike={branchLike}
+              component={component}
+              condition={condition}
+            />
+          ) : (
+            <QualityGateCondition
+              branchLike={branchLike}
+              component={component}
+              condition={condition}
+            />
+          )}
+          <BasicSeparator />
+        </div>
       ))}
       {renderCollapsed && (
-        <ButtonLink
-          className="overview-quality-gate-conditions-list-collapse"
-          onClick={() => toggleCollapsed(!collapsed)}>
-          {translateWithParameters(
-            'overview.X_more_failed_conditions',
-            sortedConditions.length - MAX_CONDITIONS
-          )}
-          <ChevronDownIcon className="little-spacer-left" />
-        </ButtonLink>
+        <li className="sw-flex sw-justify-center sw-my-3">
+          <Link onClick={handleToggleCollapsed} to={{}} preventDefault>
+            <span className="sw-font-semibold sw-text-sm">{translate('show_more')}</span>
+          </Link>
+        </li>
       )}
-    </div>
+    </ul>
   );
 }
 

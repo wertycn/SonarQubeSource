@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post } from '../helpers/request';
+import { AddRemoveNotificationParameters, NotificationsResponse } from '../types/notifications';
 
-export function getNotifications(): Promise<{
-  channels: string[];
-  globalTypes: string[];
-  notifications: T.Notification[];
-  perProjectTypes: string[];
-}> {
+export function getNotifications(): Promise<NotificationsResponse> {
   return getJSON('/api/notifications/list').catch(throwGlobalError);
 }
 
-export function addNotification(data: { channel: string; type: string; project?: string }) {
+export function addNotification(data: AddRemoveNotificationParameters) {
   return post('/api/notifications/add', data).catch(throwGlobalError);
 }
 
-export function removeNotification(data: { channel: string; type: string; project?: string }) {
+export function removeNotification(data: AddRemoveNotificationParameters) {
   return post('/api/notifications/remove', data).catch(throwGlobalError);
 }

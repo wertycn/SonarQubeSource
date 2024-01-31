@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,59 +18,27 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Helmet } from 'react-helmet-async';
-import { connect } from 'react-redux';
-import Favorite from '../../../../components/controls/Favorite';
-import { isLoggedIn } from '../../../../helpers/users';
-import { getCurrentUser, Store } from '../../../../store/rootReducer';
-import { ProjectAlmBindingResponse } from '../../../../types/alm-settings';
-import { BranchLike } from '../../../../types/branch-like';
-import BranchLikeNavigation from './branch-like/BranchLikeNavigation';
-import CurrentBranchLikeMergeInformation from './branch-like/CurrentBranchLikeMergeInformation';
+import { Component } from '../../../../types/types';
+import { CurrentUser } from '../../../../types/users';
+import withCurrentUserContext from '../../current-user/withCurrentUserContext';
 import { Breadcrumb } from './Breadcrumb';
+import BranchLikeNavigation from './branch-like/BranchLikeNavigation';
 
 export interface HeaderProps {
-  branchLikes: BranchLike[];
-  component: T.Component;
-  currentBranchLike: BranchLike | undefined;
-  currentUser: T.CurrentUser;
-  projectBinding?: ProjectAlmBindingResponse;
+  component: Component;
+  currentUser: CurrentUser;
 }
 
 export function Header(props: HeaderProps) {
-  const { branchLikes, component, currentBranchLike, currentUser, projectBinding } = props;
+  const { component, currentUser } = props;
 
   return (
-    <>
-      <Helmet title={component.name} />
-      <header className="display-flex-center flex-shrink">
-        <Breadcrumb component={component} currentBranchLike={currentBranchLike} />
-        {isLoggedIn(currentUser) && (
-          <Favorite
-            className="spacer-left"
-            component={component.key}
-            favorite={Boolean(component.isFavorite)}
-            qualifier={component.qualifier}
-          />
-        )}
-        {currentBranchLike && (
-          <>
-            <BranchLikeNavigation
-              branchLikes={branchLikes}
-              component={component}
-              currentBranchLike={currentBranchLike}
-              projectBinding={projectBinding}
-            />
-            <CurrentBranchLikeMergeInformation currentBranchLike={currentBranchLike} />
-          </>
-        )}
-      </header>
-    </>
+    <div className="sw-flex sw-flex-shrink sw-items-center">
+      <Breadcrumb component={component} currentUser={currentUser} />
+
+      <BranchLikeNavigation component={component} />
+    </div>
   );
 }
 
-const mapStateToProps = (state: Store) => ({
-  currentUser: getCurrentUser(state)
-});
-
-export default connect(mapStateToProps)(React.memo(Header));
+export default withCurrentUserContext(React.memo(Header));

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,24 +21,19 @@ package org.sonar.server.platform.db.migration.charset;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Collections;
 import javax.annotation.Nullable;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.utils.MessageException;
 
-import static java.util.Collections.singletonList;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class OracleCharsetHandlerTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private SqlExecutor sqlExecutor = mock(SqlExecutor.class);
   private Connection connection = mock(Connection.class);
@@ -55,7 +50,7 @@ public class OracleCharsetHandlerTest {
   public void upgrade_does_not_verify_utf8_charset() throws Exception {
     underTest.handle(connection, DatabaseCharsetChecker.State.UPGRADE);
 
-    verifyZeroInteractions(sqlExecutor);
+    verifyNoInteractions(sqlExecutor);
   }
 
   @Test
@@ -69,29 +64,27 @@ public class OracleCharsetHandlerTest {
   public void fresh_install_fails_if_charset_is_not_utf8() throws Exception {
     answerCharset("LATIN");
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("Oracle NLS_CHARACTERSET does not support UTF8: LATIN");
-
-    underTest.handle(connection, DatabaseCharsetChecker.State.FRESH_INSTALL);
+    assertThatThrownBy(() -> underTest.handle(connection, DatabaseCharsetChecker.State.FRESH_INSTALL))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Oracle NLS_CHARACTERSET does not support UTF8: LATIN");
   }
 
   @Test
   public void fails_if_can_not_get_charset() throws Exception {
     answerCharset(null);
 
-    expectedException.expect(MessageException.class);
-
-    underTest.handle(connection, DatabaseCharsetChecker.State.FRESH_INSTALL);
+    assertThatThrownBy(() -> underTest.handle(connection, DatabaseCharsetChecker.State.FRESH_INSTALL))
+      .isInstanceOf(MessageException.class);
   }
 
   @Test
   public void does_nothing_if_regular_startup() throws Exception {
     underTest.handle(connection, DatabaseCharsetChecker.State.STARTUP);
-    verifyZeroInteractions(sqlExecutor);
+    verifyNoInteractions(sqlExecutor);
   }
 
   private void answerCharset(@Nullable String charset) throws SQLException {
-    when(sqlExecutor.select(any(Connection.class), anyString(), any(SqlExecutor.StringsConverter.class)))
-      .thenReturn(charset == null ? Collections.emptyList() : singletonList(new String[] {charset}));
+    when(sqlExecutor.selectSingleString(any(Connection.class), anyString()))
+      .thenReturn(charset);
   }
 }

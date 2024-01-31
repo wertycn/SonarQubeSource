@@ -1,4 +1,4 @@
-sonarqube {
+sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: Scanner Engine Shaded"
   }
@@ -7,5 +7,5 @@ sonarqube {
 apply plugin: 'com.github.johnrengelman.shadow'
 
 dependencies {
-  compile project(':sonar-scanner-engine')
+  api project(':sonar-scanner-engine')
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.server.qualityprofile.ws;
 import java.util.Map;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.Severity;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -29,7 +30,7 @@ import org.sonar.api.utils.KeyValueFormat;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.qualityprofile.QProfileRules;
 import org.sonar.server.qualityprofile.RuleActivation;
 import org.sonar.server.user.UserSession;
@@ -67,6 +68,8 @@ public class ActivateRuleAction implements QProfileWsAction {
         "  <li>'Administer Quality Profiles'</li>" +
         "  <li>Edit right on the specified quality profile</li>" +
         "</ul>")
+      .setChangelog(
+        new Change("10.2", format("Parameter '%s' is now deprecated.", PARAM_SEVERITY)))
       .setHandler(this)
       .setPost(true)
       .setSince("4.4");
@@ -79,10 +82,11 @@ public class ActivateRuleAction implements QProfileWsAction {
     activate.createParam(PARAM_RULE)
       .setDescription("Rule key")
       .setRequired(true)
-      .setExampleValue("squid:AvoidCycles");
+      .setExampleValue("java:AvoidCycles");
 
     activate.createParam(PARAM_SEVERITY)
       .setDescription(format("Severity. Ignored if parameter %s is true.", PARAM_RESET))
+      .setDeprecatedSince("10.2")
       .setPossibleValues(Severity.ALL);
 
     activate.createParam(PARAM_PARAMS)
@@ -110,10 +114,10 @@ public class ActivateRuleAction implements QProfileWsAction {
 
   private RuleActivation readActivation(DbSession dbSession, Request request) {
     RuleKey ruleKey = RuleKey.parse(request.mandatoryParam(PARAM_RULE));
-    RuleDefinitionDto ruleDefinition = wsSupport.getRule(dbSession, ruleKey);
+    RuleDto ruleDto = wsSupport.getRule(dbSession, ruleKey);
     boolean reset = Boolean.TRUE.equals(request.paramAsBoolean(PARAM_RESET));
     if (reset) {
-      return RuleActivation.createReset(ruleDefinition.getUuid());
+      return RuleActivation.createReset(ruleDto.getUuid());
     }
     String severity = request.param(PARAM_SEVERITY);
     Map<String, String> params = null;
@@ -121,7 +125,7 @@ public class ActivateRuleAction implements QProfileWsAction {
     if (paramsAsString != null) {
       params = KeyValueFormat.parse(paramsAsString);
     }
-    return RuleActivation.create(ruleDefinition.getUuid(), severity, params);
+    return RuleActivation.create(ruleDto.getUuid(), severity, params);
   }
 
 }

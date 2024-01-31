@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON } from '../helpers/request';
+import { ProjectLink } from '../types/types';
 
-export function getProjectLinks(projectKey: string): Promise<T.ProjectLink[]> {
-  return getJSON('/api/project_links/search', { projectKey }).then(r => r.links, throwGlobalError);
+export function getProjectLinks(projectKey: string): Promise<ProjectLink[]> {
+  return getJSON('/api/project_links/search', { projectKey }).then(
+    (r) => r.links,
+    throwGlobalError,
+  );
 }
 
 export function deleteLink(linkId: string) {
@@ -32,6 +36,6 @@ export function createLink(data: {
   name: string;
   projectKey: string;
   url: string;
-}): Promise<T.ProjectLink> {
-  return postJSON('/api/project_links/create', data).then(r => r.link, throwGlobalError);
+}): Promise<ProjectLink> {
+  return postJSON('/api/project_links/create', data).then((r) => r.link, throwGlobalError);
 }

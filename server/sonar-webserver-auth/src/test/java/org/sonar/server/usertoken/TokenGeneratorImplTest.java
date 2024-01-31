@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,27 +20,56 @@
 package org.sonar.server.usertoken;
 
 import org.junit.Test;
+import org.sonar.db.user.TokenType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TokenGeneratorImplTest {
-  TokenGeneratorImpl underTest = new TokenGeneratorImpl();
+  private final TokenGeneratorImpl underTest = new TokenGeneratorImpl();
 
   @Test
   public void generate_different_tokens() {
     // this test is not enough to ensure that generated strings are unique,
     // but it still does a simple and stupid verification
-    String firstToken = underTest.generate();
-    String secondToken = underTest.generate();
+    String firstToken = underTest.generate(TokenType.USER_TOKEN);
+    String secondToken = underTest.generate(TokenType.USER_TOKEN);
 
     assertThat(firstToken)
       .isNotEqualTo(secondToken)
-      .hasSize(40);
+      .hasSize(44);
+  }
+
+  @Test
+  public void generated_userToken_should_have_squ_prefix() {
+    String token = underTest.generate(TokenType.USER_TOKEN);
+
+    assertThat(token).matches("squ_.{40}");
+  }
+
+  @Test
+  public void generated_projectAnalysisToken_should_have_sqp_prefix() {
+    String token = underTest.generate(TokenType.PROJECT_ANALYSIS_TOKEN);
+
+    assertThat(token).matches("sqp_.{40}");
+  }
+
+  @Test
+  public void generated_globalAnalysisToken_should_have_sqa_prefix() {
+    String token = underTest.generate(TokenType.GLOBAL_ANALYSIS_TOKEN);
+
+    assertThat(token).matches("sqa_.{40}");
+  }
+
+  @Test
+  public void generateProjectBadgeToken_nullToken_shouldNotHavePrefix() {
+    String token = underTest.generate(TokenType.PROJECT_BADGE_TOKEN);
+
+    assertThat(token).matches("sqb_.{40}");
   }
 
   @Test
   public void token_does_not_contain_colon() {
-    assertThat(underTest.generate()).doesNotContain(":");
+    assertThat(underTest.generate(TokenType.USER_TOKEN)).doesNotContain(":");
   }
 
   @Test

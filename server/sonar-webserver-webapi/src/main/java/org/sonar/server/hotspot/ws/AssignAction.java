@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.server.hotspot.ws;
 
 import javax.annotation.Nullable;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -29,13 +30,19 @@ import org.sonar.core.issue.IssueChangeContext;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.issue.IssueDto;
+import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.IssueFieldsSetter;
 import org.sonar.server.issue.ws.IssueUpdater;
+import org.sonar.server.pushapi.hotspots.HotspotChangeEventService;
+import org.sonar.server.pushapi.hotspots.HotspotChangedEvent;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.sonar.api.issue.Issue.RESOLUTION_ACKNOWLEDGED;
 import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
+import static org.sonar.db.component.BranchType.BRANCH;
 import static org.sonar.server.exceptions.NotFoundException.checkFound;
 import static org.sonar.server.exceptions.NotFoundException.checkFoundWithOptional;
 
@@ -50,13 +57,15 @@ public class AssignAction implements HotspotsWsAction {
   private final HotspotWsSupport hotspotWsSupport;
   private final IssueFieldsSetter issueFieldsSetter;
   private final IssueUpdater issueUpdater;
+  private final HotspotChangeEventService hotspotChangeEventService;
 
   public AssignAction(DbClient dbClient, HotspotWsSupport hotspotWsSupport, IssueFieldsSetter issueFieldsSetter,
-    IssueUpdater issueUpdater) {
+    IssueUpdater issueUpdater, HotspotChangeEventService hotspotChangeEventService) {
     this.dbClient = dbClient;
     this.hotspotWsSupport = hotspotWsSupport;
     this.issueFieldsSetter = issueFieldsSetter;
     this.issueUpdater = issueUpdater;
+    this.hotspotChangeEventService = hotspotChangeEventService;
   }
 
   @Override
@@ -66,7 +75,9 @@ public class AssignAction implements HotspotsWsAction {
       .setSince("8.2")
       .setHandler(this)
       .setInternal(true)
-      .setPost(true);
+      .setPost(true)
+      .setChangelog(
+        new Change("8.9", "Parameter 'assignee' is no longer mandatory"));
 
     action.createParam(PARAM_HOTSPOT_KEY)
       .setDescription("Hotspot key")
@@ -75,7 +86,6 @@ public class AssignAction implements HotspotsWsAction {
 
     action.createParam(PARAM_ASSIGNEE)
       .setDescription("Login of the assignee with 'Browse' project permission")
-      .setRequired(true)
       .setExampleValue("admin");
 
     action.createParam(PARAM_COMMENT)
@@ -85,7 +95,7 @@ public class AssignAction implements HotspotsWsAction {
 
   @Override
   public void handle(Request request, Response response) throws Exception {
-    String assignee = request.mandatoryParam(PARAM_ASSIGNEE);
+    String assignee = request.param(PARAM_ASSIGNEE);
     String key = request.mandatoryParam(PARAM_HOTSPOT_KEY);
     String comment = request.param(PARAM_COMMENT);
 
@@ -99,11 +109,11 @@ public class AssignAction implements HotspotsWsAction {
 
       IssueDto hotspotDto = hotspotWsSupport.loadHotspot(dbSession, hotspotKey);
 
-      checkIfHotspotToReview(hotspotDto);
-      hotspotWsSupport.loadAndCheckProject(dbSession, hotspotDto, UserRole.USER);
-      UserDto assignee = getAssignee(dbSession, login);
+      checkHotspotStatusAndResolution(hotspotDto);
+      hotspotWsSupport.loadAndCheckBranch(dbSession, hotspotDto, UserRole.USER);
+      UserDto assignee = isNullOrEmpty(login) ? null : getAssignee(dbSession, login);
 
-      IssueChangeContext context = hotspotWsSupport.newIssueChangeContext();
+      IssueChangeContext context = hotspotWsSupport.newIssueChangeContextWithoutMeasureRefresh();
 
       DefaultIssue defaultIssue = hotspotDto.toDefaultIssue();
 
@@ -111,17 +121,25 @@ public class AssignAction implements HotspotsWsAction {
         issueFieldsSetter.addComment(defaultIssue, comment, context);
       }
 
-      checkAssigneeProjectPermission(dbSession, assignee, hotspotDto.getProjectUuid());
+      if (assignee != null) {
+        checkAssigneeProjectPermission(dbSession, assignee, hotspotDto.getProjectUuid());
+      }
 
       if (issueFieldsSetter.assign(defaultIssue, assignee, context)) {
-        issueUpdater.saveIssueAndPreloadSearchResponseData(dbSession, defaultIssue, context, false);
+        issueUpdater.saveIssueAndPreloadSearchResponseData(dbSession, hotspotDto, defaultIssue, context);
+
+        BranchDto branch = issueUpdater.getBranch(dbSession, defaultIssue);
+        if (BRANCH.equals(branch.getBranchType())) {
+          HotspotChangedEvent hotspotChangedEvent = buildEventData(defaultIssue, assignee, hotspotDto.getFilePath());
+          hotspotChangeEventService.distributeHotspotChangedEvent(branch.getProjectUuid(), hotspotChangedEvent);
+        }
       }
     }
   }
 
-  private static void checkIfHotspotToReview(IssueDto hotspotDto) {
-    if (!STATUS_TO_REVIEW.equals(hotspotDto.getStatus())) {
-      throw new IllegalArgumentException(String.format("Assignee can only be changed on Security Hotspots with status '%s'", STATUS_TO_REVIEW));
+  private static void checkHotspotStatusAndResolution(IssueDto hotspotDto) {
+    if (!STATUS_TO_REVIEW.equals(hotspotDto.getStatus()) && !RESOLUTION_ACKNOWLEDGED.equals(hotspotDto.getResolution())) {
+      throw new IllegalArgumentException("Cannot change the assignee of this hotspot given its current status and resolution");
     }
   }
 
@@ -129,16 +147,28 @@ public class AssignAction implements HotspotsWsAction {
     return checkFound(dbClient.userDao().selectActiveUserByLogin(dbSession, assignee), "Unknown user: %s", assignee);
   }
 
-  private void checkAssigneeProjectPermission(DbSession dbSession, UserDto assignee, String issueProjectUuid) {
-    ComponentDto componentDto = checkFoundWithOptional(dbClient.componentDao().selectByUuid(dbSession, issueProjectUuid),
-      "Could not find project for issue");
-    String mainProjectUuid = componentDto.getMainBranchProjectUuid() == null ? componentDto.uuid() : componentDto.getMainBranchProjectUuid();
-    if (componentDto.isPrivate() && !hasProjectPermission(dbSession, assignee.getUuid(), mainProjectUuid)) {
+  private void checkAssigneeProjectPermission(DbSession dbSession, UserDto assignee, String issueBranchUuid) {
+    ProjectDto project = checkFoundWithOptional(dbClient.projectDao().selectByBranchUuid(dbSession, issueBranchUuid),
+      "Could not find branch for issue");
+
+    if (project.isPrivate() && !hasProjectPermission(dbSession, assignee.getUuid(), project.getUuid())) {
       throw new IllegalArgumentException(String.format("Provided user with login '%s' does not have 'Browse' permission to project", assignee.getLogin()));
     }
   }
 
   private boolean hasProjectPermission(DbSession dbSession, String userUuid, String projectUuid) {
-    return dbClient.authorizationDao().selectProjectPermissions(dbSession, projectUuid, userUuid).contains(UserRole.USER);
+    return dbClient.authorizationDao().selectEntityPermissions(dbSession, projectUuid, userUuid).contains(UserRole.USER);
+  }
+
+  private static HotspotChangedEvent buildEventData(DefaultIssue defaultIssue, @Nullable UserDto assignee, String filePath) {
+    return new HotspotChangedEvent.Builder()
+      .setKey(defaultIssue.key())
+      .setProjectKey(defaultIssue.projectKey())
+      .setStatus(defaultIssue.status())
+      .setResolution(defaultIssue.resolution())
+      .setUpdateDate(defaultIssue.updateDate())
+      .setAssignee(assignee == null ? null : assignee.getLogin())
+      .setFilePath(filePath)
+      .build();
   }
 }

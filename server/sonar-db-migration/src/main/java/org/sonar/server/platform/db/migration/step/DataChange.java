@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -62,6 +62,10 @@ public abstract class DataChange implements MigrationStep {
     return res;
   }
 
+  protected Database getDatabase() {
+    return db;
+  }
+
   public static class Context {
     private final Database db;
     private final Connection readConnection;
@@ -83,6 +87,9 @@ public abstract class DataChange implements MigrationStep {
 
     public MassUpdate prepareMassUpdate() {
       return new MassUpdate(db, readConnection, writeConnection);
+    }
+    public <T> MassRowSplitter<T> prepareMassRowSplitter() {
+      return new MassRowSplitter<>(db, readConnection, writeConnection);
     }
   }
 

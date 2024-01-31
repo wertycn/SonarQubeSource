@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,11 +21,11 @@ package org.sonar.xoo.lang;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
@@ -42,9 +42,6 @@ public class CpdTokenizerSensorTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private File baseDir;
 
@@ -80,6 +77,7 @@ public class CpdTokenizerSensorTest {
     InputFile inputFile = new TestInputFileBuilder("foo", "src/foo.xoo")
       .setLanguage("xoo")
       .initMetadata(content)
+      .setCharset(Charset.defaultCharset())
       .setModuleBaseDir(baseDir.toPath())
       .build();
     context.fileSystem().add(inputFile);

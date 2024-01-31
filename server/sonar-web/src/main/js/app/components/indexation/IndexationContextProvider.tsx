@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,18 +18,20 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 /* eslint-disable react/no-unused-state */
+
 import * as React from 'react';
-import { withAppState } from '../../../components/hoc/withAppState';
+import { AppState } from '../../../types/appstate';
 import { IndexationContextInterface, IndexationStatus } from '../../../types/indexation';
+import withAppStateContext from '../app-state/withAppStateContext';
 import { IndexationContext } from './IndexationContext';
 import IndexationNotificationHelper from './IndexationNotificationHelper';
 
-interface Props {
-  appState: Pick<T.AppState, 'needIssueSync'>;
+export interface IndexationContextProviderProps {
+  appState: AppState;
 }
 
 export class IndexationContextProvider extends React.PureComponent<
-  React.PropsWithChildren<Props>,
+  React.PropsWithChildren<IndexationContextProviderProps>,
   IndexationContextInterface
 > {
   mounted = false;
@@ -40,7 +42,9 @@ export class IndexationContextProvider extends React.PureComponent<
     if (this.props.appState.needIssueSync) {
       IndexationNotificationHelper.startPolling(this.handleNewStatus);
     } else {
-      this.setState({ status: { isCompleted: true, percentCompleted: 100, hasFailures: false } });
+      this.setState({
+        status: { isCompleted: true, hasFailures: false },
+      });
     }
   }
 
@@ -65,4 +69,4 @@ export class IndexationContextProvider extends React.PureComponent<
   }
 }
 
-export default withAppState(IndexationContextProvider);
+export default withAppStateContext(IndexationContextProvider);

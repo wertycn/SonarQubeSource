@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,60 +19,58 @@
  */
 package org.sonar.server.plugins;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableSet;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+import javax.inject.Inject;
 import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.server.platform.ServerFileSystem;
-import org.sonar.updatecenter.common.Version;
 
 import static java.lang.String.format;
 import static org.apache.commons.io.FileUtils.moveFile;
+import static org.sonar.core.plugin.PluginType.BUNDLED;
+import static org.sonar.core.plugin.PluginType.EXTERNAL;
 import static org.sonar.core.util.FileUtils.deleteQuietly;
 import static org.sonar.server.log.ServerProcessLogging.STARTUP_LOGGER_NAME;
-import static org.sonar.server.plugins.PluginType.BUNDLED;
-import static org.sonar.server.plugins.PluginType.EXTERNAL;
 
 public class PluginJarLoader {
-  private static final Logger LOG = Loggers.get(PluginJarLoader.class);
+  private static final Logger STARTUP_LOGGER = LoggerFactory.getLogger(STARTUP_LOGGER_NAME);
+  private static final Logger LOG = LoggerFactory.getLogger(PluginJarLoader.class);
 
   // List of plugins that are silently removed if installed
-  private static final Set<String> DEFAULT_BLACKLISTED_PLUGINS = ImmutableSet.of("scmactivity", "issuesreport", "genericcoverage");
+  private static final Set<String> DEFAULT_BLACKLISTED_PLUGINS = Set.of("scmactivity", "issuesreport", "genericcoverage");
   // List of plugins that should prevent the server to finish its startup
-  private static final Set<String> FORBIDDEN_INCOMPATIBLE_PLUGINS = ImmutableSet
-    .of("sqale", "report", "views", "authgithub", "authgitlab", "authsaml", "ldap", "scmgit", "scmsvn");
+  private static final Set<String> FORBIDDEN_INCOMPATIBLE_PLUGINS = Set.of(
+    "sqale", "report", "views", "authgithub", "authgitlab", "authbitbucket", "authsaml", "ldap", "scmgit", "scmsvn");
 
   private static final String LOAD_ERROR_GENERIC_MESSAGE = "Startup failed: Plugins can't be loaded. See web logs for more information";
 
   private final ServerFileSystem fs;
-  private final SonarRuntime runtime;
+  private final SonarRuntime sonarRuntime;
   private final Set<String> blacklistedPluginKeys;
 
-  public PluginJarLoader(ServerFileSystem fs, SonarRuntime runtime) {
-    this(fs, runtime, DEFAULT_BLACKLISTED_PLUGINS);
+  @Inject
+  public PluginJarLoader(ServerFileSystem fs, SonarRuntime sonarRuntime) {
+    this(fs, sonarRuntime, DEFAULT_BLACKLISTED_PLUGINS);
   }
 
-  PluginJarLoader(ServerFileSystem fs, SonarRuntime runtime, Set<String> blacklistedPluginKeys) {
+  PluginJarLoader(ServerFileSystem fs, SonarRuntime sonarRuntime, Set<String> blacklistedPluginKeys) {
     this.fs = fs;
-    this.runtime = runtime;
+    this.sonarRuntime = sonarRuntime;
     this.blacklistedPluginKeys = blacklistedPluginKeys;
   }
 
@@ -122,61 +120,9 @@ public class PluginJarLoader {
     plugins.putAll(externalPluginsByKey);
     plugins.putAll(bundledPluginsByKey);
 
-    unloadIncompatiblePlugins(plugins);
+    PluginRequirementsValidator.unloadIncompatiblePlugins(plugins);
 
     return plugins.values();
-  }
-
-  /**
-   * Removes the plugins that are not compatible with current environment.
-   */
-  private static void unloadIncompatiblePlugins(Map<String, ServerPluginInfo> pluginsByKey) {
-    // loop as long as the previous loop ignored some plugins. That allows to support dependencies
-    // on many levels, for example D extends C, which extends B, which requires A. If A is not installed,
-    // then B, C and D must be ignored. That's not possible to achieve this algorithm with a single iteration over plugins.
-    Set<String> removedKeys = new HashSet<>();
-    do {
-      removedKeys.clear();
-      for (ServerPluginInfo plugin : pluginsByKey.values()) {
-        if (!isCompatible(plugin, pluginsByKey)) {
-          removedKeys.add(plugin.getKey());
-        }
-      }
-      for (String removedKey : removedKeys) {
-        pluginsByKey.remove(removedKey);
-      }
-    } while (!removedKeys.isEmpty());
-  }
-
-  @VisibleForTesting
-  static boolean isCompatible(ServerPluginInfo plugin, Map<String, ServerPluginInfo> allPluginsByKeys) {
-    if (!Strings.isNullOrEmpty(plugin.getBasePlugin()) && !allPluginsByKeys.containsKey(plugin.getBasePlugin())) {
-      // it extends a plugin that is not installed
-      LOG.warn("Plugin {} [{}] is ignored because its base plugin [{}] is not installed", plugin.getName(), plugin.getKey(), plugin.getBasePlugin());
-      return false;
-    }
-
-    if (plugin.getType() != BUNDLED && !plugin.getRequiredPlugins().isEmpty()) {
-      LOG.warn("Use of 'Plugin-Dependencies' mechanism is planned for removal. Update the plugin {} [{}] to shade its dependencies instead.",
-        plugin.getName(), plugin.getKey());
-    }
-
-    for (PluginInfo.RequiredPlugin requiredPlugin : plugin.getRequiredPlugins()) {
-      PluginInfo installedRequirement = allPluginsByKeys.get(requiredPlugin.getKey());
-      if (installedRequirement == null) {
-        // it requires a plugin that is not installed
-        LOG.warn("Plugin {} [{}] is ignored because the required plugin [{}] is not installed", plugin.getName(), plugin.getKey(), requiredPlugin.getKey());
-        return false;
-      }
-      Version installedRequirementVersion = installedRequirement.getVersion();
-      if (installedRequirementVersion != null && requiredPlugin.getMinimalVersion().compareToIgnoreQualifier(installedRequirementVersion) > 0) {
-        // it requires a more recent version
-        LOG.warn("Plugin {} [{}] is ignored because the version {} of required plugin [{}] is not installed", plugin.getName(), plugin.getKey(),
-          requiredPlugin.getMinimalVersion(), requiredPlugin.getKey());
-        return false;
-      }
-    }
-    return true;
   }
 
   private static String getRelativeDir(File dir) {
@@ -194,8 +140,7 @@ public class PluginJarLoader {
   }
 
   private static void logGenericPluginLoadErrorLog() {
-    Logger logger = Loggers.get(STARTUP_LOGGER_NAME);
-    logger.error(LOAD_ERROR_GENERIC_MESSAGE);
+    STARTUP_LOGGER.error(LOAD_ERROR_GENERIC_MESSAGE);
   }
 
   private List<ServerPluginInfo> getBundledPluginsMetadata() {
@@ -233,17 +178,17 @@ public class PluginJarLoader {
     List<T> list = listJarFiles(pluginsDir).stream()
       .map(toPluginInfo)
       .filter(this::checkPluginInfo)
-      .collect(Collectors.toList());
+      .toList();
     failIfContainsIncompatiblePlugins(list);
     return list;
   }
 
-  private void failIfContainsIncompatiblePlugins(List<? extends PluginInfo> plugins) {
+  private static void failIfContainsIncompatiblePlugins(List<? extends PluginInfo> plugins) {
     List<String> incompatiblePlugins = plugins.stream()
       .filter(p -> FORBIDDEN_INCOMPATIBLE_PLUGINS.contains(p.getKey()))
       .map(p -> "'" + p.getKey() + "'")
       .sorted()
-      .collect(Collectors.toList());
+      .toList();
 
     if (!incompatiblePlugins.isEmpty()) {
       logGenericPluginLoadErrorLog();
@@ -265,8 +210,9 @@ public class PluginJarLoader {
       return false;
     }
 
-    if (!info.isCompatibleWith(runtime.getApiVersion().toString())) {
-      throw MessageException.of(format("Plugin %s [%s] requires at least SonarQube %s", info.getName(), info.getKey(), info.getMinimalSqVersion()));
+    if (!info.isCompatibleWith(sonarRuntime.getApiVersion().toString())) {
+      throw MessageException.of(format("Plugin %s [%s] requires at least Sonar Plugin API version %s (current: %s)",
+        info.getName(), info.getKey(), info.getMinimalSonarPluginApiVersion(), sonarRuntime.getApiVersion()));
     }
     return true;
   }

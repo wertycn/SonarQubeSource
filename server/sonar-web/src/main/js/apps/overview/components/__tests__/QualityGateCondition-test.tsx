@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,81 +17,68 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
 import * as React from 'react';
 import { mockBranch } from '../../../../helpers/mocks/branch-like';
 import { mockQualityGateStatusConditionEnhanced } from '../../../../helpers/mocks/quality-gates';
 import { mockMetric } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { MetricKey, MetricType } from '../../../../types/metrics';
 import { QualityGateStatusConditionEnhanced } from '../../../../types/quality-gates';
 import QualityGateCondition from '../QualityGateCondition';
 
-it('open_issues', () => {
-  const condition = quickMock('open_issues', 'INT');
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('new_open_issues', () => {
-  const condition = quickMock('new_open_issues', 'INT', true);
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('reliability_rating', () => {
-  const condition = quickMock('reliability_rating');
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('security_rating', () => {
-  const condition = quickMock('security_rating');
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('sqale_rating', () => {
-  const condition = quickMock('sqale_rating');
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('new_reliability_rating', () => {
-  const condition = quickMock('new_reliability_rating', 'RATING', true);
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('new_security_rating', () => {
-  const condition = quickMock('new_security_rating', 'RATING', true);
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('new_maintainability_rating', () => {
-  const condition = quickMock('new_maintainability_rating', 'RATING', true);
-  expect(shallowRender({ condition })).toMatchSnapshot();
-});
-
-it('should work with branch', () => {
-  const condition = quickMock('new_maintainability_rating');
+it.each([
+  [quickMock(MetricKey.reliability_rating)],
+  [quickMock(MetricKey.security_rating)],
+  [quickMock(MetricKey.sqale_rating)],
+  [quickMock(MetricKey.new_reliability_rating, 'RATING', true)],
+  [quickMock(MetricKey.new_security_rating, 'RATING', true)],
+  [quickMock(MetricKey.new_maintainability_rating, 'RATING', true)],
+  [quickMock(MetricKey.security_hotspots_reviewed)],
+  [quickMock(MetricKey.new_security_hotspots_reviewed, 'RATING', true)],
+])('should render correclty', async (condition) => {
+  renderQualityGateCondition({ condition });
   expect(
-    shallow(
-      <QualityGateCondition
-        branchLike={mockBranch()}
-        component={{ key: 'abcd-key' }}
-        condition={condition}
-      />
-    )
-  ).toMatchSnapshot();
+    await screen.findByText(`metric.${condition.measure.metric.name}.name`),
+  ).toBeInTheDocument();
+
+  expect(
+    await screen.findByText(`quality_gates.operator.${condition.op}`, { exact: false }),
+  ).toBeInTheDocument();
+  // if (condition.measure.metric.type === 'RATING') {
+  //   expect(await screen.findByText('.rating', { exact: false })).toBeInTheDocument();
+  // }
 });
 
-function shallowRender(props = {}) {
-  return shallow(
+it('should show the count when metric is not rating', async () => {
+  renderQualityGateCondition({ condition: quickMock(MetricKey.open_issues, MetricType.Integer) });
+  expect(await screen.findByText('3 metric.open_issues.name')).toBeInTheDocument();
+});
+
+it('should work with branch', async () => {
+  const condition = quickMock(MetricKey.new_maintainability_rating);
+  renderQualityGateCondition({ branchLike: mockBranch(), condition });
+
+  expect(await screen.findByText('metric.new_maintainability_rating.name')).toBeInTheDocument();
+  expect(
+    await screen.findByText('quality_gates.operator.GT.rating', { exact: false }),
+  ).toBeInTheDocument();
+});
+
+function renderQualityGateCondition(props: Partial<QualityGateCondition['props']>) {
+  return renderComponent(
     <QualityGateCondition
       component={{ key: 'abcd-key' }}
       condition={mockQualityGateStatusConditionEnhanced()}
       {...props}
-    />
+    />,
   );
 }
 
 function quickMock(
-  metric: string,
+  metric: MetricKey,
   type = 'RATING',
-  addPeriod = false
+  addPeriod = false,
 ): QualityGateStatusConditionEnhanced {
   return mockQualityGateStatusConditionEnhanced({
     error: '1',
@@ -99,12 +86,12 @@ function quickMock(
       metric: mockMetric({
         key: metric,
         name: metric,
-        type
+        type,
       }),
       value: '3',
-      ...(addPeriod ? { period: { value: '3', index: 1 } } : {})
+      ...(addPeriod ? { period: { value: '3', index: 1 } } : {}),
     },
     metric,
-    ...(addPeriod ? { period: 1 } : {})
+    ...(addPeriod ? { period: 1 } : {}),
   });
 }

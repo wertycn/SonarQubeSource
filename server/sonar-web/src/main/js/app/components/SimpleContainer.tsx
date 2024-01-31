@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,22 +18,22 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import NavBar from 'sonar-ui-common/components/ui/NavBar';
-import { rawSizes } from '../theme';
-import GlobalFooterContainer from './GlobalFooterContainer';
+import { Outlet } from 'react-router-dom';
+import GlobalFooter from './GlobalFooter';
+import MainSonarQubeBar from './nav/global/MainSonarQubeBar';
 
-interface Props {
-  children?: React.ReactNode;
-}
-
-export default function SimpleContainer({ children }: Props) {
+/*
+ * We need to render either children or the Outlet,
+ * because this component is used both in the context of routes and as a regular container
+ */
+export default function SimpleContainer({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="global-container">
+    <div className="global-container new-background">
       <div className="page-wrapper" id="container">
-        <NavBar className="navbar-global" height={rawSizes.globalNavHeightRaw} />
-        {children}
+        <MainSonarQubeBar />
+        {children !== undefined ? children : <Outlet />}
       </div>
-      <GlobalFooterContainer />
+      <GlobalFooter />
     </div>
   );
 }

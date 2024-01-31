@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,7 +36,6 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.LoggerFactory;
 import org.sonar.application.config.AppSettings;
@@ -46,8 +45,10 @@ import org.sonar.process.logging.LogbackJsonLayout;
 import org.sonar.process.logging.PatternLayoutEncoder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.slf4j.Logger.ROOT_LOGGER_NAME;
 import static org.sonar.application.process.StreamGobbler.LOGGER_GOBBLER;
+import static org.sonar.application.process.StreamGobbler.LOGGER_STARTUP;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
 import static org.sonar.process.ProcessProperties.Property.PATH_LOGS;
 
@@ -55,8 +56,6 @@ public class AppLoggingTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private File logDir;
 
@@ -75,34 +74,24 @@ public class AppLoggingTest {
   }
 
   @Test
-  public void no_writing_to_sonar_log_file_when_running_from_sonar_script() {
-    emulateRunFromSonarScript();
-
-    LoggerContext ctx = underTest.configure();
-
-    ctx.getLoggerList().forEach(AppLoggingTest::verifyNoFileAppender);
-  }
-
-  @Test
   public void root_logger_only_writes_to_console_with_formatting_when_running_from_sonar_script() {
-    emulateRunFromSonarScript();
-
     LoggerContext ctx = underTest.configure();
 
     Logger rootLogger = ctx.getLogger(ROOT_LOGGER_NAME);
-    ConsoleAppender<ILoggingEvent> consoleAppender = (ConsoleAppender<ILoggingEvent>) rootLogger.getAppender("APP_CONSOLE");
+    var consoleAppender = (ConsoleAppender<ILoggingEvent>) rootLogger.getAppender("APP_CONSOLE");
     verifyAppFormattedLogEncoder(consoleAppender.getEncoder());
-    assertThat(rootLogger.iteratorForAppenders()).toIterable().hasSize(1);
+    var rollingFileAppender = rootLogger.getAppender("file_sonar");
+    assertThat(rollingFileAppender).isNotNull();
+    assertThat(rootLogger.iteratorForAppenders()).toIterable().hasSize(2);
   }
 
   @Test
   public void gobbler_logger_writes_to_console_without_formatting_when_running_from_sonar_script() {
-    emulateRunFromSonarScript();
-
     LoggerContext ctx = underTest.configure();
 
     Logger gobblerLogger = ctx.getLogger(LOGGER_GOBBLER);
     verifyGobblerConsoleAppender(gobblerLogger);
+
     assertThat(gobblerLogger.iteratorForAppenders()).toIterable().hasSize(1);
   }
 
@@ -117,10 +106,10 @@ public class AppLoggingTest {
     verifySonarLogFileAppender(rootLogger.getAppender("file_sonar"));
     assertThat(rootLogger.iteratorForAppenders()).toIterable().hasSize(2);
 
-    // verify no other logger writes to sonar.log
+    // verify no other logger except startup logger writes to sonar.log
     ctx.getLoggerList()
       .stream()
-      .filter(logger -> !ROOT_LOGGER_NAME.equals(logger.getName()))
+      .filter(logger -> !ROOT_LOGGER_NAME.equals(logger.getName()) && !LOGGER_STARTUP.equals(logger.getName()))
       .forEach(AppLoggingTest::verifyNoFileAppender);
   }
 
@@ -148,7 +137,7 @@ public class AppLoggingTest {
 
     ctx.getLoggerList()
       .stream()
-      .filter(logger -> !ROOT_LOGGER_NAME.equals(logger.getName()))
+      .filter(logger -> !ROOT_LOGGER_NAME.equals(logger.getName()) && !LOGGER_STARTUP.equals(logger.getName()))
       .forEach(AppLoggingTest::verifyNoFileAppender);
   }
 
@@ -232,20 +221,18 @@ public class AppLoggingTest {
   public void fail_with_IAE_if_global_property_unsupported_level() {
     settings.getProps().set("sonar.log.level", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure();
+    assertThatThrownBy(() -> underTest.configure())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void fail_with_IAE_if_app_property_unsupported_level() {
     settings.getProps().set("sonar.log.level.app", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.app is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.configure();
+    assertThatThrownBy(() -> underTest.configure())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.app is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
@@ -254,12 +241,12 @@ public class AppLoggingTest {
     underTest.configure();
 
     assertThat(
-      LoggerFactory.getLogger("com.hazelcast").isInfoEnabled()).isEqualTo(false);
+      LoggerFactory.getLogger("com.hazelcast").isInfoEnabled()).isFalse();
   }
 
   @Test
   public void use_json_output() {
-    settings.getProps().set("sonar.log.useJsonOutput", "true");
+    settings.getProps().set("sonar.log.jsonOutput", "true");
 
     LoggerContext ctx = underTest.configure();
     Logger rootLogger = ctx.getLogger(ROOT_LOGGER_NAME);
@@ -267,10 +254,6 @@ public class AppLoggingTest {
     Encoder<ILoggingEvent> encoder = appender.getEncoder();
     assertThat(encoder).isInstanceOf(LayoutWrappingEncoder.class);
     assertThat(((LayoutWrappingEncoder)encoder).getLayout()).isInstanceOf(LogbackJsonLayout.class);
-  }
-
-  private void emulateRunFromSonarScript() {
-    settings.getProps().set("sonar.wrapped", "true");
   }
 
   private void emulateRunFromCommandLine(boolean withAllLogsPrintedToConsole) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,8 +29,6 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
-
-import static org.sonar.db.component.ComponentDto.removeBranchAndPullRequestFromKey;
 
 /**
  * Cache a map between component keys and uuids in the source branch of a pull request
@@ -66,7 +64,7 @@ public class SourceBranchComponentUuids {
     String sourceBranchUuid = branchDtoOpt.map(BranchDto::getUuid).orElse(null);
     hasSourceBranchAnalysis = sourceBranchUuid != null && dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, sourceBranchUuid).isPresent();
     if (hasSourceBranchAnalysis) {
-      List<ComponentDto> targetComponents = dbClient.componentDao().selectByProjectUuid(sourceBranchUuid, dbSession);
+      List<ComponentDto> targetComponents = dbClient.componentDao().selectByBranchUuid(sourceBranchUuid, dbSession);
       for (ComponentDto dto : targetComponents) {
         sourceBranchComponentsUuidsByKey.put(dto.getKey(), dto.uuid());
       }
@@ -79,9 +77,8 @@ public class SourceBranchComponentUuids {
   }
 
   @CheckForNull
-  public String getSourceBranchComponentUuid(String dbKey) {
+  public String getSourceBranchComponentUuid(String key) {
     lazyInit();
-    String cleanComponentKey = removeBranchAndPullRequestFromKey(dbKey);
-    return sourceBranchComponentsUuidsByKey.get(cleanComponentKey);
+    return sourceBranchComponentsUuidsByKey.get(key);
   }
 }

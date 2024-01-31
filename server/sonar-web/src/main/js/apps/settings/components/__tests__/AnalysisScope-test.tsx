@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,42 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { uniq } from 'lodash';
 import * as React from 'react';
-import { mockComponent } from '../../../../helpers/testMocks';
+import SettingsServiceMock, {
+  DEFAULT_DEFINITIONS_MOCK,
+} from '../../../../api/mocks/SettingsServiceMock';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { byRole, byText } from '../../../../helpers/testSelector';
+import { AdditionalCategoryComponentProps } from '../AdditionalCategories';
 import { AnalysisScope } from '../AnalysisScope';
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
+const handler = new SettingsServiceMock();
+
+const ui = {
+  introduction: byText('settings.analysis_scope.wildcards.introduction'),
+  docLink: byRole('link', { name: /learn_more/ }),
+};
+
+beforeEach(() => {
+  handler.reset();
 });
 
-function shallowRender() {
-  return shallow(<AnalysisScope component={mockComponent()} selectedCategory="TEST" />);
+it('renders correctly', async () => {
+  renderAnalysisScope();
+
+  expect(await ui.introduction.find()).toBeInTheDocument();
+  expect(ui.docLink.get()).toBeInTheDocument();
+});
+
+function renderAnalysisScope(overrides: Partial<AdditionalCategoryComponentProps> = {}) {
+  const props = {
+    definitions: DEFAULT_DEFINITIONS_MOCK,
+    categories: uniq(DEFAULT_DEFINITIONS_MOCK.map((d) => d.category)),
+    selectedCategory: 'general',
+    component: mockComponent(),
+    ...overrides,
+  };
+  return renderComponent(<AnalysisScope {...props} />);
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,25 +23,25 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import javax.annotation.CheckForNull;
-import javax.annotation.concurrent.Immutable;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.mail.Email;
 import org.apache.commons.mail.EmailException;
 import org.apache.commons.mail.HtmlEmail;
 import org.apache.commons.mail.SimpleEmail;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.notifications.Notification;
-import org.sonar.api.notifications.NotificationChannel;
 import org.sonar.api.user.User;
 import org.sonar.api.utils.SonarException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.notification.EmailMessage;
 import org.sonar.server.issue.notification.EmailTemplate;
+import org.sonar.server.notification.NotificationChannel;
 
 import static java.util.Objects.requireNonNull;
 
@@ -57,13 +57,15 @@ import static java.util.Objects.requireNonNull;
  */
 public class EmailNotificationChannel extends NotificationChannel {
 
-  private static final Logger LOG = Loggers.get(EmailNotificationChannel.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EmailNotificationChannel.class);
 
   /**
    * @see org.apache.commons.mail.Email#setSocketConnectionTimeout(int)
    * @see org.apache.commons.mail.Email#setSocketTimeout(int)
    */
   private static final int SOCKET_TIMEOUT = 30_000;
+
+  private static final Pattern PATTERN_LINE_BREAK = Pattern.compile("[\n\r]");
 
   /**
    * Email Header Field: "List-ID".
@@ -91,6 +93,7 @@ public class EmailNotificationChannel extends NotificationChannel {
 
   private static final String SUBJECT_DEFAULT = "Notification";
   private static final String SMTP_HOST_NOT_CONFIGURED_DEBUG_MSG = "SMTP host was not configured - email will not be sent";
+  private static final String MAIL_SENT_FROM = "%sMail sent from: %s";
 
   private final EmailSettings configuration;
   private final EmailTemplate[] templates;
@@ -127,22 +130,10 @@ public class EmailNotificationChannel extends NotificationChannel {
     return false;
   }
 
-  @Immutable
-  public static final class EmailDeliveryRequest {
-    private final String recipientEmail;
-    private final Notification notification;
-
+  public record EmailDeliveryRequest(String recipientEmail, Notification notification) {
     public EmailDeliveryRequest(String recipientEmail, Notification notification) {
       this.recipientEmail = requireNonNull(recipientEmail, "recipientEmail can't be null");
       this.notification = requireNonNull(notification, "notification can't be null");
-    }
-
-    public String getRecipientEmail() {
-      return recipientEmail;
-    }
-
-    public Notification getNotification() {
-      return notification;
     }
 
     @Override
@@ -159,11 +150,6 @@ public class EmailNotificationChannel extends NotificationChannel {
     }
 
     @Override
-    public int hashCode() {
-      return Objects.hash(recipientEmail, notification);
-    }
-
-    @Override
     public String toString() {
       return "EmailDeliveryRequest{" + "'" + recipientEmail + '\'' + " : " + notification + '}';
     }
@@ -176,11 +162,11 @@ public class EmailNotificationChannel extends NotificationChannel {
     }
 
     return (int) deliveries.stream()
-      .filter(t -> !t.getRecipientEmail().trim().isEmpty())
+      .filter(t -> !t.recipientEmail().isBlank())
       .map(t -> {
-        EmailMessage emailMessage = format(t.getNotification());
+        EmailMessage emailMessage = format(t.notification());
         if (emailMessage != null) {
-          emailMessage.setTo(t.getRecipientEmail());
+          emailMessage.setTo(t.recipientEmail());
           return deliver(emailMessage);
         }
         return false;
@@ -228,7 +214,9 @@ public class EmailNotificationChannel extends NotificationChannel {
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
 
     try {
-      LOG.trace("Sending email: {}", emailMessage);
+      LOG.atTrace().setMessage("Sending email: {}")
+        .addArgument(() -> sanitizeLog(emailMessage.getMessage()))
+        .log();
       String host = resolveHost();
 
       Email email = createEmailWithMessage(emailMessage);
@@ -241,6 +229,10 @@ public class EmailNotificationChannel extends NotificationChannel {
     } finally {
       Thread.currentThread().setContextClassLoader(classloader);
     }
+  }
+
+  private static String sanitizeLog(String message) {
+    return PATTERN_LINE_BREAK.matcher(message).replaceAll("_");
   }
 
   private static Email createEmailWithMessage(EmailMessage emailMessage) throws EmailException {
@@ -333,12 +325,16 @@ public class EmailNotificationChannel extends NotificationChannel {
       EmailMessage emailMessage = new EmailMessage();
       emailMessage.setTo(toAddress);
       emailMessage.setSubject(subject);
-      emailMessage.setPlainTextMessage(message);
+      emailMessage.setPlainTextMessage(message + getServerBaseUrlFooter());
       send(emailMessage);
     } catch (EmailException e) {
       LOG.debug("Fail to send test email to {}: {}", toAddress, e);
       throw e;
     }
+  }
+
+  private String getServerBaseUrlFooter() {
+    return String.format(MAIL_SENT_FROM, "\n\n", configuration.getServerBaseURL());
   }
 
 }

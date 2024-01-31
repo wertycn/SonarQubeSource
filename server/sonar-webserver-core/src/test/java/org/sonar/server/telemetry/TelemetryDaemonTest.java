@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,18 +24,17 @@ import java.util.Collections;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
+import org.slf4j.event.Level;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.impl.utils.TestSystem2;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.api.utils.log.LoggerLevel;
 import org.sonar.api.utils.text.JsonWriter;
-import org.sonar.server.measure.index.ProjectMeasuresStatistics;
 import org.sonar.server.property.InternalProperties;
 import org.sonar.server.property.MapInternalProperties;
 import org.sonar.server.util.GlobalLockManager;
 import org.sonar.server.util.GlobalLockManagerImpl;
 
-import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -64,20 +63,9 @@ public class TelemetryDaemonTest {
   private static final TelemetryData SOME_TELEMETRY_DATA = TelemetryData.builder()
     .setServerId("foo")
     .setVersion("bar")
+    .setMessageSequenceNumber(1L)
     .setPlugins(Collections.emptyMap())
-    .setAlmIntegrationCountByAlm(Collections.emptyMap())
-    .setExternalAuthenticationProviders(singletonList("github"))
-    .setProjectCountByScm(Collections.emptyMap())
-    .setProjectCountByCi(Collections.emptyMap())
-    .setProjectMeasuresStatistics(ProjectMeasuresStatistics.builder()
-      .setProjectCount(12)
-      .setProjectCountByLanguage(Collections.emptyMap())
-      .setNclocByLanguage(Collections.emptyMap())
-      .build())
-    .setNcloc(42L)
-    .setExternalAuthenticationProviders(Collections.emptyList())
     .setDatabase(new TelemetryData.Database("H2", "11"))
-    .setUsingBranches(true)
     .build();
 
   private final TelemetryClient client = mock(TelemetryClient.class);
@@ -105,7 +93,7 @@ public class TelemetryDaemonTest {
 
     underTest.start();
 
-    verify(client, timeout(2_000).atLeastOnce()).upload(anyString());
+    verify(client, timeout(4_000).atLeastOnce()).upload(anyString());
     verify(dataJsonWriter).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
   }
 
@@ -124,9 +112,9 @@ public class TelemetryDaemonTest {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     long now = system2.now();
-    long sixDaysAgo = now - (ONE_DAY * 6L);
-    long sevenDaysAgo = now - (ONE_DAY * 7L);
-    internalProperties.write("telemetry.lastPing", String.valueOf(sixDaysAgo));
+    long twentyHoursAgo = now - (ONE_HOUR * 20L);
+    long oneDayAgo = now - ONE_DAY;
+    internalProperties.write("telemetry.lastPing", String.valueOf(twentyHoursAgo));
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
     when(dataLoader.load()).thenReturn(SOME_TELEMETRY_DATA);
     mockDataJsonWriterDoingSomething();
@@ -136,37 +124,38 @@ public class TelemetryDaemonTest {
     verify(dataJsonWriter, after(2_000).never()).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
     verify(client, never()).upload(anyString());
 
-    internalProperties.write("telemetry.lastPing", String.valueOf(sevenDaysAgo));
+    internalProperties.write("telemetry.lastPing", String.valueOf(oneDayAgo));
 
     verify(client, timeout(2_000)).upload(anyString());
     verify(dataJsonWriter).writeTelemetryData(any(JsonWriter.class), same(SOME_TELEMETRY_DATA));
   }
 
   @Test
-  public void do_not_send_data_if_last_ping_earlier_than_one_week_ago() throws IOException {
+  public void do_not_send_data_if_last_ping_earlier_than_one_day_ago() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
     long now = system2.now();
-    long sixDaysAgo = now - (ONE_DAY * 6L);
+    long twentyHoursAgo = now - (ONE_HOUR * 20L);
     mockDataJsonWriterDoingSomething();
 
-    internalProperties.write("telemetry.lastPing", String.valueOf(sixDaysAgo));
+    internalProperties.write("telemetry.lastPing", String.valueOf(twentyHoursAgo));
     underTest.start();
 
     verify(client, after(2_000).never()).upload(anyString());
   }
 
   @Test
-  public void send_data_if_last_ping_is_one_week_ago() throws IOException {
+  public void send_data_if_last_ping_is_over_one_day_ago() throws IOException {
     initTelemetrySettingsToDefaultValues();
     when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
     settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
     long today = parseDate("2017-08-01").getTime();
-    system2.setNow(today + 15 * ONE_HOUR);
-    long sevenDaysAgo = today - (ONE_DAY * 7L);
-    internalProperties.write("telemetry.lastPing", String.valueOf(sevenDaysAgo));
+    system2.setNow(today);
+    long oneDayAgo = today - ONE_DAY - ONE_HOUR;
+    internalProperties.write("telemetry.lastPing", String.valueOf(oneDayAgo));
     reset(internalProperties);
+    when(dataLoader.load()).thenReturn(SOME_TELEMETRY_DATA);
     mockDataJsonWriterDoingSomething();
 
     underTest.start();
@@ -188,7 +177,37 @@ public class TelemetryDaemonTest {
 
     verify(client, after(2_000).never()).upload(anyString());
     verify(client, timeout(2_000).times(1)).optOut(anyString());
-    assertThat(logger.logs(LoggerLevel.INFO)).contains("Sharing of SonarQube statistics is disabled.");
+    assertThat(logger.logs(Level.INFO)).contains("Sharing of SonarQube statistics is disabled.");
+  }
+
+  @Test
+  public void write_sequence_as_one_if_not_previously_present() {
+    initTelemetrySettingsToDefaultValues();
+    when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
+    settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
+    mockDataJsonWriterDoingSomething();
+
+    underTest.start();
+
+    verify(internalProperties, timeout(4_000)).write("telemetry.messageSeq", "1");
+  }
+
+  @Test
+  public void write_sequence_correctly_incremented() {
+    initTelemetrySettingsToDefaultValues();
+    when(lockManager.tryLock(any(), anyInt())).thenReturn(true);
+    settings.setProperty("sonar.telemetry.frequencyInSeconds", "1");
+    internalProperties.write("telemetry.messageSeq", "10");
+    mockDataJsonWriterDoingSomething();
+
+    underTest.start();
+
+    verify(internalProperties, timeout(4_000)).write("telemetry.messageSeq", "10");
+
+    // force another ping
+    internalProperties.write("telemetry.lastPing", String.valueOf(system2.now() - ONE_DAY));
+
+    verify(internalProperties, timeout(4_000)).write("telemetry.messageSeq", "11");
   }
 
   private void initTelemetrySettingsToDefaultValues() {

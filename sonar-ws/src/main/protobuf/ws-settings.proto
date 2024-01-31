@@ -82,11 +82,14 @@ enum Type {
   PROPERTY_SET = 12;
   LICENSE = 13;
   JSON = 14;
+  FORMATTED_TEXT = 15;
+  EMAIL = 16;
 }
 
 // Response of GET api/settings/values
 message ValuesWsResponse {
   repeated Setting settings = 1;
+  repeated string setSecuredSettings = 2;
 }
 
 message Setting {
@@ -115,6 +118,3 @@ message FieldValues {
     map<string, string> value = 1;
   }
 }
-
-
-

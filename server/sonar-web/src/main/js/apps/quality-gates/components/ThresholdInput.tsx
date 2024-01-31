@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputField, InputSelect } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
+import { LabelValueSelectOption } from '../../../components/controls/Select';
+import { Metric } from '../../../types/types';
 
 interface Props {
   name: string;
   value: string;
-  metric: T.Metric;
+  metric: Metric;
   onChange: (value: string) => void;
 }
 
@@ -32,7 +34,7 @@ export default class ThresholdInput extends React.PureComponent<Props> {
     this.props.onChange(e.currentTarget.value);
   };
 
-  handleSelectChange = (option: { value: string } | null) => {
+  handleSelectChange = (option: LabelValueSelectOption) => {
     if (option) {
       this.props.onChange(option.value);
     } else {
@@ -47,20 +49,19 @@ export default class ThresholdInput extends React.PureComponent<Props> {
       { label: 'A', value: '1' },
       { label: 'B', value: '2' },
       { label: 'C', value: '3' },
-      { label: 'D', value: '4' }
+      { label: 'D', value: '4' },
     ];
 
     return (
-      <Select
-        className="input-tiny text-middle"
-        clearable={true}
-        id="condition-threshold"
+      <InputSelect
+        className="sw-w-abs-150"
+        inputId="condition-threshold"
         name={name}
         onChange={this.handleSelectChange}
         options={options}
         placeholder=""
-        searchable={false}
-        value={value}
+        size="small"
+        value={options.find((o) => o.value === value)}
       />
     );
   }
@@ -73,8 +74,8 @@ export default class ThresholdInput extends React.PureComponent<Props> {
     }
 
     return (
-      <input
-        className="input-tiny text-middle"
+      <InputField
+        size="small"
         data-type={metric.type}
         id="condition-threshold"
         name={name}

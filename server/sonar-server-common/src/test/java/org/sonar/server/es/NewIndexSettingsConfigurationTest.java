@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,55 +20,49 @@
 package org.sonar.server.es;
 
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.config.Configuration;
 import org.sonar.server.es.newindex.SettingsConfiguration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.sonar.server.es.newindex.SettingsConfiguration.newBuilder;
 
 public class NewIndexSettingsConfigurationTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private Configuration mockConfiguration = mock(Configuration.class);
 
   @Test
   public void newBuilder_fails_with_NPE_when_Configuration_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("configuration can't be null");
-
-    newBuilder(null);
+    assertThatThrownBy(() -> newBuilder(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("configuration can't be null");
   }
 
   @Test
   public void setDefaultNbOfShards_fails_with_IAE_if_argument_is_zero() {
     SettingsConfiguration.Builder underTest = newBuilder(mockConfiguration);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("defaultNbOfShards must be >= 1");
-
-    underTest.setDefaultNbOfShards(0);
+    assertThatThrownBy(() -> underTest.setDefaultNbOfShards(0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("defaultNbOfShards must be >= 1");
   }
 
   @Test
   public void setDefaultNbOfShards_fails_with_IAE_if_argument_is_less_than_zero() {
     SettingsConfiguration.Builder underTest = newBuilder(mockConfiguration);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("defaultNbOfShards must be >= 1");
-
-    underTest.setDefaultNbOfShards(-1 - new Random().nextInt(10));
+    assertThatThrownBy(() -> underTest.setDefaultNbOfShards(-1 - new Random().nextInt(10)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("defaultNbOfShards must be >= 1");
   }
 
   @Test
   public void setDefaultNbOfShards_accepts_1() {
     SettingsConfiguration.Builder underTest = newBuilder(mockConfiguration);
 
-    assertThat(underTest.setDefaultNbOfShards(1).build().getDefaultNbOfShards()).isEqualTo(1);
+    assertThat(underTest.setDefaultNbOfShards(1).build().getDefaultNbOfShards()).isOne();
   }
 
   @Test
@@ -82,27 +76,25 @@ public class NewIndexSettingsConfigurationTest {
 
   @Test
   public void getDefaultNbOfShards_returns_1_when_not_explicitly_set() {
-    assertThat(newBuilder(mockConfiguration).build().getDefaultNbOfShards()).isEqualTo(1);
+    assertThat(newBuilder(mockConfiguration).build().getDefaultNbOfShards()).isOne();
   }
 
   @Test
   public void setRefreshInterval_fails_with_IAE_if_argument_is_zero() {
     SettingsConfiguration.Builder underTest = newBuilder(mockConfiguration);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("refreshInterval must be either -1 or strictly positive");
-
-    underTest.setRefreshInterval(0);
+    assertThatThrownBy(() -> underTest.setRefreshInterval(0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("refreshInterval must be either -1 or strictly positive");
   }
 
   @Test
   public void setRefreshInterval_fails_with_IAE_if_argument_is_less_than_minus_1() {
     SettingsConfiguration.Builder underTest = newBuilder(mockConfiguration);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("refreshInterval must be either -1 or strictly positive");
-
-    underTest.setRefreshInterval(-2 - new Random().nextInt(10));
+    assertThatThrownBy(() -> underTest.setRefreshInterval(-2 - new Random().nextInt(10)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("refreshInterval must be either -1 or strictly positive");
   }
 
   @Test

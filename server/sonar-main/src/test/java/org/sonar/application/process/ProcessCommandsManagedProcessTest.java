@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,8 +24,8 @@ import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.mockito.Mockito;
-import org.sonar.process.sharedmemoryfile.ProcessCommands;
 import org.sonar.process.ProcessId;
+import org.sonar.process.sharedmemoryfile.ProcessCommands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -33,8 +33,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-
 public class ProcessCommandsManagedProcessTest {
 
   @Test

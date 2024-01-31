@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, FlagMessage, InputSelect, Modal } from 'design-system';
 import * as React from 'react';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { setWorkerCount } from '../../../api/ce';
+import { translate } from '../../../helpers/l10n';
 
 const MAX_WORKERS = 10;
+const WORKERS_FORM_ID = 'workers-form';
 
 interface Props {
   onClose: (newWorkerCount?: number) => void;
@@ -44,7 +42,7 @@ export default class WorkersForm extends React.PureComponent<Props, State> {
     super(props);
     this.state = {
       newWorkerCount: props.workerCount,
-      submitting: false
+      submitting: false,
     };
   }
 
@@ -60,7 +58,7 @@ export default class WorkersForm extends React.PureComponent<Props, State> {
     this.props.onClose();
   };
 
-  handleWorkerCountChange = (option: { value: number }) =>
+  handleWorkerCountChange = (option: { label: string; value: number }) =>
     this.setState({ newWorkerCount: option.value });
 
   handleSubmit = (event: React.SyntheticEvent<HTMLFormElement>) => {
@@ -77,11 +75,13 @@ export default class WorkersForm extends React.PureComponent<Props, State> {
         if (this.mounted) {
           this.setState({ submitting: false });
         }
-      }
+      },
     );
   };
 
   render() {
+    const { newWorkerCount, submitting } = this.state;
+
     const options = [];
     for (let i = 1; i <= MAX_WORKERS; i++) {
       options.push({ label: String(i), value: i });
@@ -89,34 +89,33 @@ export default class WorkersForm extends React.PureComponent<Props, State> {
 
     return (
       <Modal
-        contentLabel={translate('background_tasks.change_number_of_workers')}
-        onRequestClose={this.handleClose}>
-        <header className="modal-head">
-          <h2>{translate('background_tasks.change_number_of_workers')}</h2>
-        </header>
-        <form onSubmit={this.handleSubmit}>
-          <div className="modal-body">
-            <Select
-              className="input-tiny spacer-top"
-              clearable={false}
+        headerTitle={translate('background_tasks.change_number_of_workers')}
+        onClose={this.handleClose}
+        isOverflowVisible
+        body={
+          <form id={WORKERS_FORM_ID} onSubmit={this.handleSubmit}>
+            <InputSelect
+              aria-label={translate('background_tasks.change_number_of_workers')}
+              className="sw-mt-2"
+              isSearchable={false}
               onChange={this.handleWorkerCountChange}
               options={options}
-              searchable={false}
-              value={this.state.newWorkerCount}
+              size="medium"
+              value={options.find((o) => o.value === newWorkerCount)}
             />
-            <Alert className="big-spacer-top" variant="info">
+            <FlagMessage className="sw-mt-4" variant="info">
               {translate('background_tasks.change_number_of_workers.hint')}
-            </Alert>
-          </div>
-          <footer className="modal-foot">
-            <div>
-              {this.state.submitting && <i className="spinner spacer-right" />}
-              <SubmitButton disabled={this.state.submitting}>{translate('save')}</SubmitButton>
-              <ResetButtonLink onClick={this.handleClose}>{translate('cancel')}</ResetButtonLink>
-            </div>
-          </footer>
-        </form>
-      </Modal>
+            </FlagMessage>
+          </form>
+        }
+        primaryButton={
+          <ButtonPrimary disabled={submitting} type="submit" form={WORKERS_FORM_ID}>
+            {translate('save')}
+          </ButtonPrimary>
+        }
+        secondaryButtonLabel={translate('cancel')}
+        loading={submitting}
+      />
     );
   }
 }

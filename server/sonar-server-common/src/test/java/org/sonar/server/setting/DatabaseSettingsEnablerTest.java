@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,17 +20,13 @@
 package org.sonar.server.setting;
 
 import org.junit.After;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 public class DatabaseSettingsEnablerTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private ThreadLocalSettings settings = mock(ThreadLocalSettings.class);
   private DatabaseSettingLoader loader = mock(DatabaseSettingLoader.class);

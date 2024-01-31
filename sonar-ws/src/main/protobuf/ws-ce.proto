@@ -39,9 +39,9 @@ message TaskResponse {
 
 // GET api/ce/activity
 message ActivityResponse {
-  // paging has been deprecated in 5.5
-  optional sonarqube.ws.commons.Paging unusedPaging = 1;
+  reserved 1; //drop unusedPaging deprecated since 5.5
   repeated Task tasks = 2;
+  optional sonarqube.ws.commons.Paging paging = 3;
 }
 
 // GET api/ce/activity_status
@@ -55,8 +55,9 @@ message ActivityStatusWsResponse {
 // GET api/ce/indexation_status
 message IndexationStatusWsResponse {
   optional bool isCompleted = 1;
-  optional int32 percentCompleted = 2;
-  optional bool hasFailures = 3;
+  optional bool hasFailures = 2;
+  optional int32 completedCount = 3;
+  optional int32 total = 4;
 }
 
 // GET api/ce/analysis_status
@@ -134,6 +135,8 @@ message Task {
   optional string pullRequestTitle = 25;
   optional int32 warningCount = 26;
   repeated string warnings = 27;
+  optional string nodeName = 28;
+  repeated string infoMessages = 29;
 }
 
 enum TaskStatus {

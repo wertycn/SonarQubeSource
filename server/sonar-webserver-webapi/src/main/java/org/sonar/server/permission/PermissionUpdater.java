@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,46 +22,57 @@ package org.sonar.server.permission;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import org.sonar.db.DbSession;
-import org.sonar.server.es.ProjectIndexer;
-import org.sonar.server.es.ProjectIndexers;
+import org.sonar.db.entity.EntityDto;
+import org.sonar.server.es.Indexers;
 
-/**
- * Add or remove global/project permissions to a group. This class does not verify that caller has administration right on the related project.
- */
-public class PermissionUpdater {
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toMap;
+import static org.sonar.api.utils.Preconditions.checkState;
+import static org.sonar.server.es.Indexers.EntityEvent.PERMISSION_CHANGE;
 
-  private final ProjectIndexers projectIndexers;
-  private final UserPermissionChanger userPermissionChanger;
-  private final GroupPermissionChanger groupPermissionChanger;
+public class PermissionUpdater<T extends PermissionChange> {
 
-  public PermissionUpdater(ProjectIndexers projectIndexers,
-    UserPermissionChanger userPermissionChanger, GroupPermissionChanger groupPermissionChanger) {
-    this.projectIndexers = projectIndexers;
-    this.userPermissionChanger = userPermissionChanger;
-    this.groupPermissionChanger = groupPermissionChanger;
+  private final Indexers indexers;
+
+  private final Map<Class<?>, GranteeTypeSpecificPermissionUpdater<T>> specificPermissionClassToHandler;
+
+  public PermissionUpdater(Indexers indexers, Set<GranteeTypeSpecificPermissionUpdater<T>> permissionChangers) {
+    this.indexers = indexers;
+    specificPermissionClassToHandler = permissionChangers.stream()
+      .collect(toMap(GranteeTypeSpecificPermissionUpdater::getHandledClass, Function.identity()));
   }
 
-  public void apply(DbSession dbSession, Collection<PermissionChange> changes) {
+  public void apply(DbSession dbSession, Collection<T> changes) {
+    checkState(changes.stream().map(PermissionChange::getProjectUuid).distinct().count() <= 1,
+      "Only one project per changes is supported");
+
     List<String> projectOrViewUuids = new ArrayList<>();
-    for (PermissionChange change : changes) {
-      boolean changed = doApply(dbSession, change);
-      String projectUuid = change.getProjectUuid();
-      if (changed && projectUuid != null) {
-        projectOrViewUuids.add(projectUuid);
+    Map<Optional<String>, List<T>> granteeUuidToPermissionChanges = changes.stream().collect(groupingBy(change -> Optional.ofNullable(change.getUuidOfGrantee())));
+    granteeUuidToPermissionChanges.values().forEach(permissionChanges -> applyForSingleGrantee(dbSession, projectOrViewUuids, permissionChanges));
+
+    indexers.commitAndIndexOnEntityEvent(dbSession, projectOrViewUuids, PERMISSION_CHANGE);
+  }
+
+  private void applyForSingleGrantee(DbSession dbSession, List<String> projectOrViewUuids, List<T> permissionChanges) {
+    T anyPermissionChange = permissionChanges.iterator().next();
+    EntityDto entity = anyPermissionChange.getEntity();
+    String entityUuid = Optional.ofNullable(entity).map(EntityDto::getUuid).orElse(null);
+    GranteeTypeSpecificPermissionUpdater<T> granteeTypeSpecificPermissionUpdater = getSpecificProjectUpdater(anyPermissionChange);
+    Set<String> existingPermissions = granteeTypeSpecificPermissionUpdater.loadExistingEntityPermissions(dbSession, anyPermissionChange.getUuidOfGrantee(), entityUuid);
+    for (T permissionChange : permissionChanges) {
+      if (granteeTypeSpecificPermissionUpdater.apply(dbSession, existingPermissions, permissionChange) && permissionChange.getProjectUuid() != null) {
+        projectOrViewUuids.add(permissionChange.getProjectUuid());
       }
     }
-    projectIndexers.commitAndIndexByProjectUuids(dbSession, projectOrViewUuids, ProjectIndexer.Cause.PERMISSION_CHANGE);
   }
 
-  private boolean doApply(DbSession dbSession, PermissionChange change) {
-    if (change instanceof UserPermissionChange) {
-      return userPermissionChanger.apply(dbSession, (UserPermissionChange) change);
-    }
-    if (change instanceof GroupPermissionChange) {
-      return groupPermissionChanger.apply(dbSession, (GroupPermissionChange) change);
-    }
-    throw new UnsupportedOperationException("Unsupported permission change: " + change.getClass());
-
+  private GranteeTypeSpecificPermissionUpdater<T> getSpecificProjectUpdater(T anyPermissionChange) {
+    return specificPermissionClassToHandler.get(anyPermissionChange.getClass());
   }
+
 }

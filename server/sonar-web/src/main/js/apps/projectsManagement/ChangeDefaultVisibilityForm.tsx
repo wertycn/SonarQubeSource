@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,76 +17,77 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as React from 'react';
-import { Button, ResetButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import Radio from 'sonar-ui-common/components/controls/Radio';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { ButtonPrimary, FlagMessage, Modal, RadioButton, TextSubdued } from 'design-system';
+import React, { useState } from 'react';
+import { translate } from '../../helpers/l10n';
+import { useGithubProvisioningEnabledQuery } from '../../queries/identity-provider/github';
+import { Visibility } from '../../types/component';
 
 export interface Props {
-  defaultVisibility: T.Visibility;
+  defaultVisibility: Visibility;
   onClose: () => void;
-  onConfirm: (visiblity: T.Visibility) => void;
+  onConfirm: (visiblity: Visibility) => void;
 }
 
-interface State {
-  visibility: T.Visibility;
-}
+const FORM_ID = 'change-default-visibility-form';
 
-export default class ChangeDefaultVisibilityForm extends React.PureComponent<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { visibility: props.defaultVisibility };
-  }
+export default function ChangeDefaultVisibilityForm(props: Props) {
+  const [visibility, setVisibility] = useState(props.defaultVisibility);
+  const { data: githubProbivisioningEnabled } = useGithubProvisioningEnabledQuery();
 
-  handleConfirmClick = () => {
-    this.props.onConfirm(this.state.visibility);
-    this.props.onClose();
+  const handleConfirmClick = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    props.onConfirm(visibility);
+    props.onClose();
   };
 
-  handleVisibilityChange = (visibility: T.Visibility) => {
-    this.setState({ visibility });
+  const handleVisibilityChange = (visibility: Visibility) => {
+    setVisibility(visibility);
   };
 
-  render() {
-    return (
-      <Modal contentLabel="modal form" onRequestClose={this.props.onClose}>
-        <header className="modal-head">
-          <h2>{translate('settings.projects.change_visibility_form.header')}</h2>
-        </header>
+  const header = translate('settings.projects.change_visibility_form.header');
 
-        <div className="modal-body">
-          {['public', 'private'].map(visibility => (
-            <div className="big-spacer-bottom" key={visibility}>
-              <Radio
-                value={visibility}
-                checked={this.state.visibility === visibility}
-                onCheck={this.handleVisibilityChange}>
-                <div>
-                  {translate('visibility', visibility)}
-                  <p className="text-muted spacer-top">
-                    {translate('visibility', visibility, 'description.short')}
-                  </p>
-                </div>
-              </Radio>
+  const body = (
+    <form id={FORM_ID} onSubmit={handleConfirmClick}>
+      {Object.values(Visibility).map((visibilityValue) => (
+        <div className="sw-mb-4" key={visibilityValue}>
+          <RadioButton
+            value={visibilityValue}
+            checked={visibility === visibilityValue}
+            onCheck={handleVisibilityChange}
+          >
+            <div>
+              {translate('visibility', visibilityValue)}
+              <TextSubdued as="p" className="sw-mt-2">
+                {translate('visibility', visibilityValue, 'description.short')}
+              </TextSubdued>
             </div>
-          ))}
-
-          <Alert variant="warning">
-            {translate('settings.projects.change_visibility_form.warning')}
-          </Alert>
+          </RadioButton>
         </div>
+      ))}
+      <FlagMessage variant="warning">
+        {translate(
+          `settings.projects.change_visibility_form.warning${
+            githubProbivisioningEnabled ? '.github' : ''
+          }`,
+        )}
+      </FlagMessage>
+    </form>
+  );
 
-        <footer className="modal-foot">
-          <Button className="js-confirm" onClick={this.handleConfirmClick}>
-            {translate('settings.projects.change_visibility_form.submit')}
-          </Button>
-          <ResetButtonLink className="js-modal-close" onClick={this.props.onClose}>
-            {translate('cancel')}
-          </ResetButtonLink>
-        </footer>
-      </Modal>
-    );
-  }
+  return (
+    <Modal
+      isScrollable={false}
+      isOverflowVisible
+      headerTitle={header}
+      onClose={props.onClose}
+      body={body}
+      primaryButton={
+        <ButtonPrimary form={FORM_ID} autoFocus type="submit">
+          {translate('settings.projects.change_visibility_form.submit')}
+        </ButtonPrimary>
+      }
+      secondaryButtonLabel={translate('cancel')}
+    />
+  );
 }

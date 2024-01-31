@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,35 +17,37 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ContentCell, TableRow } from 'design-system';
 import * as React from 'react';
+import { PermissionTemplate } from '../../../types/types';
 import ActionsCell from './ActionsCell';
 import NameCell from './NameCell';
 import PermissionCell from './PermissionCell';
 
 interface Props {
   refresh: () => Promise<void>;
-  template: T.PermissionTemplate;
+  template: PermissionTemplate;
   topQualifiers: string[];
 }
 
 export default function ListItem(props: Props) {
-  const permissions = props.template.permissions.map(p => (
+  const permissions = props.template.permissions.map((p) => (
     <PermissionCell key={p.key} permission={p} />
   ));
 
   return (
-    <tr data-id={props.template.id} data-name={props.template.name}>
+    <TableRow data-id={props.template.id} data-name={props.template.name}>
       <NameCell template={props.template} />
 
       {permissions}
 
-      <td className="nowrap thin text-right text-top little-padded-left little-padded-right">
+      <ContentCell>
         <ActionsCell
           permissionTemplate={props.template}
           refresh={props.refresh}
           topQualifiers={props.topQualifiers}
         />
-      </td>
-    </tr>
+      </ContentCell>
+    </TableRow>
   );
 }

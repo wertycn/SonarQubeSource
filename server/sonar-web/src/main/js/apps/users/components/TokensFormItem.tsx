@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,123 +17,164 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
+import styled from '@emotion/styled';
+import classNames from 'classnames';
+import {
+  ContentCell,
+  DangerButtonSecondary,
+  FlagWarningIcon,
+  Spinner,
+  TableRow,
+  themeColor,
+} from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import ConfirmButton from 'sonar-ui-common/components/controls/ConfirmButton';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import DateFormatter from 'sonar-ui-common/components/intl/DateFormatter';
-import DateFromNow from 'sonar-ui-common/components/intl/DateFromNow';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { limitComponentName } from 'sonar-ui-common/helpers/path';
-import { revokeToken } from '../../../api/user-tokens';
+import ConfirmButton from '../../../components/controls/ConfirmButton';
+import DateFormatter from '../../../components/intl/DateFormatter';
+import DateFromNow from '../../../components/intl/DateFromNow';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { useRevokeTokenMutation } from '../../../queries/users';
+import { UserToken } from '../../../types/token';
 
 export type TokenDeleteConfirmation = 'inline' | 'modal';
 
 interface Props {
   deleteConfirmation: TokenDeleteConfirmation;
   login: string;
-  onRevokeToken: (token: T.UserToken) => void;
-  token: T.UserToken;
+  token: UserToken;
 }
 
-interface State {
-  loading: boolean;
-  showConfirmation: boolean;
-}
+export default function TokensFormItem(props: Readonly<Props>) {
+  const { token, deleteConfirmation, login } = props;
+  const [showConfirmation, setShowConfirmation] = React.useState(false);
+  const { mutateAsync, isLoading } = useRevokeTokenMutation();
 
-const MAX_TOKEN_NAME_FIELD = 20;
+  const handleRevoke = () => mutateAsync({ login, name: token.name });
 
-export default class TokensFormItem extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = { loading: false, showConfirmation: false };
-
-  componentDidMount() {
-    this.mounted = true;
-  }
-
-  componentWillUnmount() {
-    this.mounted = false;
-  }
-
-  handleClick = () => {
-    if (this.state.showConfirmation) {
-      this.handleRevoke().then(() => {
-        if (this.mounted) {
-          this.setState({ showConfirmation: false });
-        }
-      });
+  const handleClick = () => {
+    if (showConfirmation) {
+      handleRevoke()
+        .then(() => setShowConfirmation(false))
+        .catch(() => setShowConfirmation(false));
     } else {
-      this.setState({ showConfirmation: true });
+      setShowConfirmation(true);
     }
   };
 
-  handleRevoke = () => {
-    this.setState({ loading: true });
-    return revokeToken({ login: this.props.login, name: this.props.token.name }).then(
-      () => this.props.onRevokeToken(this.props.token),
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      }
-    );
-  };
+  const className = classNames('sw-mr-2', {
+    'sw-text-gray-400': token.isExpired,
+  });
 
-  render() {
-    const { deleteConfirmation, token } = this.props;
-    const { loading, showConfirmation } = this.state;
-    return (
-      <tr>
-        <td>
-          <Tooltip overlay={token.name}>
-            <span>{limitComponentName(token.name, MAX_TOKEN_NAME_FIELD)}</span>
-          </Tooltip>
-        </td>
-        <td className="nowrap">
-          <DateFromNow date={token.lastConnectionDate} hourPrecision={true} />
-        </td>
-        <td className="thin nowrap text-right">
-          <DateFormatter date={token.createdAt} long={true} />
-        </td>
-        <td className="thin nowrap text-right">
-          <DeferredSpinner loading={loading}>
-            <i className="deferred-spinner-placeholder" />
-          </DeferredSpinner>
-          {deleteConfirmation === 'modal' ? (
-            <ConfirmButton
-              confirmButtonText={translate('users.tokens.revoke_token')}
-              isDestructive={true}
-              modalBody={
-                <FormattedMessage
-                  defaultMessage={translate('users.tokens.sure_X')}
-                  id="users.tokens.sure_X"
-                  values={{ token: <strong>{token.name}</strong> }}
-                />
-              }
-              modalHeader={translate('users.tokens.revoke_token')}
-              onConfirm={this.handleRevoke}>
-              {({ onClick }) => (
-                <Button
-                  className="spacer-left button-red input-small"
-                  disabled={loading}
-                  onClick={onClick}
-                  title={translate('users.tokens.revoke_token')}>
-                  {translate('users.tokens.revoke')}
-                </Button>
-              )}
-            </ConfirmButton>
-          ) : (
-            <Button
-              className="button-red input-small spacer-left"
-              disabled={loading}
-              onClick={this.handleClick}>
-              {showConfirmation ? translate('users.tokens.sure') : translate('users.tokens.revoke')}
-            </Button>
+  return (
+    <TableRow>
+      <ContentCell
+        className={classNames('sw-flex-col sw-items-center sw-w-64', className)}
+        title={token.name}
+      >
+        <div className="sw-w-full sw-truncate">
+          {token.name}
+
+          {token.isExpired && (
+            <StyledSpan tokenIsExpired>
+              <div className="sw-mt-1">
+                <FlagWarningIcon className="sw-mr-1" />
+
+                {translate('my_account.tokens.expired')}
+              </div>
+            </StyledSpan>
           )}
-        </td>
-      </tr>
-    );
-  }
+        </div>
+      </ContentCell>
+
+      <ContentCell className={className} title={translate('users.tokens', token.type)}>
+        {translate('users.tokens', token.type, 'short')}
+      </ContentCell>
+
+      <ContentCell className={classNames('sw-w-32', className)} title={token.project?.name}>
+        <div className="sw-w-full sw-truncate">{token.project?.name}</div>
+      </ContentCell>
+
+      <ContentCell className={className}>
+        <DateFromNow date={token.lastConnectionDate} hourPrecision />
+      </ContentCell>
+
+      <ContentCell className={className}>
+        <DateFormatter date={token.createdAt} long />
+      </ContentCell>
+
+      <ContentCell className={className}>
+        {token.expirationDate ? (
+          <StyledSpan tokenIsExpired={token.isExpired}>
+            <DateFormatter date={token.expirationDate} long />
+          </StyledSpan>
+        ) : (
+          '–'
+        )}
+      </ContentCell>
+
+      <ContentCell>
+        {token.isExpired && (
+          <DangerButtonSecondary
+            disabled={isLoading}
+            onClick={handleRevoke}
+            aria-label={translateWithParameters('users.tokens.remove_label', token.name)}
+          >
+            <Spinner className="sw-mr-1" loading={isLoading}>
+              {translate('remove')}
+            </Spinner>
+          </DangerButtonSecondary>
+        )}
+
+        {!token.isExpired && deleteConfirmation === 'modal' && (
+          <ConfirmButton
+            confirmButtonText={translate('yes')}
+            isDestructive
+            modalBody={
+              <FormattedMessage
+                defaultMessage={translate('users.tokens.sure_X')}
+                id="users.tokens.sure_X"
+                values={{ token: <strong>{token.name}</strong> }}
+              />
+            }
+            modalHeader={translateWithParameters('users.tokens.revoke_label', token.name)}
+            onConfirm={handleRevoke}
+          >
+            {({ onClick }) => (
+              <DangerButtonSecondary
+                disabled={isLoading}
+                onClick={onClick}
+                aria-label={translateWithParameters('users.tokens.revoke_label', token.name)}
+              >
+                {translate('users.tokens.revoke')}
+              </DangerButtonSecondary>
+            )}
+          </ConfirmButton>
+        )}
+
+        {!token.isExpired && deleteConfirmation === 'inline' && (
+          <DangerButtonSecondary
+            aria-label={
+              showConfirmation
+                ? translate('users.tokens.sure')
+                : translateWithParameters('users.tokens.revoke_label', token.name)
+            }
+            disabled={isLoading}
+            onClick={handleClick}
+          >
+            <Spinner className="sw-mr-1" loading={isLoading} />
+
+            {showConfirmation ? translate('users.tokens.sure') : translate('users.tokens.revoke')}
+          </DangerButtonSecondary>
+        )}
+      </ContentCell>
+    </TableRow>
+  );
 }
+
+const StyledSpan = styled.span<{
+  tokenIsExpired?: boolean;
+}>`
+  color: ${({ tokenIsExpired }) =>
+    tokenIsExpired ? themeColor('iconWarning') : themeColor('pageContent')};
+`;

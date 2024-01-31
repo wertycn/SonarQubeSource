@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.ce.task.projectanalysis.event;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class EventTest {
 
@@ -29,14 +30,16 @@ public class EventTest {
   private static final String SOME_DATA = "some data";
   private static final String SOME_DESCRIPTION = "some description";
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void createAlert_fail_fast_null_check_on_null_name() {
-    Event.createAlert(null, SOME_DATA, SOME_DESCRIPTION);
+    assertThatThrownBy(() -> Event.createAlert(null, SOME_DATA, SOME_DESCRIPTION))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void createProfile_fail_fast_null_check_on_null_name() {
-    Event.createProfile(null, SOME_DATA, SOME_DESCRIPTION);
+    assertThatThrownBy(() -> Event.createProfile(null, SOME_DATA, SOME_DESCRIPTION))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -60,8 +63,18 @@ public class EventTest {
   @Test
   public void same_name_and_category_make_equal_events() {
     Event source = Event.createAlert(SOME_NAME, null, null);
-    assertThat(source).isEqualTo(Event.createAlert(SOME_NAME, null, null));
-    assertThat(source).isEqualTo(source);
-    assertThat(source).isNotEqualTo(null);
+    assertThat(source)
+      .isEqualTo(Event.createAlert(SOME_NAME, null, null))
+      .isEqualTo(source)
+      .isNotNull();
+  }
+
+  @Test
+  public void createSqUpgradeEvents_verify_fields() {
+    Event event = Event.createSqUpgrade(SOME_NAME);
+    assertThat(event.getName()).isEqualTo(SOME_NAME);
+    assertThat(event.getCategory()).isEqualTo(Event.Category.SQ_UPGRADE);
+    assertThat(event.getData()).isNull();
+    assertThat(event.getDescription()).isNull();
   }
 }

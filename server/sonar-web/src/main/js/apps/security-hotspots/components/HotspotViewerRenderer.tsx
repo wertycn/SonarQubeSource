@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,140 +17,108 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { ClipboardButton } from 'sonar-ui-common/components/controls/clipboard';
-import LinkIcon from 'sonar-ui-common/components/icons/LinkIcon';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getPathUrlAsString } from 'sonar-ui-common/helpers/urls';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
-import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { getComponentSecurityHotspotsUrl } from '../../../helpers/urls';
-import { isLoggedIn } from '../../../helpers/users';
-import { BranchLike } from '../../../types/branch-like';
-import { Hotspot } from '../../../types/security-hotspots';
-import Assignee from './assignee/Assignee';
-import HotspotOpenInIdeButton from './HotspotOpenInIdeButton';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
+import { fillBranchLike } from '../../../helpers/branch-like';
+import { Standards } from '../../../types/security';
+import { Hotspot, HotspotStatusOption } from '../../../types/security-hotspots';
+import { Component } from '../../../types/types';
+import { HotspotHeader } from './HotspotHeader';
+
+import { Spinner } from 'design-system';
+import { CurrentUser } from '../../../types/users';
+import { RuleDescriptionSection } from '../../coding-rules/rule';
 import HotspotReviewHistoryAndComments from './HotspotReviewHistoryAndComments';
 import HotspotSnippetContainer from './HotspotSnippetContainer';
 import './HotspotViewer.css';
 import HotspotViewerTabs from './HotspotViewerTabs';
-import Status from './status/Status';
+import StatusUpdateSuccessModal from './StatusUpdateSuccessModal';
 
 export interface HotspotViewerRendererProps {
-  branchLike?: BranchLike;
-  component: T.Component;
-  currentUser: T.CurrentUser;
+  component: Component;
+  currentUser: CurrentUser;
   hotspot?: Hotspot;
+  hotspotsReviewedMeasure?: string;
+  lastStatusChangedTo?: HotspotStatusOption;
   loading: boolean;
-  commentVisible: boolean;
-  commentTextRef: React.RefObject<HTMLTextAreaElement>;
-  onOpenComment: () => void;
-  onCloseComment: () => void;
-  onUpdateHotspot: (statusUpdate?: boolean) => Promise<void>;
-  securityCategories: T.StandardSecurityCategories;
+  onCloseStatusUpdateSuccessModal: () => void;
+  onLocationClick: (index: number) => void;
+  onSwitchFilterToStatusOfUpdatedHotspot: () => void;
+  onUpdateHotspot: (statusUpdate?: boolean, statusOption?: HotspotStatusOption) => Promise<void>;
+  ruleDescriptionSections?: RuleDescriptionSection[];
+  ruleLanguage?: string;
+  selectedHotspotLocation?: number;
+  showStatusUpdateSuccessModal: boolean;
+  standards?: Standards;
 }
 
 export function HotspotViewerRenderer(props: HotspotViewerRendererProps) {
   const {
-    branchLike,
     component,
     currentUser,
     hotspot,
+    hotspotsReviewedMeasure,
+    lastStatusChangedTo,
     loading,
-    securityCategories,
-    commentTextRef,
-    commentVisible
+    ruleDescriptionSections,
+    ruleLanguage,
+    selectedHotspotLocation,
+    showStatusUpdateSuccessModal,
+    standards,
   } = props;
 
-  const permalink = getPathUrlAsString(
-    getComponentSecurityHotspotsUrl(component.key, {
-      ...getBranchLikeQuery(branchLike),
-      hotspots: hotspot?.key
-    }),
-    false
-  );
+  const branchLike = hotspot && fillBranchLike(hotspot.project.branch, hotspot.project.pullRequest);
 
   return (
-    <DeferredSpinner className="big-spacer-left big-spacer-top" loading={loading}>
+    <>
+      <Spinner className="sw-ml-4 sw-mt-4" loading={loading} />
+
+      {showStatusUpdateSuccessModal && (
+        <StatusUpdateSuccessModal
+          hotspotsReviewedMeasure={hotspotsReviewedMeasure}
+          lastStatusChangedTo={lastStatusChangedTo}
+          onClose={props.onCloseStatusUpdateSuccessModal}
+          onSwitchFilterToStatusOfUpdatedHotspot={props.onSwitchFilterToStatusOfUpdatedHotspot}
+        />
+      )}
+
       {hotspot && (
-        <div className="big-padded hotspot-content">
-          <div className="huge-spacer-bottom display-flex-space-between">
-            <strong className="big big-spacer-right">{hotspot.message}</strong>
-            <div className="display-flex-row flex-0">
-              {isLoggedIn(currentUser) && (
-                <>
-                  <div className="dropdown spacer-right flex-1-0-auto">
-                    <Button className="it__hs-add-comment" onClick={props.onOpenComment}>
-                      {translate('hotspots.comment.open')}
-                    </Button>
-                  </div>
-                  <div className="dropdown spacer-right flex-1-0-auto">
-                    <HotspotOpenInIdeButton
-                      hotspotKey={hotspot.key}
-                      projectKey={hotspot.project.key}
-                    />
-                  </div>
-                </>
-              )}
-              <ClipboardButton className="flex-1-0-auto" copyValue={permalink}>
-                <LinkIcon className="spacer-right" />
-                <span>{translate('hotspots.get_permalink')}</span>
-              </ClipboardButton>
-            </div>
-          </div>
-
-          <div className="huge-spacer-bottom display-flex-row">
-            <div className="hotspot-information display-flex-column display-flex-space-between">
-              <div className="display-flex-center">
-                <span className="big-spacer-right">{translate('category')}</span>
-                <strong className="nowrap">
-                  {securityCategories[hotspot.rule.securityCategory].title}
-                </strong>
-              </div>
-              <div className="display-flex-center">
-                <span className="big-spacer-right">{translate('hotspots.risk_exposure')}</span>
-                <div
-                  className={classNames(
-                    'hotspot-risk-badge',
-                    hotspot.rule.vulnerabilityProbability
-                  )}>
-                  {translate('risk_exposure', hotspot.rule.vulnerabilityProbability)}
-                </div>
-              </div>
-              <div className="display-flex-center it__hs-assignee">
-                <span className="big-spacer-right">{translate('assignee')}</span>
-                <div>
-                  <Assignee hotspot={hotspot} onAssigneeChange={props.onUpdateHotspot} />
-                </div>
-              </div>
-            </div>
-            <div className="huge-spacer-left">
-              <Status hotspot={hotspot} onStatusChange={() => props.onUpdateHotspot(true)} />
-            </div>
-          </div>
-
-          <HotspotSnippetContainer
+        <div className="sw-box-border sw-p-6">
+          <HotspotHeader
             branchLike={branchLike}
             component={component}
             hotspot={hotspot}
+            onUpdateHotspot={props.onUpdateHotspot}
+            standards={standards}
           />
-          <HotspotViewerTabs hotspot={hotspot} />
-          <HotspotReviewHistoryAndComments
-            commentTextRef={commentTextRef}
-            commentVisible={commentVisible}
-            currentUser={currentUser}
+          <HotspotViewerTabs
+            activityTabContent={
+              <HotspotReviewHistoryAndComments
+                currentUser={currentUser}
+                hotspot={hotspot}
+                onCommentUpdate={props.onUpdateHotspot}
+              />
+            }
+            branchLike={branchLike}
+            component={component}
+            codeTabContent={
+              <HotspotSnippetContainer
+                branchLike={branchLike}
+                component={component}
+                hotspot={hotspot}
+                onLocationSelect={props.onLocationClick}
+                selectedHotspotLocation={selectedHotspotLocation}
+              />
+            }
             hotspot={hotspot}
-            onCloseComment={props.onCloseComment}
-            onCommentUpdate={props.onUpdateHotspot}
-            onOpenComment={props.onOpenComment}
+            onUpdateHotspot={props.onUpdateHotspot}
+            ruleDescriptionSections={ruleDescriptionSections}
+            ruleLanguage={ruleLanguage}
           />
         </div>
       )}
-    </DeferredSpinner>
+    </>
   );
 }
 
-export default withCurrentUser(HotspotViewerRenderer);
+export default withCurrentUserContext(HotspotViewerRenderer);

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,13 +25,15 @@ interface Props {
   children: (position: { top: number; left: number }) => React.ReactElement<any>;
 }
 
+export const SCREEN_POSITION_COMPUTE_DELAY = 250;
+
 export default class ScreenPositionHelper extends React.PureComponent<Props> {
   container?: HTMLDivElement;
   debouncedOnResize: () => void;
 
   constructor(props: Props) {
     super(props);
-    this.debouncedOnResize = debounce(() => this.forceUpdate(), 250);
+    this.debouncedOnResize = debounce(() => this.forceUpdate(), SCREEN_POSITION_COMPUTE_DELAY);
   }
 
   componentDidMount() {
@@ -50,7 +52,7 @@ export default class ScreenPositionHelper extends React.PureComponent<Props> {
     }
     return {
       top: window.pageYOffset + containerPos.top,
-      left: window.pageXOffset + containerPos.left
+      left: window.pageXOffset + containerPos.left,
     };
   };
 
@@ -58,7 +60,8 @@ export default class ScreenPositionHelper extends React.PureComponent<Props> {
     return (
       <div
         className={this.props.className}
-        ref={container => (this.container = container as HTMLDivElement)}>
+        ref={(container) => (this.container = container as HTMLDivElement)}
+      >
         {this.props.children(this.getPosition())}
       </div>
     );

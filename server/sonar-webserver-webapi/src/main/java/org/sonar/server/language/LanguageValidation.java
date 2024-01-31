@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,20 +21,23 @@ package org.sonar.server.language;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
-import org.picocontainer.Startable;
+import org.sonar.api.Startable;
 import org.sonar.api.resources.Language;
 import org.sonar.server.plugins.ServerPluginRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class LanguageValidation implements Startable {
 
   private final ServerPluginRepository pluginRepository;
   private final Language[] languages;
 
+  @Autowired(required = false)
   public LanguageValidation(ServerPluginRepository pluginRepository) {
     this.pluginRepository = pluginRepository;
     this.languages = new Language[0];
   }
 
+  @Autowired(required = false)
   public LanguageValidation(ServerPluginRepository pluginRepository, Language... languages) {
     this.pluginRepository = pluginRepository;
     this.languages = languages;

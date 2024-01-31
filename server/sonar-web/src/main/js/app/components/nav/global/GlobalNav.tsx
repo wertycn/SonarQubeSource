@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,45 +18,40 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import NavBar from 'sonar-ui-common/components/ui/NavBar';
-import { getAppState, getCurrentUser, Store } from '../../../../store/rootReducer';
-import { rawSizes } from '../../../theme';
-import EmbedDocsPopupHelper from '../../embed-docs-modal/EmbedDocsPopupHelper';
-import Search from '../../search/Search';
-import './GlobalNav.css';
-import GlobalNavBranding from './GlobalNavBranding';
+import EmbedDocsPopupHelper from '../../../../components/embed-docs-modal/EmbedDocsPopupHelper';
+import { CurrentUser } from '../../../../types/users';
+import withCurrentUserContext from '../../current-user/withCurrentUserContext';
+import GlobalSearch from '../../global-search/GlobalSearch';
 import GlobalNavMenu from './GlobalNavMenu';
-import GlobalNavUser from './GlobalNavUser';
+import { GlobalNavUser } from './GlobalNavUser';
+import MainSonarQubeBar from './MainSonarQubeBar';
 
 export interface GlobalNavProps {
-  appState: Pick<T.AppState, 'canAdmin' | 'globalPages' | 'qualifiers'>;
-  currentUser: T.CurrentUser;
+  currentUser: CurrentUser;
   location: { pathname: string };
 }
 
 export function GlobalNav(props: GlobalNavProps) {
-  const { appState, currentUser, location } = props;
+  const { currentUser, location } = props;
   return (
-    <NavBar className="navbar-global" height={rawSizes.globalNavHeightRaw} id="global-navigation">
-      <GlobalNavBranding />
+    <MainSonarQubeBar>
+      <div className="sw-flex" id="global-navigation">
+        <div className="it__global-navbar-menu sw-flex sw-justify-start sw-items-center sw-flex-1">
+          <GlobalNavMenu currentUser={currentUser} location={location} />
+          <div className="sw-px-8 sw-flex-1">
+            <GlobalSearch />
+          </div>
+        </div>
 
-      <GlobalNavMenu appState={appState} currentUser={currentUser} location={location} />
-
-      <ul className="global-navbar-menu global-navbar-menu-right">
-        <EmbedDocsPopupHelper />
-        <Search currentUser={currentUser} />
-        <GlobalNavUser currentUser={currentUser} />
-      </ul>
-    </NavBar>
+        <div className="sw-flex sw-items-center sw-ml-2">
+          <EmbedDocsPopupHelper />
+          <div className="sw-ml-4">
+            <GlobalNavUser />
+          </div>
+        </div>
+      </div>
+    </MainSonarQubeBar>
   );
 }
 
-const mapStateToProps = (state: Store) => {
-  return {
-    currentUser: getCurrentUser(state),
-    appState: getAppState(state)
-  };
-};
-
-export default connect(mapStateToProps)(GlobalNav);
+export default withCurrentUserContext(GlobalNav);

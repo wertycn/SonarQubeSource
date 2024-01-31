@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import org.sonar.api.config.Configuration;
 import org.sonar.api.utils.MessageException;
 
 import static org.sonar.core.config.ScannerProperties.BRANCH_NAME;
+import static org.sonar.core.config.ScannerProperties.FILE_SIZE_LIMIT;
 
 /**
  * Properties that can be passed to the scanners and are not exposed in SonarQube.
@@ -42,6 +43,7 @@ public class ScanProperties {
   public static final String SCM_REVISION = "sonar.scm.revision";
   public static final String QUALITY_GATE_WAIT = "sonar.qualitygate.wait";
   public static final String QUALITY_GATE_TIMEOUT_IN_SEC = "sonar.qualitygate.timeout";
+  public static final String REPORT_PUBLISH_TIMEOUT_IN_SEC = "sonar.ws.report.timeout";
 
   private final Configuration configuration;
   private final DefaultInputProject project;
@@ -86,6 +88,14 @@ public class ScanProperties {
 
   public int qualityGateWaitTimeout() {
     return configuration.getInt(QUALITY_GATE_TIMEOUT_IN_SEC).orElse(300);
+  }
+
+  public int reportPublishTimeout() {
+    return configuration.getInt(REPORT_PUBLISH_TIMEOUT_IN_SEC).orElse(60);
+  }
+
+  public long fileSizeLimit() {
+    return configuration.getInt(FILE_SIZE_LIMIT).orElse(20);
   }
 
   /**

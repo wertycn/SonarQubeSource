@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,8 +28,11 @@ import javax.annotation.Nullable;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.permission.GlobalPermission;
+import org.sonar.db.portfolio.PortfolioDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
@@ -78,7 +81,7 @@ import static com.google.common.base.Preconditions.checkState;
 public class UserSessionRule implements TestRule, UserSession {
   private static final String DEFAULT_LOGIN = "default_login";
 
-  private UserSession currentUserSession;
+  private AbstractMockUserSession<?> currentUserSession;
 
   private UserSessionRule() {
     anonymous();
@@ -116,16 +119,6 @@ public class UserSessionRule implements TestRule, UserSession {
    */
   public UserSessionRule anonymous() {
     setCurrentUserSession(new AnonymousMockUserSession());
-    return this;
-  }
-
-  public UserSessionRule setRoot() {
-    ensureMockUserSession().setRoot(true);
-    return this;
-  }
-
-  public UserSessionRule setNonRoot() {
-    ensureMockUserSession().setRoot(false);
     return this;
   }
 
@@ -177,13 +170,18 @@ public class UserSessionRule implements TestRule, UserSession {
     this.currentUserSession = null;
   }
 
-  public void set(UserSession userSession) {
+  public void set(AbstractMockUserSession<?> userSession) {
     checkNotNull(userSession);
     setCurrentUserSession(userSession);
   }
 
-  public UserSessionRule registerComponents(ComponentDto... componentDtos) {
-    ensureAbstractMockUserSession().registerComponents(componentDtos);
+  public UserSessionRule registerPortfolios(ComponentDto... portfolios) {
+    ensureAbstractMockUserSession().registerComponents(portfolios);
+    return this;
+  }
+
+  public UserSessionRule registerPortfolios(PortfolioDto... portfolioDtos) {
+    ensureAbstractMockUserSession().registerPortfolios(portfolioDtos);
     return this;
   }
 
@@ -192,13 +190,38 @@ public class UserSessionRule implements TestRule, UserSession {
     return this;
   }
 
+  public UserSessionRule registerApplication(ProjectDto application, ProjectDto... appProjects) {
+    ensureAbstractMockUserSession().registerApplication(application, appProjects);
+    return this;
+  }
+
   public UserSessionRule addProjectPermission(String projectPermission, ComponentDto... components) {
     ensureAbstractMockUserSession().addProjectPermission(projectPermission, components);
     return this;
   }
 
+  public UserSessionRule addPortfolioPermission(String projectPermission, ComponentDto... components) {
+    ensureAbstractMockUserSession().addProjectPermission(projectPermission, components);
+    return this;
+  }
+
+  public UserSessionRule addProjectBranchMapping(String projectUuid, ComponentDto... branchComponents) {
+    ensureAbstractMockUserSession().addProjectBranchMapping(projectUuid, branchComponents);
+    return this;
+  }
+
+  public UserSessionRule registerBranches(BranchDto... branchDtos) {
+    ensureAbstractMockUserSession().registerBranches(branchDtos);
+    return this;
+  }
+
   public UserSessionRule addProjectPermission(String projectPermission, ProjectDto... projectDto) {
     ensureAbstractMockUserSession().addProjectPermission(projectPermission, projectDto);
+    return this;
+  }
+
+  public UserSessionRule addPortfolioPermission(String portfolioPermission, PortfolioDto... portfolioDto) {
+    ensureAbstractMockUserSession().addPortfolioPermission(portfolioPermission, portfolioDto);
     return this;
   }
 
@@ -231,7 +254,7 @@ public class UserSessionRule implements TestRule, UserSession {
     return (MockUserSession) currentUserSession;
   }
 
-  private void setCurrentUserSession(UserSession userSession) {
+  private void setCurrentUserSession(AbstractMockUserSession<?> userSession) {
     this.currentUserSession = Preconditions.checkNotNull(userSession);
   }
 
@@ -241,8 +264,28 @@ public class UserSessionRule implements TestRule, UserSession {
   }
 
   @Override
-  public boolean hasProjectPermission(String permission, ProjectDto project) {
-    return currentUserSession.hasProjectPermission(permission, project);
+  public boolean hasEntityPermission(String permission, EntityDto entity) {
+    return currentUserSession.hasEntityPermission(permission, entity.getUuid());
+  }
+
+  @Override
+  public boolean hasEntityPermission(String permission, String entityUuid) {
+    return currentUserSession.hasEntityPermission(permission, entityUuid);
+  }
+
+  @Override
+  public boolean hasChildProjectsPermission(String permission, ComponentDto component) {
+    return currentUserSession.hasChildProjectsPermission(permission, component);
+  }
+
+  @Override
+  public boolean hasChildProjectsPermission(String permission, EntityDto application) {
+    return currentUserSession.hasChildProjectsPermission(permission, application);
+  }
+
+  @Override
+  public boolean hasPortfolioChildProjectsPermission(String permission, ComponentDto component) {
+    return currentUserSession.hasPortfolioChildProjectsPermission(permission, component);
   }
 
   @Override
@@ -256,8 +299,8 @@ public class UserSessionRule implements TestRule, UserSession {
   }
 
   @Override
-  public List<ProjectDto> keepAuthorizedProjects(String permission, Collection<ProjectDto> projects) {
-    return currentUserSession.keepAuthorizedProjects(permission, projects);
+  public <T extends EntityDto> List<T> keepAuthorizedEntities(String permission, Collection<T> entities) {
+    return currentUserSession.keepAuthorizedEntities(permission, entities);
   }
 
   @Override
@@ -310,16 +353,6 @@ public class UserSessionRule implements TestRule, UserSession {
   }
 
   @Override
-  public boolean isRoot() {
-    return currentUserSession.isRoot();
-  }
-
-  @Override
-  public UserSession checkIsRoot() {
-    return currentUserSession.checkIsRoot();
-  }
-
-  @Override
   public UserSession checkLoggedIn() {
     currentUserSession.checkLoggedIn();
     return this;
@@ -343,8 +376,20 @@ public class UserSessionRule implements TestRule, UserSession {
   }
 
   @Override
-  public UserSession checkProjectPermission(String projectPermission, ProjectDto project) {
-    currentUserSession.checkProjectPermission(projectPermission, project);
+  public UserSession checkEntityPermission(String projectPermission, EntityDto entity) {
+    currentUserSession.checkEntityPermission(projectPermission, entity);
+    return this;
+  }
+
+  @Override
+  public UserSession checkChildProjectsPermission(String projectPermission, ComponentDto component) {
+    currentUserSession.checkChildProjectsPermission(projectPermission, component);
+    return this;
+  }
+
+  @Override
+  public UserSession checkChildProjectsPermission(String projectPermission, EntityDto application) {
+    currentUserSession.checkChildProjectsPermission(projectPermission, application);
     return this;
   }
 
@@ -363,5 +408,19 @@ public class UserSessionRule implements TestRule, UserSession {
   public UserSession checkIsSystemAdministrator() {
     currentUserSession.checkIsSystemAdministrator();
     return this;
+  }
+
+  @Override
+  public boolean isActive() {
+    return currentUserSession.isActive();
+  }
+
+  @Override
+  public boolean isAuthenticatedBrowserSession() {
+    return currentUserSession.isAuthenticatedBrowserSession();
+  }
+
+  public void flagSessionAsGui() {
+    currentUserSession.flagAsBrowserSession();
   }
 }

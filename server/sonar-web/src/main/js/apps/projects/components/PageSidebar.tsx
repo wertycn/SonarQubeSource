@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,12 +17,14 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator, DangerButtonSecondary, StyledPageTitle } from 'design-system';
 import { flatMap } from 'lodash';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
+import { Dict, RawQuery } from '../../../types/types';
 import CoverageFilter from '../filters/CoverageFilter';
 import DuplicationsFilter from '../filters/DuplicationsFilter';
-import LanguagesFilterContainer from '../filters/LanguagesFilterContainer';
+import LanguagesFilter from '../filters/LanguagesFilter';
 import MaintainabilityFilter from '../filters/MaintainabilityFilter';
 import NewCoverageFilter from '../filters/NewCoverageFilter';
 import NewDuplicationsFilter from '../filters/NewDuplicationsFilter';
@@ -30,54 +32,77 @@ import NewLinesFilter from '../filters/NewLinesFilter';
 import NewMaintainabilityFilter from '../filters/NewMaintainabilityFilter';
 import NewReliabilityFilter from '../filters/NewReliabilityFilter';
 import NewSecurityFilter from '../filters/NewSecurityFilter';
-import QualifierFilter from '../filters/QualifierFilter';
-import QualityGateFilter from '../filters/QualityGateFilter';
+import QualifierFacet from '../filters/QualifierFilter';
+import QualityGateFacet from '../filters/QualityGateFilter';
 import ReliabilityFilter from '../filters/ReliabilityFilter';
 import SecurityFilter from '../filters/SecurityFilter';
 import SecurityReviewFilter from '../filters/SecurityReviewFilter';
 import SizeFilter from '../filters/SizeFilter';
-import TagsFilter from '../filters/TagsFilter';
+import TagsFacet from '../filters/TagsFilter';
 import { hasFilterParams } from '../query';
 import { Facets } from '../types';
-import ClearAll from './ClearAll';
-import FavoriteFilterContainer from './FavoriteFilterContainer';
+import FavoriteFilter from './FavoriteFilter';
 
 export interface PageSidebarProps {
   applicationsEnabled: boolean;
   facets?: Facets;
+  loadSearchResultCount: (property: string, values: string[]) => Promise<Dict<number>>;
   onClearAll: () => void;
-  onQueryChange: (change: T.RawQuery) => void;
-  query: T.RawQuery;
+  onQueryChange: (change: RawQuery) => void;
+  query: RawQuery;
   view: string;
-  visualization: string;
 }
 
 export default function PageSidebar(props: PageSidebarProps) {
-  const { applicationsEnabled, facets, onQueryChange, query, view, visualization } = props;
+  const {
+    applicationsEnabled,
+    facets,
+    loadSearchResultCount,
+    onClearAll,
+    onQueryChange,
+    query,
+    view,
+  } = props;
   const isFiltered = hasFilterParams(query);
   const isLeakView = view === 'leak';
   const maxFacetValue = getMaxFacetValue(facets);
   const facetProps = { onQueryChange, maxFacetValue };
 
-  let linkQuery: T.RawQuery | undefined = undefined;
-  if (view !== 'overall') {
-    linkQuery = { view };
+  const heading = React.useRef<HTMLHeadingElement>(null);
 
-    if (view === 'visualizations') {
-      linkQuery.visualization = visualization;
+  const clearAll = React.useCallback(() => {
+    onClearAll();
+    if (heading.current) {
+      heading.current.focus();
     }
-  }
+  }, [onClearAll, heading]);
 
   return (
-    <div>
-      <FavoriteFilterContainer query={linkQuery} />
+    <div className="sw-body-sm sw-px-4 sw-pt-12 sw-pb-24">
+      <FavoriteFilter />
 
-      <div className="projects-facets-header clearfix">
-        {isFiltered && <ClearAll onClearAll={props.onClearAll} />}
+      <div className="sw-flex sw-items-center sw-justify-between">
+        <StyledPageTitle className="sw-body-md-highlight" as="h2" tabIndex={-1} ref={heading}>
+          {translate('filters')}
+        </StyledPageTitle>
 
-        <h2 className="h3">{translate('filters')}</h2>
+        {isFiltered && (
+          <DangerButtonSecondary onClick={clearAll}>
+            {translate('clear_all_filters')}
+          </DangerButtonSecondary>
+        )}
       </div>
-      <QualityGateFilter {...facetProps} facet={getFacet(facets, 'gate')} value={query.gate} />
+
+      <BasicSeparator className="sw-my-4" />
+
+      <QualityGateFacet
+        {...facetProps}
+        facet={getFacet(facets, 'gate')}
+        value={query.gate?.split(',')}
+      />
+
+      <BasicSeparator className="sw-my-4" />
+
       {!isLeakView && (
         <>
           <ReliabilityFilter
@@ -85,33 +110,49 @@ export default function PageSidebar(props: PageSidebarProps) {
             facet={getFacet(facets, 'reliability')}
             value={query.reliability}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <SecurityFilter
             {...facetProps}
             facet={getFacet(facets, 'security')}
             value={query.security}
           />
 
+          <BasicSeparator className="sw-my-4" />
+
           <SecurityReviewFilter
             {...facetProps}
-            facet={getFacet(facets, 'security_review_rating')}
+            facet={getFacet(facets, 'security_review')}
             value={query.security_review_rating}
           />
+
+          <BasicSeparator className="sw-my-4" />
 
           <MaintainabilityFilter
             {...facetProps}
             facet={getFacet(facets, 'maintainability')}
             value={query.maintainability}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <CoverageFilter
             {...facetProps}
             facet={getFacet(facets, 'coverage')}
             value={query.coverage}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <DuplicationsFilter
             {...facetProps}
             facet={getFacet(facets, 'duplications')}
             value={query.duplications}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <SizeFilter {...facetProps} facet={getFacet(facets, 'size')} value={query.size} />
         </>
       )}
@@ -122,33 +163,50 @@ export default function PageSidebar(props: PageSidebarProps) {
             facet={getFacet(facets, 'new_reliability')}
             value={query.new_reliability}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <NewSecurityFilter
             {...facetProps}
             facet={getFacet(facets, 'new_security')}
             value={query.new_security}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <SecurityReviewFilter
             {...facetProps}
-            className="leak-facet-box"
-            facet={getFacet(facets, 'new_security_review_rating')}
+            facet={getFacet(facets, 'new_security_review')}
             property="new_security_review"
             value={query.new_security_review_rating}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <NewMaintainabilityFilter
             {...facetProps}
             facet={getFacet(facets, 'new_maintainability')}
             value={query.new_maintainability}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <NewCoverageFilter
             {...facetProps}
             facet={getFacet(facets, 'new_coverage')}
             value={query.new_coverage}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <NewDuplicationsFilter
             {...facetProps}
             facet={getFacet(facets, 'new_duplications')}
             value={query.new_duplications}
           />
+
+          <BasicSeparator className="sw-my-4" />
+
           <NewLinesFilter
             {...facetProps}
             facet={getFacet(facets, 'new_lines')}
@@ -156,22 +214,34 @@ export default function PageSidebar(props: PageSidebarProps) {
           />
         </>
       )}
-      <LanguagesFilterContainer
+
+      <BasicSeparator className="sw-my-4" />
+
+      <LanguagesFilter
         {...facetProps}
         facet={getFacet(facets, 'languages')}
+        loadSearchResultCount={loadSearchResultCount}
         query={query}
         value={query.languages}
       />
+
+      <BasicSeparator className="sw-my-4" />
+
       {applicationsEnabled && (
-        <QualifierFilter
-          {...facetProps}
-          facet={getFacet(facets, 'qualifier')}
-          value={query.qualifier}
-        />
+        <>
+          <QualifierFacet
+            {...facetProps}
+            facet={getFacet(facets, 'qualifier')}
+            value={query.qualifier}
+          />
+
+          <BasicSeparator className="sw-my-4" />
+        </>
       )}
-      <TagsFilter
+      <TagsFacet
         {...facetProps}
         facet={getFacet(facets, 'tags')}
+        loadSearchResultCount={loadSearchResultCount}
         query={query}
         value={query.tags}
       />
@@ -184,5 +254,5 @@ function getFacet(facets: Facets | undefined, name: string) {
 }
 
 function getMaxFacetValue(facets?: Facets) {
-  return facets && Math.max(...flatMap(Object.values(facets), facet => Object.values(facet)));
+  return facets && Math.max(...flatMap(Object.values(facets), (facet) => Object.values(facet)));
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,33 +21,29 @@ package org.sonar.scanner.scan;
 
 import java.util.Map;
 import org.apache.commons.lang.StringUtils;
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.notifications.AnalysisWarnings;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.repository.settings.ProjectSettingsLoader;
+import org.springframework.context.annotation.Bean;
 
-public class ProjectServerSettingsProvider extends ProviderAdapter {
+public class ProjectServerSettingsProvider {
 
-  private static final Logger LOG = Loggers.get(ProjectConfigurationProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProjectServerSettingsProvider.class);
 
   private static final String MODULE_LEVEL_ARCHIVED_SETTINGS_WARNING = "Settings that were previously configured at " +
     "sub-project level are not used anymore. Transition the settings listed in ‘General Settings -> General -> " +
     "Archived Sub-Projects Settings' at project level, and clear the property to prevent the analysis from " +
     "displaying this warning.";
 
-  private ProjectServerSettings singleton = null;
-
+  @Bean("ProjectServerSettings")
   public ProjectServerSettings provide(ProjectSettingsLoader loader, AnalysisWarnings analysisWarnings) {
-    if (singleton == null) {
-      Map<String, String> serverSideSettings = loader.loadProjectSettings();
-      if (StringUtils.isNotBlank(serverSideSettings.get(CoreProperties.MODULE_LEVEL_ARCHIVED_SETTINGS))) {
-        LOG.warn(MODULE_LEVEL_ARCHIVED_SETTINGS_WARNING);
-        analysisWarnings.addUnique(MODULE_LEVEL_ARCHIVED_SETTINGS_WARNING);
-      }
-      singleton = new ProjectServerSettings(serverSideSettings);
+    Map<String, String> serverSideSettings = loader.loadProjectSettings();
+    if (StringUtils.isNotBlank(serverSideSettings.get(CoreProperties.MODULE_LEVEL_ARCHIVED_SETTINGS))) {
+      LOG.warn(MODULE_LEVEL_ARCHIVED_SETTINGS_WARNING);
+      analysisWarnings.addUnique(MODULE_LEVEL_ARCHIVED_SETTINGS_WARNING);
     }
-    return singleton;
+    return new ProjectServerSettings(serverSideSettings);
   }
 }

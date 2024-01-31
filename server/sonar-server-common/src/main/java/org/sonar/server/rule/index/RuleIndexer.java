@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,10 +25,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.sonar.api.rules.RuleType;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -42,18 +42,16 @@ import org.sonar.server.es.IndexingListener;
 import org.sonar.server.es.IndexingResult;
 import org.sonar.server.es.OneToOneResilientIndexingListener;
 import org.sonar.server.es.ResilientIndexer;
-import org.sonar.server.rule.HotspotRuleDescription;
 import org.sonar.server.security.SecurityStandards;
 
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Stream.concat;
-import static org.sonar.core.util.stream.MoreCollectors.toHashSet;
 import static org.sonar.server.rule.index.RuleIndexDefinition.TYPE_RULE;
 import static org.sonar.server.security.SecurityStandards.SQ_CATEGORY_KEYS_ORDERING;
 
 public class RuleIndexer implements ResilientIndexer {
-  private static final Logger LOG = Loggers.get(RuleIndexer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RuleIndexer.class);
 
   private final EsClient esClient;
   private final DbClient dbClient;
@@ -83,7 +81,7 @@ public class RuleIndexer implements ResilientIndexer {
     try (DbSession dbSession = dbClient.openSession(false)) {
       BulkIndexer bulk = createBulkIndexer(bulkSize, IndexingListener.FAIL_ON_ERROR);
       bulk.start();
-      dbClient.ruleDao().scrollIndexingRules(dbSession, dto -> bulk.add(ruleDocOf(dto).toIndexRequest()));
+      dbClient.ruleDao().selectIndexingRules(dbSession, dto -> bulk.add(ruleDocOf(dto).toIndexRequest()));
       bulk.stop();
     }
   }
@@ -91,7 +89,7 @@ public class RuleIndexer implements ResilientIndexer {
   public void commitAndIndex(DbSession dbSession, Collection<String> ruleUuids) {
     List<EsQueueDto> items = ruleUuids.stream()
       .map(RuleIndexer::createQueueDtoForRule)
-      .collect(MoreCollectors.toArrayList());
+      .toList();
 
     dbClient.esQueueDao().insert(dbSession, items);
     dbSession.commit();
@@ -136,9 +134,9 @@ public class RuleIndexer implements ResilientIndexer {
     Set<String> ruleUuids = items
       .stream()
       .map(EsQueueDto::getDocId)
-      .collect(toHashSet(items.size()));
+      .collect(Collectors.toSet());
 
-    dbClient.ruleDao().scrollIndexingRulesByKeys(dbSession, ruleUuids,
+    dbClient.ruleDao().selectIndexingRulesByKeys(dbSession, ruleUuids,
       r -> {
         bulkIndexer.add(ruleDocOf(r).toIndexRequest());
         ruleUuids.remove(r.getUuid());
@@ -162,22 +160,9 @@ public class RuleIndexer implements ResilientIndexer {
           .sorted(SQ_CATEGORY_KEYS_ORDERING)
           .collect(joining(", ")));
     }
-    if (dto.getTypeAsRuleType() == RuleType.SECURITY_HOTSPOT) {
-      HotspotRuleDescription ruleDescription = HotspotRuleDescription.from(dto);
-      if (!ruleDescription.isComplete()) {
-        LOG.debug(
-          "Description of Security Hotspot Rule {} can't be fully parsed: What is the risk?={}, Are you vulnerable?={}, How to fix it={}",
-          dto.getRuleKey(),
-          toOkMissing(ruleDescription.getRisk()), toOkMissing(ruleDescription.getVulnerable()),
-          toOkMissing(ruleDescription.getFixIt()));
-      }
-    }
-    return RuleDoc.of(dto, securityStandards);
+    return RuleDoc.createFrom(dto, securityStandards);
   }
 
-  private static String toOkMissing(Optional<String> field) {
-    return field.map(t -> "ok").orElse("missing");
-  }
 
   private BulkIndexer createBulkIndexer(Size bulkSize, IndexingListener listener) {
     return new BulkIndexer(esClient, TYPE_RULE, bulkSize, listener);
@@ -188,7 +173,6 @@ public class RuleIndexer implements ResilientIndexer {
   }
 
   private static EsQueueDto createQueueDtoForRule(String ruleUuid) {
-    String docId = ruleUuid;
-    return EsQueueDto.create(TYPE_RULE.format(), docId, null, docId);
+    return EsQueueDto.create(TYPE_RULE.format(), ruleUuid, null, ruleUuid);
   }
 }

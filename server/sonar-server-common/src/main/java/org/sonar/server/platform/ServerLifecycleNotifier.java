@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,10 @@
  */
 package org.sonar.server.platform;
 
-import org.picocontainer.Startable;
-import org.sonar.api.utils.log.Loggers;
+import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.api.Startable;
 import org.sonar.api.platform.Server;
 import org.sonar.api.platform.ServerStartHandler;
 import org.sonar.api.platform.ServerStopHandler;
@@ -30,39 +32,29 @@ import org.sonar.api.platform.ServerStopHandler;
  */
 public class ServerLifecycleNotifier implements Startable {
 
-  private ServerStartHandler[] startHandlers;
-  private ServerStopHandler[] stopHandlers;
-  private Server server;
+  private static final Logger LOG = LoggerFactory.getLogger(ServerLifecycleNotifier.class);
+  private final ServerStartHandler[] startHandlers;
+  private final ServerStopHandler[] stopHandlers;
+  private final Server server;
 
-  public ServerLifecycleNotifier(Server server, ServerStartHandler[] startHandlers, ServerStopHandler[] stopHandlers) {
-    this.startHandlers = startHandlers;
-    this.stopHandlers = stopHandlers;
+  public ServerLifecycleNotifier(Server server, @Nullable ServerStartHandler[] startHandlers, @Nullable ServerStopHandler[] stopHandlers) {
+    this.startHandlers = startHandlers != null ? startHandlers : new ServerStartHandler[0];
+    this.stopHandlers = stopHandlers != null ? stopHandlers : new ServerStopHandler[0];
     this.server = server;
-  }
-
-  public ServerLifecycleNotifier(Server server, ServerStartHandler[] startHandlers) {
-    this(server, startHandlers, new ServerStopHandler[0]);
-  }
-
-  public ServerLifecycleNotifier(Server server, ServerStopHandler[] stopHandlers) {
-    this(server, new ServerStartHandler[0], stopHandlers);
-  }
-
-  public ServerLifecycleNotifier(Server server) {
-    this(server, new ServerStartHandler[0], new ServerStopHandler[0]);
   }
 
   @Override
   public void start() {
-    /* IMPORTANT :
-     we want to be sure that handlers are notified when all other services are started.
-     That's why the class Platform explicitely executes the method notifyStart(), instead of letting picocontainer
-     choose the startup order.
+    /*
+     * IMPORTANT :
+     * we want to be sure that handlers are notified when all other services are started.
+     * That's why the class Platform explicitely executes the method notifyStart(), instead of letting the ioc container
+     * choose the startup order.
      */
   }
 
   public void notifyStart() {
-    Loggers.get(ServerLifecycleNotifier.class).debug("Notify " + ServerStartHandler.class.getSimpleName() + " handlers...");
+    LOG.debug("Notify {} handlers...", ServerStartHandler.class.getSimpleName());
     for (ServerStartHandler handler : startHandlers) {
       handler.onServerStart(server);
     }
@@ -70,7 +62,7 @@ public class ServerLifecycleNotifier implements Startable {
 
   @Override
   public void stop() {
-    Loggers.get(ServerLifecycleNotifier.class).debug("Notify " + ServerStopHandler.class.getSimpleName() + " handlers...");
+    LOG.debug("Notify {} handlers...", ServerStopHandler.class.getSimpleName());
     for (ServerStopHandler handler : stopHandlers) {
       handler.onServerStop(server);
     }

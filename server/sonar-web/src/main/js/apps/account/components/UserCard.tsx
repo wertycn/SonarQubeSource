@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Avatar } from 'design-system';
 import * as React from 'react';
-import Avatar from '../../../components/ui/Avatar';
+import { LoggedInUser } from '../../../types/users';
 
 interface Props {
-  user: T.LoggedInUser;
+  user: LoggedInUser;
 }
 
 export default function UserCard({ user }: Props) {
   return (
-    <div className="account-user">
-      <div className="pull-left account-user-avatar" id="avatar">
-        <Avatar hash={user.avatar} name={user.name} size={60} />
-      </div>
-      <h1 className="pull-left" id="name">
-        {user.name}
-      </h1>
-    </div>
+    <>
+      <Avatar hash={user.avatar} name={user.name} size="md" />
+      <span className="sw-heading-md fs-mask">{user.name}</span>
+    </>
   );
 }

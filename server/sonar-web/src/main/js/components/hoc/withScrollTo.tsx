@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,8 +28,12 @@ export interface WithScrollToProps {
 const TOP_OFFSET = 200;
 const BOTTOM_OFFSET = 10;
 
-export function withScrollTo<P>(WrappedComponent: React.ComponentClass<P>) {
-  return class Wrapper extends React.Component<P & Partial<WithScrollToProps>> {
+export function withScrollTo<P>(
+  WrappedComponent: React.ComponentClass<React.PropsWithChildren<P>>,
+) {
+  return class Wrapper extends React.Component<
+    React.PropsWithChildren<P> & Partial<WithScrollToProps>
+  > {
     componentRef?: React.Component | null;
     node?: Element | Text | null;
 
@@ -73,7 +77,7 @@ export function withScrollTo<P>(WrappedComponent: React.ComponentClass<P>) {
       return (
         <WrappedComponent
           {...this.props}
-          ref={ref => {
+          ref={(ref) => {
             this.componentRef = ref;
           }}
         />

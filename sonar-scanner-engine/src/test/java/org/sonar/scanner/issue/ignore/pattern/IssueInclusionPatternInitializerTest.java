@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -56,7 +56,7 @@ public class IssueInclusionPatternInitializerTest {
 
     assertThat(patternsInitializer.hasConfiguredPatterns()).isTrue();
     assertThat(patternsInitializer.hasMulticriteriaPatterns()).isTrue();
-    assertThat(patternsInitializer.getMulticriteriaPatterns().size()).isEqualTo(2);
+    assertThat(patternsInitializer.getMulticriteriaPatterns()).hasSize(2);
   }
 
 }

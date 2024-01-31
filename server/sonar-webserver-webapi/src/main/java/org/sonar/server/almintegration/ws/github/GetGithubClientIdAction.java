@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,15 +48,16 @@ public class GetGithubClientIdAction implements AlmIntegrationsWsAction {
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("get_github_client_id")
-      .setDescription("Get the client id of a Github ALM Integration.")
+      .setDescription("Get the client id of a Github Integration.")
       .setInternal(true)
       .setSince("8.4")
+      .setResponseExample(getClass().getResource("example-get_github_client_id.json"))
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
   }
 
   @Override
@@ -71,7 +72,7 @@ public class GetGithubClientIdAction implements AlmIntegrationsWsAction {
 
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       AlmSettingDto almSetting = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("Github ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("Github Setting '%s' not found", almSettingKey)));
 
       if (almSetting.getClientId() == null) {
         throw new NotFoundException(String.format("No client ID for setting with key '%s'", almSettingKey));

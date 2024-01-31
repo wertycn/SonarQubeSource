@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,10 +33,11 @@ import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.sensor.SensorContext;
 import org.sonar.api.batch.sensor.coverage.NewCoverage;
 import org.sonar.api.utils.MessageException;
-
-import static org.sonar.api.utils.Preconditions.checkState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GenericCoverageReportParser {
+  private static final Logger LOG = LoggerFactory.getLogger(GenericCoverageReportParser.class);
 
   private static final String LINE_NUMBER_ATTR = "lineNumber";
   private static final String COVERED_ATTR = "covered";
@@ -79,18 +80,17 @@ public class GenericCoverageReportParser {
       checkElementName(fileCursor, "file");
       String filePath = mandatoryAttribute(fileCursor, "path");
       InputFile inputFile = context.fileSystem().inputFile(context.fileSystem().predicates().hasPath(filePath));
-      if (inputFile == null) {
+      if (inputFile == null || inputFile.language() == null) {
         numberOfUnknownFiles++;
         if (numberOfUnknownFiles <= MAX_STORED_UNKNOWN_FILE_PATHS) {
           firstUnknownFiles.add(filePath);
         }
+        if (inputFile != null) {
+          LOG.debug("Skipping file '{}' in the generic coverage report because it doesn't have a known language", filePath);
+        }
         continue;
       }
-      checkState(
-        inputFile.language() != null,
-        "Line %s of report refers to a file with an unknown language: %s",
-        fileCursor.getCursorLocation().getLineNumber(),
-        filePath);
+
       matchedFileKeys.add(inputFile.key());
 
       NewCoverage newCoverage = context.newCoverage().onFile(inputFile);

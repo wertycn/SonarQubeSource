@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,9 +37,7 @@ public class RuleTagsCopier extends IssueVisitor {
     if (issue.isNew()) {
       // analyzer can provide some tags. They must be merged with rule tags
       Rule rule = ruleRepository.getByKey(issue.ruleKey());
-      if (!rule.isExternal()) {
-        issue.setTags(union(issue.tags(), rule.getTags()));
-      }
+      issue.setTags(union(issue.tags(), rule.getTags()));
     }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ package org.sonar.server.platform.platformlevel;
 
 import org.sonar.api.utils.UriReader;
 import org.sonar.core.extension.CoreExtensionsInstaller;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.core.util.DefaultHttpDownloader;
 import org.sonar.server.async.AsyncExecutionModule;
 import org.sonar.server.platform.ServerImpl;
@@ -29,6 +29,7 @@ import org.sonar.server.platform.StartupMetadataPersister;
 import org.sonar.server.platform.WebCoreExtensionsInstaller;
 import org.sonar.server.platform.db.migration.NoopDatabaseMigrationImpl;
 import org.sonar.server.platform.serverid.ServerIdModule;
+import org.sonar.server.plugins.DetectPluginChange;
 import org.sonar.server.setting.DatabaseSettingLoader;
 import org.sonar.server.setting.DatabaseSettingsEnabler;
 
@@ -42,22 +43,24 @@ public class PlatformLevel3 extends PlatformLevel {
 
   @Override
   protected void configureLevel() {
-    addIfStartupLeader(StartupMetadataPersister.class);
+    addIfStartupLeader(
+      StartupMetadataPersister.class,
+      DetectPluginChange.class);
     add(
       NoopDatabaseMigrationImpl.class,
-      ServerIdModule.class,
+      new ServerIdModule(),
       ServerImpl.class,
       DatabaseSettingLoader.class,
       DatabaseSettingsEnabler.class,
       UriReader.class,
       DefaultHttpDownloader.class,
-      AsyncExecutionModule.class);
+      new AsyncExecutionModule());
   }
 
   @Override
   public PlatformLevel start() {
-    ComponentContainer container = getContainer();
-    CoreExtensionsInstaller coreExtensionsInstaller = get(WebCoreExtensionsInstaller.class);
+    SpringComponentContainer container = getContainer();
+    CoreExtensionsInstaller coreExtensionsInstaller = parent.get(WebCoreExtensionsInstaller.class);
     coreExtensionsInstaller.install(container, hasPlatformLevel(3), noAdditionalSideFilter());
 
     return super.start();

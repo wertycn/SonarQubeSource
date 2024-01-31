@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -71,7 +71,8 @@ select:invalid {
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--secondFontColor);
+  color: var(--neutral600);
+  opacity: 0.9;
 }
 
 input[type='text'].is-valid,
@@ -81,8 +82,7 @@ input[type='search'].is-valid,
 input[type='date'].is-valid,
 input[type='number'].is-valid,
 textarea.is-valid,
-select.is-valid,
-.is-valid > .Select-control {
+select.is-valid {
   border-color: var(--green);
 }
 
@@ -93,8 +93,7 @@ input[type='search'].is-invalid,
 input[type='date'].is-invalid,
 input[type='number'].is-invalid,
 textarea.is-invalid,
-select.is-invalid,
-.is-invalid > .Select-control {
+select.is-invalid {
   border-color: var(--red);
 }
 
@@ -215,6 +214,7 @@ em.mandatory {
 .form-field input[type='password'],
 .form-field textarea,
 .form-field select,
+.form-field .react-select,
 .form-field .Select {
   width: 250px;
 }

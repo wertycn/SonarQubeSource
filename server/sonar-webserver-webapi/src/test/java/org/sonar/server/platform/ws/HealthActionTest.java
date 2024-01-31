@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,6 @@ import java.util.stream.IntStream;
 import org.apache.commons.lang.RandomStringUtils;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.process.cluster.health.NodeDetails;
 import org.sonar.process.cluster.health.NodeHealth;
@@ -39,7 +38,7 @@ import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.health.ClusterHealth;
 import org.sonar.server.health.Health;
 import org.sonar.server.health.HealthChecker;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.user.SystemPasscode;
 import org.sonar.server.ws.TestRequest;
@@ -52,6 +51,8 @@ import static java.util.Collections.singleton;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -60,20 +61,17 @@ import static org.sonar.api.utils.DateUtils.parseDateTime;
 import static org.sonar.process.cluster.health.NodeDetails.newNodeDetailsBuilder;
 import static org.sonar.process.cluster.health.NodeHealth.newNodeHealthBuilder;
 import static org.sonar.server.health.Health.GREEN;
-import static org.sonar.server.health.Health.newHealthCheckBuilder;
 import static org.sonar.test.JsonAssert.assertJson;
 
 public class HealthActionTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public UserSessionRule userSessionRule = UserSessionRule.standalone();
 
   private final Random random = new Random();
   private HealthChecker healthChecker = mock(HealthChecker.class);
-  private WebServer webServer = mock(WebServer.class);
+  private NodeInformation nodeInformation = mock(NodeInformation.class);
   private SystemPasscode systemPasscode = mock(SystemPasscode.class);
-  private WsActionTester underTest = new WsActionTester(new HealthAction(webServer, new HealthActionSupport(healthChecker), systemPasscode, userSessionRule));
+  private WsActionTester underTest = new WsActionTester(new HealthAction(nodeInformation, new HealthActionSupport(healthChecker), systemPasscode, userSessionRule));
 
   @Test
   public void verify_definition() {
@@ -92,9 +90,8 @@ public class HealthActionTest {
   public void request_fails_with_ForbiddenException_when_anonymous() {
     TestRequest request = underTest.newRequest();
 
-    expectForbiddenException();
+    expectForbiddenException(() -> request.execute());
 
-    request.execute();
   }
 
   @Test
@@ -102,9 +99,7 @@ public class HealthActionTest {
     when(systemPasscode.isValid(any())).thenReturn(false);
     TestRequest request = underTest.newRequest();
 
-    expectForbiddenException();
-
-    request.execute();
+    expectForbiddenException(() -> request.execute());
   }
 
   @Test
@@ -114,9 +109,7 @@ public class HealthActionTest {
     when(healthChecker.checkCluster()).thenReturn(randomStatusMinimalClusterHealth());
     TestRequest request = underTest.newRequest();
 
-    expectForbiddenException();
-
-    request.execute();
+    expectForbiddenException(() -> request.execute());
   }
 
   @Test
@@ -141,11 +134,11 @@ public class HealthActionTest {
   @Test
   public void verify_response_example() {
     authenticateWithRandomMethod();
-    when(webServer.isStandalone()).thenReturn(false);
+    when(nodeInformation.isStandalone()).thenReturn(false);
     long time = parseDateTime("2015-08-13T23:34:59+0200").getTime();
     when(healthChecker.checkCluster())
       .thenReturn(
-        new ClusterHealth(newHealthCheckBuilder()
+        new ClusterHealth(Health.builder()
           .setStatus(Health.Status.RED)
           .addCause("Application node app-1 is RED")
           .build(),
@@ -173,39 +166,6 @@ public class HealthActionTest {
                   .setPort(999)
                   .setStartedAt(time)
                   .build())
-              .build(),
-            newNodeHealthBuilder()
-              .setStatus(NodeHealth.Status.GREEN)
-              .setDetails(
-                newNodeDetailsBuilder()
-                  .setName("es-1")
-                  .setType(NodeDetails.Type.SEARCH)
-                  .setHost("192.168.1.3")
-                  .setPort(999)
-                  .setStartedAt(time)
-                  .build())
-              .build(),
-            newNodeHealthBuilder()
-              .setStatus(NodeHealth.Status.GREEN)
-              .setDetails(
-                newNodeDetailsBuilder()
-                  .setName("es-2")
-                  .setType(NodeDetails.Type.SEARCH)
-                  .setHost("192.168.1.4")
-                  .setPort(999)
-                  .setStartedAt(time)
-                  .build())
-              .build(),
-            newNodeHealthBuilder()
-              .setStatus(NodeHealth.Status.GREEN)
-              .setDetails(
-                newNodeDetailsBuilder()
-                  .setName("es-3")
-                  .setType(NodeDetails.Type.SEARCH)
-                  .setHost("192.168.1.5")
-                  .setPort(999)
-                  .setStartedAt(time)
-                  .build())
               .build())));
 
     TestResponse response = underTest.newRequest().execute();
@@ -218,12 +178,12 @@ public class HealthActionTest {
   public void request_returns_status_and_causes_from_HealthChecker_checkNode_method_when_standalone() {
     authenticateWithRandomMethod();
     Health.Status randomStatus = Health.Status.values()[new Random().nextInt(Health.Status.values().length)];
-    Health.Builder builder = newHealthCheckBuilder()
+    Health.Builder builder = Health.builder()
       .setStatus(randomStatus);
     IntStream.range(0, new Random().nextInt(5)).mapToObj(i -> RandomStringUtils.randomAlphanumeric(3)).forEach(builder::addCause);
     Health health = builder.build();
     when(healthChecker.checkNode()).thenReturn(health);
-    when(webServer.isStandalone()).thenReturn(true);
+    when(nodeInformation.isStandalone()).thenReturn(true);
     TestRequest request = underTest.newRequest();
 
     System.HealthResponse healthResponse = request.executeProtobuf(System.HealthResponse.class);
@@ -236,10 +196,10 @@ public class HealthActionTest {
     authenticateWithRandomMethod();
     Health.Status randomStatus = Health.Status.values()[random.nextInt(Health.Status.values().length)];
     String[] causes = IntStream.range(0, random.nextInt(33)).mapToObj(i -> randomAlphanumeric(4)).toArray(String[]::new);
-    Health.Builder healthBuilder = newHealthCheckBuilder()
+    Health.Builder healthBuilder = Health.builder()
       .setStatus(randomStatus);
     Arrays.stream(causes).forEach(healthBuilder::addCause);
-    when(webServer.isStandalone()).thenReturn(false);
+    when(nodeInformation.isStandalone()).thenReturn(false);
     when(healthChecker.checkCluster()).thenReturn(new ClusterHealth(healthBuilder.build(), emptySet()));
 
     System.HealthResponse clusterHealthResponse = underTest.newRequest().executeProtobuf(System.HealthResponse.class);
@@ -253,7 +213,7 @@ public class HealthActionTest {
   public void response_contains_information_of_nodes_when_clustered() {
     authenticateWithRandomMethod();
     NodeHealth nodeHealth = randomNodeHealth();
-    when(webServer.isStandalone()).thenReturn(false);
+    when(nodeInformation.isStandalone()).thenReturn(false);
     when(healthChecker.checkCluster()).thenReturn(new ClusterHealth(GREEN, singleton(nodeHealth)));
 
     System.HealthResponse response = underTest.newRequest().executeProtobuf(System.HealthResponse.class);
@@ -295,7 +255,7 @@ public class HealthActionTest {
     String[] expected = nodeHealths.stream().map(s -> formatDateTime(new Date(s.getDetails().getStartedAt()))).toArray(String[]::new);
     Collections.shuffle(nodeHealths);
 
-    when(webServer.isStandalone()).thenReturn(false);
+    when(nodeInformation.isStandalone()).thenReturn(false);
     when(healthChecker.checkCluster()).thenReturn(new ClusterHealth(GREEN, new HashSet<>(nodeHealths)));
 
     System.HealthResponse response = underTest.newRequest().executeProtobuf(System.HealthResponse.class);
@@ -310,13 +270,13 @@ public class HealthActionTest {
       .setStatus(NodeHealth.Status.values()[random.nextInt(NodeHealth.Status.values().length)]);
     IntStream.range(0, random.nextInt(4)).mapToObj(i -> randomAlphabetic(5)).forEach(builder::addCause);
     return builder.setDetails(
-      newNodeDetailsBuilder()
-        .setType(random.nextBoolean() ? NodeDetails.Type.APPLICATION : NodeDetails.Type.SEARCH)
-        .setName(randomAlphanumeric(3))
-        .setHost(randomAlphanumeric(4))
-        .setPort(1 + random.nextInt(3))
-        .setStartedAt(1 + random.nextInt(23))
-        .build())
+        newNodeDetailsBuilder()
+          .setType(random.nextBoolean() ? NodeDetails.Type.APPLICATION : NodeDetails.Type.SEARCH)
+          .setName(randomAlphanumeric(3))
+          .setHost(randomAlphanumeric(4))
+          .setPort(1 + random.nextInt(3))
+          .setStartedAt(1 + random.nextInt(23))
+          .build())
       .build();
   }
 
@@ -325,25 +285,26 @@ public class HealthActionTest {
       .setStatus(NodeHealth.Status.values()[random.nextInt(NodeHealth.Status.values().length)]);
     IntStream.range(0, random.nextInt(4)).mapToObj(i -> randomAlphabetic(5)).forEach(builder::addCause);
     return builder.setDetails(
-      newNodeDetailsBuilder()
-        .setType(type)
-        .setName(name)
-        .setHost(host)
-        .setPort(port)
-        .setStartedAt(started)
-        .build())
+        newNodeDetailsBuilder()
+          .setType(type)
+          .setName(name)
+          .setHost(host)
+          .setPort(port)
+          .setStartedAt(started)
+          .build())
       .build();
   }
 
   private ClusterHealth randomStatusMinimalClusterHealth() {
-    return new ClusterHealth(newHealthCheckBuilder()
+    return new ClusterHealth(Health.builder()
       .setStatus(Health.Status.values()[random.nextInt(Health.Status.values().length)])
       .build(), emptySet());
   }
 
-  private void expectForbiddenException() {
-    expectedException.expect(ForbiddenException.class);
-    expectedException.expectMessage("Insufficient privileges");
+  private void expectForbiddenException(ThrowingCallable shouldRaiseThrowable) {
+    assertThatThrownBy(shouldRaiseThrowable)
+      .isInstanceOf(ForbiddenException.class)
+      .hasMessageContaining("Insufficient privileges");
   }
 
   /**

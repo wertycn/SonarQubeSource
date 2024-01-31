@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,6 +38,16 @@ public class UserTokenDto {
   private Long lastConnectionDate;
 
   private Long createdAt;
+
+  private String projectKey;
+
+  private String type;
+
+  private Long expirationDate;
+
+  private String projectName;
+
+  private String projectUuid;
 
   public String getUuid() {
     return uuid;
@@ -91,5 +101,55 @@ public class UserTokenDto {
   public UserTokenDto setCreatedAt(long createdAt) {
     this.createdAt = createdAt;
     return this;
+  }
+
+  public String getProjectKey() {
+    return projectKey;
+  }
+
+  public UserTokenDto setProjectKey(String projectKey) {
+    this.projectKey = projectKey;
+    return this;
+  }
+
+  public String getType() {
+    return type;
+  }
+
+  public UserTokenDto setType(String type) {
+    this.type = type;
+    return this;
+  }
+
+  public Long getExpirationDate() {
+    return expirationDate;
+  }
+
+  public UserTokenDto setExpirationDate(@Nullable Long expirationDate) {
+    this.expirationDate = expirationDate;
+    return this;
+  }
+
+  @CheckForNull
+  public String getProjectName() {
+    return projectName;
+  }
+
+  public UserTokenDto setProjectName(@Nullable String projectName) {
+    this.projectName = projectName;
+    return this;
+  }
+
+  public String getProjectUuid() {
+    return projectUuid;
+  }
+
+  public UserTokenDto setProjectUuid(@Nullable String projectUuid) {
+    this.projectUuid = projectUuid;
+    return this;
+  }
+
+  public boolean isExpired() {
+    return (this.expirationDate != null && this.getExpirationDate() < System.currentTimeMillis());
   }
 }

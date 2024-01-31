@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,6 @@ import java.util.stream.Stream;
 import org.apache.commons.lang.ArrayUtils;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.ce.task.projectanalysis.analysis.Analysis;
@@ -54,6 +53,7 @@ import org.sonar.db.protobuf.DbIssues.Location;
 import org.sonar.db.protobuf.DbIssues.Locations.Builder;
 import org.sonar.server.issue.IssueFieldsSetter;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
@@ -61,7 +61,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.ce.task.projectanalysis.qualityprofile.QProfileStatusRepository.Status.UNCHANGED;
 
@@ -71,8 +71,6 @@ public class IssueCreationDateCalculatorTest {
 
   @org.junit.Rule
   public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule();
-  @org.junit.Rule
-  public ExpectedException exception = ExpectedException.none();
 
   private ScmInfoRepository scmInfoRepository = mock(ScmInfoRepository.class);
   private IssueFieldsSetter issueUpdater = mock(IssueFieldsSetter.class);
@@ -192,9 +190,9 @@ public class IssueCreationDateCalculatorTest {
     when(ruleRepository.findByKey(ruleKey)).thenReturn(Optional.empty());
     makeIssueNew();
 
-    exception.expect(IllegalStateException.class);
-    exception.expectMessage("The rule with key 'reop:rule' raised an issue, but no rule with that key was found");
-    run();
+    assertThatThrownBy(this::run)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("The rule with key 'reop:rule' raised an issue, but no rule with that key was found");
   }
 
   @Test
@@ -319,7 +317,7 @@ public class IssueCreationDateCalculatorTest {
     run();
 
     assertChangeOfCreationDateTo(expectedDate);
-    verifyZeroInteractions(activeRulesHolder);
+    verifyNoInteractions(activeRulesHolder);
   }
 
   @DataProvider

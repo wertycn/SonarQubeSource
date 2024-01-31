@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,17 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator } from 'design-system';
 import * as React from 'react';
 import { Profile } from '../../../api/quality-profiles';
-import StandardFacet from '../../issues/sidebar/StandardFacet';
+import { translate } from '../../../helpers/l10n';
+import { Dict } from '../../../types/types';
+import { LanguageFacet } from '../../issues/sidebar/LanguageFacet';
+import { StandardFacet } from '../../issues/sidebar/StandardFacet';
 import { Facets, OpenFacets, Query } from '../query';
-import ActivationSeverityFacet from './ActivationSeverityFacet';
+import AttributeCategoryFacet from './AttributeCategoryFacet';
 import AvailableSinceFacet from './AvailableSinceFacet';
-import DefaultSeverityFacet from './DefaultSeverityFacet';
 import InheritanceFacet from './InheritanceFacet';
-import LanguageFacet from './LanguageFacet';
 import ProfileFacet from './ProfileFacet';
 import RepositoryFacet from './RepositoryFacet';
+import SeverityFacet from './SeverityFacet';
+import SoftwareQualityFacet from './SoftwareQualityFacet';
 import StatusFacet from './StatusFacet';
 import TagFacet from './TagFacet';
 import TemplateFacet from './TemplateFacet';
@@ -40,10 +44,12 @@ export interface FacetsListProps {
   onFilterChange: (changes: Partial<Query>) => void;
   openFacets: OpenFacets;
   query: Query;
-  referencedProfiles: T.Dict<Profile>;
-  referencedRepositories: T.Dict<{ key: string; language: string; name: string }>;
+  referencedProfiles: Dict<Profile>;
+  referencedRepositories: Dict<{ key: string; language: string; name: string }>;
   selectedProfile?: Profile;
 }
+
+const MAX_INITIAL_LANGUAGES = 5;
 
 export default function FacetsList(props: FacetsListProps) {
   const languageDisabled = !props.hideProfileFacet && props.query.profile !== undefined;
@@ -53,84 +59,126 @@ export default function FacetsList(props: FacetsListProps) {
     props.selectedProfile === undefined ||
     !props.selectedProfile.isInherited;
 
-  const activationSeverityDisabled =
-    props.query.compareToProfile !== undefined ||
-    props.selectedProfile === undefined ||
-    !props.query.activation;
   return (
     <>
       <LanguageFacet
-        disabled={languageDisabled}
+        maxInitialItems={MAX_INITIAL_LANGUAGES}
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.languages}
-        stats={props.facets && props.facets.languages}
-        values={props.query.languages}
+        selectedLanguages={props.query.languages}
+        stats={props.facets?.languages}
+        disabled={languageDisabled}
+        disabledHelper={translate('coding_rules.filters.language.inactive')}
       />
+
+      <BasicSeparator className="sw-my-4" />
+
+      <AttributeCategoryFacet
+        onChange={props.onFilterChange}
+        onToggle={props.onFacetToggle}
+        open={!!props.openFacets.cleanCodeAttributeCategories}
+        stats={props.facets?.cleanCodeAttributeCategories}
+        values={props.query.cleanCodeAttributeCategories}
+      />
+
+      <BasicSeparator className="sw-my-4" />
+
+      <SoftwareQualityFacet
+        onChange={props.onFilterChange}
+        onToggle={props.onFacetToggle}
+        open={!!props.openFacets.impactSoftwareQualities}
+        stats={props.facets?.impactSoftwareQualities}
+        values={props.query.impactSoftwareQualities}
+      />
+
+      <BasicSeparator className="sw-my-4" />
+
+      <SeverityFacet
+        onChange={props.onFilterChange}
+        onToggle={props.onFacetToggle}
+        open={!!props.openFacets.impactSeverities}
+        stats={props.facets?.impactSeverities}
+        values={props.query.impactSeverities}
+      />
+
+      <BasicSeparator className="sw-my-4" />
+
       <TypeFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.types}
-        stats={props.facets && props.facets.types}
+        stats={props.facets?.types}
         values={props.query.types}
       />
+
+      <BasicSeparator className="sw-my-4" />
+
       <TagFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.tags}
-        stats={props.facets && props.facets.tags}
+        stats={props.facets?.tags}
         values={props.query.tags}
       />
+
+      <BasicSeparator className="sw-my-4" />
+
       <RepositoryFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.repositories}
         referencedRepositories={props.referencedRepositories}
-        stats={props.facets && props.facets.repositories}
+        stats={props.facets?.repositories}
         values={props.query.repositories}
       />
-      <DefaultSeverityFacet
-        onChange={props.onFilterChange}
-        onToggle={props.onFacetToggle}
-        open={!!props.openFacets.severities}
-        stats={props.facets && props.facets.severities}
-        values={props.query.severities}
-      />
+
+      <BasicSeparator className="sw-my-4" />
+
       <StatusFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.statuses}
-        stats={props.facets && props.facets.statuses}
+        stats={props.facets?.statuses}
         values={props.query.statuses}
       />
-      <StandardFacet
-        cwe={props.query.cwe}
-        cweOpen={!!props.openFacets.cwe}
-        cweStats={props.facets && props.facets.cwe}
-        fetchingCwe={false}
-        fetchingOwaspTop10={false}
-        fetchingSansTop25={false}
-        fetchingSonarSourceSecurity={false}
-        onChange={props.onFilterChange}
-        onToggle={props.onFacetToggle}
-        open={!!props.openFacets.standards}
-        owaspTop10={props.query.owaspTop10}
-        owaspTop10Open={!!props.openFacets.owaspTop10}
-        owaspTop10Stats={props.facets && props.facets.owaspTop10}
-        query={props.query}
-        sansTop25={props.query.sansTop25}
-        sansTop25Open={!!props.openFacets.sansTop25}
-        sansTop25Stats={props.facets && props.facets.sansTop25}
-        sonarsourceSecurity={props.query.sonarsourceSecurity}
-        sonarsourceSecurityOpen={!!props.openFacets.sonarsourceSecurity}
-        sonarsourceSecurityStats={props.facets && props.facets.sonarsourceSecurity}
-      />
+
+      <BasicSeparator className="sw-my-4" />
+
       <AvailableSinceFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
         open={!!props.openFacets.availableSince}
         value={props.query.availableSince}
       />
+
+      <BasicSeparator className="sw-my-4" />
+
+      <StandardFacet
+        cwe={props.query.cwe}
+        cweOpen={!!props.openFacets.cwe}
+        cweStats={props.facets?.cwe}
+        fetchingCwe={false}
+        fetchingOwaspTop10={false}
+        fetchingOwaspTop10-2021={false}
+        fetchingSonarSourceSecurity={false}
+        onChange={props.onFilterChange}
+        onToggle={props.onFacetToggle}
+        open={!!props.openFacets.standards}
+        owaspTop10={props.query.owaspTop10}
+        owaspTop10Open={!!props.openFacets.owaspTop10}
+        owaspTop10Stats={props.facets?.owaspTop10}
+        owaspTop10-2021={props.query['owaspTop10-2021']}
+        owaspTop10-2021Open={!!props.openFacets['owaspTop10-2021']}
+        owaspTop10-2021Stats={props.facets?.['owaspTop10-2021']}
+        query={props.query}
+        sonarsourceSecurity={props.query.sonarsourceSecurity}
+        sonarsourceSecurityOpen={!!props.openFacets.sonarsourceSecurity}
+        sonarsourceSecurityStats={props.facets?.sonarsourceSecurity}
+      />
+
+      <BasicSeparator className="sw-my-4" />
+
       <TemplateFacet
         onChange={props.onFilterChange}
         onToggle={props.onFacetToggle}
@@ -139,6 +187,7 @@ export default function FacetsList(props: FacetsListProps) {
       />
       {!props.hideProfileFacet && (
         <>
+          <BasicSeparator className="sw-my-4" />
           <ProfileFacet
             activation={props.query.activation}
             compareToProfile={props.query.compareToProfile}
@@ -149,20 +198,13 @@ export default function FacetsList(props: FacetsListProps) {
             referencedProfiles={props.referencedProfiles}
             value={props.query.profile}
           />
+          <BasicSeparator className="sw-my-4" />
           <InheritanceFacet
             disabled={inheritanceDisabled}
             onChange={props.onFilterChange}
             onToggle={props.onFacetToggle}
             open={!!props.openFacets.inheritance}
             value={props.query.inheritance}
-          />
-          <ActivationSeverityFacet
-            disabled={activationSeverityDisabled}
-            onChange={props.onFilterChange}
-            onToggle={props.onFacetToggle}
-            open={!!props.openFacets.activationSeverities}
-            stats={props.facets && props.facets.activationSeverities}
-            values={props.query.activationSeverities}
           />
         </>
       )}

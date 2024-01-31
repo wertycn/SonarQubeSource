@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,58 +17,83 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import {
+  Card,
+  FlagMessage,
+  PageContentFontWrapper,
+  Spinner,
+  Title,
+  themeBorder,
+  themeColor,
+} from 'design-system';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import GlobalMessagesContainer from '../../../app/components/GlobalMessagesContainer';
-import { Store } from '../../../store/rootReducer';
-import './Login.css';
+import { Helmet } from 'react-helmet-async';
+import { Location } from '../../../components/hoc/withRouter';
+import { translate } from '../../../helpers/l10n';
+import { sanitizeUserInput } from '../../../helpers/sanitize';
+import { getBaseUrl } from '../../../helpers/system';
+import { getReturnUrl } from '../../../helpers/urls';
+import { IdentityProvider } from '../../../types/types';
 import LoginForm from './LoginForm';
 import OAuthProviders from './OAuthProviders';
 
 export interface LoginProps {
-  authorizationError?: boolean;
-  authenticationError?: boolean;
-  identityProviders: T.IdentityProvider[];
+  identityProviders: IdentityProvider[];
+  loading: boolean;
+  message?: string;
   onSubmit: (login: string, password: string) => Promise<void>;
-  returnTo: string;
+  location: Location;
 }
 
-export function Login(props: LoginProps) {
-  const { authorizationError, authenticationError, identityProviders, returnTo } = props;
-  const displayError = authorizationError || authenticationError;
+export default function Login(props: Readonly<LoginProps>) {
+  const { identityProviders, loading, location, message } = props;
+  const returnTo = getReturnUrl(location);
+  const displayError = Boolean(location.query.authorizationError);
 
   return (
-    <div className="login-page" id="login_form">
-      <h1 className="login-title text-center huge-spacer-bottom">
-        {translate('login.login_to_sonarqube')}
-      </h1>
+    <div className="sw-flex sw-flex-col sw-items-center" id="login_form">
+      <Helmet defer={false} title={translate('login.page')} />
+      <img alt="" className="sw-mt-32" src={`${getBaseUrl()}/images/sonar-logo-horizontal.png`} />
+      <Card className="sw-my-14 sw-p-0 sw-w-abs-350">
+        <PageContentFontWrapper className="sw-body-md sw-flex sw-flex-col sw-items-center sw-py-8 sw-px-4">
+          <img
+            alt=""
+            className="sw-mb-6"
+            src={`${getBaseUrl()}/images/embed-doc/sq-icon.svg`}
+            width={28}
+          />
+          <Title className="sw-mb-6">{translate('login.login_to_sonarqube')}</Title>
+          <Spinner loading={loading}>
+            <>
+              {displayError && (
+                <FlagMessage className="sw-mb-6" variant="error">
+                  {translate('login.unauthorized_access_alert')}
+                </FlagMessage>
+              )}
 
-      {displayError && (
-        <Alert className="huge-spacer-bottom" display="block" variant="error">
-          {translate('login.unauthorized_access_alert')}
-        </Alert>
-      )}
+              {message !== undefined && message.length > 0 && (
+                <StyledMessage
+                  className="markdown sw-rounded-2 sw-p-4 sw-mb-6"
+                  // eslint-disable-next-line react/no-danger
+                  dangerouslySetInnerHTML={{ __html: sanitizeUserInput(message) }}
+                />
+              )}
 
-      {identityProviders.length > 0 && (
-        <OAuthProviders identityProviders={identityProviders} returnTo={returnTo} />
-      )}
+              {identityProviders.length > 0 && (
+                <OAuthProviders identityProviders={identityProviders} returnTo={returnTo} />
+              )}
 
-      <LoginForm
-        collapsed={identityProviders.length > 0}
-        onSubmit={props.onSubmit}
-        returnTo={returnTo}
-      />
-
-      <GlobalMessagesContainer />
+              <LoginForm collapsed={identityProviders.length > 0} onSubmit={props.onSubmit} />
+            </>
+          </Spinner>
+        </PageContentFontWrapper>
+      </Card>
     </div>
   );
 }
 
-const mapStateToProps = (state: Store) => ({
-  authorizationError: state.appState.authorizationError,
-  authenticationError: state.appState.authenticationError
-});
-
-export default connect(mapStateToProps)(Login);
+const StyledMessage = styled.div`
+  background: ${themeColor('highlightedSection')};
+  border: ${themeBorder('default', 'highlightedSectionBorder')};
+`;

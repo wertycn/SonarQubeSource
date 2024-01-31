@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,46 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Spinner } from 'design-system';
 import * as React from 'react';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import PageActions from 'sonar-ui-common/components/ui/PageActions';
 import { getComponentLeaves } from '../../../api/components';
-import A11ySkipTarget from '../../../app/components/a11y/A11ySkipTarget';
 import SourceViewer from '../../../components/SourceViewer/SourceViewer';
+import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import { getBranchLikeQuery, isSameBranchLike } from '../../../helpers/branch-like';
 import { BranchLike } from '../../../types/branch-like';
-import BubbleChart from '../drilldown/BubbleChart';
-import { enhanceComponent, getBubbleMetrics, hasFullMeasures, isFileType } from '../utils';
-import Breadcrumbs from './Breadcrumbs';
+import { isFile } from '../../../types/component';
+import {
+  ComponentMeasure,
+  ComponentMeasureEnhanced,
+  ComponentMeasureIntern,
+  Dict,
+  Metric,
+  Paging,
+  Period,
+} from '../../../types/types';
+import BubbleChartView from '../drilldown/BubbleChartView';
+import { BUBBLES_FETCH_LIMIT, enhanceComponent, getBubbleMetrics, hasFullMeasures } from '../utils';
 import LeakPeriodLegend from './LeakPeriodLegend';
 import MeasureContentHeader from './MeasureContentHeader';
+import MeasuresBreadcrumbs from './MeasuresBreadcrumbs';
 
 interface Props {
   branchLike?: BranchLike;
   className?: string;
-  component: T.ComponentMeasure;
+  component: ComponentMeasure;
   domain: string;
-  leakPeriod?: T.Period;
+  leakPeriod?: Period;
   loading: boolean;
-  metrics: T.Dict<T.Metric>;
-  onIssueChange?: (issue: T.Issue) => void;
-  rootComponent: T.ComponentMeasure;
-  updateLoading: (param: T.Dict<boolean>) => void;
-  updateSelected: (component: string) => void;
+  metrics: Dict<Metric>;
+  rootComponent: ComponentMeasure;
+  updateLoading: (param: Dict<boolean>) => void;
+  updateSelected: (component: ComponentMeasureIntern) => void;
 }
 
 interface State {
-  components: T.ComponentMeasureEnhanced[];
-  paging?: T.Paging;
+  components: ComponentMeasureEnhanced[];
+  paging?: Paging;
 }
-
-const BUBBLES_LIMIT = 500;
 
 export default class MeasureOverview extends React.PureComponent<Props, State> {
   mounted = false;
@@ -78,107 +84,93 @@ export default class MeasureOverview extends React.PureComponent<Props, State> {
 
   fetchComponents = () => {
     const { branchLike, component, domain, metrics } = this.props;
-    if (isFileType(component)) {
+    if (isFile(component.qualifier)) {
       this.setState({ components: [], paging: undefined });
       return;
     }
     const { x, y, size, colors } = getBubbleMetrics(domain, metrics);
     const metricsKey = [x.key, y.key, size.key];
     if (colors) {
-      metricsKey.push(...colors.map(metric => metric.key));
+      metricsKey.push(...colors.map((metric) => metric.key));
     }
     const options = {
       ...getBranchLikeQuery(branchLike),
       s: 'metric',
       metricSort: size.key,
       asc: false,
-      ps: BUBBLES_LIMIT
+      ps: BUBBLES_FETCH_LIMIT,
     };
 
     this.props.updateLoading({ bubbles: true });
     getComponentLeaves(component.key, metricsKey, options).then(
-      r => {
+      (r) => {
         if (domain === this.props.domain) {
           if (this.mounted) {
             this.setState({
-              components: r.components.map(component =>
-                enhanceComponent(component, undefined, metrics)
-              ),
-              paging: r.paging
+              components: r.components.map((c) => enhanceComponent(c, undefined, metrics)),
+              paging: r.paging,
             });
           }
           this.props.updateLoading({ bubbles: false });
         }
       },
-      () => this.props.updateLoading({ bubbles: false })
+      () => this.props.updateLoading({ bubbles: false }),
     );
   };
 
-  renderContent() {
-    const { branchLike, component } = this.props;
-    if (isFileType(component)) {
+  renderContent(isFile: boolean) {
+    const { branchLike, component, domain, metrics } = this.props;
+    const { paging } = this.state;
+
+    if (isFile) {
       return (
         <div className="measure-details-viewer">
-          <SourceViewer
-            branchLike={branchLike}
-            component={component.key}
-            onIssueChange={this.props.onIssueChange}
-          />
+          <SourceViewer hideHeader branchLike={branchLike} component={component.key} />
         </div>
       );
     }
 
     return (
-      <BubbleChart
-        component={this.props.component}
+      <BubbleChartView
+        component={component}
+        branchLike={branchLike}
         components={this.state.components}
-        domain={this.props.domain}
-        metrics={this.props.metrics}
+        domain={domain}
+        metrics={metrics}
+        paging={paging}
         updateSelected={this.props.updateSelected}
       />
     );
   }
 
   render() {
-    const { branchLike, component, leakPeriod, rootComponent } = this.props;
-    const { paging } = this.state;
+    const { branchLike, className, component, leakPeriod, loading, rootComponent } = this.props;
     const displayLeak = hasFullMeasures(branchLike);
-    return (
-      <div className={this.props.className}>
-        <div className="layout-page-header-panel layout-page-main-header">
-          <A11ySkipTarget anchor="measures_main" />
+    const isFileComponent = isFile(component.qualifier);
 
-          <div className="layout-page-header-panel-inner layout-page-main-header-inner">
-            <div className="layout-page-main-inner">
-              <MeasureContentHeader
-                left={
-                  <Breadcrumbs
-                    backToFirst={true}
-                    branchLike={branchLike}
-                    className="text-ellipsis"
-                    component={component}
-                    handleSelect={this.props.updateSelected}
-                    rootComponent={rootComponent}
-                  />
-                }
-                right={
-                  <PageActions
-                    current={this.state.components.length}
-                    total={paging && paging.total}
-                  />
-                }
-              />
-            </div>
-          </div>
-        </div>
-        <div className="layout-page-main-inner measure-details-content">
-          <div className="clearfix big-spacer-bottom">
-            {leakPeriod && displayLeak && (
-              <LeakPeriodLegend className="pull-right" component={component} period={leakPeriod} />
-            )}
-          </div>
-          <DeferredSpinner loading={this.props.loading} />
-          {!this.props.loading && this.renderContent()}
+    return (
+      <div className={className}>
+        <A11ySkipTarget anchor="measures_main" />
+
+        <MeasureContentHeader
+          left={
+            <MeasuresBreadcrumbs
+              backToFirst
+              branchLike={branchLike}
+              component={component}
+              handleSelect={this.props.updateSelected}
+              rootComponent={rootComponent}
+            />
+          }
+          right={
+            leakPeriod &&
+            displayLeak && <LeakPeriodLegend component={component} period={leakPeriod} />
+          }
+        />
+
+        <div className="sw-p-6">
+          <Spinner loading={loading} />
+          {!loading && this.renderContent(isFileComponent)}
         </div>
       </div>
     );

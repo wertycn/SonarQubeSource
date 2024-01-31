@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,10 +23,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.analysis.Analysis;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.batch.BatchReportReader;
@@ -54,7 +53,7 @@ import org.sonar.scanner.protocol.output.ScannerReport.CpdTextBlock;
  */
 public class LoadCrossProjectDuplicationsRepositoryStep implements ComputationStep {
 
-  private static final Logger LOGGER = Loggers.get(LoadCrossProjectDuplicationsRepositoryStep.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(LoadCrossProjectDuplicationsRepositoryStep.class);
 
   private final TreeRootHolder treeRootHolder;
   private final BatchReportReader reportReader;
@@ -100,20 +99,20 @@ public class LoadCrossProjectDuplicationsRepositoryStep implements ComputationSt
           cpdTextBlocks.add(blocksIt.next());
         }
       }
-      LOGGER.trace("Found {} cpd blocks on file {}", cpdTextBlocks.size(), file.getDbKey());
+      LOGGER.trace("Found {} cpd blocks on file {}", cpdTextBlocks.size(), file.getKey());
       if (cpdTextBlocks.isEmpty()) {
         return;
       }
 
-      Collection<String> hashes = cpdTextBlocks.stream().map(CpdTextBlockToHash.INSTANCE).collect(Collectors.toList());
+      Collection<String> hashes = cpdTextBlocks.stream().map(CpdTextBlockToHash.INSTANCE).toList();
       List<DuplicationUnitDto> dtos = selectDuplicates(file, hashes);
       if (dtos.isEmpty()) {
         return;
       }
 
-      Collection<Block> duplicatedBlocks = dtos.stream().map(DtoToBlock.INSTANCE).collect(Collectors.toList());
-      Collection<Block> originBlocks = cpdTextBlocks.stream().map(new CpdTextBlockToBlock(file.getDbKey())).collect(Collectors.toList());
-      LOGGER.trace("Found {} duplicated cpd blocks on file {}", duplicatedBlocks.size(), file.getDbKey());
+      Collection<Block> duplicatedBlocks = dtos.stream().map(DtoToBlock.INSTANCE).toList();
+      Collection<Block> originBlocks = cpdTextBlocks.stream().map(new CpdTextBlockToBlock(file.getKey())).toList();
+      LOGGER.trace("Found {} duplicated cpd blocks on file {}", duplicatedBlocks.size(), file.getKey());
 
       integrateCrossProjectDuplications.computeCpd(file, originBlocks, duplicatedBlocks);
     }

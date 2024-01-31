@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,23 +23,24 @@ import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import org.sonar.db.Pagination;
+import org.sonar.db.user.SearchGroupMembershipDto;
 
 public interface QProfileEditGroupsMapper {
 
   List<QProfileEditGroupsDto> selectByQProfileAndGroups(@Param("qProfileUuid") String qProfileUuid, @Param("groupUuids") List<String> groupUuids);
 
-  int countByQuery(@Param("query") SearchGroupsQuery query);
+  int countByQuery(@Param("query") SearchQualityProfilePermissionQuery query);
 
-  List<GroupMembershipDto> selectByQuery(@Param("query") SearchGroupsQuery query, @Param("pagination") Pagination pagination);
+  List<SearchGroupMembershipDto> selectByQuery(@Param("query") SearchQualityProfilePermissionQuery query, @Param("pagination") Pagination pagination);
 
   List<String> selectQProfileUuidsByGroups(@Param("groupUuids") List<String> groupUuids);
 
   void insert(@Param("dto") QProfileEditGroupsDto dto, @Param("now") long now);
 
-  void delete(@Param("qProfileUuid") String qProfileUuid, @Param("groupUuid") String groupUuid);
+  int delete(@Param("qProfileUuid") String qProfileUuid, @Param("groupUuid") String groupUuid);
 
-  void deleteByQProfiles(@Param("qProfileUuids") Collection<String> qProfileUuids);
+  int deleteByQProfiles(@Param("qProfileUuids") Collection<String> qProfileUuids);
 
-  void deleteByGroup(@Param("groupUuid") String groupUuid);
+  int deleteByGroup(@Param("groupUuid") String groupUuid);
 
 }

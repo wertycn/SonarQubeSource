@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,19 +19,16 @@
  */
 package org.sonar.ce.taskprocessor;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.CeTask;
 import org.sonar.ce.task.CeTaskCanceledException;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class SimpleCeTaskInterrupterTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private SimpleCeTaskInterrupter underTest = new SimpleCeTaskInterrupter();
 
@@ -48,10 +45,9 @@ public class SimpleCeTaskInterrupterTest {
 
       t.interrupt();
 
-      expectedException.expect(CeTaskCanceledException.class);
-      expectedException.expectMessage("CeWorker executing in Thread '" + threadName + "' has been interrupted");
-
-      underTest.check(t);
+      assertThatThrownBy(() -> underTest.check(t))
+        .isInstanceOf(CeTaskCanceledException.class)
+        .hasMessage("CeWorker executing in Thread '" + threadName + "' has been interrupted");
     } finally {
       t.kill();
       t.join(1_000);
@@ -64,7 +60,7 @@ public class SimpleCeTaskInterrupterTest {
 
     underTest.onStart(ceTask);
 
-    verifyZeroInteractions(ceTask);
+    verifyNoInteractions(ceTask);
   }
 
   @Test
@@ -73,6 +69,6 @@ public class SimpleCeTaskInterrupterTest {
 
     underTest.onEnd(ceTask);
 
-    verifyZeroInteractions(ceTask);
+    verifyNoInteractions(ceTask);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@ import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.qualityprofile.QProfileRules;
 import org.sonar.server.rule.index.RuleIndexer;
 
@@ -65,7 +65,7 @@ public class DeleteAction implements RulesWsAction {
       .createParam(PARAM_KEY)
       .setDescription("Rule key")
       .setRequired(true)
-      .setExampleValue("squid:XPath_1402065390816");
+      .setExampleValue("java:S1144");
   }
 
   @Override
@@ -77,7 +77,7 @@ public class DeleteAction implements RulesWsAction {
 
   public void delete(RuleKey ruleKey) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      RuleDefinitionDto rule = dbClient.ruleDao().selectOrFailDefinitionByKey(dbSession, ruleKey);
+      RuleDto rule = dbClient.ruleDao().selectOrFailByKey(dbSession, ruleKey);
       checkArgument(rule.isCustomRule(), "Rule '%s' cannot be deleted because it is not a custom rule", rule.getKey().toString());
 
       qProfileRules.deleteRule(dbSession, rule);

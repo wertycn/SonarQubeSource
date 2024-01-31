@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,10 +32,6 @@ import org.sonar.duplications.token.TokenChunker;
  * </p>
  */
 public final class JavaTokenProducer {
-
-  private JavaTokenProducer() {
-  }
-
   private static final String NORMALIZED_CHARACTER_LITERAL = "$CHARS";
   private static final String NORMALIZED_NUMERIC_LITERAL = "$NUMBER";
 
@@ -44,6 +40,9 @@ public final class JavaTokenProducer {
 
   private static final String FLOAT_SUFFIX = "[fFdD]";
   private static final String INT_SUFFIX = "[lL]";
+
+  private JavaTokenProducer() {
+  }
 
   public static TokenChunker build() {
     return TokenChunker.builder()

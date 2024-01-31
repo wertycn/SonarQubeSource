@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,9 +34,9 @@ public interface AlmPatMapper {
 
   void update(@Param("dto") AlmPatDto almPatDto);
 
-  void deleteByUuid(@Param("uuid") String uuid);
+  int deleteByUuid(@Param("uuid") String uuid);
 
-  void deleteByUser(@Param("userUuid") String userUuid);
+  int deleteByUser(@Param("userUuid") String userUuid);
 
-  void deleteByAlmSetting(@Param("almSettingUuid") String almSettingUuid);
+  int deleteByAlmSetting(@Param("almSettingUuid") String almSettingUuid);
 }

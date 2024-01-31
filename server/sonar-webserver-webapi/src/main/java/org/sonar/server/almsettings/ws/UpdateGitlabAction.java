@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -51,7 +51,7 @@ public class UpdateGitlabAction implements AlmSettingsWsAction {
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("update_gitlab")
-      .setDescription("Update GitLab ALM instance Setting. <br/>" +
+      .setDescription("Update GitLab instance Setting. <br/>" +
         "Requires the 'Administer System' permission")
       .setPost(true)
       .setSince("8.1")
@@ -95,10 +95,15 @@ public class UpdateGitlabAction implements AlmSettingsWsAction {
       if (isNotBlank(newKey) && !newKey.equals(key)) {
         almSettingsSupport.checkAlmSettingDoesNotAlreadyExist(dbSession, newKey);
       }
+
+      if (isNotBlank(pat)) {
+        almSettingDto.setPersonalAccessToken(pat);
+      }
+
       dbClient.almSettingDao().update(dbSession, almSettingDto
         .setKey(isNotBlank(newKey) ? newKey : key)
-        .setUrl(url)
-        .setPersonalAccessToken(isNotBlank(pat) ? pat : almSettingDto.getPersonalAccessToken()));
+        .setUrl(url),
+        pat != null);
       dbSession.commit();
     }
   }

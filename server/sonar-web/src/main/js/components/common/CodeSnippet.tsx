@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
 import * as React from 'react';
-import { ClipboardButton } from 'sonar-ui-common/components/controls/clipboard';
-import { isDefined } from 'sonar-ui-common/helpers/types';
+import { ClipboardButton } from '../../components/controls/clipboard';
+import { isDefined } from '../../helpers/types';
 import './CodeSnippet.css';
 
 export interface CodeSnippetProps {
@@ -35,14 +35,15 @@ export default function CodeSnippet(props: CodeSnippetProps) {
 
   let finalSnippet: string;
   if (Array.isArray(snippet)) {
-    finalSnippet = snippet.filter(line => isDefined(line)).join(isOneLine ? ' ' : ' \\\n  ');
+    finalSnippet = snippet.filter((line) => isDefined(line)).join(isOneLine ? ' ' : ' \\\n  ');
   } else {
     finalSnippet = snippet;
   }
 
   return (
     <div className={classNames('code-snippet spacer-top spacer-bottom display-flex-row', {})}>
-      <pre className="flex-1" ref={snippetRef}>
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <pre className="flex-1" ref={snippetRef} tabIndex={0}>
         {finalSnippet}
       </pre>
       {!noCopy && <ClipboardButton copyValue={finalSnippet} />}

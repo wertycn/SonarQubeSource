@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -57,9 +57,9 @@ public class IntervalTest {
       );
 
     List<Interval> intervals = Interval.group(snapshots, DateUtils.parseDate("2010-01-01"), DateUtils.parseDate("2011-12-31"), Calendar.MONTH);
-    assertThat(intervals.size()).isEqualTo(3);
+    assertThat(intervals).hasSize(3);
 
-    assertThat(intervals.get(0).count()).isEqualTo(1);
+    assertThat(intervals.get(0).count()).isOne();
     assertThat(calendarField(intervals.get(0), Calendar.MONTH)).isEqualTo((Calendar.APRIL));
 
     assertThat(intervals.get(1).count()).isEqualTo(2);
@@ -78,13 +78,13 @@ public class IntervalTest {
 
     List<Interval> intervals = Interval.group(snapshots,
       DateUtils.parseDateTime("2010-01-01T00:00:00+0100"), DateUtils.parseDateTime("2011-12-31T00:00:00+0100"), Calendar.MONTH);
-    assertThat(intervals.size()).isEqualTo(2);
+    assertThat(intervals).hasSize(2);
 
-    assertThat(intervals.get(0).count()).isEqualTo(1);
+    assertThat(intervals.get(0).count()).isOne();
     assertThat(calendarField(intervals.get(0), Calendar.MONTH)).isEqualTo((Calendar.APRIL));
     assertThat(calendarField(intervals.get(0), Calendar.YEAR)).isEqualTo((2010));
 
-    assertThat(intervals.get(1).count()).isEqualTo(1);
+    assertThat(intervals.get(1).count()).isOne();
     assertThat(calendarField(intervals.get(1), Calendar.MONTH)).isEqualTo((Calendar.APRIL));
     assertThat(calendarField(intervals.get(1), Calendar.YEAR)).isEqualTo((2011));
   }
@@ -100,8 +100,8 @@ public class IntervalTest {
     List<Interval> intervals = Interval.group(snapshots,
       DateUtils.parseDateTime("2011-05-25T00:00:00+0100"),
       DateUtils.parseDateTime("2012-01-26T00:00:00+0100"), Calendar.MONTH);
-    assertThat(intervals.size()).isEqualTo(1);
-    assertThat(intervals.get(0).count()).isEqualTo(1);
+    assertThat(intervals.size()).isOne();
+    assertThat(intervals.get(0).count()).isOne();
     assertThat(intervals.get(0).get().get(0).getAnalysisUuid()).isEqualTo(("u2"));
   }
 }

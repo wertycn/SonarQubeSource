@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,29 +17,35 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { UnorderedList } from 'design-system';
 import { map } from 'lodash';
 import * as React from 'react';
+import { SysInfoStandalone } from '../../../types/types';
 import {
   getHealth,
   getHealthCauses,
   getStandaloneMainSections,
   getStandaloneSecondarySections,
-  ignoreInfoFields
+  ignoreInfoFields,
 } from '../utils';
 import HealthCard from './info-items/HealthCard';
 
 interface Props {
   expandedCards: string[];
-  sysInfoData: T.SysInfoStandalone;
+  sysInfoData: SysInfoStandalone;
   toggleCard: (toggledCard: string) => void;
 }
 
-export default function StandAloneSysInfos({ expandedCards, sysInfoData, toggleCard }: Props) {
-  const mainCardName = 'System';
+const mainCardName = 'System';
+
+export default function StandAloneSysInfos({
+  expandedCards,
+  sysInfoData,
+  toggleCard,
+}: Readonly<Props>) {
   return (
-    <>
+    <UnorderedList className="sw-flex sw-flex-col sw-gap-4">
       <HealthCard
-        biggerHealth={true}
         health={getHealth(sysInfoData)}
         healthCauses={getHealthCauses(sysInfoData)}
         name={mainCardName}
@@ -56,6 +62,6 @@ export default function StandAloneSysInfos({ expandedCards, sysInfoData, toggleC
           sysInfoData={ignoreInfoFields(section)}
         />
       ))}
-    </>
+    </UnorderedList>
   );
 }

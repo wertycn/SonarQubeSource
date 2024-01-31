@@ -78,6 +78,51 @@ enum RuleScope {
   ALL = 2;
 }
 
+enum CleanCodeAttribute {
+  UNKNOWN_ATTRIBUTE = 0;
+  CONVENTIONAL = 1;
+  FORMATTED = 2;
+  IDENTIFIABLE = 3;
+  CLEAR = 4;
+  COMPLETE = 5;
+  EFFICIENT = 6;
+  LOGICAL = 7;
+  DISTINCT = 8;
+  FOCUSED = 9;
+  MODULAR = 10;
+  TESTED = 11;
+  LAWFUL = 12;
+  RESPECTFUL = 13;
+  TRUSTWORTHY = 14;
+}
+
+enum CleanCodeAttributeCategory {
+  UNKNOWN_CATEGORY = 0;
+  ADAPTABLE = 1;
+  CONSISTENT = 2;
+  INTENTIONAL = 3;
+  RESPONSIBLE = 4;
+}
+
+message Impact {
+  required SoftwareQuality softwareQuality = 1;
+  required ImpactSeverity severity = 2;
+}
+
+enum SoftwareQuality {
+  UNKNOWN_IMPACT_QUALITY = 0;
+  MAINTAINABILITY = 1;
+  RELIABILITY = 2;
+  SECURITY = 3;
+}
+
+enum ImpactSeverity {
+  UNKNOWN_IMPACT_SEVERITY = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+}
+
 // Lines start at 1 and line offsets start at 0
 message TextRange {
   // Start line. Should never be absent
@@ -95,6 +140,14 @@ message TextRange {
 
 message Flow {
   repeated Location locations = 1;
+  optional string description = 2;
+  optional FlowType type = 3;
+}
+
+enum FlowType {
+  UNDEFINED = 0;
+  DATA = 1;
+  EXECUTION = 2;
 }
 
 message Location {
@@ -103,6 +156,7 @@ message Location {
   // Only when component is a file. Can be empty for a file if this is an issue global to the file.
   optional sonarqube.ws.commons.TextRange textRange = 2;
   optional string msg = 3;
+  repeated MessageFormatting msgFormattings = 5;
 }
 
 message User {
@@ -121,6 +175,8 @@ message Changelog {
   repeated Diff diffs = 5;
   optional string avatar = 6;
   optional bool isUserActive = 7;
+  optional string externalUser = 8;
+  optional string webhookSource = 9;
 
   message Diff {
     optional string key = 1;
@@ -172,4 +228,14 @@ enum BranchType {
   UNKNOWN_BRANCH_TYPE = 0;
   PULL_REQUEST = 3;
   BRANCH = 4;
+}
+
+message MessageFormatting {
+  required int32 start = 1;
+  required int32 end = 2;
+  required MessageFormattingType type = 3;
+}
+
+enum MessageFormattingType {
+  CODE = 0;
 }

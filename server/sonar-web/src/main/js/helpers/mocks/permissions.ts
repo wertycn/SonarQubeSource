@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,59 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  Permission,
+  PermissionGroup,
+  PermissionTemplate,
+  PermissionTemplateGroup,
+  PermissionUser,
+} from '../../types/types';
 import { mockUser } from '../testMocks';
 
-export function mockPermissionGroup(overrides: Partial<T.PermissionGroup> = {}): T.PermissionGroup {
+export function mockPermissionGroup(overrides: Partial<PermissionGroup> = {}): PermissionGroup {
   return {
     name: 'sonar-admins',
     permissions: ['provisioning'],
-    ...overrides
+    ...overrides,
   };
 }
 
-export function mockPermissionUser(overrides: Partial<T.PermissionUser> = {}): T.PermissionUser {
+export function mockPermissionUser(overrides: Partial<PermissionUser> = {}): PermissionUser {
   return {
     ...mockUser(),
     active: true,
     name: 'johndoe',
     permissions: ['provisioning'],
-    ...overrides
+    ...overrides,
+  };
+}
+
+export function mockPermission(override: Partial<Permission> = {}) {
+  return {
+    key: 'admin',
+    name: 'Admin',
+    description: 'Can do anything he/she wants',
+    ...override,
+  };
+}
+
+export function mockPermissionTemplateGroup(override: Partial<PermissionTemplateGroup> = {}) {
+  return {
+    groupsCount: 1,
+    usersCount: 1,
+    key: 'admin',
+    withProjectCreator: true,
+    ...override,
+  };
+}
+
+export function mockPermissionTemplate(override: Partial<PermissionTemplate> = {}) {
+  return {
+    id: 'template1',
+    name: 'Permission Template 1',
+    createdAt: '',
+    defaultFor: [],
+    permissions: [mockPermissionTemplateGroup()],
+    ...override,
   };
 }

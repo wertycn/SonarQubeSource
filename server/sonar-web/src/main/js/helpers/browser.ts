@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,5 +20,5 @@
 import { EnhancedWindow } from '../types/browser';
 
 export function getEnhancedWindow() {
-  return (window as unknown) as EnhancedWindow;
+  return window as unknown as EnhancedWindow;
 }

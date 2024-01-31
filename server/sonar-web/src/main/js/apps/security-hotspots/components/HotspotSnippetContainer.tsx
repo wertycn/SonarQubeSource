@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,25 +22,28 @@ import { getSources } from '../../../api/components';
 import { locationsByLine } from '../../../components/SourceViewer/helpers/indexing';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { BranchLike } from '../../../types/branch-like';
-import { ComponentQualifier } from '../../../types/component';
 import { Hotspot } from '../../../types/security-hotspots';
-import { constructSourceViewerFile } from '../utils';
+import { Component, ExpandDirection, FlowLocation, SourceLine } from '../../../types/types';
+import { constructSourceViewerFile, getLocations } from '../utils';
 import HotspotSnippetContainerRenderer from './HotspotSnippetContainerRenderer';
 
 interface Props {
   branchLike?: BranchLike;
-  component: T.Component;
+  component: Component;
   hotspot: Hotspot;
+  onLocationSelect: (index: number) => void;
+  selectedHotspotLocation?: number;
 }
 
 interface State {
   highlightedSymbols: string[];
   lastLine?: number;
   loading: boolean;
-  sourceLines: T.SourceLine[];
+  sourceLines: SourceLine[];
+  secondaryLocations: FlowLocation[];
 }
 
-const BUFFER_LINES = 5;
+const BUFFER_LINES = 10;
 const EXPAND_BY_LINES = 50;
 
 export default class HotspotSnippetContainer extends React.Component<Props, State> {
@@ -48,16 +51,19 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
   state: State = {
     highlightedSymbols: [],
     loading: true,
-    sourceLines: []
+    sourceLines: [],
+    secondaryLocations: [],
   };
 
-  componentWillMount() {
+  async componentDidMount() {
     this.mounted = true;
+    await this.initializeSecondaryLocations();
     this.fetchSources();
   }
 
-  componentDidUpdate(prevProps: Props) {
+  async componentDidUpdate(prevProps: Props) {
     if (prevProps.hotspot.key !== this.props.hotspot.key) {
+      await this.initializeSecondaryLocations();
       this.fetchSources();
     }
   }
@@ -66,7 +72,7 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
     this.mounted = false;
   }
 
-  checkLastLine(lines: T.SourceLine[], target: number): number | undefined {
+  checkLastLine(lines: SourceLine[], target: number): number | undefined {
     if (lines.length < 1) {
       return undefined;
     }
@@ -80,8 +86,10 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
   async fetchSources() {
     const {
       branchLike,
-      hotspot: { component, textRange }
+      hotspot: { component, textRange },
     } = this.props;
+
+    const { secondaryLocations } = this.state;
 
     if (!textRange) {
       // Hotspot not associated to any loc
@@ -89,9 +97,22 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
       return;
     }
 
-    const from = Math.max(1, textRange.startLine - BUFFER_LINES);
-    // Add 1 to check for end-of-file:
-    const to = textRange.endLine + BUFFER_LINES + 1;
+    // Search for the min startLine within primary and secondary locations
+    const from = Math.max(
+      1,
+      Math.min(
+        ...[textRange, ...secondaryLocations.map((l) => l.textRange)].map(
+          (t) => t.startLine - BUFFER_LINES,
+        ),
+      ),
+    );
+    // Search for the max endLine within primary and secondary locations
+    const to = Math.max(
+      ...[textRange, ...secondaryLocations.map((l) => l.textRange)].map(
+        // Add 1 to check for end-of-file
+        (t) => t.endLine + BUFFER_LINES + 1,
+      ),
+    );
 
     this.setState({ loading: true });
 
@@ -99,8 +120,8 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
       key: component.key,
       from,
       to,
-      ...getBranchLikeQuery(branchLike)
-    }).catch(() => [] as T.SourceLine[]);
+      ...getBranchLikeQuery(branchLike),
+    }).catch(() => [] as SourceLine[]);
 
     if (this.mounted) {
       const lastLine = this.checkLastLine(sourceLines, to);
@@ -111,7 +132,24 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
     }
   }
 
-  handleExpansion = (direction: T.ExpandDirection) => {
+  initializeSecondaryLocations() {
+    const { hotspot } = this.props;
+
+    return new Promise((resolve) => {
+      this.setState(
+        {
+          secondaryLocations: getLocations(hotspot.flows, undefined).map((location, index) => ({
+            ...location,
+            index,
+            text: location.msg,
+          })),
+        },
+        () => resolve(undefined),
+      );
+    });
+  }
+
+  handleExpansion = (direction: ExpandDirection) => {
     const { branchLike, hotspot } = this.props;
     const { sourceLines } = this.state;
 
@@ -119,19 +157,19 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
       direction === 'up'
         ? {
             from: Math.max(1, sourceLines[0].line - EXPAND_BY_LINES),
-            to: sourceLines[0].line - 1
+            to: sourceLines[0].line - 1,
           }
         : {
             from: sourceLines[sourceLines.length - 1].line + 1,
             // Add 1 to check for end-of-file:
-            to: sourceLines[sourceLines.length - 1].line + EXPAND_BY_LINES + 1
+            to: sourceLines[sourceLines.length - 1].line + EXPAND_BY_LINES + 1,
           };
 
     return getSources({
       key: hotspot.component.key,
       ...range,
-      ...getBranchLikeQuery(branchLike)
-    }).then(additionalLines => {
+      ...getBranchLikeQuery(branchLike),
+    }).then((additionalLines) => {
       const { lastLine: previousLastLine } = this.state;
 
       const lastLine =
@@ -143,13 +181,13 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
       } else {
         // remove extra sourceline if we didn't reach the end:
         concatSourceLines = sourceLines.concat(
-          lastLine ? additionalLines : additionalLines.slice(0, -1)
+          lastLine ? additionalLines : additionalLines.slice(0, -1),
         );
       }
 
       this.setState({
         lastLine,
-        sourceLines: concatSourceLines
+        sourceLines: concatSourceLines,
       });
     });
   };
@@ -159,8 +197,8 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
   };
 
   render() {
-    const { branchLike, component, hotspot } = this.props;
-    const { highlightedSymbols, lastLine, loading, sourceLines } = this.state;
+    const { hotspot, selectedHotspotLocation } = this.props;
+    const { highlightedSymbols, lastLine, loading, sourceLines, secondaryLocations } = this.state;
 
     const locations = locationsByLine([hotspot]);
 
@@ -168,16 +206,17 @@ export default class HotspotSnippetContainer extends React.Component<Props, Stat
 
     return (
       <HotspotSnippetContainerRenderer
-        branchLike={branchLike}
-        displayProjectName={component.qualifier === ComponentQualifier.Application}
         highlightedSymbols={highlightedSymbols}
         hotspot={hotspot}
         loading={loading}
         locations={locations}
         onExpandBlock={this.handleExpansion}
         onSymbolClick={this.handleSymbolClick}
+        onLocationSelect={this.props.onLocationSelect}
         sourceLines={sourceLines}
         sourceViewerFile={sourceViewerFile}
+        secondaryLocations={secondaryLocations}
+        selectedHotspotLocation={selectedHotspotLocation}
       />
     );
   }

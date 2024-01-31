@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,23 +24,19 @@ import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Optional;
 import javax.annotation.Nullable;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.sonar.api.measures.Metric;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.api.measures.Metric.ValueType.BOOL;
 import static org.sonar.api.measures.Metric.ValueType.DATA;
 import static org.sonar.api.measures.Metric.ValueType.DISTRIB;
 import static org.sonar.api.measures.Metric.ValueType.STRING;
-import static org.sonar.server.qualitygate.FakeMeasure.newMeasureOnLeak;
 
 @RunWith(DataProviderRunner.class)
 public class ConditionEvaluatorTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void GREATER_THAN_double() {
@@ -62,9 +58,9 @@ public class ConditionEvaluatorTest {
     test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
     test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
 
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
   }
 
   @Test
@@ -73,18 +69,38 @@ public class ConditionEvaluatorTest {
     test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
     test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
 
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
-    testOnLeak(newMeasureOnLeak(10), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+  }
+
+  @Test
+  public void GREATER_THAN_long() {
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
+
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "9", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.GREATER_THAN, "11", EvaluatedCondition.EvaluationStatus.OK, "10");
+  }
+
+  @Test
+  public void LESS_THAN_long() {
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
+
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "10", EvaluatedCondition.EvaluationStatus.OK, "10");
+    test(new FakeMeasure(10L), Condition.Operator.LESS_THAN, "11", EvaluatedCondition.EvaluationStatus.ERROR, "10");
   }
 
   @Test
   public void evaluate_throws_IAE_if_fail_to_parse_threshold() {
-
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Quality Gate: unable to parse threshold '9bar' to compare against foo");
-
-    test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "9bar", EvaluatedCondition.EvaluationStatus.ERROR, "10da");
+    assertThatThrownBy(() -> test(new FakeMeasure(10), Condition.Operator.LESS_THAN, "9bar", EvaluatedCondition.EvaluationStatus.ERROR, "10da"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Quality Gate: unable to parse threshold '9bar' to compare against foo");
   }
 
   @Test
@@ -93,14 +109,12 @@ public class ConditionEvaluatorTest {
     test(null, Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, null);
   }
 
-
   @Test
   @UseDataProvider("unsupportedMetricTypes")
   public void fail_when_condition_is_on_unsupported_metric(Metric.ValueType metricType) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage(String.format("Condition is not allowed for type %s", metricType));
-
-    test(new FakeMeasure(metricType), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10");
+    assertThatThrownBy(() -> test(new FakeMeasure(metricType), Condition.Operator.LESS_THAN, "9", EvaluatedCondition.EvaluationStatus.OK, "10"))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(String.format("Condition is not allowed for type %s", metricType));
   }
 
   @DataProvider
@@ -113,22 +127,9 @@ public class ConditionEvaluatorTest {
     };
   }
 
-  private void test(@Nullable QualityGateEvaluator.Measure measure, Condition.Operator operator, String errorThreshold, EvaluatedCondition.EvaluationStatus expectedStatus, @Nullable String expectedValue) {
-    Condition condition = new Condition("foo", operator, errorThreshold);
-
-    EvaluatedCondition result = ConditionEvaluator.evaluate(condition, new FakeMeasures(measure));
-
-    assertThat(result.getStatus()).isEqualTo(expectedStatus);
-    if (expectedValue == null) {
-      assertThat(result.getValue()).isNotPresent();
-    } else {
-      assertThat(result.getValue()).hasValue(expectedValue);
-    }
-  }
-
-  private void testOnLeak(QualityGateEvaluator.Measure measure, Condition.Operator operator, String errorThreshold, EvaluatedCondition.EvaluationStatus expectedStatus,
+  private void test(@Nullable QualityGateEvaluator.Measure measure, Condition.Operator operator, String errorThreshold, EvaluatedCondition.EvaluationStatus expectedStatus,
     @Nullable String expectedValue) {
-    Condition condition = new Condition("new_foo", operator, errorThreshold);
+    Condition condition = new Condition("foo", operator, errorThreshold);
 
     EvaluatedCondition result = ConditionEvaluator.evaluate(condition, new FakeMeasures(measure));
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,11 @@ public interface CeActivityMapper {
 
   List<CeActivityDto> selectOlderThan(@Param("beforeDate") long beforeDate);
 
-  int countLastByStatusAndMainComponentUuid(@Param("status") CeActivityDto.Status status, @Nullable @Param("mainComponentUuid") String mainComponentUuid);
+  List<CeActivityDto> selectNewerThan(@Param("afterDate") long afterDate);
+
+  int countByQuery(@Param("query") CeTaskQuery query);
+
+  int countLastByStatusAndEntityUuid(@Param("status") CeActivityDto.Status status, @Nullable @Param("entityUuid") String entityUuid);
 
   void insert(CeActivityDto dto);
 
@@ -47,7 +51,7 @@ public interface CeActivityMapper {
   @CheckForNull
   CeActivityDto selectLastByComponentUuidAndTaskType(@Param("componentUuid") String componentUuid, @Param("taskType") String taskType);
 
-  short hasAnyFailedIssueSyncTask();
+  short hasAnyFailedOrCancelledIssueSyncTask();
 
   List<CeActivityDto> selectByTaskType(@Param("taskType") String taskType);
 }

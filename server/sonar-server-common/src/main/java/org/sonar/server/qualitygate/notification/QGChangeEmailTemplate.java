@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,12 +21,16 @@ package org.sonar.server.qualitygate.notification;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.notifications.Notification;
 import org.sonar.server.issue.notification.EmailMessage;
 import org.sonar.server.issue.notification.EmailTemplate;
+import org.sonar.server.measure.Rating;
+
+import java.util.Optional;
 
 /**
  * Creates email message for notification "alerts".
@@ -35,7 +39,7 @@ import org.sonar.server.issue.notification.EmailTemplate;
  */
 public class QGChangeEmailTemplate implements EmailTemplate {
 
-  private EmailSettings configuration;
+  private final EmailSettings configuration;
 
   public QGChangeEmailTemplate(EmailSettings configuration) {
     this.configuration = configuration;
@@ -57,12 +61,13 @@ public class QGChangeEmailTemplate implements EmailTemplate {
     String alertName = notification.getFieldValue("alertName");
     String alertText = notification.getFieldValue("alertText");
     String alertLevel = notification.getFieldValue("alertLevel");
+    String ratingMetricsInOneString = notification.getFieldValue("ratingMetrics");
     boolean isNewAlert = Boolean.parseBoolean(notification.getFieldValue("isNewAlert"));
     String fullProjectName = computeFullProjectName(projectName, branchName);
 
     // Generate text
     String subject = generateSubject(fullProjectName, alertLevel, isNewAlert);
-    String messageBody = generateMessageBody(projectName, projectKey, projectVersion, branchName, alertName, alertText, isNewAlert);
+    String messageBody = generateMessageBody(projectName, projectKey, projectVersion, branchName, alertName, alertText, isNewAlert, ratingMetricsInOneString);
 
     // And finally return the email that will be sent
     return new EmailMessage()
@@ -92,7 +97,7 @@ public class QGChangeEmailTemplate implements EmailTemplate {
 
   private String generateMessageBody(String projectName, String projectKey,
     @Nullable String projectVersion, @Nullable String branchName,
-    String alertName, String alertText, boolean isNewAlert) {
+    String alertName, String alertText, boolean isNewAlert, String ratingMetricsInOneString) {
     StringBuilder messageBody = new StringBuilder();
     messageBody.append("Project: ").append(projectName).append("\n");
     if (branchName != null) {
@@ -111,11 +116,11 @@ public class QGChangeEmailTemplate implements EmailTemplate {
         messageBody.append("Quality gate threshold");
       }
       if (alerts.length == 1) {
-        messageBody.append(": ").append(alerts[0].trim()).append("\n");
+        messageBody.append(": ").append(formatRating(alerts[0].trim(), ratingMetricsInOneString)).append("\n");
       } else {
         messageBody.append("s:\n");
         for (String alert : alerts) {
-          messageBody.append("  - ").append(alert.trim()).append("\n");
+          messageBody.append("  - ").append(formatRating(alert.trim(), ratingMetricsInOneString)).append("\n");
         }
       }
     }
@@ -126,6 +131,38 @@ public class QGChangeEmailTemplate implements EmailTemplate {
     }
 
     return messageBody.toString();
+  }
+
+  /**
+   * Converts the ratings from digits to a rating letter {@see org.sonar.server.measure.Rating}, based on the
+   * raw text passed to this template.
+   *
+   * Examples:
+   * Reliability rating > 4 will be converted to Reliability rating worse than D
+   * Security rating on New Code > 1 will be converted to Security rating on New Code worse than A
+   * Code Coverage < 50% will not be converted and returned as is.
+   *
+   * @param alert
+   * @param ratingMetricsInOneString
+   * @return full raw alert with converted ratings
+   */
+  private static String formatRating(String alert, String ratingMetricsInOneString) {
+    Optional<String> ratingToFormat = Optional.empty();
+    for(String rating : ratingMetricsInOneString.split(",")) {
+      if (alert.matches(rating + " > \\d$")) {
+        ratingToFormat = Optional.of(rating);
+        break;
+      }
+    }
+    if(!ratingToFormat.isPresent()){
+      return alert;
+    }
+
+    StringBuilder builder = new StringBuilder(ratingToFormat.get());
+    builder.append(" worse than ");
+    String rating = alert.substring(alert.length() - 1);
+    builder.append(Rating.valueOf(Integer.parseInt(rating)).name());
+    return builder.toString();
   }
 
 }

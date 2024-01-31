@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,61 +17,63 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, HelperHintIcon, SubTitle } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import DocumentationTooltip from '../../../components/common/DocumentationTooltip';
+import { translate } from '../../../helpers/l10n';
+import { QualityGate } from '../../../types/types';
 import Conditions from './Conditions';
 import Projects from './Projects';
+import QualityGatePermissions from './QualityGatePermissions';
 
 export interface DetailsContentProps {
-  isDefault?: boolean;
-  metrics: T.Dict<T.Metric>;
-  onAddCondition: (condition: T.Condition) => void;
-  onRemoveCondition: (Condition: T.Condition) => void;
-  onSaveCondition: (newCondition: T.Condition, oldCondition: T.Condition) => void;
-  qualityGate: T.QualityGate;
-  updatedConditionId?: number;
+  qualityGate: QualityGate;
+  isFetching?: boolean;
 }
 
 export function DetailsContent(props: DetailsContentProps) {
-  const { isDefault, metrics, qualityGate, updatedConditionId } = props;
-  const conditions = qualityGate.conditions || [];
-  const actions = qualityGate.actions || ({} as any);
+  const { qualityGate, isFetching } = props;
+  const actions = qualityGate.actions ?? {};
 
   return (
-    <div className="layout-page-main-inner">
-      <Conditions
-        canEdit={actions.manageConditions}
-        conditions={conditions}
-        metrics={metrics}
-        onAddCondition={props.onAddCondition}
-        onRemoveCondition={props.onRemoveCondition}
-        onSaveCondition={props.onSaveCondition}
-        qualityGate={qualityGate}
-        updatedConditionId={updatedConditionId}
-      />
+    <div>
+      {qualityGate.isDefault &&
+        (qualityGate.conditions === undefined || qualityGate.conditions.length === 0) && (
+          <FlagMessage className="sw-mb-4" variant="warning">
+            {translate('quality_gates.is_default_no_conditions')}
+          </FlagMessage>
+        )}
 
-      <div className="quality-gate-section" id="quality-gate-projects">
-        <header className="display-flex-center spacer-bottom">
-          <h3>{translate('quality_gates.projects')}</h3>
-          <HelpTooltip
-            className="spacer-left"
-            overlay={
-              <div className="big-padded-top big-padded-bottom">
-                {translate('quality_gates.projects.help')}
-              </div>
-            }
-          />
-        </header>
-        {isDefault ? (
-          translate('quality_gates.projects_for_default')
-        ) : (
-          <Projects
-            canEdit={actions.associateProjects}
-            // pass unique key to re-mount the component when the quality gate changes
-            key={qualityGate.id}
-            qualityGate={qualityGate}
-          />
+      <Conditions qualityGate={qualityGate} isFetching={isFetching} />
+
+      <div className="sw-mt-10">
+        <div className="sw-flex sw-flex-col">
+          <SubTitle as="h3" className="sw-body-md-highlight">
+            {translate('quality_gates.projects')}
+            <DocumentationTooltip
+              className="sw-ml-2"
+              content={translate('quality_gates.projects.help')}
+            >
+              <HelperHintIcon />
+            </DocumentationTooltip>
+          </SubTitle>
+
+          {qualityGate.isDefault ? (
+            <p className="sw-body-sm sw-mb-2">{translate('quality_gates.projects_for_default')}</p>
+          ) : (
+            <Projects
+              canEdit={actions.associateProjects}
+              // pass unique key to re-mount the component when the quality gate changes
+              key={qualityGate.name}
+              qualityGate={qualityGate}
+            />
+          )}
+        </div>
+
+        {actions.delegate && (
+          <div className="sw-mt-10">
+            <QualityGatePermissions qualityGate={qualityGate} />
+          </div>
         )}
       </div>
     </div>

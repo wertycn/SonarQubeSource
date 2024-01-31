@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@
 import { Standards } from '../types/security';
 
 export function getStandards(): Promise<Standards> {
-  return import('./standards.json').then(x => x.default);
+  return import('./standards.json').then((x) => x.default);
 }
 
 export function renderCWECategory(standards: Standards, category: string): string {
@@ -29,46 +29,76 @@ export function renderCWECategory(standards: Standards, category: string): strin
     return `CWE-${category}`;
   } else if (category === 'unknown') {
     return record.title;
-  } else {
-    return `CWE-${category} - ${record.title}`;
   }
+  return `CWE-${category} - ${record.title}`;
 }
 
 export function renderOwaspTop10Category(
   standards: Standards,
   category: string,
-  withPrefix = false
+  withPrefix = false,
 ): string {
-  const record = standards.owaspTop10[category];
-  if (!record) {
-    return addPrefix(category.toUpperCase(), 'OWASP', withPrefix);
-  } else {
-    return addPrefix(`${category.toUpperCase()} - ${record.title}`, 'OWASP', withPrefix);
-  }
+  return renderOwaspCategory('owaspTop10', standards, category, withPrefix);
 }
 
-export function renderSansTop25Category(
+export function renderOwaspTop102021Category(
   standards: Standards,
   category: string,
-  withPrefix = false
+  withPrefix = false,
 ): string {
-  const record = standards.sansTop25[category];
-  return addPrefix(record ? record.title : category, 'SANS', withPrefix);
+  return renderOwaspCategory('owaspTop10-2021', standards, category, withPrefix);
+}
+
+function renderOwaspCategory(
+  type: 'owaspTop10' | 'owaspTop10-2021',
+  standards: Standards,
+  category: string,
+  withPrefix: boolean,
+) {
+  const record = standards[type][category];
+  if (!record) {
+    return addPrefix(category.toUpperCase(), 'OWASP', withPrefix);
+  }
+  return addPrefix(`${category.toUpperCase()} - ${record.title}`, 'OWASP', withPrefix);
 }
 
 export function renderSonarSourceSecurityCategory(
   standards: Standards,
   category: string,
-  withPrefix = false
+  withPrefix = false,
 ): string {
   const record = standards.sonarsourceSecurity[category];
   if (!record) {
     return addPrefix(category.toUpperCase(), 'SONAR', withPrefix);
   } else if (category === 'others') {
     return record.title;
-  } else {
-    return addPrefix(record.title, 'SONAR', withPrefix);
   }
+  return addPrefix(record.title, 'SONAR', withPrefix);
+}
+
+export function renderPciDss32Category(standards: Standards, category: string): string {
+  const record = standards['pciDss-3.2'][category];
+  if (!record) {
+    return category;
+  }
+  return `${category} - ${record.title}`;
+}
+
+export function renderPciDss40Category(standards: Standards, category: string): string {
+  const record = standards['pciDss-4.0'][category];
+  if (!record) {
+    return category;
+  }
+  return `${category} - ${record.title}`;
+}
+
+export function renderOwaspAsvs40Category(standards: Standards, category: string): string {
+  const record = standards['owaspAsvs-4.0'][category];
+  if (!record) {
+    return category;
+  }
+  const levelInfo = record.level ? ` (Level ${record.level})` : '';
+  return `${category} - ${record.title}${levelInfo}`;
 }
 
 function addPrefix(title: string, prefix: string, withPrefix: boolean) {

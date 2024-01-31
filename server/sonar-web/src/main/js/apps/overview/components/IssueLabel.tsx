@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,65 +17,93 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DrilldownLink, HelperHintIcon, LightLabel } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure, localizeMetric } from 'sonar-ui-common/helpers/measures';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import Tooltip from '../../../components/controls/Tooltip';
 import { getLeakValue } from '../../../components/measure/utils';
+import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
-import { findMeasure } from '../../../helpers/measures';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { findMeasure, formatMeasure, localizeMetric } from '../../../helpers/measures';
 import { getComponentIssuesUrl, getComponentSecurityHotspotsUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
+import { ComponentQualifier } from '../../../types/component';
 import { IssueType } from '../../../types/issues';
-import { getIssueIconClass, getIssueMetricKey } from '../utils';
+import { MetricType } from '../../../types/metrics';
+import { Component, MeasureEnhanced } from '../../../types/types';
+import { getIssueMetricKey } from '../utils';
+import { OverviewDisabledLinkTooltip } from './OverviewDisabledLinkTooltip';
 
 export interface IssueLabelProps {
   branchLike?: BranchLike;
-  component: T.Component;
+  component: Component;
   helpTooltip?: string;
-  measures: T.MeasureEnhanced[];
+  measures: MeasureEnhanced[];
   type: IssueType;
   useDiffMetric?: boolean;
 }
 
 export function IssueLabel(props: IssueLabelProps) {
   const { branchLike, component, helpTooltip, measures, type, useDiffMetric = false } = props;
-  const metric = getIssueMetricKey(type, useDiffMetric);
-  const measure = findMeasure(measures, metric);
-  const iconClass = getIssueIconClass(type);
+  const metricKey = getIssueMetricKey(type, useDiffMetric);
+  const measure = findMeasure(measures, metricKey);
 
   let value;
+
   if (measure) {
     value = useDiffMetric ? getLeakValue(measure) : measure.value;
   }
 
   const params = {
     ...getBranchLikeQuery(branchLike),
-    resolved: 'false',
+    inNewCodePeriod: useDiffMetric ? 'true' : 'false',
+    ...DEFAULT_ISSUES_QUERY,
     types: type,
-    sinceLeakPeriod: useDiffMetric ? 'true' : 'false'
   };
 
+  const url =
+    type === IssueType.SecurityHotspot
+      ? getComponentSecurityHotspotsUrl(component.key, params)
+      : getComponentIssuesUrl(component.key, params);
+
+  const disabled =
+    component.qualifier === ComponentQualifier.Application && component.needIssueSync;
+
+  const drilldownLinkProps = disabled
+    ? { disabled, to: '' }
+    : {
+        'aria-label': translateWithParameters(
+          'overview.see_list_of_x_y_issues',
+          value as string,
+          localizeMetric(metricKey),
+        ),
+        to: url,
+      };
+
   return (
-    <>
+    <div className="sw-body-md sw-flex sw-items-center">
       {value === undefined ? (
-        <span aria-label={translate('no_data')} className="overview-measures-empty-value" />
+        <LightLabel aria-label={translate('no_data')}> — </LightLabel>
       ) : (
-        <Link
-          className="overview-measures-value text-light"
-          to={
-            type === IssueType.SecurityHotspot
-              ? getComponentSecurityHotspotsUrl(component.key, params)
-              : getComponentIssuesUrl(component.key, params)
-          }>
-          {formatMeasure(value, 'SHORT_INT')}
-        </Link>
+        <Tooltip
+          classNameSpace={disabled ? 'tooltip' : 'sw-hidden'}
+          overlay={<OverviewDisabledLinkTooltip />}
+        >
+          <DrilldownLink className="it__overview-measures-value" {...drilldownLinkProps}>
+            {formatMeasure(value, MetricType.ShortInteger)}
+          </DrilldownLink>
+        </Tooltip>
       )}
-      {React.createElement(iconClass, { className: 'big-spacer-left little-spacer-right' })}
-      {localizeMetric(metric)}
-      {helpTooltip && <HelpTooltip className="little-spacer-left" overlay={helpTooltip} />}
-    </>
+
+      <LightLabel className="sw-mx-2">{localizeMetric(metricKey)}</LightLabel>
+
+      {helpTooltip && (
+        <HelpTooltip overlay={helpTooltip}>
+          <HelperHintIcon aria-label={helpTooltip} />
+        </HelpTooltip>
+      )}
+    </div>
   );
 }
 

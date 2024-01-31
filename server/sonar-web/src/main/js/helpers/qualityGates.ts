@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,49 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { MetricKey, MetricType } from '../types/metrics';
 import {
   QualityGateApplicationStatusChildProject,
   QualityGateProjectStatus,
-  QualityGateStatusCondition
+  QualityGateStatusCondition,
 } from '../types/quality-gates';
+import { Metric } from '../types/types';
+import { translate } from './l10n';
+
+export function getOperatorLabel(op: string, metric: Metric) {
+  return metric.type === MetricType.Rating
+    ? translate('quality_gates.operator', op, 'rating')
+    : translate('quality_gates.operator', op);
+}
 
 export function extractStatusConditionsFromProjectStatus(
-  projectStatus: QualityGateProjectStatus
+  projectStatus: QualityGateProjectStatus,
 ): QualityGateStatusCondition[] {
   const { conditions } = projectStatus;
   return conditions
-    ? conditions.map(c => ({
+    ? conditions.map((c) => ({
         actual: c.actualValue,
         error: c.errorThreshold,
         level: c.status,
-        metric: c.metricKey,
+        metric: c.metricKey as MetricKey,
         op: c.comparator,
-        period: c.periodIndex
+        period: c.periodIndex,
       }))
     : [];
 }
 
 export function extractStatusConditionsFromApplicationStatusChildProject(
-  projectStatus: QualityGateApplicationStatusChildProject
+  projectStatus: QualityGateApplicationStatusChildProject,
 ): QualityGateStatusCondition[] {
   const { conditions } = projectStatus;
   return conditions
-    ? conditions.map(c => ({
+    ? conditions.map((c) => ({
         actual: c.value,
         error: c.errorThreshold,
         level: c.status,
-        metric: c.metric,
+        metric: c.metric as MetricKey,
         op: c.comparator,
-        period: c.periodIndex
+        period: c.periodIndex,
       }))
     : [];
 }

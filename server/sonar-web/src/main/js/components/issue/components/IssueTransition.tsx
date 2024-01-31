@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,84 +17,117 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import styled from '@emotion/styled';
+import {
+  Dropdown,
+  DropdownMenuWrapper,
+  ItemDivider,
+  PopupPlacement,
+  PopupZLevel,
+  SearchSelectDropdownControl,
+} from 'design-system';
 import * as React from 'react';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import DropdownIcon from 'sonar-ui-common/components/icons/DropdownIcon';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { setIssueTransition } from '../../../api/issues';
+import { addIssueComment, setIssueTransition } from '../../../api/issues';
+import { useAcceptGuideState } from '../../../apps/issues/components/IssueNewStatusAndTransitionGuide';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { Issue } from '../../../types/types';
 import StatusHelper from '../../shared/StatusHelper';
 import { updateIssue } from '../actions';
-import SetTransitionPopup from '../popups/SetTransitionPopup';
+import { IssueTransitionOverlay } from './IssueTransitionOverlay';
 
 interface Props {
-  hasTransitions: boolean;
   isOpen: boolean;
-  issue: Pick<T.Issue, 'fromHotspot' | 'key' | 'resolution' | 'status' | 'transitions' | 'type'>;
-  onChange: (issue: T.Issue) => void;
+  issue: Pick<Issue, 'key' | 'resolution' | 'issueStatus' | 'transitions' | 'type' | 'actions'>;
+  onChange: (issue: Issue) => void;
   togglePopup: (popup: string, show?: boolean) => void;
 }
 
-export default class IssueTransition extends React.PureComponent<Props> {
-  setTransition = (transition: string) => {
-    updateIssue(
-      this.props.onChange,
-      setIssueTransition({ issue: this.props.issue.key, transition })
-    );
-    this.toggleSetTransition();
-  };
+export default function IssueTransition(props: Readonly<Props>) {
+  const { isOpen, issue, onChange, togglePopup } = props;
 
-  toggleSetTransition = (open?: boolean) => {
-    this.props.togglePopup('transition', open);
-  };
+  const [{ stepIndex: guideStepIndex, guideIsRunning }] = useAcceptGuideState();
 
-  handleClose = () => {
-    this.toggleSetTransition(false);
-  };
+  const [transitioning, setTransitioning] = React.useState(false);
 
-  render() {
-    const { issue } = this.props;
+  async function handleSetTransition(transition: string, comment?: string) {
+    setTransitioning(true);
 
-    if (this.props.hasTransitions) {
-      return (
-        <div className="dropdown">
-          <Toggler
-            onRequestClose={this.handleClose}
-            open={this.props.isOpen && this.props.hasTransitions}
-            overlay={
-              <SetTransitionPopup
-                fromHotspot={issue.fromHotspot}
-                onSelect={this.setTransition}
-                transitions={issue.transitions}
-                type={issue.type}
-              />
-            }>
-            <ButtonLink
-              aria-label={translateWithParameters(
-                'issue.transition.status_x_click_to_change',
-                translate('issue.status', issue.status)
-              )}
-              aria-expanded={this.props.isOpen}
-              className="issue-action issue-action-with-options js-issue-transition"
-              onClick={this.toggleSetTransition}>
-              <StatusHelper
-                className="issue-meta-label"
-                resolution={issue.resolution}
-                status={issue.status}
-              />
-              <DropdownIcon className="little-spacer-left" />
-            </ButtonLink>
-          </Toggler>
-        </div>
-      );
+    try {
+      if (typeof comment === 'string' && comment.length > 0) {
+        await setIssueTransition({ issue: issue.key, transition });
+        await updateIssue(onChange, addIssueComment({ issue: issue.key, text: comment }));
+      } else {
+        await updateIssue(onChange, setIssueTransition({ issue: issue.key, transition }));
+      }
+      togglePopup('transition', false);
+    } finally {
+      setTransitioning(false);
     }
+  }
 
+  function handleClose() {
+    togglePopup('transition', false);
+  }
+
+  function onToggleClick() {
+    togglePopup('transition', !isOpen);
+  }
+
+  if (issue.transitions?.length) {
     return (
-      <StatusHelper
-        className="issue-meta-label"
-        resolution={issue.resolution}
-        status={issue.status}
-      />
+      <StyledDropdown
+        allowResizing
+        closeOnClick={false}
+        id="issue-transition"
+        onClose={handleClose}
+        openDropdown={isOpen}
+        withClickOutHandler={!guideIsRunning}
+        withFocusOutHandler={!guideIsRunning}
+        overlay={
+          <IssueTransitionOverlay
+            issue={issue}
+            onClose={handleClose}
+            onSetTransition={handleSetTransition}
+            loading={transitioning}
+            guideStepIndex={guideStepIndex}
+          />
+        }
+        placement={PopupPlacement.Bottom}
+        zLevel={PopupZLevel.Absolute}
+        size="medium"
+      >
+        {({ a11yAttrs }) => (
+          <SearchSelectDropdownControl
+            {...a11yAttrs}
+            onClick={onToggleClick}
+            onClear={handleClose}
+            isDiscreet
+            className="it__issue-transition sw-px-1"
+            label={
+              <StatusHelper className="sw-flex sw-items-center" issueStatus={issue.issueStatus} />
+            }
+            ariaLabel={translateWithParameters(
+              'issue.transition.status_x_click_to_change',
+              translate('issue.issue_status', issue.issueStatus),
+            )}
+          />
+        )}
+      </StyledDropdown>
     );
   }
+
+  return <StatusHelper issueStatus={issue.issueStatus} />;
 }
+
+const StyledDropdown = styled(Dropdown)`
+  overflow: auto;
+
+  & ${DropdownMenuWrapper} {
+    border-radius: 8px;
+
+    ${ItemDivider} {
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+`;

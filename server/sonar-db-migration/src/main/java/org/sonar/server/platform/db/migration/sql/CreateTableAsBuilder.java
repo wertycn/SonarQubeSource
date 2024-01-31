@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,7 @@ public class CreateTableAsBuilder {
   private final Dialect dialect;
   private final String tableName;
   private final String fromTableName;
-  private List<Column> columns = new ArrayList<>();
+  private final List<Column> columns = new ArrayList<>();
 
   public CreateTableAsBuilder(Dialect dialect, String tableName, String fromTableName) {
     this.dialect = requireNonNull(dialect, "dialect can't be null");
@@ -78,7 +78,7 @@ public class CreateTableAsBuilder {
       sql.add(sb.toString());
     }
 
-    List<Column> notNullColumns = columns.stream().filter(c -> !c.definition().isNullable()).collect(Collectors.toList());
+    List<Column> notNullColumns = columns.stream().filter(c -> !c.definition().isNullable()).toList();
     for (Column c : notNullColumns) {
       sql.addAll(new AlterColumnsBuilder(dialect, tableName).updateColumn(c.definition()).build());
     }
@@ -99,8 +99,8 @@ public class CreateTableAsBuilder {
   }
 
   private static class Column {
-    private ColumnDef columnDef;
-    private String castFrom;
+    private final ColumnDef columnDef;
+    private final String castFrom;
 
     public Column(ColumnDef columnDef, @Nullable String castFrom) {
       this.columnDef = columnDef;

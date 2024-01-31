@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@ import org.sonar.ce.taskprocessor.CeProcessingScheduler;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class CeQueueInitializerTest {
 
@@ -52,7 +52,7 @@ public class CeQueueInitializerTest {
 
     underTest.onServerStart(server);
 
-    verifyZeroInteractions(processingScheduler, cleaningScheduler);
+    verifyNoInteractions(processingScheduler, cleaningScheduler);
 
   }
 }

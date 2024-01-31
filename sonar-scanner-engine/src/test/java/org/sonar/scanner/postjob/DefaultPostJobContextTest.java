@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,30 +21,26 @@ package org.sonar.scanner.postjob;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.sonar.api.batch.AnalysisMode;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
 
-import static org.mockito.Mockito.mock;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class DefaultPostJobContextTest {
 
   private DefaultPostJobContext context;
   private MapSettings settings;
+  private Configuration configuration;
 
   @Before
   public void setUp() {
     settings = new MapSettings();
-    AnalysisMode analysisMode = mock(AnalysisMode.class);
-    context = new DefaultPostJobContext(settings.asConfig(), analysisMode);
+    configuration = settings.asConfig();
+    context = new DefaultPostJobContext(configuration);
   }
 
-  @Test(expected=UnsupportedOperationException.class)
-  public void testIssues() {
-    context.issues();
-  }
-
-  @Test(expected=UnsupportedOperationException.class)
-  public void testResolvedIssues() {
-    context.resolvedIssues();
+  @Test
+  public void getConfig() {
+    assertThat(context.config()).isEqualTo(configuration);
   }
 }

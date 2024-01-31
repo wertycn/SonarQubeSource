@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.db.qualityprofile;
 
-import com.google.common.collect.ImmutableMap;
 import java.util.Collections;
 import java.util.Map;
 import org.junit.Test;
@@ -39,7 +38,7 @@ public class QProfileChangeDtoTest {
     underTest.setData(Collections.emptyMap());
     assertThat(underTest.getDataAsMap()).isEmpty();
 
-    underTest.setData(ImmutableMap.of("k1", "v1", "k2", "v2"));
+    underTest.setData(Map.of("k1", "v1", "k2", "v2"));
     assertThat(underTest.getDataAsMap()).containsOnly(entry("k1", "v1"), entry("k2", "v2"));
   }
 }

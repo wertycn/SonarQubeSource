@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import { click } from 'sonar-ui-common/helpers/testUtils';
+import { renderComponent } from '../../../helpers/testReactTestingUtils';
+import { FCProps } from '../../../types/misc';
 import FormattingTips from '../FormattingTips';
 
 const originalOpen = window.open;
@@ -27,28 +29,26 @@ const originalOpen = window.open;
 beforeAll(() => {
   Object.defineProperty(window, 'open', {
     writable: true,
-    value: jest.fn()
+    value: jest.fn(),
   });
 });
 
 afterAll(() => {
   Object.defineProperty(window, 'open', {
     writable: true,
-    value: originalOpen
+    value: originalOpen,
   });
 });
 
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot();
+it('should render correctly', async () => {
+  const user = userEvent.setup();
+  renderFormattingTips();
+  const link = screen.getByRole('link', { name: 'formatting.helplink' });
+  expect(link).toBeInTheDocument();
+  await user.click(link);
+  expect(window.open).toHaveBeenCalled();
 });
 
-it('should correctly open a new window', () => {
-  const wrapper = shallowRender();
-  expect(window.open).not.toBeCalled();
-  click(wrapper.find('a'));
-  expect(window.open).toBeCalled();
-});
-
-function shallowRender(props: Partial<FormattingTips['props']> = {}) {
-  return shallow<FormattingTips>(<FormattingTips {...props} />);
+function renderFormattingTips(props: Partial<FCProps<typeof FormattingTips>> = {}) {
+  return renderComponent(<FormattingTips {...props} />);
 }

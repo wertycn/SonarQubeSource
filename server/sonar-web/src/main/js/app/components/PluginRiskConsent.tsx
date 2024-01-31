@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,28 +18,37 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { Helmet } from 'react-helmet-async';
 import { setSimpleSettingValue } from '../../api/settings';
+import { Button } from '../../components/controls/buttons';
 import { whenLoggedIn } from '../../components/hoc/whenLoggedIn';
 import { Router, withRouter } from '../../components/hoc/withRouter';
+import { translate } from '../../helpers/l10n';
+import { getBaseUrl } from '../../helpers/system';
 import { hasGlobalPermission } from '../../helpers/users';
 import { Permissions } from '../../types/permissions';
 import { RiskConsent } from '../../types/plugins';
 import { SettingsKey } from '../../types/settings';
-import GlobalMessagesContainer from './GlobalMessagesContainer';
+import { LoggedInUser } from '../../types/users';
 import './PluginRiskConsent.css';
 
 export interface PluginRiskConsentProps {
-  currentUser: T.LoggedInUser;
+  currentUser: LoggedInUser;
   router: Router;
 }
 
 export function PluginRiskConsent(props: PluginRiskConsentProps) {
   const { router, currentUser } = props;
 
-  if (!hasGlobalPermission(currentUser, Permissions.Admin)) {
-    router.replace('/');
+  const isAdmin = hasGlobalPermission(currentUser, Permissions.Admin);
+
+  React.useEffect(() => {
+    if (!isAdmin) {
+      router.replace('/');
+    }
+  }, [isAdmin, router]);
+
+  if (!isAdmin) {
     return null;
   }
 
@@ -47,10 +56,11 @@ export function PluginRiskConsent(props: PluginRiskConsentProps) {
     try {
       await setSimpleSettingValue({
         key: SettingsKey.PluginRiskConsent,
-        value: RiskConsent.Accepted
+        value: RiskConsent.Accepted,
       });
 
-      window.location.href = `/`; // force a refresh for the backend
+      // force a refresh for the backend
+      window.location.href = `${getBaseUrl()}/`;
     } catch (_) {
       /* Do nothing */
     }
@@ -58,8 +68,7 @@ export function PluginRiskConsent(props: PluginRiskConsentProps) {
 
   return (
     <div className="plugin-risk-consent-page">
-      <GlobalMessagesContainer />
-
+      <Helmet defer={false} title={translate('plugin_risk_consent.page')} />
       <div className="plugin-risk-consent-content boxed-group">
         <div className="boxed-group-inner text-center">
           <h1 className="big-spacer-bottom">{translate('plugin_risk_consent.title')}</h1>

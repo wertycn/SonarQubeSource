@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,43 +19,37 @@
  */
 package org.sonar.ce.task.projectanalysis.duplication;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.ReportComponent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class InProjectDuplicateTest {
   private static final Component FILE_1 = ReportComponent.builder(Component.Type.FILE, 1).build();
   private static final Component FILE_2 = ReportComponent.builder(Component.Type.FILE, 2).build();
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void constructors_throws_NPE_if_file_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("file can not be null");
-
-    new InProjectDuplicate(null, new TextBlock(1, 1));
+    assertThatThrownBy(() -> new InProjectDuplicate(null, new TextBlock(1, 1)))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("file can not be null");
   }
 
   @Test
   public void constructors_throws_NPE_if_textBlock_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("textBlock of duplicate can not be null");
-
-    new InProjectDuplicate(FILE_1, null);
+    assertThatThrownBy(() -> new InProjectDuplicate(FILE_1, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("textBlock of duplicate can not be null");
   }
 
   @Test
   public void constructors_throws_IAE_if_type_of_file_argument_is_not_FILE() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("file must be of type FILE");
-
-    new InProjectDuplicate(ReportComponent.builder(Component.Type.PROJECT, 1).build(), new TextBlock(1, 1));
+    assertThatThrownBy(() -> new InProjectDuplicate(ReportComponent.builder(Component.Type.PROJECT, 1).build(), new TextBlock(1, 1)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("file must be of type FILE");
   }
 
   @Test
@@ -83,7 +77,7 @@ public class InProjectDuplicateTest {
   @Test
   public void hashcode_depends_on_file_and_TextBlock() {
     TextBlock textBlock = new TextBlock(1, 2);
-    assertThat(new InProjectDuplicate(FILE_1, textBlock).hashCode()).isEqualTo(new InProjectDuplicate(FILE_1, textBlock).hashCode());
+    assertThat(new InProjectDuplicate(FILE_1, textBlock)).hasSameHashCodeAs(new InProjectDuplicate(FILE_1, textBlock));
 
     assertThat(new InProjectDuplicate(FILE_1, textBlock).hashCode()).isNotEqualTo(new InProjectDuplicate(FILE_2, textBlock).hashCode());
     assertThat(new InProjectDuplicate(FILE_1, textBlock).hashCode()).isNotEqualTo(new InProjectDuplicate(FILE_2, new TextBlock(1, 1)).hashCode());
@@ -91,8 +85,8 @@ public class InProjectDuplicateTest {
 
   @Test
   public void verify_toString() {
-    assertThat(new InProjectDuplicate(FILE_1, new TextBlock(1, 2)).toString())
-      .isEqualTo("InProjectDuplicate{file=ReportComponent{ref=1, key='key_1', type=FILE}, textBlock=TextBlock{start=1, end=2}}");
+    assertThat(new InProjectDuplicate(FILE_1, new TextBlock(1, 2)))
+      .hasToString("InProjectDuplicate{file=ReportComponent{ref=1, key='key_1', type=FILE}, textBlock=TextBlock{start=1, end=2}}");
   }
 
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { NumberedList, NumberedListItem } from 'design-system';
 import * as React from 'react';
 import SentenceWithHighlights from '../../components/SentenceWithHighlights';
 import { BuildTools } from '../../types';
@@ -34,27 +34,27 @@ export default function DotNet(props: DotNetProps): JSX.Element {
   return (
     <>
       <AlertClassicEditor />
-      <ol className="list-styled big-spacer-top">
-        <li>
+      <NumberedList className="sw-mt-4">
+        <NumberedListItem>
           <SentenceWithHighlights
             translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.prepare"
             highlightKeys={['pipeline', 'task', 'before']}
           />
-        </li>
-        <PrepareAnalysisCommand
-          buildTool={BuildTools.DotNet}
-          kind={PrepareType.MSBuild}
-          projectKey={projectKey}
-        />
-        <li>
+          <PrepareAnalysisCommand
+            buildTool={BuildTools.DotNet}
+            kind={PrepareType.MSBuild}
+            projectKey={projectKey}
+          />
+        </NumberedListItem>
+        <NumberedListItem>
           <SentenceWithHighlights
             translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.run"
             highlightKeys={['task', 'after']}
           />
-        </li>
+        </NumberedListItem>
 
         <PublishSteps />
-      </ol>
+      </NumberedList>
     </>
   );
 }

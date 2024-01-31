@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,44 +24,59 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
-import org.sonar.core.util.FileUtils;
+import java.util.Objects;
+import org.sonar.api.batch.fs.internal.AbstractProjectOrModule;
 import org.sonar.api.batch.fs.internal.DefaultInputModule;
+import org.sonar.api.batch.fs.internal.DefaultInputProject;
+import org.sonar.core.util.FileUtils;
 import org.sonar.scanner.fs.InputModuleHierarchy;
 
 /**
- * Clean and create working directories of each module.
+ * Clean and create working directories of each module, except the root.
  * Be careful that sub module work dir might be nested in parent working directory.
  */
 public class WorkDirectoriesInitializer {
-
-  private InputModuleHierarchy moduleHierarchy;
-
-  public WorkDirectoriesInitializer(InputModuleHierarchy moduleHierarchy) {
-    this.moduleHierarchy = moduleHierarchy;
+  public void execute(InputModuleHierarchy moduleHierarchy) {
+    DefaultInputModule root = moduleHierarchy.root();
+    // dont apply to root. Root is done by InputProjectProvider
+    for (DefaultInputModule sub : moduleHierarchy.children(root)) {
+      if (!Objects.equals(root.getWorkDir(), sub.getWorkDir())) {
+        cleanAllWorkingDirs(moduleHierarchy, sub);
+        mkdirsAllWorkingDirs(moduleHierarchy, sub);
+      }
+    }
   }
 
-  public void execute() {
-    cleanAllWorkingDirs(moduleHierarchy.root());
-    mkdirsAllWorkingDirs(moduleHierarchy.root());
+  public void execute(DefaultInputProject project) {
+    cleanWorkingDir(project);
+    mkdirWorkingDir(project);
   }
 
-  private void cleanAllWorkingDirs(DefaultInputModule module) {
+  private static void cleanAllWorkingDirs(InputModuleHierarchy moduleHierarchy, DefaultInputModule module) {
     for (DefaultInputModule sub : moduleHierarchy.children(module)) {
-      cleanAllWorkingDirs(sub);
+      cleanAllWorkingDirs(moduleHierarchy, sub);
     }
-    if (Files.exists(module.getWorkDir())) {
-      deleteAllRecursivelyExceptLockFile(module.getWorkDir());
+    cleanWorkingDir(module);
+  }
+
+  private static void cleanWorkingDir(AbstractProjectOrModule projectOrModule) {
+    if (Files.exists(projectOrModule.getWorkDir())) {
+      deleteAllRecursivelyExceptLockFile(projectOrModule.getWorkDir());
     }
   }
 
-  private void mkdirsAllWorkingDirs(DefaultInputModule module) {
+  private static void mkdirsAllWorkingDirs(InputModuleHierarchy moduleHierarchy, DefaultInputModule module) {
     for (DefaultInputModule sub : moduleHierarchy.children(module)) {
-      mkdirsAllWorkingDirs(sub);
+      mkdirsAllWorkingDirs(moduleHierarchy, sub);
     }
+    mkdirWorkingDir(module);
+  }
+
+  private static void mkdirWorkingDir(AbstractProjectOrModule projectOrModule) {
     try {
-      Files.createDirectories(module.getWorkDir());
+      Files.createDirectories(projectOrModule.getWorkDir());
     } catch (Exception e) {
-      throw new IllegalStateException("Fail to create working dir: " + module.getWorkDir(), e);
+      throw new IllegalStateException("Fail to create working dir: " + projectOrModule.getWorkDir(), e);
     }
   }
 

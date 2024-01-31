@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,37 +18,37 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getSizeRatingLabel } from 'sonar-ui-common/helpers/ratings';
+import { translate } from '../../../helpers/l10n';
+import { getSizeRatingLabel } from '../../../helpers/ratings';
+import { MetricKey } from '../../../types/metrics';
+import { RawQuery } from '../../../types/types';
 import { Facet } from '../types';
-import Filter from './Filter';
-import FilterHeader from './FilterHeader';
+import RangeFacetBase from './RangeFacetBase';
 
 export interface Props {
-  className?: string;
   facet?: Facet;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
+  onQueryChange: (change: RawQuery) => void;
   property?: string;
   value?: any;
 }
 
 export default function NewLinesFilter(props: Props) {
-  const { property = 'new_lines' } = props;
+  const { facet, maxFacetValue, property = MetricKey.new_lines, value } = props;
 
   return (
-    <Filter
-      className="leak-facet-box"
-      facet={props.facet}
+    <RangeFacetBase
+      facet={facet}
       getFacetValueForOption={getFacetValueForOption}
-      header={<FilterHeader name={translate('projects.facets.new_lines')} />}
+      header={translate('projects.facets.new_lines')}
       highlightUnder={1}
-      maxFacetValue={props.maxFacetValue}
+      maxFacetValue={maxFacetValue}
       onQueryChange={props.onQueryChange}
       options={[1, 2, 3, 4, 5]}
       property={property}
+      renderAccessibleLabel={renderAccessibleLabel}
       renderOption={renderOption}
-      value={props.value}
+      value={value}
     />
   );
 }
@@ -60,4 +60,8 @@ function getFacetValueForOption(facet: Facet, option: number) {
 
 function renderOption(option: number) {
   return <span>{getSizeRatingLabel(option)}</span>;
+}
+
+function renderAccessibleLabel(option: number) {
+  return translate('projects.facets.new_lines.label', option.toString());
 }

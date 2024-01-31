@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,38 +17,53 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { InputField } from 'design-system';
 import * as React from 'react';
-import { DefaultSpecializedInputProps } from '../../utils';
+import { KeyboardKeys } from '../../../../helpers/keycodes';
+import { DefaultSpecializedInputProps, getPropertyName } from '../../utils';
 
-interface Props extends DefaultSpecializedInputProps {
-  className?: string;
-  type: string;
+export interface SimpleInputProps extends DefaultSpecializedInputProps {
   value: string | number;
 }
 
-export default class SimpleInput extends React.PureComponent<Props> {
+export default class SimpleInput extends React.PureComponent<SimpleInputProps> {
   handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     this.props.onChange(event.currentTarget.value);
   };
 
   handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.keyCode === 13 && this.props.onSave) {
+    if (event.nativeEvent.key === KeyboardKeys.Enter && this.props.onSave) {
       this.props.onSave();
-    } else if (event.keyCode === 27 && this.props.onCancel) {
+    } else if (event.nativeEvent.key === KeyboardKeys.Escape && this.props.onCancel) {
       this.props.onCancel();
     }
   };
 
   render() {
+    const {
+      autoComplete,
+      autoFocus,
+      className,
+      isInvalid,
+      name,
+      value = '',
+      setting,
+      size,
+      type,
+    } = this.props;
     return (
-      <input
-        className={classNames('text-top', this.props.className)}
-        name={this.props.name}
+      <InputField
+        isInvalid={isInvalid}
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        className={className}
+        name={name}
         onChange={this.handleInputChange}
         onKeyDown={this.handleKeyDown}
-        type={this.props.type}
-        value={this.props.value || ''}
+        type={type}
+        value={value}
+        size={size}
+        aria-label={getPropertyName(setting.definition)}
       />
     );
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,77 +20,59 @@
 package org.sonar.server.component;
 
 import java.util.List;
-import org.sonar.api.resources.ResourceType;
-import org.sonar.api.resources.ResourceTypes;
-import org.sonar.api.resources.Scopes;
+import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.server.es.ProjectIndexers;
+import org.sonar.server.es.Indexers;
+import org.sonar.server.es.Indexers.BranchEvent;
+import org.sonar.server.es.Indexers.EntityEvent;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Collections.singletonList;
-import static org.sonar.server.es.ProjectIndexer.Cause.PROJECT_DELETION;
 
 @ServerSide
 public class ComponentCleanerService {
 
   private final DbClient dbClient;
-  private final ResourceTypes resourceTypes;
-  private final ProjectIndexers projectIndexers;
+  private final Indexers indexers;
 
-  public ComponentCleanerService(DbClient dbClient, ResourceTypes resourceTypes, ProjectIndexers projectIndexers) {
+  public ComponentCleanerService(DbClient dbClient, Indexers indexers) {
     this.dbClient = dbClient;
-    this.resourceTypes = resourceTypes;
-    this.projectIndexers = projectIndexers;
+    this.indexers = indexers;
   }
 
   public void delete(DbSession dbSession, List<ProjectDto> projects) {
     for (ProjectDto project : projects) {
-      delete(dbSession, project);
-    }
-  }
-
-  public void deleteComponents(DbSession dbSession, List<ComponentDto> components) {
-    for (ComponentDto component : components) {
-      delete(dbSession, component);
+      deleteEntity(dbSession, project);
     }
   }
 
   public void deleteBranch(DbSession dbSession, BranchDto branch) {
+    if (branch.isMain()) {
+      throw new IllegalArgumentException("Only non-main branches can be deleted");
+    }
     dbClient.purgeDao().deleteBranch(dbSession, branch.getUuid());
-    projectIndexers.commitAndIndexBranches(dbSession, singletonList(branch), PROJECT_DELETION);
+    updateProjectNcloc(dbSession, branch.getProjectUuid());
+    indexers.commitAndIndexBranches(dbSession, singletonList(branch), BranchEvent.DELETION);
   }
 
-  public void delete(DbSession dbSession, ProjectDto project) {
-    dbClient.purgeDao().deleteProject(dbSession, project.getUuid());
-    dbClient.userDao().cleanHomepage(dbSession, project);
-    projectIndexers.commitAndIndexProjects(dbSession, singletonList(project), PROJECT_DELETION);
+  private void updateProjectNcloc(DbSession dbSession, String projectUuid) {
+    long maxncloc = dbClient.liveMeasureDao().sumNclocOfBiggestBranchForProject(dbSession, projectUuid);
+    dbClient.projectDao().updateNcloc(dbSession, projectUuid, maxncloc);
   }
 
-  public void deleteApplication(DbSession dbSession, ProjectDto application) {
-    dbClient.purgeDao().deleteProject(dbSession, application.getUuid());
-    dbClient.userDao().cleanHomepage(dbSession, application);
-    projectIndexers.commitAndIndexProjects(dbSession, singletonList(application), PROJECT_DELETION);
-  }
-
-  public void delete(DbSession dbSession, ComponentDto project) {
-    checkArgument(!hasNotProjectScope(project) && !isNotDeletable(project) && project.getMainBranchProjectUuid() == null, "Only projects can be deleted");
-    dbClient.purgeDao().deleteProject(dbSession, project.uuid());
-    dbClient.userDao().cleanHomepage(dbSession, project);
-    projectIndexers.commitAndIndexComponents(dbSession, singletonList(project), PROJECT_DELETION);
-  }
-
-  private static boolean hasNotProjectScope(ComponentDto project) {
-    return !Scopes.PROJECT.equals(project.scope());
-  }
-
-  private boolean isNotDeletable(ComponentDto project) {
-    ResourceType resourceType = resourceTypes.get(project.qualifier());
-    // this essentially means PROJECTS, VIEWS and APPS (not SUBVIEWS)
-    return resourceType == null || !resourceType.getBooleanProperty("deletable");
+  public void deleteEntity(DbSession dbSession, EntityDto entity) {
+    checkArgument(!entity.getQualifier().equals(Qualifiers.SUBVIEW), "Qualifier can't be subview");
+    dbClient.purgeDao().deleteProject(dbSession, entity.getUuid(), entity.getQualifier(), entity.getName(), entity.getKey());
+    dbClient.userDao().cleanHomepage(dbSession, entity);
+    if (Qualifiers.PROJECT.equals(entity.getQualifier())) {
+      dbClient.userTokenDao().deleteByProjectUuid(dbSession, entity.getKey(), entity.getUuid());
+    }
+    // Note that we do not send an event for each individual branch being deleted with the project
+    indexers.commitAndIndexEntities(dbSession, singletonList(entity), EntityEvent.DELETION);
   }
 }

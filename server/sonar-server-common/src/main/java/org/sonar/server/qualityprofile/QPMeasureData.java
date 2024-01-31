@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,6 @@ import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.core.util.UtcDateUtils;
 
 import static java.util.function.Function.identity;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 /**
  * Represents the array of JSON objects stored in the value of the
@@ -49,7 +48,7 @@ public class QPMeasureData {
   }
 
   public static QPMeasureData fromJson(String json) {
-    return new QPMeasureData(StreamSupport.stream(new JsonParser().parse(json).getAsJsonArray().spliterator(), false)
+    return new QPMeasureData(StreamSupport.stream(JsonParser.parseString(json).getAsJsonArray().spliterator(), false)
       .map(jsonElement -> {
         JsonObject jsonProfile = jsonElement.getAsJsonObject();
         return new QualityProfile(
@@ -57,7 +56,7 @@ public class QPMeasureData {
           jsonProfile.get("name").getAsString(),
           jsonProfile.get("language").getAsString(),
           UtcDateUtils.parseDateTime(jsonProfile.get("rulesUpdatedAt").getAsString()));
-      }).collect(Collectors.toList()));
+      }).toList());
   }
 
   public static String toJson(QPMeasureData data) {
@@ -83,7 +82,7 @@ public class QPMeasureData {
   }
 
   public Map<String, QualityProfile> getProfilesByKey() {
-    return profiles.stream().collect(uniqueIndex(QualityProfile::getQpKey, identity()));
+    return profiles.stream().collect(Collectors.toMap(QualityProfile::getQpKey, identity()));
   }
 
   private enum QualityProfileComparator implements Comparator<QualityProfile> {

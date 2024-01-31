@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,9 @@ public class InfoAction implements SystemWsAction {
 
     action.setChangelog(
       new Change("5.5", "Becomes internal to easily update result"),
-      new Change("8.3", "Becomes public")
+      new Change("8.3", "Becomes public"),
+      new Change("9.7", "'Statistics' field has been removed from response"),
+      new Change("9.8", "'Edition' field added to the response under the 'System' section")
     );
   }
 

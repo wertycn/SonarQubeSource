@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@ public class CeQueueTesting {
     return new CeQueueDto()
       .setUuid(uuid)
       .setComponentUuid(randomAlphanumeric(40))
-      .setMainComponentUuid(randomAlphanumeric(39))
+      .setEntityUuid(randomAlphanumeric(39))
       .setStatus(CeQueueDto.Status.PENDING)
       .setTaskType(CeTaskTypes.REPORT)
       .setSubmitterUuid(randomAlphanumeric(255))
@@ -52,7 +52,7 @@ public class CeQueueTesting {
       int touchedRows = mapper.updateIf(ceQueueDto.getUuid(),
         new UpdateIf.NewProperties(IN_PROGRESS, workerUuid, now, now),
         new UpdateIf.OldProperties(PENDING));
-      assertThat(touchedRows).isEqualTo(1);
+      assertThat(touchedRows).isOne();
     });
   }
 
@@ -65,7 +65,7 @@ public class CeQueueTesting {
       int touchedRows = mapper.updateIf(ceQueueDto.getUuid(),
         new UpdateIf.NewProperties(PENDING, ceQueueDto.getUuid(), now, now),
         new UpdateIf.OldProperties(IN_PROGRESS));
-      assertThat(touchedRows).isEqualTo(1);
+      assertThat(touchedRows).isOne();
     });
   }
 }

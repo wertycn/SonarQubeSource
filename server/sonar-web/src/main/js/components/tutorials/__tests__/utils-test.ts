@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,29 +19,32 @@
  */
 import {
   mockAlmSettingsInstance,
-  mockProjectGithubBindingResponse
+  mockProjectBitbucketCloudBindingResponse,
+  mockProjectGithubBindingResponse,
 } from '../../../helpers/mocks/alm-settings';
-import { buildGithubLink, getUniqueTokenName } from '../utils';
+import { mockUserToken } from '../../../helpers/mocks/token';
+import { UserToken } from '../../../types/token';
+import { buildBitbucketCloudLink, buildGithubLink, getUniqueTokenName } from '../utils';
 
 describe('getUniqueTokenName', () => {
   const initialTokenName = 'Analyze "lightsaber"';
 
   it('should return the given name when the user has no token', () => {
-    const userTokens: T.UserToken[] = [];
+    const userTokens: UserToken[] = [];
 
     expect(getUniqueTokenName(userTokens, initialTokenName)).toBe(initialTokenName);
   });
 
   it('should generate a token with the given name', () => {
-    const userTokens = [{ name: initialTokenName, createdAt: '2019-06-14T09:45:52+0200' }];
-
-    expect(getUniqueTokenName(userTokens, 'Analyze "project"')).toBe('Analyze "project"');
+    expect(
+      getUniqueTokenName([mockUserToken({ name: initialTokenName })], 'Analyze "project"'),
+    ).toBe('Analyze "project"');
   });
 
   it('should generate a unique token when the name already exists', () => {
     const userTokens = [
-      { name: initialTokenName, createdAt: '2019-06-15T09:45:52+0200' },
-      { name: `${initialTokenName} 1`, createdAt: '2019-06-15T09:45:53+0200' }
+      mockUserToken({ name: initialTokenName }),
+      mockUserToken({ name: `${initialTokenName} 1` }),
     ];
 
     expect(getUniqueTokenName(userTokens, initialTokenName)).toBe('Analyze "lightsaber" 2');
@@ -55,18 +58,43 @@ describe('buildGithubLink', () => {
     expect(
       buildGithubLink(
         mockAlmSettingsInstance({ url: 'https://github.company.com/api/v3' }),
-        projectBinding
-      )
+        projectBinding,
+      ),
     ).toBe('https://github.company.com/owner/reponame');
   });
 
   it('should work for github.com', () => {
     expect(
-      buildGithubLink(mockAlmSettingsInstance({ url: 'http://api.github.com/' }), projectBinding)
+      buildGithubLink(mockAlmSettingsInstance({ url: 'http://api.github.com/' }), projectBinding),
     ).toBe('https://github.com/owner/reponame');
   });
 
   it('should return null if there is no url defined', () => {
     expect(buildGithubLink(mockAlmSettingsInstance({ url: undefined }), projectBinding)).toBeNull();
+  });
+});
+
+describe('buildBitbucketCloudLink', () => {
+  const projectBinding = mockProjectBitbucketCloudBindingResponse({ repository: 'reponame' });
+
+  it('should work', () => {
+    expect(
+      buildBitbucketCloudLink(
+        mockAlmSettingsInstance({ url: 'http://bitbucket.org/workspace/' }),
+        projectBinding,
+      ),
+    ).toBe('http://bitbucket.org/workspace/reponame');
+  });
+
+  it('should return null if there is no url defined', () => {
+    expect(
+      buildBitbucketCloudLink(mockAlmSettingsInstance({ url: undefined }), projectBinding),
+    ).toBeNull();
+    expect(
+      buildBitbucketCloudLink(
+        mockAlmSettingsInstance(),
+        mockProjectBitbucketCloudBindingResponse({ repository: undefined }),
+      ),
+    ).toBeNull();
   });
 });

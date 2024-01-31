@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -74,7 +74,9 @@ public abstract class AbstractSettingsLoader {
   static Map<String, String> toMap(List<Settings.Setting> settingsList) {
     Map<String, String> result = new LinkedHashMap<>();
     for (Settings.Setting s : settingsList) {
-      if (!s.getInherited()) {
+      // we need the "*.file.suffixes" and "*.file.patterns" properties for language detection
+      // see DefaultLanguagesRepository.populateFileSuffixesAndPatterns()
+      if (!s.getInherited() || s.getKey().endsWith(".file.suffixes") || s.getKey().endsWith(".file.patterns")) {
         switch (s.getValueOneOfCase()) {
           case VALUE:
             result.put(s.getKey(), s.getValue());
@@ -86,7 +88,9 @@ public abstract class AbstractSettingsLoader {
             convertPropertySetToProps(result, s);
             break;
           default:
-            throw new IllegalStateException("Unknown property value for " + s.getKey());
+            if (!s.getKey().endsWith(".secured")) {
+              throw new IllegalStateException("Unknown property value for " + s.getKey());
+            }
         }
       }
     }

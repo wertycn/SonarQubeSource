@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,6 +63,7 @@ public class ListAction implements WsAction {
     }
   }
 
+  @Override
   public void define(WebService.NewController controller) {
     NewAction action = controller.createAction("list")
       .setDescription("List supported programming languages")
@@ -80,11 +81,11 @@ public class ListAction implements WsAction {
   }
 
   private Collection<Language> listMatchingLanguages(@Nullable String query, int pageSize) {
-    Pattern pattern = Pattern.compile(query == null ? MATCH_ALL : MATCH_ALL + Pattern.quote(query) + MATCH_ALL, Pattern.CASE_INSENSITIVE);
+    Pattern pattern = Pattern.compile(query == null ? MATCH_ALL : Pattern.quote(query), Pattern.CASE_INSENSITIVE);
 
     SortedMap<String, Language> languagesByName = Maps.newTreeMap();
     for (Language lang : languages.all()) {
-      if (pattern.matcher(lang.getKey()).matches() || pattern.matcher(lang.getName()).matches()) {
+      if (pattern.matcher(lang.getKey()).find() || pattern.matcher(lang.getName()).find()) {
         languagesByName.put(lang.getName(), lang);
       }
     }

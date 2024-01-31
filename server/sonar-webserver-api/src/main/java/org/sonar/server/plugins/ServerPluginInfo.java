@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Objects;
 import org.sonar.core.platform.PluginInfo;
+import org.sonar.core.plugin.PluginType;
 import org.sonar.updatecenter.common.PluginManifest;
 
 public class ServerPluginInfo extends PluginInfo {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,9 +34,9 @@ public class FastStringComparatorTest {
     String s1 = "Od";
     String s2 = "PE";
 
-    assertThat(s1.hashCode()).isEqualTo(s2.hashCode());
-    assertThat(compare(s1, s2)).isLessThan(0);
-    assertThat(compare(s2, s1)).isGreaterThan(0);
+    assertThat(s1).hasSameHashCodeAs(s2);
+    assertThat(compare(s1, s2)).isNegative();
+    assertThat(compare(s2, s1)).isPositive();
   }
 
   @Test
@@ -46,7 +46,7 @@ public class FastStringComparatorTest {
 
     assertThat(s1.hashCode()).isNotEqualTo(s2.hashCode());
     assertThat(compare(s1, s2)).isEqualTo(-1);
-    assertThat(compare(s2, s1)).isEqualTo(1);
+    assertThat(compare(s2, s1)).isOne();
   }
 
   @Test

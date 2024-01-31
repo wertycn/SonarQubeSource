@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as startOfDay from 'date-fns/start_of_day';
-import { isEqual } from 'lodash';
-import { parseDate } from 'sonar-ui-common/helpers/dates';
+import { startOfDay } from 'date-fns';
+import { isEqual, uniq } from 'lodash';
+import { DEFAULT_GRAPH } from '../../components/activity-graph/utils';
+import { parseDate } from '../../helpers/dates';
+import { MEASURES_REDIRECTION } from '../../helpers/measures';
 import {
   cleanQuery,
   parseAsArray,
@@ -27,10 +29,11 @@ import {
   parseAsString,
   serializeDate,
   serializeString,
-  serializeStringArray
-} from 'sonar-ui-common/helpers/query';
-import { DEFAULT_GRAPH } from '../../components/activity-graph/utils';
-import { GraphType } from '../../types/project-activity';
+  serializeStringArray,
+} from '../../helpers/query';
+import { MetricKey } from '../../types/metrics';
+import { GraphType, ParsedAnalysis } from '../../types/project-activity';
+import { Dict, RawQuery } from '../../types/types';
 
 export interface Query {
   category: string;
@@ -41,9 +44,6 @@ export interface Query {
   selectedDate?: Date;
   to?: Date;
 }
-
-export const EVENT_TYPES = ['VERSION', 'QUALITY_GATE', 'QUALITY_PROFILE', 'OTHER'];
-export const APPLICATION_EVENT_TYPES = ['QUALITY_GATE', 'DEFINITION_CHANGE', 'OTHER'];
 
 export function activityQueryChanged(prevQuery: Query, nextQuery: Query) {
   return prevQuery.category !== nextQuery.category || datesQueryChanged(prevQuery, nextQuery);
@@ -61,23 +61,19 @@ export function historyQueryChanged(prevQuery: Query, nextQuery: Query) {
   return prevQuery.graph !== nextQuery.graph;
 }
 
-export function selectedDateQueryChanged(prevQuery: Query, nextQuery: Query) {
-  return !isEqual(prevQuery.selectedDate, nextQuery.selectedDate);
-}
-
-interface AnalysesByDay {
-  byDay: T.Dict<T.ParsedAnalysis[]>;
+export interface AnalysesByDay {
+  byDay: Dict<ParsedAnalysis[]>;
   version: string | null;
   key: string | null;
 }
 
 export function getAnalysesByVersionByDay(
-  analyses: T.ParsedAnalysis[],
-  query: Pick<Query, 'category' | 'from' | 'to'>
+  analyses: ParsedAnalysis[],
+  query: Pick<Query, 'category' | 'from' | 'to'>,
 ) {
   return analyses.reduce<AnalysesByDay[]>((acc, analysis) => {
     let currentVersion = acc[acc.length - 1];
-    const versionEvent = analysis.events.find(event => event.category === 'VERSION');
+    const versionEvent = analysis.events.find((event) => event.category === 'VERSION');
     if (versionEvent) {
       const newVersion = { version: versionEvent.name, key: versionEvent.key, byDay: {} };
       if (!currentVersion || Object.keys(currentVersion.byDay).length > 0) {
@@ -92,16 +88,15 @@ export function getAnalysesByVersionByDay(
       acc.push(currentVersion);
     }
 
-    const day = startOfDay(parseDate(analysis.date))
-      .getTime()
-      .toString();
+    const day = startOfDay(parseDate(analysis.date)).getTime().toString();
 
     let matchFilters = true;
     if (query.category || query.from || query.to) {
       const isAfterFrom = !query.from || analysis.date >= query.from;
       const isBeforeTo = !query.to || analysis.date <= query.to;
       const hasSelectedCategoryEvents =
-        !query.category || analysis.events.find(event => event.category === query.category) != null;
+        !query.category ||
+        analysis.events.find((event) => event.category === query.category) != null;
       matchFilters = isAfterFrom && isBeforeTo && hasSelectedCategoryEvents;
     }
 
@@ -115,28 +110,31 @@ export function getAnalysesByVersionByDay(
   }, []);
 }
 
-export function parseQuery(urlQuery: T.RawQuery): Query {
+export function parseQuery(urlQuery: RawQuery): Query {
+  const parsedMetrics = parseAsArray(urlQuery['custom_metrics'], parseAsString<MetricKey>);
+  const customMetrics = uniq(parsedMetrics.map((metric) => MEASURES_REDIRECTION[metric] ?? metric));
+
   return {
     category: parseAsString(urlQuery['category']),
-    customMetrics: parseAsArray(urlQuery['custom_metrics'], parseAsString),
+    customMetrics,
     from: parseAsDate(urlQuery['from']),
     graph: parseGraph(urlQuery['graph']),
     project: parseAsString(urlQuery['id']),
     to: parseAsDate(urlQuery['to']),
-    selectedDate: parseAsDate(urlQuery['selected_date'])
+    selectedDate: parseAsDate(urlQuery['selected_date']),
   };
 }
 
-export function serializeQuery(query: Query): T.RawQuery {
+export function serializeQuery(query: Query): RawQuery {
   return cleanQuery({
     category: serializeString(query.category),
     from: serializeDate(query.from),
     project: serializeString(query.project),
-    to: serializeDate(query.to)
+    to: serializeDate(query.to),
   });
 }
 
-export function serializeUrlQuery(query: Query): T.RawQuery {
+export function serializeUrlQuery(query: Query): RawQuery {
   return cleanQuery({
     category: serializeString(query.category),
     custom_metrics: serializeStringArray(query.customMetrics),
@@ -144,7 +142,7 @@ export function serializeUrlQuery(query: Query): T.RawQuery {
     graph: serializeGraph(query.graph),
     id: serializeString(query.project),
     to: serializeDate(query.to),
-    selected_date: serializeDate(query.selectedDate)
+    selected_date: serializeDate(query.selectedDate),
   });
 }
 

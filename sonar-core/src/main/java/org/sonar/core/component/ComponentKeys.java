@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 public final class ComponentKeys {
 
+  /**
+   * Should be in sync with DefaultIndexedFile.MAX_KEY_LENGTH
+   */
   public static final int MAX_COMPONENT_KEY_LENGTH = 400;
 
   public static final String ALLOWED_CHARACTERS_MESSAGE = "Allowed characters are alphanumeric, '-', '_', '.' and ':', with at least one non-digit";
@@ -34,11 +37,19 @@ public final class ComponentKeys {
   public static final String MALFORMED_KEY_MESSAGE = "Malformed key for '%s'. %s.";
 
   /**
-   * Allowed characters are alphanumeric, '-', '_', '.' and ':', with at least one non-digit
+   * Allowed characters are alphanumeric, '-', '_', '.' and ':'
    */
-  private static final Pattern VALID_PROJECT_KEY_REGEXP = Pattern.compile("[\\p{Alnum}\\-_.:]*[\\p{Alpha}\\-_.:]+[\\p{Alnum}\\-_.:]*");
+  private static final String VALID_PROJECT_KEY_CHARS = "\\p{Alnum}-_.:";
+
+  private static final Pattern INVALID_PROJECT_KEY_REGEXP = Pattern.compile("[^" + VALID_PROJECT_KEY_CHARS + "]");
+
+  /**
+   * At least one non-digit is necessary
+   */
+  private static final Pattern VALID_PROJECT_KEY_REGEXP = Pattern.compile("[" + VALID_PROJECT_KEY_CHARS + "]*[\\p{Alpha}\\-_.:]+[" + VALID_PROJECT_KEY_CHARS + "]*");
 
   private static final String KEY_WITH_BRANCH_FORMAT = "%s:%s";
+  private static final String REPLACEMENT_CHARACTER = "_";
 
   private ComponentKeys() {
     // only static stuff
@@ -64,6 +75,10 @@ public final class ComponentKeys {
    */
   public static void checkProjectKey(String keyCandidate) {
     checkArgument(isValidProjectKey(keyCandidate), MALFORMED_KEY_MESSAGE, keyCandidate, ALLOWED_CHARACTERS_MESSAGE);
+  }
+
+  public static String sanitizeProjectKey(String rawProjectKey) {
+    return INVALID_PROJECT_KEY_REGEXP.matcher(rawProjectKey).replaceAll(REPLACEMENT_CHARACTER);
   }
 
   /**

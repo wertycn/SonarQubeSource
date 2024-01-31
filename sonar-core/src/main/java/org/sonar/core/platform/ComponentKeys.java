@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,22 +23,34 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.sonar.core.util.Uuids;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-class ComponentKeys {
-
+public class ComponentKeys {
+  private static final Logger LOG = LoggerFactory.getLogger(ComponentKeys.class);
   private static final Pattern IDENTITY_HASH_PATTERN = Pattern.compile(".+@[a-f0-9]+");
   private final Set<Class> objectsWithoutToString = new HashSet<>();
 
   Object of(Object component) {
-    return of(component, Loggers.get(ComponentKeys.class));
+    return of(component, LOG);
   }
 
   Object of(Object component, Logger log) {
     if (component instanceof Class) {
       return component;
     }
+    return ofInstance(component, log);
+  }
+
+  public String ofInstance(Object component) {
+    return ofInstance(component, LOG);
+  }
+
+  public String ofClass(Class<?> clazz) {
+    return clazz.getClassLoader() + "-" + clazz.getCanonicalName();
+  }
+
+  String ofInstance(Object component, Logger log) {
     String key = component.toString();
     if (IDENTITY_HASH_PATTERN.matcher(key).matches()) {
       if (!objectsWithoutToString.add(component.getClass())) {
@@ -46,6 +58,6 @@ class ComponentKeys {
       }
       key += Uuids.create();
     }
-    return new StringBuilder().append(component.getClass().getCanonicalName()).append("-").append(key).toString();
+    return ofClass(component.getClass()) + "-" + key;
   }
 }

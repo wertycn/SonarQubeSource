@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,30 +18,35 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { getLocalizedMetricName, translate } from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
 import { getLeakValue } from '../../../components/measure/utils';
 import DrilldownLink from '../../../components/shared/DrilldownLink';
-import { findMeasure, localizeMetric } from '../../../helpers/measures';
+import { getLocalizedMetricName, translate, translateWithParameters } from '../../../helpers/l10n';
+import { findMeasure, formatMeasure, localizeMetric } from '../../../helpers/measures';
 import { BranchLike } from '../../../types/branch-like';
 import { MetricKey } from '../../../types/metrics';
+import { Component, MeasureEnhanced } from '../../../types/types';
 
 export interface DebtValueProps {
   branchLike?: BranchLike;
-  component: T.Component;
-  measures: T.MeasureEnhanced[];
+  component: Component;
+  measures: MeasureEnhanced[];
   useDiffMetric?: boolean;
 }
 
 export function DebtValue(props: DebtValueProps) {
   const { branchLike, component, measures, useDiffMetric = false } = props;
-  const metric = useDiffMetric ? MetricKey.new_technical_debt : MetricKey.sqale_index;
-  const measure = findMeasure(measures, metric);
+  const metricKey = useDiffMetric ? MetricKey.new_technical_debt : MetricKey.sqale_index;
+  const measure = findMeasure(measures, metricKey);
 
   let value;
+  let metricName;
   if (measure) {
     value = useDiffMetric ? getLeakValue(measure) : measure.value;
+    metricName = getLocalizedMetricName(measure.metric, true);
+  } else {
+    metricName = localizeMetric(metricKey);
   }
+  const formattedValue = formatMeasure(value, 'WORK_DUR');
 
   return (
     <>
@@ -49,16 +54,20 @@ export function DebtValue(props: DebtValueProps) {
         <span aria-label={translate('no_data')} className="overview-measures-empty-value" />
       ) : (
         <DrilldownLink
+          ariaLabel={translateWithParameters(
+            'overview.see_more_details_on_x_of_y',
+            formattedValue,
+            metricName,
+          )}
           branchLike={branchLike}
           className="overview-measures-value text-light"
           component={component.key}
-          metric={metric}>
-          {formatMeasure(value, 'WORK_DUR')}
+          metric={metricKey}
+        >
+          {formattedValue}
         </DrilldownLink>
       )}
-      <span className="big-spacer-left">
-        {measure ? getLocalizedMetricName(measure.metric, true) : localizeMetric(metric)}
-      </span>
+      <span className="big-spacer-left">{metricName}</span>
     </>
   );
 }

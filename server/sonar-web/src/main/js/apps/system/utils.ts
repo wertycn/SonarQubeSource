@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { each, groupBy, memoize, omit, omitBy, pickBy, sortBy } from 'lodash';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
+import { each, memoize, omit, omitBy, pickBy, sortBy } from 'lodash';
+import { formatMeasure } from '../../helpers/measures';
+import { cleanQuery, parseAsArray, parseAsString, serializeStringArray } from '../../helpers/query';
 import {
-  cleanQuery,
-  parseAsArray,
-  parseAsString,
-  serializeStringArray
-} from 'sonar-ui-common/helpers/query';
-import { SystemUpgrade } from '../../types/system';
+  RawQuery,
+  SysInfoAppNode,
+  SysInfoBase,
+  SysInfoCluster,
+  SysInfoLogging,
+  SysInfoSearchNode,
+  SysInfoSection,
+  SysInfoStandalone,
+  SysInfoValueObject,
+} from '../../types/types';
 
 export interface Query {
   expandedCards: string[];
 }
 
-export const LOGS_LEVELS = ['INFO', 'DEBUG', 'TRACE'];
-const DEFAULT_LOG_LEVEL = LOGS_LEVELS[0];
+export enum LogsLevels {
+  INFO = 'INFO',
+  DEBUG = 'DEBUG',
+  TRACE = 'TRACE',
+}
+
+export const LOGS_LEVELS = Object.values(LogsLevels);
+const DEFAULT_LOG_LEVEL = LogsLevels.INFO;
 
 export const APP_NODES_FIELD = 'Application Nodes';
 export const ALMS_FIELD = 'ALMs';
@@ -57,7 +68,7 @@ export const VERSION_FIELD = 'Version';
 export const WEB_LOGGING_FIELD = 'Web Logging';
 export const WEB_PREFIX = 'Web';
 
-export function ignoreInfoFields(sysInfoObject: T.SysInfoValueObject) {
+export function ignoreInfoFields(sysInfoObject: SysInfoValueObject) {
   return omit(sysInfoObject, [
     ALMS_FIELD,
     BUNDLED_FIELD,
@@ -67,99 +78,97 @@ export function ignoreInfoFields(sysInfoObject: T.SysInfoValueObject) {
     PLUGINS_FIELD,
     SETTINGS_FIELD,
     SERVER_ID_FIELD,
-    VERSION_FIELD
+    VERSION_FIELD,
   ]);
 }
 
-export function getHealth(sysInfoObject: T.SysInfoBase) {
+export function getHealth(sysInfoObject: SysInfoBase) {
   return sysInfoObject[HEALTH_FIELD];
 }
 
-export function getHealthCauses(sysInfoObject: T.SysInfoBase) {
+export function getHealthCauses(sysInfoObject: SysInfoBase) {
   return sysInfoObject[HEALTH_CAUSES_FIELD];
 }
 
-export function getLogsLevel(sysInfoObject?: T.SysInfoValueObject): string {
+export function getLogsLevel(sysInfoObject?: SysInfoValueObject): LogsLevels {
   if (sysInfoObject !== undefined) {
     if (isLogInfoBlock(sysInfoObject)) {
-      return sysInfoObject[LOGS_LEVEL_FIELD];
+      return sysInfoObject[LOGS_LEVEL_FIELD] as LogsLevels;
     } else if (hasLoggingInfo(sysInfoObject)) {
       return sortBy(
         [
           getLogsLevel(sysInfoObject[WEB_LOGGING_FIELD]),
-          getLogsLevel(sysInfoObject[CE_LOGGING_FIELD])
+          getLogsLevel(sysInfoObject[CE_LOGGING_FIELD]),
         ],
-        logLevel => LOGS_LEVELS.indexOf(logLevel)
+        (logLevel: LogsLevels) => LOGS_LEVELS.indexOf(logLevel),
       )[1];
     }
   }
   return DEFAULT_LOG_LEVEL;
 }
 
-export function getAppNodes(sysInfoData: T.SysInfoCluster): T.SysInfoAppNode[] {
+export function getAppNodes(sysInfoData: SysInfoCluster): SysInfoAppNode[] {
   return sysInfoData[APP_NODES_FIELD];
 }
 
-export function getSearchNodes(sysInfoData: T.SysInfoCluster): T.SysInfoSearchNode[] {
+export function getSearchNodes(sysInfoData: SysInfoCluster): SysInfoSearchNode[] {
   return sysInfoData[SEARCH_NODES_FIELD];
 }
 
 export function isCluster(
-  sysInfoData: T.SysInfoCluster | T.SysInfoStandalone
-): sysInfoData is T.SysInfoCluster {
+  sysInfoData: SysInfoCluster | SysInfoStandalone,
+): sysInfoData is SysInfoCluster {
   return sysInfoData[SYSTEM_FIELD] && sysInfoData[SYSTEM_FIELD][HA_FIELD] === true;
 }
 
-export function isLogInfoBlock(
-  sysInfoObject: T.SysInfoValueObject
-): sysInfoObject is T.SysInfoLogging {
+export function isLogInfoBlock(sysInfoObject: SysInfoValueObject): sysInfoObject is SysInfoLogging {
   return sysInfoObject[LOGS_LEVEL_FIELD] !== undefined;
 }
 
 export function hasLoggingInfo(
-  sysInfoObject: T.SysInfoValueObject
-): sysInfoObject is T.SysInfoStandalone | T.SysInfoAppNode {
+  sysInfoObject: SysInfoValueObject,
+): sysInfoObject is SysInfoStandalone | SysInfoAppNode {
   return Boolean(sysInfoObject[WEB_LOGGING_FIELD] || sysInfoObject[CE_LOGGING_FIELD]);
 }
 
-export function getServerId(sysInfoData: T.SysInfoCluster | T.SysInfoStandalone): string {
+export function getServerId(sysInfoData: SysInfoCluster | SysInfoStandalone): string {
   return sysInfoData && sysInfoData[SYSTEM_FIELD][SERVER_ID_FIELD];
 }
 
-export function getVersion(sysInfoData: T.SysInfoStandalone): string | undefined {
+export function getVersion(sysInfoData: SysInfoStandalone): string | undefined {
   return sysInfoData && sysInfoData[SYSTEM_FIELD][VERSION_FIELD];
 }
 
-export function getClusterVersion(sysInfoData: T.SysInfoCluster): string | undefined {
+export function getClusterVersion(sysInfoData: SysInfoCluster): string | undefined {
   const appNodes = getAppNodes(sysInfoData);
   return appNodes.length > 0 ? appNodes[0][SYSTEM_FIELD][VERSION_FIELD] : undefined;
 }
 
-export function getSystemLogsLevel(sysInfoData: T.SysInfoCluster | T.SysInfoStandalone): string {
+export function getSystemLogsLevel(sysInfoData: SysInfoCluster | SysInfoStandalone): string {
   if (isCluster(sysInfoData)) {
-    const logLevels = sortBy(getAppNodes(sysInfoData).map(getLogsLevel), logLevel =>
-      LOGS_LEVELS.indexOf(logLevel)
+    const logLevels = sortBy(getAppNodes(sysInfoData).map(getLogsLevel), (logLevel: LogsLevels) =>
+      LOGS_LEVELS.indexOf(logLevel),
     );
     return logLevels.length > 0 ? logLevels[logLevels.length - 1] : DEFAULT_LOG_LEVEL;
-  } else {
-    return getLogsLevel(sysInfoData);
   }
+
+  return getLogsLevel(sysInfoData);
 }
 
-export function getNodeName(nodeInfo: T.SysInfoAppNode | T.SysInfoSearchNode): string {
+export function getNodeName(nodeInfo: SysInfoAppNode | SysInfoSearchNode): string {
   return nodeInfo[NAME_FIELD];
 }
 
-function getSystemData(sysInfoData: T.SysInfoBase): T.SysInfoValueObject {
-  const statData: T.SysInfoValueObject = {};
-  const statistics = sysInfoData[STATS_FIELD] as T.SysInfoValueObject; // TODO
+function getSystemData(sysInfoData: SysInfoBase): SysInfoValueObject {
+  const statData: SysInfoValueObject = {};
+  const statistics = sysInfoData[STATS_FIELD] as SysInfoValueObject; // TODO
   if (statistics) {
     statData['Lines of Code'] = formatMeasure(statistics[NCLOC_FIELD] as number, 'INT');
   }
   return { ...sysInfoData[SYSTEM_FIELD], ...statData };
 }
 
-export function getClusterMainCardSection(sysInfoData: T.SysInfoCluster): T.SysInfoValueObject {
+export function getClusterMainCardSection(sysInfoData: SysInfoCluster): SysInfoValueObject {
   return {
     ...getSystemData(sysInfoData),
     ...omit(sysInfoData, [
@@ -168,12 +177,12 @@ export function getClusterMainCardSection(sysInfoData: T.SysInfoCluster): T.SysI
       SEARCH_NODES_FIELD,
       SETTINGS_FIELD,
       STATS_FIELD,
-      SYSTEM_FIELD
-    ])
+      SYSTEM_FIELD,
+    ]),
   };
 }
 
-export function getStandaloneMainSections(sysInfoData: T.SysInfoBase): T.SysInfoValueObject {
+export function getStandaloneMainSections(sysInfoData: SysInfoBase): SysInfoValueObject {
   return {
     ...getSystemData(sysInfoData),
     ...(omitBy(
@@ -183,20 +192,20 @@ export function getStandaloneMainSections(sysInfoData: T.SysInfoBase): T.SysInfo
         [PLUGINS_FIELD, SETTINGS_FIELD, STATS_FIELD, SYSTEM_FIELD].includes(key) ||
         key.startsWith(CE_FIELD_PREFIX) ||
         key.startsWith(SEARCH_PREFIX) ||
-        key.startsWith(WEB_PREFIX)
-    ) as T.SysInfoValueObject)
+        key.startsWith(WEB_PREFIX),
+    ) as SysInfoValueObject),
   };
 }
 
-export function getStandaloneSecondarySections(sysInfoData: T.SysInfoBase): T.SysInfoSection {
+export function getStandaloneSecondarySections(sysInfoData: SysInfoBase): SysInfoSection {
   return {
-    Web: pickBy(sysInfoData, (_, key) => key.startsWith(WEB_PREFIX)) as T.SysInfoValueObject,
+    Web: pickBy(sysInfoData, (_, key) => key.startsWith(WEB_PREFIX)) as SysInfoValueObject,
     'Compute Engine': pickBy(sysInfoData, (_, key) =>
-      key.startsWith(CE_FIELD_PREFIX)
-    ) as T.SysInfoValueObject,
+      key.startsWith(CE_FIELD_PREFIX),
+    ) as SysInfoValueObject,
     'Search Engine': pickBy(sysInfoData, (_, key) =>
-      key.startsWith(SEARCH_PREFIX)
-    ) as T.SysInfoValueObject
+      key.startsWith(SEARCH_PREFIX),
+    ) as SysInfoValueObject,
   };
 }
 
@@ -209,9 +218,9 @@ export function getFileNameSuffix(suffix?: string) {
   );
 }
 
-export function groupSections(sysInfoData: T.SysInfoValueObject) {
-  const mainSection: T.SysInfoValueObject = {};
-  const sections: T.SysInfoSection = {};
+export function groupSections(sysInfoData: SysInfoValueObject) {
+  const mainSection: SysInfoValueObject = {};
+  const sections: SysInfoSection = {};
   each(sysInfoData, (item, key) => {
     if (typeof item !== 'object' || item instanceof Array) {
       mainSection[key] = item;
@@ -223,28 +232,14 @@ export function groupSections(sysInfoData: T.SysInfoValueObject) {
 }
 
 export const parseQuery = memoize(
-  (urlQuery: T.RawQuery): Query => ({
-    expandedCards: parseAsArray(urlQuery.expand, parseAsString)
-  })
+  (urlQuery: RawQuery): Query => ({
+    expandedCards: parseAsArray(urlQuery.expand, parseAsString),
+  }),
 );
 
 export const serializeQuery = memoize(
-  (query: Query): T.RawQuery =>
+  (query: Query): RawQuery =>
     cleanQuery({
-      expand: serializeStringArray(query.expandedCards)
-    })
+      expand: serializeStringArray(query.expandedCards),
+    }),
 );
-
-export function sortUpgrades(upgrades: SystemUpgrade[]): SystemUpgrade[] {
-  return sortBy(upgrades, [
-    (upgrade: SystemUpgrade) => -Number(upgrade.version.split('.')[0]),
-    (upgrade: SystemUpgrade) => -Number(upgrade.version.split('.')[1] || 0),
-    (upgrade: SystemUpgrade) => -Number(upgrade.version.split('.')[2] || 0)
-  ]);
-}
-
-export function groupUpgrades(upgrades: SystemUpgrade[]): SystemUpgrade[][] {
-  const groupedVersions = groupBy(upgrades, upgrade => upgrade.version.split('.')[0]);
-  const sortedMajor = sortBy(Object.keys(groupedVersions), key => -Number(key));
-  return sortedMajor.map(key => groupedVersions[key]);
-}

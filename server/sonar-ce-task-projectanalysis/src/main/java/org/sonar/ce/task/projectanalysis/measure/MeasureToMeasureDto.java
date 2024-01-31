@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -42,9 +42,6 @@ public class MeasureToMeasureDto {
     out.setMetricUuid(metric.getUuid());
     out.setComponentUuid(component.getUuid());
     out.setAnalysisUuid(analysisMetadataHolder.getUuid());
-    if (measure.hasVariation()) {
-      out.setVariation(measure.getVariation());
-    }
     if (measure.hasQualityGateStatus()) {
       setAlert(out, measure.getQualityGateStatus());
     }
@@ -58,9 +55,6 @@ public class MeasureToMeasureDto {
     out.setMetricUuid(metric.getUuid());
     out.setComponentUuid(component.getUuid());
     out.setProjectUuid(treeRootHolder.getRoot().getUuid());
-    if (measure.hasVariation()) {
-      out.setVariation(measure.getVariation());
-    }
     out.setValue(valueAsDouble(measure));
     out.setData(data(measure));
     return out;
@@ -73,11 +67,7 @@ public class MeasureToMeasureDto {
 
   private static String data(Measure in) {
     switch (in.getValueType()) {
-      case NO_VALUE:
-      case BOOLEAN:
-      case INT:
-      case LONG:
-      case DOUBLE:
+      case NO_VALUE, BOOLEAN, INT, LONG, DOUBLE:
         return in.getData();
       case STRING:
         return in.getStringValue();
@@ -94,20 +84,12 @@ public class MeasureToMeasureDto {
    */
   @CheckForNull
   private static Double valueAsDouble(Measure measure) {
-    switch (measure.getValueType()) {
-      case BOOLEAN:
-        return measure.getBooleanValue() ? 1.0d : 0.0d;
-      case INT:
-        return (double) measure.getIntValue();
-      case LONG:
-        return (double) measure.getLongValue();
-      case DOUBLE:
-        return measure.getDoubleValue();
-      case NO_VALUE:
-      case STRING:
-      case LEVEL:
-      default:
-        return null;
-    }
+    return switch (measure.getValueType()) {
+      case BOOLEAN -> measure.getBooleanValue() ? 1.0D : 0.0D;
+      case INT -> (double) measure.getIntValue();
+      case LONG -> (double) measure.getLongValue();
+      case DOUBLE -> measure.getDoubleValue();
+      default -> null;
+    };
   }
 }

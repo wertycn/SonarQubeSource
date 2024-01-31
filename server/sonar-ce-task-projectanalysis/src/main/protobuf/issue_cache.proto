@@ -33,8 +33,8 @@ message Issue {
   optional int32 ruleType = 2;
   optional string componentUuid = 3;
   optional string componentKey = 4;
-  optional string moduleUuid = 5;
-  optional string moduleUuidPath = 6;
+  reserved 5; //moduleUuid
+  reserved 6; // moduleUuidPath
   optional string projectUuid = 7;
   optional string projectKey = 8;
   optional string ruleKey = 9;
@@ -49,14 +49,13 @@ message Issue {
   optional string resolution = 18;
   optional string assigneeUuid = 19;
   optional string checksum = 20;
-  map<string, string> attributes = 21;
   optional string authorLogin = 22;
   optional string tags = 23;
   optional sonarqube.db.issues.Locations locations = 24;
 
   optional bool isFromExternalRuleEngine = 25;
 
-   // FUNCTIONAL DATES
+  // FUNCTIONAL DATES
   optional int64 creationDate = 26;
   optional int64 updateDate = 27;
   optional int64 closeDate = 28;
@@ -73,6 +72,20 @@ message Issue {
   optional int64 selectedAt = 37;
 
   repeated Comment comments = 38;
+
+  optional bool quickFixAvailable = 39;
+
+  optional bool isOnReferencedBranch = 40;
+  optional bool isOnChangedLine = 41;
+  optional bool isNewCodeReferenceIssue = 42;
+  optional bool isNoLongerNewCodeReferenceIssue = 43;
+  optional string ruleDescriptionContextKey = 44;
+  optional sonarqube.db.issues.MessageFormattings messageFormattings = 45;
+  optional string codeVariants = 46;
+  optional string assigneeLogin = 47;
+  optional string anticipatedTransitionUuid = 48;
+  repeated Impact impacts = 49;
+  optional string cleanCodeAttribute = 50;
 }
 
 message Comment {
@@ -95,4 +108,9 @@ message FieldDiffs {
 message Diff {
   optional string oldValue = 1;
   optional string newValue = 2;
+}
+
+message Impact {
+  required string software_quality = 1;
+  required string severity = 2;
 }

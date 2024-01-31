@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,13 +26,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.utils.DateUtils;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.scanner.bootstrap.ScannerProperties;
 import org.sonar.scanner.rule.QualityProfiles;
 import org.sonarqube.ws.Qualityprofiles.SearchWsResponse.QualityProfile;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -72,12 +71,12 @@ public class QualityProfileProviderTest {
 
   @Test
   public void testProfileProp() {
-    when(loader.load(eq("project"))).thenReturn(response);
+    when(loader.load("project")).thenReturn(response);
 
     QualityProfiles qps = qualityProfileProvider.provide(loader, props);
     assertResponse(qps);
 
-    verify(loader).load(eq("project"));
+    verify(loader).load("project");
     verifyNoMoreInteractions(loader);
   }
 

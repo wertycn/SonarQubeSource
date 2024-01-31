@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -158,11 +158,9 @@ public class SearchRequest {
    * <ul>
    *   <li>"actives"</li>
    *   <li>"createdAt"</li>
-   *   <li>"debtOverloaded"</li>
    *   <li>"debtRemFn"</li>
    *   <li>"defaultDebtRemFn"</li>
    *   <li>"defaultRemFn"</li>
-   *   <li>"effortToFixDescription"</li>
    *   <li>"gapDescription"</li>
    *   <li>"htmlDesc"</li>
    *   <li>"htmlNote"</li>
@@ -376,7 +374,7 @@ public class SearchRequest {
   }
 
   /**
-   * Example value: "squid:S001"
+   * Example value: "java:S001"
    */
   public SearchRequest setRuleKey(String ruleKey) {
     this.ruleKey = ruleKey;

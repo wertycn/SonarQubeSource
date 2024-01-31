@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,13 +21,23 @@ package org.sonar.application.es;
 
 import com.google.common.collect.Sets;
 import com.google.common.net.HostAndPort;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.tls.HandshakeCertificates;
+import okhttp3.tls.HeldCertificate;
 import org.elasticsearch.ElasticsearchStatusException;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,10 +66,31 @@ public class EsConnectorImplTest {
     "  \"error\" : \"i-have-a-bad-feelings-about-this\"" +
     "}";
 
+  private static final String ES_INFO_RESPONSE = "{"
+    + "  \"name\" : \"sonarqube\","
+    + "  \"cluster_name\" : \"sonarqube\","
+    + "  \"cluster_uuid\" : \"6Oj9lFIyQVa_d5HgQWqQpA\","
+    + "  \"version\" : {"
+    + "    \"number\" : \"7.14.1\","
+    + "    \"build_flavor\" : \"default\","
+    + "    \"build_type\" : \"tar\","
+    + "    \"build_hash\" : \"66b55ebfa59c92c15db3f69a335d500018b3331e\","
+    + "    \"build_date\" : \"2021-08-26T09:01:05.390870785Z\","
+    + "    \"build_snapshot\" : false,"
+    + "    \"lucene_version\" : \"8.9.0\","
+    + "    \"minimum_wire_compatibility_version\" : \"6.8.0\","
+    + "    \"minimum_index_compatibility_version\" : \"6.0.0-beta1\""
+    + "  },"
+    + "  \"tagline\" : \"You Know, for Search\""
+    + "}";
+
   @Rule
   public MockWebServer mockWebServer = new MockWebServer();
+  @Rule
+  public TemporaryFolder temp = new TemporaryFolder();
 
-  EsConnectorImpl underTest = new EsConnectorImpl(Sets.newHashSet(HostAndPort.fromParts(mockWebServer.getHostName(), mockWebServer.getPort())), null);
+  EsConnectorImpl underTest = new EsConnectorImpl(Sets.newHashSet(HostAndPort.fromParts(mockWebServer.getHostName(),
+    mockWebServer.getPort())), null, null, null);
 
   @After
   public void after() {
@@ -87,18 +118,64 @@ public class EsConnectorImplTest {
     mockServerResponse(200, JSON_SUCCESS_RESPONSE);
     String password = "test-password";
 
-    EsConnectorImpl underTest = new EsConnectorImpl(Sets.newHashSet(HostAndPort.fromParts(mockWebServer.getHostName(), mockWebServer.getPort())), password);
+    EsConnectorImpl underTest = new EsConnectorImpl(Sets.newHashSet(HostAndPort.fromParts(mockWebServer.getHostName(), mockWebServer.getPort())),
+      password, null, null);
 
     assertThat(underTest.getClusterHealthStatus())
       .hasValue(ClusterHealthStatus.YELLOW);
     assertThat(mockWebServer.takeRequest().getHeader("Authorization")).isEqualTo("Basic ZWxhc3RpYzp0ZXN0LXBhc3N3b3Jk");
   }
 
+  @Test
+  public void newInstance_whenKeyStorePassed_shouldCreateClient() throws GeneralSecurityException, IOException {
+    mockServerResponse(200, JSON_SUCCESS_RESPONSE);
+
+    Path keyStorePath = temp.newFile("keystore.p12").toPath();
+    String password = "password";
+
+    HandshakeCertificates certificate = createCertificate(mockWebServer.getHostName(), keyStorePath, password);
+    mockWebServer.useHttps(certificate.sslSocketFactory(), false);
+
+    EsConnectorImpl underTest = new EsConnectorImpl(Sets.newHashSet(HostAndPort.fromParts(mockWebServer.getHostName(),
+      mockWebServer.getPort())), null, keyStorePath, password);
+
+    assertThat(underTest.getClusterHealthStatus()).hasValue(ClusterHealthStatus.YELLOW);
+  }
+
+  private HandshakeCertificates createCertificate(String hostName, Path keyStorePath, String password)
+    throws GeneralSecurityException, IOException {
+    HeldCertificate localhostCertificate = new HeldCertificate.Builder()
+      .addSubjectAlternativeName(hostName)
+      .build();
+
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+      KeyStore ks = KeyStore.getInstance("PKCS12");
+      ks.load(null);
+      ks.setKeyEntry("alias", localhostCertificate.keyPair().getPrivate(), password.toCharArray(),
+        new java.security.cert.Certificate[]{localhostCertificate.certificate()});
+      ks.store(baos, password.toCharArray());
+
+      try (OutputStream outputStream = Files.newOutputStream(keyStorePath)) {
+        outputStream.write(baos.toByteArray());
+      }
+    }
+
+    return new HandshakeCertificates.Builder()
+      .heldCertificate(localhostCertificate)
+      .build();
+  }
+
   private void mockServerResponse(int httpCode, String jsonResponse) {
+    mockWebServer.enqueue(new MockResponse()
+      .setResponseCode(200)
+      .setBody(ES_INFO_RESPONSE)
+      .setHeader("Content-Type", "application/json")
+      .setHeader("X-elastic-product", "Elasticsearch"));
     mockWebServer.enqueue(new MockResponse()
       .setResponseCode(httpCode)
       .setBody(jsonResponse)
-      .setHeader("Content-Type", "application/json"));
+      .setHeader("Content-Type", "application/json")
+      .setHeader("X-elastic-product", "Elasticsearch"));
   }
 
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,12 @@ public class AnonymousMockUserSession extends AbstractMockUserSession<AnonymousM
   }
 
   @Override
-  public boolean isRoot() {
+  public boolean isActive() {
+    return false;
+  }
+
+  @Override
+  public boolean isAuthenticatedBrowserSession() {
     return false;
   }
 
@@ -68,5 +73,10 @@ public class AnonymousMockUserSession extends AbstractMockUserSession<AnonymousM
   @Override
   public Optional<ExternalIdentity> getExternalIdentity() {
     return Optional.empty();
+  }
+
+  @Override
+  public void flagAsBrowserSession() {
+    throw new UnsupportedOperationException("An anonymous session can't be authenticated");
   }
 }

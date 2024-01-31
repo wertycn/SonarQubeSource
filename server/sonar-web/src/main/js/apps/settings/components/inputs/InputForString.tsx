@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,5 +22,5 @@ import { DefaultSpecializedInputProps } from '../../utils';
 import SimpleInput from './SimpleInput';
 
 export default function InputForString(props: DefaultSpecializedInputProps) {
-  return <SimpleInput {...props} className="settings-large-input" type="text" />;
+  return <SimpleInput size="large" type="text" {...props} />;
 }

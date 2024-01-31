@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,13 +25,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
-import org.sonar.api.CoreProperties;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.log.CeTaskMessages;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.duplications.block.Block;
@@ -46,7 +44,7 @@ import org.sonar.duplications.index.PackedMemoryCloneIndex;
  */
 public class IntegrateCrossProjectDuplications {
 
-  private static final Logger LOGGER = Loggers.get(IntegrateCrossProjectDuplications.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(IntegrateCrossProjectDuplications.class);
   private static final String JAVA_KEY = "java";
   private static final String DEPRECATED_WARNING = "This analysis uses the deprecated cross-project duplication feature.";
   private static final String DEPRECATED_WARNING_DASHBOARD = "This project uses the deprecated cross-project duplication feature.";
@@ -57,12 +55,13 @@ public class IntegrateCrossProjectDuplications {
   private final Configuration config;
   private final DuplicationRepository duplicationRepository;
 
-  private Map<String, NumberOfUnitsNotLessThan> numberOfUnitsByLanguage = new HashMap<>();
+  private final Map<String, NumberOfUnitsNotLessThan> numberOfUnitsByLanguage = new HashMap<>();
 
-  public IntegrateCrossProjectDuplications(Configuration config, DuplicationRepository duplicationRepository, CeTaskMessages ceTaskMessages, System2 system) {
+  public IntegrateCrossProjectDuplications(CrossProjectDuplicationStatusHolder crossProjectDuplicationStatusHolder, Configuration config,
+    DuplicationRepository duplicationRepository, CeTaskMessages ceTaskMessages, System2 system) {
     this.config = config;
     this.duplicationRepository = duplicationRepository;
-    if (config.getBoolean(CoreProperties.CPD_CROSS_PROJECT).orElse(false)) {
+    if (crossProjectDuplicationStatusHolder.isEnabled()) {
       LOGGER.warn(DEPRECATED_WARNING);
       ceTaskMessages.add(new CeTaskMessages.Message(DEPRECATED_WARNING_DASHBOARD, system.now()));
     }
@@ -76,7 +75,7 @@ public class IntegrateCrossProjectDuplications {
     List<CloneGroup> duplications = SuffixTreeCloneDetectionAlgorithm.detect(duplicationIndex, originBlocks);
     Iterable<CloneGroup> filtered = duplications.stream()
       .filter(getNumberOfUnitsNotLessThan(component.getFileAttributes().getLanguageKey()))
-      .collect(Collectors.toList());
+      .toList();
     addDuplications(component, filtered);
   }
 
@@ -91,7 +90,7 @@ public class IntegrateCrossProjectDuplications {
     for (CloneGroup duplication : duplications) {
       cloneGroupCount++;
       if (cloneGroupCount > MAX_CLONE_GROUP_PER_FILE) {
-        LOGGER.warn("Too many duplication groups on file {}. Keeping only the first {} groups.", file.getDbKey(), MAX_CLONE_GROUP_PER_FILE);
+        LOGGER.warn("Too many duplication groups on file {}. Keeping only the first {} groups.", file.getKey(), MAX_CLONE_GROUP_PER_FILE);
         break;
       }
       addDuplication(file, duplication);
@@ -114,7 +113,7 @@ public class IntegrateCrossProjectDuplications {
       .filter(new DoesNotMatchSameComponentKey(originPart.getResourceId()))
       .filter(new DuplicateLimiter(file, originPart))
       .map(ClonePartToCrossProjectDuplicate.INSTANCE)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private NumberOfUnitsNotLessThan getNumberOfUnitsNotLessThan(String language) {
@@ -174,7 +173,7 @@ public class IntegrateCrossProjectDuplications {
     public boolean test(@Nonnull ClonePart input) {
       if (counter == MAX_CLONE_PART_PER_GROUP) {
         LOGGER.warn("Too many duplication references on file {} for block at line {}. Keeping only the first {} references.",
-          file.getDbKey(), originPart.getStartLine(), MAX_CLONE_PART_PER_GROUP);
+          file.getKey(), originPart.getStartLine(), MAX_CLONE_PART_PER_GROUP);
       }
       boolean res = counter < MAX_CLONE_GROUP_PER_FILE;
       counter++;

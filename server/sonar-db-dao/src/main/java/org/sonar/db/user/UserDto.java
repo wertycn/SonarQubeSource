@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,19 @@
  */
 package org.sonar.db.user;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.core.user.DefaultUser;
 
+import static java.lang.String.CASE_INSENSITIVE_ORDER;
+import static java.util.Comparator.comparing;
+
 /**
  * @since 3.2
  */
-public class UserDto {
+public class UserDto implements UserId {
   public static final char SCM_ACCOUNTS_SEPARATOR = '\n';
 
   /** Technical unique identifier, can't be null */
@@ -39,22 +40,20 @@ public class UserDto {
   private String name;
   private String email;
   private boolean active = true;
-  private String scmAccounts;
   private String externalId;
   private String externalLogin;
   private String externalIdentityProvider;
   // Hashed password that may be null in case of external authentication
   private String cryptedPassword;
-  // Salt used for SHA1, null when bcrypt is used or for external authentication
+  // Salt used for PBKDF2, null when bcrypt is used or for external authentication
   private String salt;
   // Hash method used to generate cryptedPassword, my be null in case of external authentication
   private String hashMethod;
   private String homepageType;
   private String homepageParameter;
   private boolean local = true;
-  private boolean root = false;
-  private boolean onboarded = false;
   private boolean resetPassword = false;
+  private List<String> scmAccounts = new ArrayList<>();
 
   /**
    * Date of the last time the user has accessed to the server.
@@ -77,7 +76,7 @@ public class UserDto {
     return uuid;
   }
 
-  UserDto setUuid(String uuid) {
+  public UserDto setUuid(String uuid) {
     this.uuid = uuid;
     return this;
   }
@@ -123,39 +122,21 @@ public class UserDto {
     return this;
   }
 
-  @CheckForNull
-  public String getScmAccounts() {
+  /**
+   * Used by mybatis
+   */
+  private List<String> getScmAccounts() {
     return scmAccounts;
   }
 
-  public List<String> getScmAccountsAsList() {
-    return decodeScmAccounts(scmAccounts);
+  public List<String> getSortedScmAccounts() {
+    // needs to be done when reading, as mybatis do not use the setter
+    return scmAccounts.stream().sorted(comparing(s -> s, CASE_INSENSITIVE_ORDER)).toList();
   }
 
-  public UserDto setScmAccounts(@Nullable String s) {
-    this.scmAccounts = s;
+  public UserDto setScmAccounts(List<String> scmAccounts) {
+    this.scmAccounts = scmAccounts;
     return this;
-  }
-
-  public UserDto setScmAccounts(@Nullable List<String> list) {
-    this.scmAccounts = encodeScmAccounts(list);
-    return this;
-  }
-
-  @CheckForNull
-  public static String encodeScmAccounts(@Nullable List<String> scmAccounts) {
-    if (scmAccounts != null && !scmAccounts.isEmpty()) {
-      return String.format("%s%s%s", SCM_ACCOUNTS_SEPARATOR, String.join(String.valueOf(SCM_ACCOUNTS_SEPARATOR), scmAccounts), SCM_ACCOUNTS_SEPARATOR);
-    }
-    return null;
-  }
-
-  public static List<String> decodeScmAccounts(@Nullable String dbValue) {
-    if (dbValue == null) {
-      return new ArrayList<>();
-    } else {
-      return Lists.newArrayList(Splitter.on(SCM_ACCOUNTS_SEPARATOR).omitEmptyStrings().split(dbValue));
-    }
   }
 
   public String getExternalId() {
@@ -241,31 +222,6 @@ public class UserDto {
 
   public UserDto setHomepageParameter(@Nullable String homepageParameter) {
     this.homepageParameter = homepageParameter;
-    return this;
-  }
-
-  public boolean isRoot() {
-    return root;
-  }
-
-  /**
-   * Setters is not accessible as MyBatis doesn't need setter to set the field and dedicated SQL requests must be used
-   * to update the root flag of a user:
-   * <ul>
-   *   <li>a user can not be created root</li>
-   *   <li>the generic update method of a user can not change its root flag</li>
-   * </ul>
-   */
-  protected void setRoot(boolean root) {
-    this.root = root;
-  }
-
-  public boolean isOnboarded() {
-    return onboarded;
-  }
-
-  public UserDto setOnboarded(boolean onboarded) {
-    this.onboarded = onboarded;
     return this;
   }
 

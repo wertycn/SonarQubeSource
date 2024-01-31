@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,7 @@ import java.util.Arrays;
 import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.ce.measure.MeasureComputer;
-import org.sonar.api.ce.measure.test.TestMeasureComputerDefinitionContext;
+import org.sonar.api.testfixtures.measure.TestMeasureComputerDefinitionContext;
 import org.sonar.ce.task.projectanalysis.api.measurecomputer.MeasureComputerDefinitionImpl;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolderRule;

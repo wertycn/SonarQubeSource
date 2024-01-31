@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,16 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import getHistory from 'sonar-ui-common/helpers/getHistory';
-import { requireAuthorization } from '../../store/appState';
-import getStore from './getStore';
+import { getBaseUrl } from '../../helpers/system';
 
 export default function handleRequiredAuthorization() {
-  const store = getStore();
-  const history = getHistory();
-
   const returnTo = window.location.pathname + window.location.search + window.location.hash;
-
-  store.dispatch(requireAuthorization());
-  history.replace({ pathname: '/sessions/new', query: { return_to: returnTo } });
+  const searchParams = new URLSearchParams({ return_to: returnTo, authorizationError: 'true' });
+  window.location.replace(`${getBaseUrl()}/sessions/new?${searchParams.toString()}`);
 }

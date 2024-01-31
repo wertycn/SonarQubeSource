@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -77,7 +77,7 @@ public class DefaultProjectRepositoriesLoader implements ProjectRepositoriesLoad
     Throwable t = e;
 
     do {
-      if (t instanceof HttpException && ((HttpException) t).code() == HttpURLConnection.HTTP_NOT_FOUND) {
+      if (t instanceof HttpException httpException && httpException.code() == HttpURLConnection.HTTP_NOT_FOUND) {
         return false;
       }
       t = t.getCause();

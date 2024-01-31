@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,21 +20,17 @@
 package org.sonar.db.measure;
 
 import java.util.Collections;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.db.component.ComponentTesting;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.db.measure.MeasureTreeQuery.Strategy.CHILDREN;
 import static org.sonar.db.measure.MeasureTreeQuery.Strategy.LEAVES;
 
 public class MeasureTreeQueryTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
+  
   @Test
   public void create_query() {
     MeasureTreeQuery query = MeasureTreeQuery.builder()
@@ -111,9 +107,11 @@ public class MeasureTreeQueryTest {
 
   @Test
   public void fail_when_no_strategy() {
-    expectedException.expect(NullPointerException.class);
-    MeasureTreeQuery.builder()
-      .build();
+    assertThatThrownBy(() -> {
+      MeasureTreeQuery.builder()
+        .build();
+    })
+      .isInstanceOf(NullPointerException.class);
   }
 
 }

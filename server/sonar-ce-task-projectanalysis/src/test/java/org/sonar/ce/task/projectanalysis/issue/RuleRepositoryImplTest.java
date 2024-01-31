@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,30 +21,33 @@ package org.sonar.ce.task.projectanalysis.issue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.Optional;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.System2;
-import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
 import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.rule.DeprecatedRuleKeyDto;
 import org.sonar.db.rule.RuleDao;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
+import org.sonar.scanner.protocol.Constants;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.server.rule.index.RuleIndexer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -52,6 +55,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
 
+@RunWith(DataProviderRunner.class)
 public class RuleRepositoryImplTest {
   private static final RuleDto AB_RULE = createABRuleDto().setUuid("rule-uuid");
   private static final RuleKey AB_RULE_DEPRECATED_KEY_1 = RuleKey.of("old_a", "old_b");
@@ -60,8 +64,6 @@ public class RuleRepositoryImplTest {
   private static final RuleKey AC_RULE_KEY = RuleKey.of("a", "c");
   private static final String AC_RULE_UUID = "uuid-684";
 
-  @org.junit.Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @org.junit.Rule
   public DbTester db = DbTester.create(System2.INSTANCE);
@@ -139,9 +141,7 @@ public class RuleRepositoryImplTest {
 
   @Test
   public void getByKey_throws_NPE_if_key_argument_is_null() {
-    expectNullRuleKeyNPE();
-
-    underTest.getByKey(null);
+    expectNullRuleKeyNPE(() -> underTest.getByKey(null));
   }
 
   @Test
@@ -169,28 +169,23 @@ public class RuleRepositoryImplTest {
 
   @Test
   public void getByKey_throws_IAE_if_rules_does_not_exist_in_DB() {
-    expectIAERuleNotFound(AC_RULE_KEY);
-
-    underTest.getByKey(AC_RULE_KEY);
+    expectIAERuleNotFound(() -> underTest.getByKey(AC_RULE_KEY), AC_RULE_KEY);
   }
 
   @Test
   public void getByKey_throws_IAE_if_argument_is_deprecated_key_in_DB_of_non_existing_rule() {
-    expectIAERuleNotFound(DEPRECATED_KEY_OF_NON_EXITING_RULE);
-
-    underTest.getByKey(DEPRECATED_KEY_OF_NON_EXITING_RULE);
+    expectIAERuleNotFound(() -> underTest.getByKey(DEPRECATED_KEY_OF_NON_EXITING_RULE), DEPRECATED_KEY_OF_NON_EXITING_RULE);
   }
 
-  private void expectIAERuleNotFound(RuleKey ruleKey) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Can not find rule for key " + ruleKey.toString() + ". This rule does not exist in DB");
+  private void expectIAERuleNotFound(ThrowingCallable callback, RuleKey ruleKey) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Can not find rule for key " + ruleKey.toString() + ". This rule does not exist in DB");
   }
 
   @Test
   public void findByKey_throws_NPE_if_key_argument_is_null() {
-    expectNullRuleKeyNPE();
-
-    underTest.findByKey(null);
+    expectNullRuleKeyNPE(() -> underTest.findByKey(null));
   }
 
   @Test
@@ -239,10 +234,9 @@ public class RuleRepositoryImplTest {
 
   @Test
   public void getByUuid_throws_IAE_if_rules_does_not_exist_in_DB() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Can not find rule for uuid " + AC_RULE_UUID + ". This rule does not exist in DB");
-
-    underTest.getByUuid(AC_RULE_UUID);
+    assertThatThrownBy(() -> underTest.getByUuid(AC_RULE_UUID))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Can not find rule for uuid " + AC_RULE_UUID + ". This rule does not exist in DB");
   }
 
   @Test
@@ -269,7 +263,7 @@ public class RuleRepositoryImplTest {
     assertThat(underTest.getByKey(ruleKey).getType()).isNull();
 
     RuleDao ruleDao = dbClient.ruleDao();
-    Optional<RuleDefinitionDto> ruleDefinitionDto = ruleDao.selectDefinitionByKey(dbClient.openSession(false), ruleKey);
+    Optional<RuleDto> ruleDefinitionDto = ruleDao.selectByKey(dbClient.openSession(false), ruleKey);
     assertThat(ruleDefinitionDto).isNotPresent();
   }
 
@@ -283,7 +277,7 @@ public class RuleRepositoryImplTest {
     underTest.saveOrUpdateAddHocRules(db.getSession());
     db.commit();
 
-    Optional<RuleDefinitionDto> ruleDefinitionDto = db.getDbClient().ruleDao().selectDefinitionByKey(db.getSession(), ruleKey);
+    Optional<RuleDto> ruleDefinitionDto = db.getDbClient().ruleDao().selectByKey(db.getSession(), ruleKey);
     assertThat(ruleDefinitionDto).isPresent();
 
     Rule rule = underTest.getByKey(ruleKey);
@@ -293,9 +287,38 @@ public class RuleRepositoryImplTest {
     verify(ruleIndexer).commitAndIndex(db.getSession(), ruleDefinitionDto.get().getUuid());
   }
 
-  private void expectNullRuleKeyNPE() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("RuleKey can not be null");
+  @DataProvider
+  public static Object[][] typesMapping() {
+    return new Object[][]{
+      {ScannerReport.IssueType.CODE_SMELL, RuleType.CODE_SMELL},
+      {ScannerReport.IssueType.BUG, RuleType.BUG},
+      {ScannerReport.IssueType.VULNERABILITY, RuleType.VULNERABILITY},
+      {ScannerReport.IssueType.SECURITY_HOTSPOT, RuleType.SECURITY_HOTSPOT}
+    };
+  }
+
+  @Test
+  @UseDataProvider("typesMapping")
+  public void addOrUpdateAddHocRuleIfNeeded_whenAdHocRule_shouldReturnRuleWithSameType(ScannerReport.IssueType type, RuleType expectedType) {
+    RuleKey ruleKey = RuleKey.of("any_repo", "any_rule");
+    ScannerReport.AdHocRule adHocRule = ScannerReport.AdHocRule.newBuilder()
+      .setEngineId("ANY_ENGINE")
+      .setRuleId("any_rule")
+      .setName("ANY_NAME")
+      .setSeverity(Constants.Severity.MAJOR)
+      .setType(type)
+      .build();
+
+    underTest.addOrUpdateAddHocRuleIfNeeded(ruleKey, () -> new NewAdHocRule(adHocRule));
+
+    Rule rule = underTest.getByKey(ruleKey);
+    assertThat(rule.getType()).isEqualTo(expectedType);
+  }
+
+  private void expectNullRuleKeyNPE(ThrowingCallable callback) {
+    assertThatThrownBy(callback)
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("RuleKey can not be null");
   }
 
   private void verifyNoMethodCallTriggersCallToDB() {

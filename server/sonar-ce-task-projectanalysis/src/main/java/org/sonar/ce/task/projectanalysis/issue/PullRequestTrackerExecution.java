@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import org.sonar.api.issue.Issue;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.source.NewLinesRepository;
@@ -37,29 +37,26 @@ public class PullRequestTrackerExecution {
   private final TrackerBaseInputFactory baseInputFactory;
   private final Tracker<DefaultIssue, DefaultIssue> tracker;
   private final NewLinesRepository newLinesRepository;
-  private final TrackerTargetBranchInputFactory targetInputFactory;
 
-  public PullRequestTrackerExecution(TrackerBaseInputFactory baseInputFactory, TrackerTargetBranchInputFactory targetInputFactory,
+  public PullRequestTrackerExecution(TrackerBaseInputFactory baseInputFactory,
     Tracker<DefaultIssue, DefaultIssue> tracker, NewLinesRepository newLinesRepository) {
     this.baseInputFactory = baseInputFactory;
-    this.targetInputFactory = targetInputFactory;
     this.tracker = tracker;
     this.newLinesRepository = newLinesRepository;
   }
 
-  public Tracking<DefaultIssue, DefaultIssue> track(Component component, Input<DefaultIssue> rawInput) {
+  public Tracking<DefaultIssue, DefaultIssue> track(Component component, Input<DefaultIssue> rawInput, @Nullable Input<DefaultIssue> targetInput) {
     // Step 1: only keep issues on changed lines
     List<DefaultIssue> filteredRaws = keepIssuesHavingAtLeastOneLocationOnChangedLines(component, rawInput.getIssues());
     Input<DefaultIssue> unmatchedRawsAfterChangedLineFiltering = createInput(rawInput, filteredRaws);
 
     // Step 2: remove issues that are resolved in the target branch
     Input<DefaultIssue> unmatchedRawsAfterTargetResolvedTracking;
-    if (targetInputFactory.hasTargetBranchAnalysis()) {
-      Input<DefaultIssue> targetInput = targetInputFactory.createForTargetBranch(component);
-      List<DefaultIssue> resolvedTargetIssues = targetInput.getIssues().stream().filter(i -> Issue.STATUS_RESOLVED.equals(i.status())).collect(Collectors.toList());
+    if (targetInput != null) {
+      List<DefaultIssue> resolvedTargetIssues = targetInput.getIssues().stream().filter(i -> Issue.STATUS_RESOLVED.equals(i.status())).toList();
       Input<DefaultIssue> resolvedTargetInput = createInput(targetInput, resolvedTargetIssues);
       Tracking<DefaultIssue, DefaultIssue> prResolvedTracking = tracker.trackNonClosed(unmatchedRawsAfterChangedLineFiltering, resolvedTargetInput);
-      unmatchedRawsAfterTargetResolvedTracking = createInput(rawInput, prResolvedTracking.getUnmatchedRaws().collect(Collectors.toList()));
+      unmatchedRawsAfterTargetResolvedTracking = createInput(rawInput, prResolvedTracking.getUnmatchedRaws().toList());
     } else {
       unmatchedRawsAfterTargetResolvedTracking = unmatchedRawsAfterChangedLineFiltering;
     }
@@ -84,7 +81,7 @@ public class PullRequestTrackerExecution {
     final Set<Integer> newLines = newLinesOpt.get();
     return issues.stream()
       .filter(i -> IssueLocations.allLinesFor(i, component.getUuid()).anyMatch(newLines::contains))
-      .collect(Collectors.toList());
+      .toList();
   }
 
 }

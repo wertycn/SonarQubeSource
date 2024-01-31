@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,23 +21,19 @@ package org.sonar.ce.async;
 
 import java.util.HashSet;
 import java.util.Set;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class SynchronousAsyncExecutionTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private SynchronousAsyncExecution underTest = new SynchronousAsyncExecution();
 
   @Test
   public void addToQueue_fails_with_NPE_if_Runnable_is_null() {
-    expectedException.expect(NullPointerException.class);
-
-    underTest.addToQueue(null);
+    assertThatThrownBy(() -> underTest.addToQueue(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test

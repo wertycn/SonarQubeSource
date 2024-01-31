@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -41,8 +41,8 @@ import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.server.notification.NotificationDispatcherMetadata.GLOBAL_NOTIFICATION;
 import static org.sonar.server.notification.NotificationDispatcherMetadata.PER_PROJECT_NOTIFICATION;
@@ -57,7 +57,7 @@ public class MyNewIssuesNotificationHandlerTest {
 
   @Test
   public void getMetadata_returns_same_instance_as_static_method() {
-    assertThat(underTest.getMetadata().get()).isSameAs(MyNewIssuesNotificationHandler.newMetadata());
+    assertThat(underTest.getMetadata()).containsSame(MyNewIssuesNotificationHandler.newMetadata());
   }
 
   @Test
@@ -92,7 +92,7 @@ public class MyNewIssuesNotificationHandlerTest {
     int deliver = underTest.deliver(Collections.emptyList());
 
     assertThat(deliver).isZero();
-    verifyZeroInteractions(notificationManager, emailNotificationChannel);
+    verifyNoInteractions(notificationManager, emailNotificationChannel);
   }
 
   @Test
@@ -105,10 +105,10 @@ public class MyNewIssuesNotificationHandlerTest {
     int deliver = underTest.deliver(notifications);
 
     assertThat(deliver).isZero();
-    verifyZeroInteractions(notificationManager);
+    verifyNoInteractions(notificationManager);
     verify(emailNotificationChannel).isActivated();
     verifyNoMoreInteractions(emailNotificationChannel);
-    notifications.forEach(Mockito::verifyZeroInteractions);
+    notifications.forEach(Mockito::verifyNoInteractions);
   }
 
   @Test
@@ -121,7 +121,7 @@ public class MyNewIssuesNotificationHandlerTest {
     int deliver = underTest.deliver(notifications);
 
     assertThat(deliver).isZero();
-    verifyZeroInteractions(notificationManager);
+    verifyNoInteractions(notificationManager);
     verify(emailNotificationChannel).isActivated();
     verifyNoMoreInteractions(emailNotificationChannel);
     notifications.forEach(notification -> {
@@ -140,7 +140,7 @@ public class MyNewIssuesNotificationHandlerTest {
     int deliver = underTest.deliver(notifications);
 
     assertThat(deliver).isZero();
-    verifyZeroInteractions(notificationManager);
+    verifyNoInteractions(notificationManager);
     verify(emailNotificationChannel).isActivated();
     verifyNoMoreInteractions(emailNotificationChannel);
     notifications.forEach(notification -> {

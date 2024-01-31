@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,14 +21,13 @@ package org.sonar.ce.task.projectanalysis.qualityprofile;
 
 import java.util.Collections;
 import java.util.Optional;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.Severity;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ActiveRulesHolderImplTest {
 
@@ -36,11 +35,9 @@ public class ActiveRulesHolderImplTest {
 
   private static final long SOME_DATE = 1_000L;
 
-  static final RuleKey RULE_KEY = RuleKey.of("squid", "S001");
+  static final RuleKey RULE_KEY = RuleKey.of("java", "S001");
   private static final String QP_KEY = "qp1";
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   ActiveRulesHolderImpl underTest = new ActiveRulesHolderImpl();
 
@@ -48,7 +45,7 @@ public class ActiveRulesHolderImplTest {
   public void get_inactive_rule() {
     underTest.set(Collections.emptyList());
     Optional<ActiveRule> activeRule = underTest.get(RULE_KEY);
-    assertThat(activeRule.isPresent()).isFalse();
+    assertThat(activeRule).isEmpty();
   }
 
   @Test
@@ -56,36 +53,36 @@ public class ActiveRulesHolderImplTest {
     underTest.set(asList(new ActiveRule(RULE_KEY, Severity.BLOCKER, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY)));
 
     Optional<ActiveRule> activeRule = underTest.get(RULE_KEY);
-    assertThat(activeRule.isPresent()).isTrue();
+    assertThat(activeRule).isPresent();
     assertThat(activeRule.get().getRuleKey()).isEqualTo(RULE_KEY);
     assertThat(activeRule.get().getSeverity()).isEqualTo(Severity.BLOCKER);
   }
 
   @Test
   public void can_not_set_twice() {
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Active rules have already been initialized");
-
-    underTest.set(asList(new ActiveRule(RULE_KEY, Severity.BLOCKER, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY)));
-    underTest.set(Collections.emptyList());
-
+    assertThatThrownBy(() -> {
+      underTest.set(asList(new ActiveRule(RULE_KEY, Severity.BLOCKER, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY)));
+      underTest.set(Collections.emptyList());
+    })
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Active rules have already been initialized");
   }
 
   @Test
   public void can_not_get_if_not_initialized() {
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Active rules have not been initialized yet");
-
-    underTest.get(RULE_KEY);
+    assertThatThrownBy(() -> underTest.get(RULE_KEY))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Active rules have not been initialized yet");
   }
 
   @Test
   public void can_not_set_duplicated_rules() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Active rule must not be declared multiple times: squid:S001");
-
-    underTest.set(asList(
-      new ActiveRule(RULE_KEY, Severity.BLOCKER, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY),
-      new ActiveRule(RULE_KEY, Severity.MAJOR, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY)));
+    assertThatThrownBy(() -> {
+      underTest.set(asList(
+        new ActiveRule(RULE_KEY, Severity.BLOCKER, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY),
+        new ActiveRule(RULE_KEY, Severity.MAJOR, Collections.emptyMap(), SOME_DATE, PLUGIN_KEY, QP_KEY)));
+    })
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Active rule must not be declared multiple times: java:S001");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,17 @@
  */
 package org.sonar.server.ws;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HttpHeaders;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.util.List;
+import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.Part;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.server.http.JavaxHttpRequest;
 import org.sonarqube.ws.MediaTypes;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,12 +40,9 @@ import static org.mockito.Mockito.when;
 
 public class ServletRequestTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+  private final HttpServletRequest source = mock(HttpServletRequest.class);
 
-  private HttpServletRequest source = mock(HttpServletRequest.class);
-
-  private ServletRequest underTest = new ServletRequest(source);
+  private final ServletRequest underTest = new ServletRequest(new JavaxHttpRequest(source));
 
   @Test
   public void call_method() {
@@ -80,8 +76,8 @@ public class ServletRequestTest {
 
   @Test
   public void has_param_from_source() {
-    when(source.getParameterMap()).thenReturn(ImmutableMap.of("param", new String[] {"value"}));
-    ServletRequest request = new ServletRequest(source);
+    when(source.getParameterMap()).thenReturn(Map.of("param", new String[] {"value"}));
+    ServletRequest request = new ServletRequest(new JavaxHttpRequest(source));
     assertThat(request.hasParam("param")).isTrue();
   }
 
@@ -181,11 +177,11 @@ public class ServletRequestTest {
   @Test
   public void to_string() {
     when(source.getRequestURL()).thenReturn(new StringBuffer("http:localhost:9000/api/issues"));
-    assertThat(underTest.toString()).isEqualTo("http:localhost:9000/api/issues");
+    assertThat(underTest).hasToString("http:localhost:9000/api/issues");
 
     when(source.getQueryString()).thenReturn("components=sonar");
 
-    assertThat(underTest.toString()).isEqualTo("http:localhost:9000/api/issues?components=sonar");
+    assertThat(underTest).hasToString("http:localhost:9000/api/issues?components=sonar");
   }
 
   @Test
@@ -212,6 +208,13 @@ public class ServletRequestTest {
     when(source.getReader()).thenReturn(reader);
 
     assertThat(underTest.getReader()).isEqualTo(reader);
+  }
+
+  @Test
+  public void startAsync() {
+    underTest.startAsync();
+
+    verify(source).startAsync();
   }
 
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,34 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Link } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 
 export default function ExtensionInstallationStepContent() {
   return (
     <span>
       <FormattedMessage
         defaultMessage={translate(
-          'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence'
+          'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence',
         )}
         id="onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence"
         values={{
           link: (
-            <a
-              href="https://marketplace.visualstudio.com/items?itemName=SonarSource.sonarqube"
-              rel="noopener noreferrer"
-              target="_blank">
+            <Link to="https://marketplace.visualstudio.com/items?itemName=SonarSource.sonarqube">
               {translate(
-                'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence.link'
+                'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence.link',
               )}
-            </a>
+            </Link>
           ),
           button: (
             <strong>
               {translate(
-                'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence.button'
+                'onboarding.tutorial.with.azure_pipelines.ExtensionInstallation.sentence.button',
               )}
             </strong>
-          )
+          ),
         }}
       />
     </span>

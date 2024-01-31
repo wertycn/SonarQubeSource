@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,29 +22,38 @@ package org.sonar.core.config;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.sonar.api.CoreProperties;
 import org.sonar.api.PropertyType;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.config.PropertyDefinition;
 import org.sonar.api.resources.Qualifiers;
+import org.sonar.core.documentation.DefaultDocumentationLinkGenerator;
 import org.sonar.core.extension.PluginRiskConsent;
 
 import static java.util.Arrays.asList;
 import static org.sonar.api.PropertyType.BOOLEAN;
 import static org.sonar.api.PropertyType.SINGLE_SELECT_LIST;
 import static org.sonar.api.PropertyType.STRING;
+import static org.sonar.api.PropertyType.TEXT;
 import static org.sonar.core.extension.PluginRiskConsent.NOT_ACCEPTED;
 
 public class CorePropertyDefinitions {
 
   public static final String SONAR_ANALYSIS = "sonar.analysis.";
+  public static final String SONAR_PROJECTCREATION_MAINBRANCHNAME = "sonar.projectCreation.mainBranchName";
   public static final String SONAR_ANALYSIS_DETECTEDSCM = "sonar.analysis.detectedscm";
   public static final String SONAR_ANALYSIS_DETECTEDCI = "sonar.analysis.detectedci";
 
   public static final String DISABLE_NOTIFICATION_ON_BUILT_IN_QPROFILES = "sonar.builtInQualityProfiles.disableNotificationOnUpdate";
 
+  public static final String ALLOW_DISABLE_INHERITED_RULES = "sonar.qualityProfiles.allowDisableInheritedRules";
+
   public static final String PLUGINS_RISK_CONSENT = "sonar.plugins.risk.consent";
+
+  public static final String DOCUMENTATION_BASE_URL = "sonar.documentation.baseUrl";
+
+  public static final String SUBCATEGORY_PROJECT_CREATION = "subProjectCreation";
+  public static final String SUBCATEGORY_QUALITY_PROFILE = "qualityProfile";
 
   private CorePropertyDefinitions() {
     // only static stuff
@@ -59,7 +68,6 @@ public class CorePropertyDefinitions {
     defs.addAll(PurgeProperties.all());
     defs.addAll(EmailSettings.definitions());
     defs.addAll(ScannerProperties.all());
-    defs.addAll(SvnProperties.all());
 
     defs.addAll(asList(
       PropertyDefinition.builder(CoreProperties.MODULE_LEVEL_ARCHIVED_SETTINGS)
@@ -70,14 +78,24 @@ public class CorePropertyDefinitions {
         .category(CoreProperties.CATEGORY_GENERAL)
         .subCategory(CoreProperties.SUBCATEGORY_MODULES)
         .onlyOnQualifiers(Qualifiers.PROJECT)
-        .type(PropertyType.TEXT)
+        .type(TEXT)
         .build(),
       PropertyDefinition.builder(CoreProperties.SERVER_BASE_URL)
         .name("Server base URL")
-        .description("HTTP(S) URL of this SonarQube server, such as <i>https://yourhost.yourdomain/sonar</i>. This value is used i.e. to create links in emails.")
+        .description(
+          "HTTP(S) URL of this SonarQube server, such as <i>https://yourhost.yourdomain/sonar</i>. "
+            + "This value is used outside SonarQube itself, e.g. for PR decoration, emails, etc.")
         .category(CoreProperties.CATEGORY_GENERAL)
         .build(),
-
+      PropertyDefinition.builder(SONAR_PROJECTCREATION_MAINBRANCHNAME)
+        .name("Default main branch name")
+        .category(CoreProperties.CATEGORY_GENERAL)
+        .subCategory(SUBCATEGORY_PROJECT_CREATION)
+        .description("Each project has a main branch at creation. This setting defines the instance-wide default main branch name. "
+          + " A user can override this when creating a project. This setting does not apply to projects imported from a DevOps platform.")
+        .type(STRING)
+        .defaultValue("main")
+        .build(),
       PropertyDefinition.builder(CoreProperties.ENCRYPTION_SECRET_KEY_PATH)
         .name("Encryption secret key path")
         .description("Path to a file that contains encryption secret key that is used to encrypting other settings.")
@@ -96,15 +114,31 @@ public class CorePropertyDefinitions {
         .description("Avoid sending email notification on each update of built-in quality profiles to quality profile administrators.")
         .defaultValue(Boolean.toString(false))
         .category(CoreProperties.CATEGORY_GENERAL)
+        .subCategory(SUBCATEGORY_QUALITY_PROFILE)
+        .type(BOOLEAN)
+        .build(),
+      PropertyDefinition.builder(ALLOW_DISABLE_INHERITED_RULES)
+        .name("Enable deactivation of inherited rules")
+        .description("Set if users with 'Administer Quality Profiles' permission are allowed to deactivate inherited rules in quality profiles.")
+        .defaultValue(Boolean.toString(true))
+        .category(CoreProperties.CATEGORY_GENERAL)
+        .subCategory(SUBCATEGORY_QUALITY_PROFILE)
         .type(BOOLEAN)
         .build(),
       PropertyDefinition.builder(PLUGINS_RISK_CONSENT)
         .name("State of user plugins risk consent")
         .description("Determine whether user is required to accept plugins risk consent")
         .defaultValue(NOT_ACCEPTED.name())
-        .options(Arrays.stream(PluginRiskConsent.values()).map(Enum::name).collect(Collectors.toList()))
+        .options(Arrays.stream(PluginRiskConsent.values()).map(Enum::name).toList())
         .hidden()
         .type(SINGLE_SELECT_LIST)
+        .build(),
+      PropertyDefinition.builder(DOCUMENTATION_BASE_URL)
+        .name("Base URL of the documentation")
+        .description("Base URL to be used in SonarQube documentation links, such as <i>https://docs.sonarsource.com/sonarqube/</i>")
+        .defaultValue(DefaultDocumentationLinkGenerator.DOCUMENTATION_PUBLIC_URL)
+        .hidden()
+        .type(STRING)
         .build(),
 
       // WEB LOOK&FEEL
@@ -118,7 +152,7 @@ public class CorePropertyDefinitions {
       PropertyDefinition.builder(WebConstants.SONAR_LF_LOGO_WIDTH_PX)
         .deprecatedKey("sonar.branding.image.width")
         .name("Width of image in pixels")
-        .description("Width in pixels, given that the height of the the image is constrained to 30px.")
+        .description("Width in pixels, constrained to 150px (the height of the image is constrained to 40px).")
         .category(CoreProperties.CATEGORY_GENERAL)
         .subCategory(CoreProperties.SUBCATEGORY_LOOKNFEEL)
         .build(),
@@ -136,13 +170,6 @@ public class CorePropertyDefinitions {
         .defaultValue("https://secure.gravatar.com/avatar/{EMAIL_MD5}.jpg?s={SIZE}&d=identicon")
         .category(CoreProperties.CATEGORY_GENERAL)
         .subCategory(CoreProperties.SUBCATEGORY_LOOKNFEEL)
-        .build(),
-      PropertyDefinition.builder(WebConstants.SONAR_LF_ABOUT_TEXT)
-        .name("About page text")
-        .description("Optional text that is displayed on the About page. Supports html.")
-        .category(CoreProperties.CATEGORY_GENERAL)
-        .subCategory(CoreProperties.SUBCATEGORY_LOOKNFEEL)
-        .type(PropertyType.TEXT)
         .build(),
 
       // ISSUES
@@ -196,7 +223,7 @@ public class CorePropertyDefinitions {
         .name("Duplication Exclusions")
         .description("Patterns used to exclude some source files from the duplication detection mechanism. " +
           "See below to know how to use wildcards to specify this property.")
-        .onQualifiers(Qualifiers.PROJECT, Qualifiers.MODULE)
+        .onQualifiers(Qualifiers.PROJECT)
         .category(CoreProperties.CATEGORY_EXCLUSIONS)
         .subCategory(CoreProperties.SUBCATEGORY_DUPLICATIONS_EXCLUSIONS)
         .multiValues(true)

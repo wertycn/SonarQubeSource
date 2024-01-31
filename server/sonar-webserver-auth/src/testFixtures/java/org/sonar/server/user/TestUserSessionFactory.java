@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,6 +25,7 @@ import javax.annotation.Nullable;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
+import org.sonar.db.user.UserTokenDto;
 
 import static java.util.Objects.requireNonNull;
 
@@ -41,8 +42,18 @@ public class TestUserSessionFactory implements UserSessionFactory {
   }
 
   @Override
-  public UserSession create(UserDto user) {
+  public UserSession create(UserDto user, boolean isAuthenticatedGuiSession) {
     return new TestUserSession(requireNonNull(user));
+  }
+
+  @Override
+  public UserSession create(UserDto user, UserTokenDto userToken) {
+    return new TestUserSession(requireNonNull(user));
+  }
+
+  @Override
+  public GithubWebhookUserSession createGithubWebhookUserSession() {
+    return new GithubWebhookUserSession();
   }
 
   @Override
@@ -102,28 +113,41 @@ public class TestUserSessionFactory implements UserSessionFactory {
     }
 
     @Override
-    public boolean isRoot() {
-      throw notImplemented();
-    }
-
-    @Override
     protected boolean hasPermissionImpl(GlobalPermission permission) {
       throw notImplemented();
     }
 
     @Override
-    protected Optional<String> componentUuidToProjectUuid(String componentUuid) {
+    protected Optional<String> componentUuidToEntityUuid(String componentUuid) {
       throw notImplemented();
     }
 
     @Override
-    protected boolean hasProjectUuidPermission(String permission, String projectUuid) {
+    protected boolean hasEntityUuidPermission(String permission, String entityUuid) {
       throw notImplemented();
     }
+
+    @Override
+    protected boolean hasChildProjectsPermission(String permission, String applicationUuid) {
+      throw notImplemented();
+    }
+
+    @Override
+    protected boolean hasPortfolioChildProjectsPermission(String permission, String portfolioUuid) { throw notImplemented(); }
 
     @Override
     public boolean isSystemAdministrator() {
       throw notImplemented();
+    }
+
+    @Override
+    public boolean isActive() {
+      throw notImplemented();
+    }
+
+    @Override
+    public boolean isAuthenticatedBrowserSession() {
+      return false;
     }
 
     private static RuntimeException notImplemented() {

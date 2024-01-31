@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,8 +24,19 @@ import java.util.Collection;
 import java.util.List;
 import org.sonar.core.component.DefaultResourceTypes;
 import org.sonar.core.config.CorePropertyDefinitions;
+import org.sonar.core.sarif.SarifSerializerImpl;
 import org.sonar.scanner.cpd.JavaCpdBlockIndexerSensor;
+import org.sonar.scanner.deprecated.test.TestPlanBuilder;
+import org.sonar.scanner.externalissue.ExternalIssueReportParser;
+import org.sonar.scanner.externalissue.ExternalIssueReportValidator;
 import org.sonar.scanner.externalissue.ExternalIssuesImportSensor;
+import org.sonar.scanner.externalissue.sarif.DefaultSarif210Importer;
+import org.sonar.scanner.externalissue.sarif.LocationMapper;
+import org.sonar.scanner.externalissue.sarif.RegionMapper;
+import org.sonar.scanner.externalissue.sarif.ResultMapper;
+import org.sonar.scanner.externalissue.sarif.RuleMapper;
+import org.sonar.scanner.externalissue.sarif.RunMapper;
+import org.sonar.scanner.externalissue.sarif.SarifIssuesImportSensor;
 import org.sonar.scanner.genericcoverage.GenericCoverageSensor;
 import org.sonar.scanner.genericcoverage.GenericTestExecutionSensor;
 import org.sonar.scanner.source.ZeroCoverageSensor;
@@ -47,10 +58,24 @@ public class BatchComponents {
     components.addAll(GenericCoverageSensor.properties());
     components.add(GenericTestExecutionSensor.class);
     components.addAll(GenericTestExecutionSensor.properties());
+    components.add(TestPlanBuilder.class);
 
     // External issues
+    components.add(ExternalIssueReportValidator.class);
+    components.add(ExternalIssueReportParser.class);
     components.add(ExternalIssuesImportSensor.class);
     components.add(ExternalIssuesImportSensor.properties());
+    components.add(SarifSerializerImpl.class);
+
+    // Sarif issues
+    components.add(SarifIssuesImportSensor.class);
+    components.add(SarifIssuesImportSensor.properties());
+    components.add(DefaultSarif210Importer.class);
+    components.add(RunMapper.class);
+    components.add(ResultMapper.class);
+    components.add(LocationMapper.class);
+    components.add(RegionMapper.class);
+    components.add(RuleMapper.class);
 
     return components;
   }

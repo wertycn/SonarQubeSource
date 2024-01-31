@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.server.authentication;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.ImmutableMap;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
@@ -30,19 +29,18 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.sonar.api.Startable;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.UserIdentity;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.db.user.UserDto;
 import org.sonar.process.ProcessProperties;
-import org.sonar.server.authentication.UserRegistration.ExistingEmailStrategy;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationEvent.Source;
 import org.sonar.server.authentication.event.AuthenticationException;
@@ -63,7 +61,7 @@ import static org.sonar.server.user.ExternalIdentity.SQ_AUTHORITY;
  */
 public class HttpHeadersAuthentication implements Startable {
 
-  private static final Logger LOG = Loggers.get(HttpHeadersAuthentication.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HttpHeadersAuthentication.class);
 
   private static final Splitter COMA_SPLITTER = Splitter.on(",").trimResults().omitEmptyStrings();
 
@@ -108,7 +106,7 @@ public class HttpHeadersAuthentication implements Startable {
     // Nothing to do
   }
 
-  public Optional<UserDto> authenticate(HttpServletRequest request, HttpServletResponse response) {
+  public Optional<UserDto> authenticate(HttpRequest request, HttpResponse response) {
     try {
       return doAuthenticate(request, response);
     } catch (BadRequestException e) {
@@ -119,7 +117,7 @@ public class HttpHeadersAuthentication implements Startable {
     }
   }
 
-  private Optional<UserDto> doAuthenticate(HttpServletRequest request, HttpServletResponse response) {
+  private Optional<UserDto> doAuthenticate(HttpRequest request, HttpResponse response) {
     if (!enabled) {
       return Optional.empty();
     }
@@ -134,14 +132,14 @@ public class HttpHeadersAuthentication implements Startable {
     }
 
     UserDto userDto = doAuthenticate(headerValuesByNames, login);
-    jwtHttpHandler.generateToken(userDto, ImmutableMap.of(LAST_REFRESH_TIME_TOKEN_PARAM, system2.now()), request, response);
+    jwtHttpHandler.generateToken(userDto, Map.of(LAST_REFRESH_TIME_TOKEN_PARAM, system2.now()), request, response);
     authenticationEvent.loginSuccess(request, userDto.getLogin(), Source.sso());
     return Optional.of(userDto);
   }
 
-  private Optional<UserDto> getUserFromToken(HttpServletRequest request, HttpServletResponse response) {
+  private Optional<UserDto> getUserFromToken(HttpRequest request, HttpResponse response) {
     Optional<JwtHttpHandler.Token> token = jwtHttpHandler.getToken(request, response);
-    if (!token.isPresent()) {
+    if (token.isEmpty()) {
       return Optional.empty();
     }
     Date now = new Date(system2.now());
@@ -169,7 +167,6 @@ public class HttpHeadersAuthentication implements Startable {
         .setUserIdentity(userIdentityBuilder.build())
         .setProvider(new SsoIdentityProvider())
         .setSource(Source.sso())
-        .setExistingEmailStrategy(ExistingEmailStrategy.FORBID)
         .build());
   }
 
@@ -178,7 +175,7 @@ public class HttpHeadersAuthentication implements Startable {
     return headerValuesByNames.get(settingsByKey.get(settingKey).toLowerCase(Locale.ENGLISH));
   }
 
-  private static Map<String, String> getHeaders(HttpServletRequest request) {
+  private static Map<String, String> getHeaders(HttpRequest request) {
     Map<String, String> headers = new HashMap<>();
     Collections.list(request.getHeaderNames()).forEach(header -> headers.put(header.toLowerCase(Locale.ENGLISH), request.getHeader(header)));
     return headers;

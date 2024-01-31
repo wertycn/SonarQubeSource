@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary } from 'design-system/lib';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import { useState } from 'react';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import CreateWebhookForm from './CreateWebhookForm';
 
 interface Props {
@@ -29,60 +30,41 @@ interface Props {
   webhooksCount: number;
 }
 
-interface State {
-  openCreate: boolean;
-}
+export const WEBHOOKS_LIMIT = 10;
 
-const WEBHOOKS_LIMIT = 10;
+export default function PageActions(props: Props) {
+  const { loading, onCreate, webhooksCount } = props;
 
-export default class PageActions extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = { openCreate: false };
+  const [openCreate, setOpenCreate] = useState(false);
 
-  componentDidMount() {
-    this.mounted = true;
+  function handleCreateClose() {
+    setOpenCreate(false);
   }
 
-  componentWillUnmount() {
-    this.mounted = false;
+  function handleCreateOpen() {
+    setOpenCreate(true);
   }
 
-  handleCreateClose = () => {
-    if (this.mounted) {
-      this.setState({ openCreate: false });
-    }
-  };
+  if (loading) {
+    return null;
+  }
 
-  handleCreateOpen = () => {
-    this.setState({ openCreate: true });
-  };
-
-  renderCreate = () => {
-    if (this.props.webhooksCount >= WEBHOOKS_LIMIT) {
-      return (
-        <Tooltip overlay={translateWithParameters('webhooks.maximum_reached', WEBHOOKS_LIMIT)}>
-          <Button className="js-webhook-create disabled">{translate('create')}</Button>
-        </Tooltip>
-      );
-    }
-
+  if (webhooksCount >= WEBHOOKS_LIMIT) {
     return (
-      <>
-        <Button className="js-webhook-create" onClick={this.handleCreateOpen}>
+      <Tooltip overlay={translateWithParameters('webhooks.maximum_reached', WEBHOOKS_LIMIT)}>
+        <ButtonPrimary className="it__webhook-create" disabled>
           {translate('create')}
-        </Button>
-        {this.state.openCreate && (
-          <CreateWebhookForm onClose={this.handleCreateClose} onDone={this.props.onCreate} />
-        )}
-      </>
+        </ButtonPrimary>
+      </Tooltip>
     );
-  };
-
-  render() {
-    if (this.props.loading) {
-      return null;
-    }
-
-    return <div className="page-actions">{this.renderCreate()}</div>;
   }
+
+  return (
+    <>
+      <ButtonPrimary className="it__webhook-create" onClick={handleCreateOpen}>
+        {translate('create')}
+      </ButtonPrimary>
+      {openCreate && <CreateWebhookForm onClose={handleCreateClose} onDone={onCreate} />}
+    </>
+  );
 }

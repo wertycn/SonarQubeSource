@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,34 +19,40 @@
  */
 package org.sonar.server.badge.ws;
 
+import javax.annotation.Nullable;
+import org.sonar.api.config.Configuration;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
+import org.sonar.db.project.ProjectBadgeTokenDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.NotFoundException;
-import org.sonar.server.user.UserSession;
 
-import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.api.CoreProperties.CORE_FORCE_AUTHENTICATION_DEFAULT_VALUE;
+import static org.sonar.api.CoreProperties.CORE_FORCE_AUTHENTICATION_PROPERTY;
 import static org.sonar.db.component.BranchType.BRANCH;
 import static org.sonar.server.ws.KeyExamples.KEY_BRANCH_EXAMPLE_001;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
+import static org.sonar.server.ws.KeyExamples.PROJECT_BADGE_TOKEN_EXAMPLE;
 
 public class ProjectBadgesSupport {
 
   private static final String PARAM_PROJECT = "project";
   private static final String PARAM_BRANCH = "branch";
+  private static final String PARAM_TOKEN = "token";
+  public static final String PROJECT_HAS_NOT_BEEN_FOUND = "Project has not been found";
 
-  private final UserSession userSession;
-  private final DbClient dbClient;
   private final ComponentFinder componentFinder;
+  private final DbClient dbClient;
+  private final Configuration config;
 
-  public ProjectBadgesSupport(UserSession userSession, DbClient dbClient, ComponentFinder componentFinder) {
-    this.userSession = userSession;
-    this.dbClient = dbClient;
+  public ProjectBadgesSupport(ComponentFinder componentFinder, DbClient dbClient, Configuration config) {
     this.componentFinder = componentFinder;
+    this.dbClient = dbClient;
+    this.config = config;
   }
 
   void addProjectAndBranchParams(WebService.NewAction action) {
@@ -58,6 +64,10 @@ public class ProjectBadgesSupport {
       .createParam(PARAM_BRANCH)
       .setDescription("Branch key")
       .setExampleValue(KEY_BRANCH_EXAMPLE_001);
+    action
+      .createParam(PARAM_TOKEN)
+      .setDescription("Project badge token")
+      .setExampleValue(PROJECT_BADGE_TOKEN_EXAMPLE);
   }
 
   BranchDto getBranch(DbSession dbSession, Request request) {
@@ -65,17 +75,8 @@ public class ProjectBadgesSupport {
       String projectKey = request.mandatoryParam(PARAM_PROJECT);
       String branchName = request.param(PARAM_BRANCH);
       ProjectDto project = componentFinder.getProjectOrApplicationByKey(dbSession, projectKey);
-      userSession.checkProjectPermission(USER, project);
-      if (project.isPrivate()) {
-        throw generateInvalidProjectException();
-      }
 
-      BranchDto branch;
-      if (branchName == null) {
-        branch = componentFinder.getMainBranch(dbSession, project);
-      } else {
-        branch = componentFinder.getBranchOrPullRequest(dbSession, project, branchName, null);
-      }
+      BranchDto branch = componentFinder.getBranchOrPullRequest(dbSession, project, branchName, null);
 
       if (!branch.getBranchType().equals(BRANCH)) {
         throw generateInvalidProjectException();
@@ -83,11 +84,33 @@ public class ProjectBadgesSupport {
 
       return branch;
     } catch (NotFoundException e) {
-      throw new NotFoundException("Project has not been found");
+      throw new NotFoundException(PROJECT_HAS_NOT_BEEN_FOUND);
     }
   }
 
   private static ProjectBadgesException generateInvalidProjectException() {
     return new ProjectBadgesException("Project is invalid");
+  }
+
+  public void validateToken(Request request) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      String projectKey = request.mandatoryParam(PARAM_PROJECT);
+      ProjectDto projectDto;
+      try {
+        projectDto = componentFinder.getProjectOrApplicationByKey(dbSession, projectKey);
+      } catch (NotFoundException e) {
+        throw new NotFoundException(PROJECT_HAS_NOT_BEEN_FOUND);
+      }
+      boolean tokenInvalid = !isTokenValid(dbSession, projectDto, request.param(PARAM_TOKEN));
+      boolean forceAuthEnabled = config.getBoolean(CORE_FORCE_AUTHENTICATION_PROPERTY).orElse(CORE_FORCE_AUTHENTICATION_DEFAULT_VALUE);
+      if ((projectDto.isPrivate() || forceAuthEnabled) && tokenInvalid) {
+        throw new NotFoundException(PROJECT_HAS_NOT_BEEN_FOUND);
+      }
+    }
+  }
+
+  private boolean isTokenValid(DbSession dbSession, ProjectDto projectDto, @Nullable String token) {
+    ProjectBadgeTokenDto projectBadgeTokenDto = dbClient.projectBadgeTokenDao().selectTokenByProject(dbSession, projectDto);
+    return token != null && projectBadgeTokenDto != null && token.equals(projectBadgeTokenDto.getToken());
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,6 +30,8 @@ import org.sonar.db.DbTester;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.db.property.PropertyDto;
+import org.sonar.db.user.GroupDto;
+import org.sonar.db.user.UserDto;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.apache.commons.lang.RandomStringUtils.randomNumeric;
@@ -99,7 +101,28 @@ public class QualityGateDbTester {
     return condition;
   }
 
-  public Optional<String> selectQGateUuidByComponentUuid(String componentUuid) {
-    return dbClient.projectQgateAssociationDao().selectQGateUuidByProjectUuid(dbSession, componentUuid);
+  public Optional<String> selectQGateUuidByProjectUuid(String projectUuid) {
+    return dbClient.projectQgateAssociationDao().selectQGateUuidByProjectUuid(dbSession, projectUuid);
+  }
+
+  public void addGroupPermission(QualityGateDto qualityGateDto, GroupDto group) {
+    dbClient.qualityGateGroupPermissionsDao().insert(dbSession, new QualityGateGroupPermissionsDto()
+        .setUuid(Uuids.createFast())
+        .setGroupUuid(group.getUuid())
+        .setQualityGateUuid(qualityGateDto.getUuid()),
+      qualityGateDto.getName(),
+      group.getName()
+    );
+    dbSession.commit();
+  }
+
+  public void addUserPermission(QualityGateDto qualityGateDto, UserDto user) {
+    dbClient.qualityGateUserPermissionDao().insert(dbSession, new QualityGateUserPermissionsDto()
+        .setUuid(Uuids.createFast())
+        .setUserUuid(user.getUuid())
+        .setQualityGateUuid(qualityGateDto.getUuid()),
+      qualityGateDto.getName(),
+      user.getLogin());
+    dbSession.commit();
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,50 +17,56 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { Badge, ItemButton, TextBold, TextMuted } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import BranchStatus from '../../../../../components/common/BranchStatus';
 import BranchLikeIcon from '../../../../../components/icons/BranchLikeIcon';
 import { getBranchLikeDisplayName, isMainBranch } from '../../../../../helpers/branch-like';
+import { translate } from '../../../../../helpers/l10n';
 import { BranchLike } from '../../../../../types/branch-like';
+import QualityGateStatus from './QualityGateStatus';
 
 export interface MenuItemProps {
   branchLike: BranchLike;
-  component: T.Component;
-  indent?: boolean;
   onSelect: (branchLike: BranchLike) => void;
   selected: boolean;
+  indent: boolean;
   setSelectedNode?: (node: HTMLLIElement) => void;
 }
 
 export function MenuItem(props: MenuItemProps) {
-  const { branchLike, component, indent, setSelectedNode, onSelect, selected } = props;
+  const { branchLike, setSelectedNode, onSelect, selected, indent } = props;
   const displayName = getBranchLikeDisplayName(branchLike);
 
   return (
-    <li
-      className={classNames('item', {
-        active: selected
-      })}
-      onClick={() => onSelect(branchLike)}
-      ref={selected ? setSelectedNode : undefined}>
-      <div
-        className={classNames('display-flex-center display-flex-space-between', {
-          'big-spacer-left': indent
-        })}>
-        <div className="item-name text-ellipsis" title={displayName}>
+    <ItemButton
+      className={classNames({ active: selected, 'sw-pl-6': indent })}
+      innerRef={selected ? setSelectedNode : undefined}
+      onClick={() => {
+        onSelect(branchLike);
+      }}
+    >
+      <div className="sw-flex sw-items-center sw-justify-between text-ellipsis sw-flex-1">
+        <div className="sw-flex sw-items-center">
           <BranchLikeIcon branchLike={branchLike} />
-          <span className="spacer-left">{displayName}</span>
+
           {isMainBranch(branchLike) && (
-            <span className="badge spacer-left">{translate('branches.main_branch')}</span>
+            <>
+              <TextBold name={displayName} className="sw-ml-4 sw-mr-2" />
+              <Badge variant="default">{translate('branches.main_branch')}</Badge>
+            </>
+          )}
+          {!isMainBranch(branchLike) && (
+            <TextMuted text={displayName} className="sw-ml-3 sw-mr-2" />
           )}
         </div>
-        <div className="spacer-left">
-          <BranchStatus branchLike={branchLike} component={component.key} />
-        </div>
+        <QualityGateStatus
+          branchLike={branchLike}
+          className="sw-flex sw-items-center sw-w-24"
+          showStatusText
+        />
       </div>
-    </li>
+    </ItemButton>
   );
 }
 

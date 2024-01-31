@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,39 +20,35 @@
 package org.sonar.server.platform.platformlevel;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import org.sonar.core.platform.ComponentContainer;
-import org.sonar.core.platform.Module;
-import org.sonar.server.platform.WebServer;
+import org.sonar.core.platform.SpringComponentContainer;
+import org.sonar.server.platform.NodeInformation;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static java.util.Objects.requireNonNull;
 
 public abstract class PlatformLevel {
   private final String name;
   @Nullable
-  private final PlatformLevel parent;
-  private final ComponentContainer container;
+  protected final PlatformLevel parent;
+  private final SpringComponentContainer container;
   private AddIfStartupLeader addIfStartupLeader;
   private AddIfCluster addIfCluster;
   private AddIfStandalone addIfStandalone;
 
-  public PlatformLevel(String name) {
+  protected PlatformLevel(String name) {
     this.name = name;
     this.parent = null;
     this.container = createContainer(null);
   }
 
-  public PlatformLevel(String name, @Nonnull PlatformLevel parent) {
+  protected PlatformLevel(String name, PlatformLevel parent) {
     this.name = checkNotNull(name);
     this.parent = checkNotNull(parent);
-    this.container = createContainer(parent.container);
+    this.container = createContainer(parent.getContainer());
   }
 
-  public ComponentContainer getContainer() {
+  public SpringComponentContainer getContainer() {
     return container;
   }
 
@@ -63,21 +59,15 @@ public abstract class PlatformLevel {
   /**
    * Intended to be override by subclasses if needed
    */
-  protected ComponentContainer createContainer(@Nullable ComponentContainer parent) {
+  protected SpringComponentContainer createContainer(@Nullable SpringComponentContainer parent) {
     if (parent == null) {
-      return new ComponentContainer();
+      return new SpringComponentContainer();
     }
     return parent.createChild();
   }
 
   public PlatformLevel configure() {
     configureLevel();
-
-    List<Module> modules = container.getComponentsByType(Module.class);
-    for (Module module : modules) {
-      module.configure(container);
-    }
-
     return this;
   }
 
@@ -88,7 +78,6 @@ public abstract class PlatformLevel {
    */
   public PlatformLevel start() {
     container.startComponents();
-
     return this;
   }
 
@@ -97,36 +86,21 @@ public abstract class PlatformLevel {
    */
   public PlatformLevel stop() {
     container.stopComponents();
-
-    return this;
-  }
-
-  /**
-   * Intended to be override by subclasses if needed
-   */
-  public PlatformLevel destroy() {
-    if (parent != null) {
-      parent.container.removeChild(container);
-    }
     return this;
   }
 
   protected <T> T get(Class<T> tClass) {
-    return requireNonNull(container.getComponentByType(tClass));
-  }
-
-  protected <T> List<T> getAll(Class<T> tClass) {
-    return container.getComponentsByType(tClass);
+    return container.getComponentByType(tClass);
   }
 
   protected <T> Optional<T> getOptional(Class<T> tClass) {
-    return Optional.ofNullable(container.getComponentByType(tClass));
+    return container.getOptionalComponentByType(tClass);
   }
 
   protected void add(Object... objects) {
     for (Object object : objects) {
       if (object != null) {
-        container.addComponent(object, true);
+        container.add(object);
       }
     }
   }
@@ -170,15 +144,17 @@ public abstract class PlatformLevel {
     return addIfStandalone;
   }
 
-  private WebServer getWebServer() {
-    return getOptional(WebServer.class)
-      .orElseThrow(() -> new IllegalStateException("WebServer not available in Pico yet"));
+  protected NodeInformation getWebServer() {
+    return Optional.ofNullable(parent)
+      .flatMap(p -> p.getOptional(NodeInformation.class))
+      .or(() -> getOptional(NodeInformation.class))
+      .orElseThrow(() -> new IllegalStateException("WebServer not available in the container"));
   }
 
-  private abstract class AddIf {
+  protected abstract class AddIf {
     private final boolean condition;
 
-    private AddIf(boolean condition) {
+    protected AddIf(boolean condition) {
       this.condition = condition;
     }
 

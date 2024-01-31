@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,11 +23,13 @@ import org.junit.Test;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class EvaluationResultTest {
-  @Test(expected = NullPointerException.class)
+  @Test
   public void constructor_throws_NPE_if_Level_arg_is_null() {
-    new EvaluationResult(null, 11);
+    assertThatThrownBy(() -> new EvaluationResult(null, 11))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -36,13 +38,13 @@ public class EvaluationResultTest {
     Measure.Level level = Measure.Level.OK;
 
     EvaluationResult evaluationResult = new EvaluationResult(level, value);
-    assertThat(evaluationResult.getLevel()).isEqualTo(level);
-    assertThat(evaluationResult.getValue()).isEqualTo(value);
+    assertThat(evaluationResult.level()).isEqualTo(level);
+    assertThat(evaluationResult.value()).isEqualTo(value);
   }
 
   @Test
   public void toString_is_defined() {
-    assertThat(new EvaluationResult(Measure.Level.OK, "toto").toString())
-      .isEqualTo("EvaluationResult{level=OK, value=toto}");
+    assertThat(new EvaluationResult(Measure.Level.OK, "toto"))
+      .hasToString("EvaluationResult{level=OK, value=toto}");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,63 +17,158 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { BasicSeparator, BorderlessAccordion, TextMuted } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { isDiffMetric } from '../../../helpers/measures';
 import { BranchLike } from '../../../types/branch-like';
-import { ComponentQualifier } from '../../../types/component';
-import { QualityGateStatus } from '../../../types/quality-gates';
-import { QualityGateConditions } from '../components/QualityGateConditions';
+import {
+  QualityGateStatus,
+  QualityGateStatusConditionEnhanced,
+} from '../../../types/quality-gates';
+import { QualityGate } from '../../../types/types';
+import QualityGateConditions from '../components/QualityGateConditions';
+import ZeroNewIssuesSimplificationGuide from '../components/ZeroNewIssuesSimplificationGuide';
 
 export interface QualityGatePanelSectionProps {
   branchLike?: BranchLike;
-  component: Pick<T.Component, 'key' | 'qualifier'>;
+  isApplication?: boolean;
+  isLastStatus?: boolean;
   qgStatus: QualityGateStatus;
+  qualityGate?: QualityGate;
+}
+
+function splitConditions(
+  conditions: QualityGateStatusConditionEnhanced[],
+): [QualityGateStatusConditionEnhanced[], QualityGateStatusConditionEnhanced[]] {
+  const newCodeFailedConditions = [];
+  const overallFailedConditions = [];
+
+  for (const condition of conditions) {
+    if (isDiffMetric(condition.metric)) {
+      newCodeFailedConditions.push(condition);
+    } else {
+      overallFailedConditions.push(condition);
+    }
+  }
+
+  return [newCodeFailedConditions, overallFailedConditions];
 }
 
 export function QualityGatePanelSection(props: QualityGatePanelSectionProps) {
-  const { component, qgStatus } = props;
-  const newCodeFailedConditions = qgStatus.failedConditions.filter(c => isDiffMetric(c.metric));
-  const overallFailedConditions = qgStatus.failedConditions.filter(c => !isDiffMetric(c.metric));
+  const { isApplication, isLastStatus, qgStatus, qualityGate } = props;
+  const [collapsed, setCollapsed] = React.useState(false);
 
-  if (newCodeFailedConditions.length === 0 && overallFailedConditions.length === 0) {
-    return null;
-  }
+  const toggle = React.useCallback(() => {
+    setCollapsed(!collapsed);
+  }, [collapsed]);
 
-  const showName = component.qualifier === ComponentQualifier.Application;
+  const [newCodeFailedConditions, overallFailedConditions] = splitConditions(
+    qgStatus.failedConditions,
+  );
+
+  const showSectionTitles =
+    isApplication || (overallFailedConditions.length > 0 && newCodeFailedConditions.length > 0);
+
+  const toggleLabel = collapsed
+    ? translateWithParameters('overview.quality_gate.show_project_conditions_x', qgStatus.name)
+    : translateWithParameters('overview.quality_gate.hide_project_conditions_x', qgStatus.name);
+
+  const newCodeText =
+    newCodeFailedConditions.length === 1
+      ? translate('quality_gates.conditions.new_code_1')
+      : translateWithParameters(
+          'quality_gates.conditions.new_code_x',
+          newCodeFailedConditions.length.toString(),
+        );
+
+  const overallText =
+    overallFailedConditions.length === 1
+      ? translate('quality_gates.conditions.overall_code_1')
+      : translateWithParameters(
+          'quality_gates.conditions.overall_code_x',
+          overallFailedConditions.length.toString(),
+        );
+
+  const renderFailedConditions = () => {
+    return (
+      <>
+        {newCodeFailedConditions.length > 0 && (
+          <>
+            {showSectionTitles && (
+              <>
+                <p className="sw-px-2 sw-py-3">{newCodeText}</p>
+
+                <BasicSeparator />
+              </>
+            )}
+
+            {qualityGate?.isBuiltIn && (
+              <ZeroNewIssuesSimplificationGuide qualityGate={qualityGate} />
+            )}
+            <QualityGateConditions
+              component={qgStatus}
+              branchLike={qgStatus.branchLike}
+              failedConditions={newCodeFailedConditions}
+              isBuiltInQualityGate={qualityGate?.isBuiltIn}
+            />
+          </>
+        )}
+
+        {overallFailedConditions.length > 0 && (
+          <>
+            {showSectionTitles && (
+              <>
+                <p className="sw-px-2 sw-py-3">{overallText}</p>
+
+                <BasicSeparator />
+              </>
+            )}
+
+            <QualityGateConditions
+              component={qgStatus}
+              branchLike={qgStatus.branchLike}
+              failedConditions={overallFailedConditions}
+            />
+          </>
+        )}
+      </>
+    );
+  };
 
   return (
-    <div className="overview-quality-gate-conditions">
-      {showName && (
-        <h3 className="overview-quality-gate-conditions-project-name">{qgStatus.name}</h3>
-      )}
-
-      {newCodeFailedConditions.length > 0 && (
+    <>
+      {isApplication ? (
         <>
-          <h4 className="overview-quality-gate-conditions-section-title">
-            {translate('quality_gates.conditions.new_code')}
-          </h4>
-          <QualityGateConditions
-            component={qgStatus}
-            branchLike={qgStatus.branchLike}
-            failedConditions={newCodeFailedConditions}
-          />
-        </>
-      )}
+          <BorderlessAccordion
+            ariaLabel={toggleLabel}
+            onClick={toggle}
+            open={!collapsed}
+            header={
+              <div className="sw-flex sw-flex-col sw-text-sm">
+                <span className="sw-body-sm-highlight">{qgStatus.name}</span>
 
-      {overallFailedConditions.length > 0 && (
-        <>
-          <h4 className="overview-quality-gate-conditions-section-title">
-            {translate('quality_gates.conditions.overall_code')}
-          </h4>
-          <QualityGateConditions
-            component={qgStatus}
-            branchLike={qgStatus.branchLike}
-            failedConditions={overallFailedConditions}
-          />
+                {collapsed && newCodeFailedConditions.length > 0 && (
+                  <TextMuted text={newCodeText} />
+                )}
+
+                {collapsed && overallFailedConditions.length > 0 && (
+                  <TextMuted text={overallText} />
+                )}
+              </div>
+            }
+          >
+            <BasicSeparator />
+
+            {renderFailedConditions()}
+          </BorderlessAccordion>
+
+          {(!isLastStatus || collapsed) && <BasicSeparator />}
         </>
+      ) : (
+        renderFailedConditions()
       )}
-    </div>
+    </>
   );
 }
 

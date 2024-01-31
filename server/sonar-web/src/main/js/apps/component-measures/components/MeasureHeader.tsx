@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,76 +17,89 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import classNames from 'classnames';
+import { Highlight, Link, MetricsLabel, MetricsRatingBadge } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import HistoryIcon from 'sonar-ui-common/components/icons/HistoryIcon';
-import IssueTypeIcon from 'sonar-ui-common/components/icons/IssueTypeIcon';
-import { getLocalizedMetricName, translate } from 'sonar-ui-common/helpers/l10n';
-import LanguageDistributionContainer from '../../../components/charts/LanguageDistributionContainer';
+import LanguageDistribution from '../../../components/charts/LanguageDistribution';
+import Tooltip from '../../../components/controls/Tooltip';
 import Measure from '../../../components/measure/Measure';
-import { isDiffMetric } from '../../../helpers/measures';
+import { getLocalizedMetricName, translate, translateWithParameters } from '../../../helpers/l10n';
+import { formatMeasure, isDiffMetric } from '../../../helpers/measures';
 import { getMeasureHistoryUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
+import { ComponentQualifier } from '../../../types/component';
+import { MetricKey, MetricType } from '../../../types/metrics';
+import { ComponentMeasure, Metric, Period, Measure as TypeMeasure } from '../../../types/types';
 import { hasFullMeasures } from '../utils';
 import LeakPeriodLegend from './LeakPeriodLegend';
 
 interface Props {
   branchLike?: BranchLike;
-  component: T.ComponentMeasure;
-  leakPeriod?: T.Period;
+  component: ComponentMeasure;
+  leakPeriod?: Period;
   measureValue?: string;
-  metric: T.Metric;
-  secondaryMeasure?: T.Measure;
+  metric: Metric;
+  secondaryMeasure?: TypeMeasure;
 }
 
 export default function MeasureHeader(props: Props) {
   const { branchLike, component, leakPeriod, measureValue, metric, secondaryMeasure } = props;
   const isDiff = isDiffMetric(metric.key);
   const hasHistory =
-    ['VW', 'SVW', 'APP', 'TRK'].includes(component.qualifier) && hasFullMeasures(branchLike);
+    [
+      ComponentQualifier.Portfolio,
+      ComponentQualifier.SubPortfolio,
+      ComponentQualifier.Application,
+      ComponentQualifier.Project,
+    ].includes(component.qualifier as ComponentQualifier) && hasFullMeasures(branchLike);
   const displayLeak = hasFullMeasures(branchLike);
   return (
-    <div className="measure-details-header big-spacer-bottom">
-      <div className="measure-details-primary">
-        <div className="measure-details-metric">
-          <IssueTypeIcon className="little-spacer-right text-text-bottom" query={metric.key} />
-          {getLocalizedMetricName(metric)}
-          <span className="measure-details-value spacer-left">
-            <strong>
-              <Measure
-                className={isDiff && displayLeak ? 'leak-box' : undefined}
-                metricKey={metric.key}
-                metricType={metric.type}
-                value={measureValue}
+    <div className="sw-mb-4">
+      <div className="sw-flex sw-items-center sw-justify-between sw-gap-4">
+        <div className="it__measure-details-metric sw-flex sw-items-center sw-gap-1">
+          <strong className="sw-body-md-highlight">{getLocalizedMetricName(metric)}</strong>
+          <Measure
+            className={classNames('it__measure-details-value sw-body-md')}
+            metricKey={metric.key}
+            metricType={metric.type}
+            value={measureValue}
+            ratingComponent={
+              <MetricsRatingBadge
+                label={
+                  measureValue
+                    ? translateWithParameters(
+                        'metric.has_rating_X',
+                        formatMeasure(measureValue, MetricType.Rating),
+                      )
+                    : translate('metric.no_rating')
+                }
+                rating={formatMeasure(measureValue, MetricType.Rating) as MetricsLabel}
               />
-            </strong>
-          </span>
+            }
+          />
+
           {!isDiff && hasHistory && (
             <Tooltip overlay={translate('component_measures.show_metric_history')}>
-              <Link
-                className="js-show-history spacer-left button button-small"
-                to={getMeasureHistoryUrl(component.key, metric.key, branchLike)}>
-                <HistoryIcon />
-              </Link>
+              <Highlight>
+                <Link
+                  className="it__show-history-link  sw-font-semibold sw-ml-4"
+                  to={getMeasureHistoryUrl(component.key, metric.key, branchLike)}
+                >
+                  {translate('component_measures.see_metric_history')}
+                </Link>
+              </Highlight>
             </Tooltip>
           )}
         </div>
-        <div className="measure-details-primary-actions">
-          {displayLeak && leakPeriod && (
-            <LeakPeriodLegend className="spacer-left" component={component} period={leakPeriod} />
-          )}
-        </div>
+        {displayLeak && leakPeriod && (
+          <LeakPeriodLegend component={component} period={leakPeriod} />
+        )}
       </div>
       {secondaryMeasure &&
-        secondaryMeasure.metric === 'ncloc_language_distribution' &&
+        secondaryMeasure.metric === MetricKey.ncloc_language_distribution &&
         secondaryMeasure.value !== undefined && (
-          <div className="measure-details-secondary">
-            <LanguageDistributionContainer
-              alignTicks={true}
-              distribution={secondaryMeasure.value}
-              width={260}
-            />
+          <div className="sw-inline-block sw-mt-2">
+            <LanguageDistribution distribution={secondaryMeasure.value} />
           </div>
         )}
     </div>

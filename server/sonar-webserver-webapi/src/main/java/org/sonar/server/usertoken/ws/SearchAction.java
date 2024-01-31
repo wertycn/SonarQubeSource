@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,12 +29,16 @@ import org.sonar.db.DbSession;
 import org.sonar.db.user.UserDto;
 import org.sonar.db.user.UserTokenDto;
 import org.sonarqube.ws.UserTokens.SearchWsResponse;
+import org.sonarqube.ws.UserTokens.SearchWsResponse.UserToken;
 
 import static java.util.Optional.ofNullable;
+import static org.elasticsearch.common.Strings.isNullOrEmpty;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.server.usertoken.ws.UserTokenSupport.ACTION_SEARCH;
 import static org.sonar.server.usertoken.ws.UserTokenSupport.PARAM_LOGIN;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
+import static org.sonarqube.ws.UserTokens.SearchWsResponse.UserToken.Project;
+import static org.sonarqube.ws.UserTokens.SearchWsResponse.UserToken.newBuilder;
 
 public class SearchAction implements UserTokensWsAction {
 
@@ -54,6 +58,7 @@ public class SearchAction implements UserTokensWsAction {
         "Field 'lastConnectionDate' is only updated every hour, so it may not be accurate, for instance when a user is using a token many times in less than one hour.<br> " +
         "It requires administration permissions to specify a 'login' and list the tokens of another user. Otherwise, tokens for the current user are listed. <br> " +
         "Authentication is required for this API endpoint")
+      .setChangelog(new Change("9.6", "New field 'expirationDate' is added to response"))
       .setChangelog(new Change("7.7", "New field 'lastConnectionDate' is added to response"))
       .setResponseExample(getClass().getResource("search-example.json"))
       .setSince("5.3")
@@ -80,14 +85,26 @@ public class SearchAction implements UserTokensWsAction {
 
   private static SearchWsResponse buildResponse(UserDto user, List<UserTokenDto> userTokensDto) {
     SearchWsResponse.Builder searchWsResponse = SearchWsResponse.newBuilder();
-    SearchWsResponse.UserToken.Builder userTokenBuilder = SearchWsResponse.UserToken.newBuilder();
+    UserToken.Builder userTokenBuilder = newBuilder();
     searchWsResponse.setLogin(user.getLogin());
     for (UserTokenDto userTokenDto : userTokensDto) {
       userTokenBuilder
         .clear()
         .setName(userTokenDto.getName())
-        .setCreatedAt(formatDateTime(userTokenDto.getCreatedAt()));
+        .setCreatedAt(formatDateTime(userTokenDto.getCreatedAt()))
+        .setType(userTokenDto.getType());
       ofNullable(userTokenDto.getLastConnectionDate()).ifPresent(date -> userTokenBuilder.setLastConnectionDate(formatDateTime(date)));
+      ofNullable(userTokenDto.getExpirationDate()).ifPresent(expirationDate -> {
+        userTokenBuilder.setExpirationDate(formatDateTime(expirationDate));
+        userTokenBuilder.setIsExpired(userTokenDto.isExpired());
+      });
+
+      if (!isNullOrEmpty(userTokenDto.getProjectKey()) && !isNullOrEmpty(userTokenDto.getProjectName())) {
+        Project.Builder projectBuilder = newBuilder().getProjectBuilder()
+          .setKey(userTokenDto.getProjectKey())
+          .setName(userTokenDto.getProjectName());
+        userTokenBuilder.setProject(projectBuilder.build());
+      }
       searchWsResponse.addUserTokens(userTokenBuilder);
     }
 

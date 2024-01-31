@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,11 +20,8 @@
 package org.sonar.ce.task.projectanalysis.filemove;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -32,8 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class SourceSimilarityImplTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private SourceSimilarityImpl underTest = new SourceSimilarityImpl();
 
@@ -122,7 +117,7 @@ public class SourceSimilarityImplTest {
    * Creates a list of {@code numberOfElements} int values as String, starting with zero.
    */
   private static List<String> listOf(int numberOfElements) {
-    return IntStream.range(0, numberOfElements).mapToObj(String::valueOf).collect(Collectors.toList());
+    return IntStream.range(0, numberOfElements).mapToObj(String::valueOf).toList();
   }
 
   @Test

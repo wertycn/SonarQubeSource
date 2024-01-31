@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,8 @@ public final class WebConstants {
   public static final String SONAR_LF_GRAVATAR_SERVER_URL = "sonar.lf.gravatarServerUrl";
   public static final String SONAR_LF_LOGO_URL = "sonar.lf.logoUrl";
   public static final String SONAR_LF_LOGO_WIDTH_PX = "sonar.lf.logoWidthPx";
-  public static final String SONAR_LF_ABOUT_TEXT = "sonar.lf.aboutText";
+  public static final String SONAR_LOGIN_MESSAGE = "sonar.login.message";
+  public static final String SONAR_LOGIN_DISPLAY_MESSAGE = "sonar.login.displayMessage";
 
   private WebConstants() {
   }

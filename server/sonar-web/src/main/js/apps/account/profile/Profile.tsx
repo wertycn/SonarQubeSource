@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,27 +17,34 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { GreySeparator, HelperHintIcon, SubHeading, Title } from 'design-system';
 import * as React from 'react';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { Helmet } from 'react-helmet-async';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
 import { whenLoggedIn } from '../../../components/hoc/whenLoggedIn';
+import { translate } from '../../../helpers/l10n';
+import { LoggedInUser } from '../../../types/users';
+import { Preferences } from './Preferences';
 import UserExternalIdentity from './UserExternalIdentity';
 
 export interface ProfileProps {
-  currentUser: T.LoggedInUser;
+  currentUser: LoggedInUser;
 }
 
 export function Profile({ currentUser }: ProfileProps) {
   const isExternalProvider = !currentUser.local && currentUser.externalProvider !== 'sonarqube';
 
   return (
-    <div className="account-body account-container account-profile">
-      <div className="boxed-group">
-        {renderLogin()}
-        {renderEmail()}
-        {renderUserGroups()}
-        {renderScmAccounts()}
-      </div>
+    <div className="sw-max-w-1/2">
+      <Helmet defer={false} title={translate('my_account.profile')} />
+      <Title className="sw-mb-6">{translate('my_account.profile')}</Title>
+      {renderLogin()}
+      {renderEmail()}
+      <GreySeparator className="sw-my-4" />
+      {renderUserGroups()}
+      {renderScmAccounts()}
+      <GreySeparator className="sw-my-4" />
+      <Preferences />
     </div>
   );
 
@@ -47,13 +54,9 @@ export function Profile({ currentUser }: ProfileProps) {
     }
 
     return (
-      <div className="boxed-group-inner">
-        <h2 className="spacer-bottom">{translate('my_profile.login')}</h2>
-        {currentUser.login && (
-          <p className="spacer-bottom" id="login">
-            {currentUser.login}
-          </p>
-        )}
+      <div className="sw-flex sw-items-center sw-mb-2">
+        <strong className="sw-body-sm-highlight sw-mr-1">{translate('my_profile.login')}:</strong>
+        {currentUser.login && <span id="login">{currentUser.login}</span>}
         {isExternalProvider && <UserExternalIdentity user={currentUser} />}
       </div>
     );
@@ -65,11 +68,9 @@ export function Profile({ currentUser }: ProfileProps) {
     }
 
     return (
-      <div className="boxed-group-inner">
-        <h2 className="spacer-bottom">{translate('my_profile.email')}</h2>
-        <div className="spacer-bottom">
-          <p id="email">{currentUser.email}</p>
-        </div>
+      <div className="sw-mb-2">
+        <strong className="sw-body-sm-highlight sw-mr-1">{translate('my_profile.email')}:</strong>
+        <span id="email">{currentUser.email}</span>
       </div>
     );
   }
@@ -80,16 +81,17 @@ export function Profile({ currentUser }: ProfileProps) {
     }
 
     return (
-      <div className="boxed-group-inner">
-        <h2 className="spacer-bottom">{translate('my_profile.groups')}</h2>
+      <>
+        <SubHeading as="h2">{translate('my_profile.groups')}</SubHeading>
         <ul id="groups">
-          {currentUser.groups.map(group => (
-            <li className="little-spacer-bottom" key={group} title={group}>
+          {currentUser.groups.map((group) => (
+            <li className="sw-mb-2" key={group} title={group}>
               {group}
             </li>
           ))}
         </ul>
-      </div>
+        <GreySeparator className="sw-my-4" />
+      </>
     );
   }
 
@@ -103,36 +105,27 @@ export function Profile({ currentUser }: ProfileProps) {
     }
 
     return (
-      <div className="boxed-group-inner">
-        <h2 className="spacer-bottom">
+      <>
+        <SubHeading as="h2">
           {translate('my_profile.scm_accounts')}
-          <HelpTooltip
-            className="little-spacer-left"
-            overlay={translate('my_profile.scm_accounts.tooltip')}
-          />
-        </h2>
+          <HelpTooltip className="sw-ml-2" overlay={translate('my_profile.scm_accounts.tooltip')}>
+            <HelperHintIcon />
+          </HelpTooltip>
+        </SubHeading>
         <ul id="scm-accounts">
-          {currentUser.login && (
-            <li className="little-spacer-bottom text-ellipsis" title={currentUser.login}>
-              {currentUser.login}
-            </li>
-          )}
+          {currentUser.login && <li title={currentUser.login}>{currentUser.login}</li>}
 
-          {currentUser.email && (
-            <li className="little-spacer-bottom text-ellipsis" title={currentUser.email}>
-              {currentUser.email}
-            </li>
-          )}
+          {currentUser.email && <li title={currentUser.email}>{currentUser.email}</li>}
 
           {currentUser.scmAccounts &&
             currentUser.scmAccounts.length > 0 &&
-            currentUser.scmAccounts.map(scmAccount => (
-              <li className="little-spacer-bottom" key={scmAccount} title={scmAccount}>
+            currentUser.scmAccounts.map((scmAccount) => (
+              <li key={scmAccount} title={scmAccount}>
                 {scmAccount}
               </li>
             ))}
         </ul>
-      </div>
+      </>
     );
   }
 }

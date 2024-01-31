@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.DIRECTORY;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.FILE;
@@ -59,7 +59,8 @@ public class CloseIssuesOnRemovedComponentsVisitorTest {
   public void setUp() throws Exception {
     protoIssueCache = new ProtoIssueCache(temp.newFile(), System2.INSTANCE);
     underTest = new VisitorsCrawler(
-      Arrays.asList(new CloseIssuesOnRemovedComponentsVisitor(issuesLoader, componentsWithUnprocessedIssues, protoIssueCache, issueLifecycle)));
+      Arrays.asList(new CloseIssuesOnRemovedComponentsVisitor(issuesLoader, componentsWithUnprocessedIssues,
+        protoIssueCache, issueLifecycle)));
   }
 
   @Test
@@ -85,21 +86,10 @@ public class CloseIssuesOnRemovedComponentsVisitorTest {
   }
 
   @Test
-  public void nothing_to_do_when_no_uuid_in_queue() {
-    when(componentsWithUnprocessedIssues.getUuids()).thenReturn(Collections.emptySet());
-
-    underTest.visit(ReportComponent.builder(PROJECT, 1).build());
-
-    verifyZeroInteractions(issueLifecycle);
-    CloseableIterator<DefaultIssue> issues = protoIssueCache.traverse();
-    assertThat(issues.hasNext()).isFalse();
-  }
-
-  @Test
   public void do_nothing_on_directory() {
     underTest.visit(ReportComponent.builder(DIRECTORY, 1).build());
 
-    verifyZeroInteractions(issueLifecycle);
+    verifyNoInteractions(issueLifecycle);
     CloseableIterator<DefaultIssue> issues = protoIssueCache.traverse();
     assertThat(issues.hasNext()).isFalse();
   }
@@ -108,7 +98,7 @@ public class CloseIssuesOnRemovedComponentsVisitorTest {
   public void do_nothing_on_file() {
     underTest.visit(ReportComponent.builder(FILE, 1).build());
 
-    verifyZeroInteractions(issueLifecycle);
+    verifyNoInteractions(issueLifecycle);
     CloseableIterator<DefaultIssue> issues = protoIssueCache.traverse();
     assertThat(issues.hasNext()).isFalse();
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,78 +17,99 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { getReturnUrl } from 'sonar-ui-common/helpers/urls';
+import { logIn } from '../../../api/auth';
+import { getLoginMessage } from '../../../api/settings';
 import { getIdentityProviders } from '../../../api/users';
-import { doLogin } from '../../../store/rootActions';
+import { Location, withRouter } from '../../../components/hoc/withRouter';
+import { addGlobalErrorMessage } from '../../../helpers/globalMessages';
+import { translate } from '../../../helpers/l10n';
+import { getReturnUrl } from '../../../helpers/urls';
+import { IdentityProvider } from '../../../types/types';
 import Login from './Login';
 
-interface OwnProps {
-  location: Pick<Location, 'hash' | 'pathname' | 'query'> & {
-    query: { advanced?: string; return_to?: string };
-  };
+interface Props {
+  location: Location;
 }
-
-interface DispatchToProps {
-  doLogin: (login: string, password: string) => Promise<void>;
-}
-
-type Props = OwnProps & DispatchToProps;
-
 interface State {
-  identityProviders?: T.IdentityProvider[];
+  identityProviders: IdentityProvider[];
+  loading: boolean;
+  message?: string;
 }
 
 export class LoginContainer extends React.PureComponent<Props, State> {
   mounted = false;
 
-  state: State = {};
+  state: State = {
+    identityProviders: [],
+    loading: true,
+  };
 
   componentDidMount() {
     this.mounted = true;
-    getIdentityProviders().then(
-      ({ identityProviders }) => {
-        if (this.mounted) {
-          this.setState({ identityProviders });
-        }
-      },
-      () => {}
-    );
+    this.loadData();
   }
 
   componentWillUnmount() {
     this.mounted = false;
   }
 
+  async loadData() {
+    await Promise.all([this.loadIdentityProviders(), this.loadLoginMessage()]);
+    this.setState({ loading: false });
+  }
+
+  loadIdentityProviders() {
+    return getIdentityProviders().then(
+      ({ identityProviders }) => {
+        if (this.mounted) {
+          this.setState({ identityProviders });
+        }
+      },
+      () => {
+        /* already handled */
+      },
+    );
+  }
+
+  async loadLoginMessage() {
+    try {
+      const { message } = await getLoginMessage();
+      if (this.mounted) {
+        this.setState({ message });
+      }
+    } catch (_) {
+      /* already handled */
+    }
+  }
+
   handleSuccessfulLogin = () => {
-    window.location.href = getReturnUrl(this.props.location);
+    window.location.replace(getReturnUrl(this.props.location));
   };
 
-  handleSubmit = (login: string, password: string) => {
-    return this.props.doLogin(login, password).then(this.handleSuccessfulLogin, () => {});
+  handleSubmit = (id: string, password: string) => {
+    return logIn(id, password)
+      .then(this.handleSuccessfulLogin)
+      .catch(() => {
+        addGlobalErrorMessage(translate('login.authentication_failed'));
+        return Promise.reject();
+      });
   };
 
   render() {
     const { location } = this.props;
-    const { identityProviders } = this.state;
-
-    if (!identityProviders) {
-      return null;
-    }
+    const { identityProviders, loading, message } = this.state;
 
     return (
       <Login
         identityProviders={identityProviders}
+        loading={loading}
+        message={message}
         onSubmit={this.handleSubmit}
-        returnTo={getReturnUrl(location)}
+        location={location}
       />
     );
   }
 }
 
-const mapStateToProps = null;
-const mapDispatchToProps = { doLogin: doLogin as any };
-
-export default connect(mapStateToProps, mapDispatchToProps)(LoginContainer);
+export default withRouter(LoginContainer);

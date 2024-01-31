@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@ package org.sonar.server.issue.workflow;
 import com.tngtech.java.junit.dataprovider.DataProvider;
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
 import com.tngtech.java.junit.dataprovider.UseDataProvider;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
@@ -37,14 +36,15 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.core.issue.FieldDiffs;
 import org.sonar.core.issue.IssueChangeContext;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.server.issue.IssueFieldsSetter;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonar.api.issue.DefaultTransitions.RESET_AS_TO_REVIEW;
+import static org.sonar.api.issue.DefaultTransitions.RESOLVE_AS_ACKNOWLEDGED;
 import static org.sonar.api.issue.DefaultTransitions.RESOLVE_AS_REVIEWED;
 import static org.sonar.api.issue.DefaultTransitions.RESOLVE_AS_SAFE;
+import static org.sonar.api.issue.Issue.RESOLUTION_ACKNOWLEDGED;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
 import static org.sonar.api.issue.Issue.RESOLUTION_REMOVED;
 import static org.sonar.api.issue.Issue.RESOLUTION_SAFE;
@@ -52,16 +52,18 @@ import static org.sonar.api.issue.Issue.STATUS_CLOSED;
 import static org.sonar.api.issue.Issue.STATUS_REVIEWED;
 import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
 import static org.sonar.api.rules.RuleType.SECURITY_HOTSPOT;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByScanBuilder;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
 import static org.sonar.db.rule.RuleTesting.XOO_X1;
+import static org.sonar.server.issue.workflow.IssueWorkflowTest.emptyIfNull;
 
 @RunWith(DataProviderRunner.class)
 public class IssueWorkflowForSecurityHotspotsTest {
+  private static final IssueChangeContext SOME_CHANGE_CONTEXT = issueChangeContextByUserBuilder(new Date(), "USER1").build();
+  private static final List<String> RESOLUTION_TYPES = List.of(RESOLUTION_FIXED, RESOLUTION_SAFE, RESOLUTION_ACKNOWLEDGED);
 
-  private static final IssueChangeContext SOME_CHANGE_CONTEXT = IssueChangeContext.createUser(new Date(), "USER1");
-
-  private IssueFieldsSetter updater = new IssueFieldsSetter();
-
-  private IssueWorkflow underTest = new IssueWorkflow(new FunctionExecutor(updater), updater);
+  private final IssueFieldsSetter updater = new IssueFieldsSetter();
+  private final IssueWorkflow underTest = new IssueWorkflow(new FunctionExecutor(updater), updater);
 
   @Test
   @UseDataProvider("anyResolutionIncludingNone")
@@ -71,7 +73,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
 
     List<Transition> transitions = underTest.outTransitions(hotspot);
 
-    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_REVIEWED, RESOLVE_AS_SAFE);
+    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_REVIEWED, RESOLVE_AS_SAFE, RESOLVE_AS_ACKNOWLEDGED);
   }
 
   @DataProvider
@@ -92,7 +94,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
 
     List<Transition> transitions = underTest.outTransitions(hotspot);
 
-    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_SAFE, RESET_AS_TO_REVIEW);
+    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_SAFE, RESET_AS_TO_REVIEW, RESOLVE_AS_ACKNOWLEDGED);
   }
 
   @Test
@@ -102,7 +104,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
 
     List<Transition> transitions = underTest.outTransitions(hotspot);
 
-    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_REVIEWED, RESET_AS_TO_REVIEW);
+    assertThat(keys(transitions)).containsExactlyInAnyOrder(RESOLVE_AS_REVIEWED, RESET_AS_TO_REVIEW, RESOLVE_AS_ACKNOWLEDGED);
   }
 
   @Test
@@ -123,8 +125,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
       Issue.SECURITY_HOTSPOT_RESOLUTIONS.stream(),
       Stream.of(randomAlphabetic(12)))
       .flatMap(t -> t)
-      .filter(t -> !RESOLUTION_FIXED.equals(t))
-      .filter(t -> !RESOLUTION_SAFE.equals(t))
+      .filter(t -> !RESOLUTION_TYPES.contains(t))
       .map(t -> new Object[] {t})
       .toArray(Object[][]::new);
   }
@@ -221,7 +222,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
       .setBeingClosed(true);
     Date now = new Date();
 
-    underTest.doAutomaticTransition(hotspot, IssueChangeContext.createScan(now));
+    underTest.doAutomaticTransition(hotspot, issueChangeContextByScanBuilder(now).build());
 
     assertThat(hotspot.resolution()).isEqualTo(RESOLUTION_FIXED);
     assertThat(hotspot.status()).isEqualTo(STATUS_CLOSED);
@@ -238,7 +239,7 @@ public class IssueWorkflowForSecurityHotspotsTest {
       .setBeingClosed(true);
     Date now = new Date();
 
-    underTest.doAutomaticTransition(hotspot, IssueChangeContext.createScan(now));
+    underTest.doAutomaticTransition(hotspot, issueChangeContextByScanBuilder(now).build());
 
     assertThat(hotspot.resolution()).isEqualTo(RESOLUTION_FIXED);
     assertThat(hotspot.status()).isEqualTo(STATUS_CLOSED);
@@ -255,31 +256,26 @@ public class IssueWorkflowForSecurityHotspotsTest {
   }
 
   @Test
-  @UseDataProvider("allStatusesLeadingToClosed")
-  public void do_not_automatically_reopen_closed_issues_of_security_hotspots(String previousStatus) {
-    DefaultIssue[] hotspots = Stream.of(RESOLUTION_FIXED, RESOLUTION_REMOVED)
-      .map(resolution -> {
-        DefaultIssue issue = newClosedHotspot(resolution);
-        setStatusPreviousToClosed(issue, previousStatus);
-        return issue;
-      })
-      .toArray(DefaultIssue[]::new);
+  public void automatically_reopen_closed_security_hotspots() {
+    DefaultIssue hotspot1 = newClosedHotspot(RESOLUTION_REMOVED);
+    setStatusPreviousToClosed(hotspot1, STATUS_REVIEWED, RESOLUTION_SAFE, RESOLUTION_REMOVED);
+
+    DefaultIssue hotspot2 = newClosedHotspot(RESOLUTION_FIXED);
+    setStatusPreviousToClosed(hotspot2, STATUS_TO_REVIEW, null, RESOLUTION_FIXED);
+
     Date now = new Date();
     underTest.start();
 
-    Arrays.stream(hotspots).forEach(hotspot -> {
-      underTest.doAutomaticTransition(hotspot, IssueChangeContext.createScan(now));
+    underTest.doAutomaticTransition(hotspot1,  issueChangeContextByScanBuilder(now).build());
+    underTest.doAutomaticTransition(hotspot2,  issueChangeContextByScanBuilder(now).build());
 
-      assertThat(hotspot.status()).isEqualTo(STATUS_CLOSED);
-      assertThat(hotspot.updateDate()).isNull();
-    });
-  }
+    assertThat(hotspot1.updateDate()).isNotNull();
+    assertThat(hotspot1.status()).isEqualTo(STATUS_REVIEWED);
+    assertThat(hotspot1.resolution()).isEqualTo(RESOLUTION_SAFE);
 
-  @DataProvider
-  public static Object[][] allStatusesLeadingToClosed() {
-    return Stream.of(STATUS_TO_REVIEW, STATUS_REVIEWED)
-      .map(t -> new Object[] {t})
-      .toArray(Object[][]::new);
+    assertThat(hotspot2.updateDate()).isNotNull();
+    assertThat(hotspot2.status()).isEqualTo(STATUS_TO_REVIEW);
+    assertThat(hotspot2.resolution()).isNull();
   }
 
   @Test
@@ -289,22 +285,25 @@ public class IssueWorkflowForSecurityHotspotsTest {
       .setRuleKey(XOO_X1);
 
     underTest.start();
-    underTest.doAutomaticTransition(hotspot, IssueChangeContext.createScan(new Date()));
+    underTest.doAutomaticTransition(hotspot, issueChangeContextByScanBuilder(new Date()).build());
 
     assertThat(hotspot.status()).isEqualTo(STATUS_TO_REVIEW);
     assertThat(hotspot.resolution()).isNull();
   }
 
   private Collection<String> keys(List<Transition> transitions) {
-    return transitions.stream().map(Transition::key).collect(MoreCollectors.toList());
+    return transitions.stream().map(Transition::key).toList();
   }
 
-  private static void setStatusPreviousToClosed(DefaultIssue hotspot, String previousStatus) {
-    addStatusChange(hotspot, new Date(), previousStatus, STATUS_CLOSED);
+  private static void setStatusPreviousToClosed(DefaultIssue hotspot, String previousStatus, @Nullable String previousResolution, @Nullable String newResolution) {
+    addStatusChange(hotspot, new Date(), previousStatus, STATUS_CLOSED, previousResolution, newResolution);
   }
 
-  private static void addStatusChange(DefaultIssue issue, Date date, String previousStatus, String newStatus) {
-    issue.addChange(new FieldDiffs().setCreationDate(date).setDiff("status", previousStatus, newStatus));
+  private static void addStatusChange(DefaultIssue issue, Date date, String previousStatus, String newStatus, @Nullable String previousResolution, @Nullable String newResolution) {
+    issue.addChange(new FieldDiffs()
+      .setCreationDate(date)
+      .setDiff("status", previousStatus, newStatus)
+      .setDiff("resolution", emptyIfNull(previousResolution), emptyIfNull(newResolution)));
   }
 
   private static DefaultIssue newClosedHotspot(String resolution) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,6 @@ public enum MetricToDto implements Function<Metric, MetricDto> {
     dto.setQualitative(metric.getQualitative());
     dto.setValueType(metric.getType().name());
     dto.setOptimizedBestValue(Optional.ofNullable(metric.isOptimizedBestValue()).orElse(false));
-    dto.setUserManaged(metric.getUserManaged());
     dto.setWorstValue(metric.getWorstValue());
     dto.setDeleteHistoricalData(metric.getDeleteHistoricalData());
     dto.setDecimalScale(metric.getDecimalScale());

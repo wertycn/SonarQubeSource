@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,13 @@
  */
 package org.sonar.scanner.platform;
 
-import java.io.File;
 import java.util.Date;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.CoreProperties;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.platform.Server;
 import org.sonar.api.utils.DateUtils;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
 
 import static org.apache.commons.lang.StringUtils.trimToEmpty;
@@ -35,12 +34,12 @@ public class DefaultServer extends Server {
 
   private final Configuration settings;
   private final DefaultScannerWsClient client;
-  private final SonarRuntime runtime;
+  private final SonarQubeVersion sonarQubeVersion;
 
-  public DefaultServer(Configuration settings, DefaultScannerWsClient client, SonarRuntime runtime) {
+  public DefaultServer(Configuration settings, DefaultScannerWsClient client, SonarQubeVersion sonarQubeVersion) {
     this.settings = settings;
     this.client = client;
-    this.runtime = runtime;
+    this.sonarQubeVersion = sonarQubeVersion;
   }
 
   @Override
@@ -50,18 +49,13 @@ public class DefaultServer extends Server {
 
   @Override
   public String getVersion() {
-    return runtime.getApiVersion().toString();
+    return sonarQubeVersion.get().toString();
   }
 
   @Override
   public Date getStartedAt() {
     String dateString = settings.get(CoreProperties.SERVER_STARTTIME).orElseThrow(() -> new IllegalStateException("Mandatory"));
     return DateUtils.parseDateTime(dateString);
-  }
-
-  @Override
-  public File getRootDir() {
-    return null;
   }
 
   @Override
@@ -77,25 +71,5 @@ public class DefaultServer extends Server {
       baseUrl = client.baseUrl();
     }
     return StringUtils.removeEnd(baseUrl, "/");
-  }
-
-  @Override
-  public boolean isDev() {
-    return false;
-  }
-
-  @Override
-  public boolean isSecured() {
-    return false;
-  }
-
-  @Override
-  public String getURL() {
-    return StringUtils.removeEnd(client.baseUrl(), "/");
-  }
-
-  @Override
-  public String getPermanentServerId() {
-    return getId();
   }
 }

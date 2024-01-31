@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@ import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric.Level;
 import org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus;
 
-import static org.sonar.core.util.stream.MoreCollectors.toEnumSet;
+import static java.util.stream.Collectors.toSet;
 
 public class QualityGateEvaluatorImpl implements QualityGateEvaluator {
 
@@ -83,14 +83,14 @@ public class QualityGateEvaluatorImpl implements QualityGateEvaluator {
   private static boolean isSmallChangeset(Measures measures) {
     Optional<Measure> newLines = measures.get(CoreMetrics.NEW_LINES_KEY);
     return newLines.isPresent() &&
-      newLines.get().getNewMetricValue().isPresent() &&
-      newLines.get().getNewMetricValue().getAsDouble() < MAXIMUM_NEW_LINES_FOR_SMALL_CHANGESETS;
+      newLines.get().getValue().isPresent() &&
+      newLines.get().getValue().getAsDouble() < MAXIMUM_NEW_LINES_FOR_SMALL_CHANGESETS;
   }
 
   private static Level overallStatusOf(Set<EvaluatedCondition> conditions) {
     Set<EvaluationStatus> statuses = conditions.stream()
       .map(EvaluatedCondition::getStatus)
-      .collect(toEnumSet(EvaluationStatus.class));
+      .collect(toSet());
 
     if (statuses.contains(EvaluationStatus.ERROR)) {
       return Level.ERROR;

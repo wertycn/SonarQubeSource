@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,10 +24,13 @@ import java.io.File;
 import org.slf4j.LoggerFactory;
 import org.sonar.process.MinimumViableSystem;
 import org.sonar.process.Monitored;
+import org.sonar.process.PluginSecurityManager;
 import org.sonar.process.ProcessEntryPoint;
 import org.sonar.process.ProcessId;
 import org.sonar.process.Props;
 import org.sonar.process.sharedmemoryfile.DefaultProcessCommands;
+
+import static org.sonar.process.ProcessId.WEB_SERVER;
 
 public class WebServer implements Monitored {
   public static final String PROPERTY_SHARED_PATH = "process.sharedDir";
@@ -40,7 +43,7 @@ public class WebServer implements Monitored {
       .checkWritableTempDir()
       .checkRequiredJavaOptions(ImmutableMap.of("file.encoding", "UTF-8"));
     this.sharedDir = getSharedDir(props);
-    this.tomcat = new EmbeddedTomcat(props);
+    this.tomcat = new EmbeddedTomcat(props, new TomcatHttpConnectorFactory());
   }
 
   private static File getSharedDir(Props props) {
@@ -75,7 +78,7 @@ public class WebServer implements Monitored {
   public void stop() {
     // hard stop is as graceful as stop for the WebServer
     hardStop();
-    LoggerFactory.getLogger(WebServer.class).info("WebServer stopped");
+    LoggerFactory.getLogger(WebServer.class).info("{} stopped", WEB_SERVER.getHumanReadableName());
   }
 
   @Override
@@ -95,6 +98,8 @@ public class WebServer implements Monitored {
     ProcessEntryPoint entryPoint = ProcessEntryPoint.createForArguments(args);
     Props props = entryPoint.getProps();
     new WebServerProcessLogging().configure(props);
+    new WebSecurityManager(new PluginSecurityManager(), props).apply();
+
     WebServer server = new WebServer(props);
     entryPoint.launch(server);
   }

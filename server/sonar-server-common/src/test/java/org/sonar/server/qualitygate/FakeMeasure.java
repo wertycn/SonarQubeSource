@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,6 @@ import javax.annotation.Nullable;
 import org.sonar.api.measures.Metric;
 
 public class FakeMeasure  implements QualityGateEvaluator.Measure {
-  private Double leakValue;
   private Double value;
   private Metric.ValueType valueType;
 
@@ -47,11 +46,9 @@ public class FakeMeasure  implements QualityGateEvaluator.Measure {
     this.valueType = Metric.ValueType.INT;
   }
 
-  public static FakeMeasure newMeasureOnLeak(@Nullable Integer value) {
-    FakeMeasure measure = new FakeMeasure();
-    measure.leakValue = value == null ? null : value.doubleValue();
-    measure.valueType = Metric.ValueType.INT;
-    return measure;
+  public FakeMeasure(@Nullable Long value) {
+    this.value = value == null ? null : value.doubleValue();
+    this.valueType = Metric.ValueType.MILLISEC;
   }
 
   @Override
@@ -67,10 +64,5 @@ public class FakeMeasure  implements QualityGateEvaluator.Measure {
   @Override
   public Optional<String> getStringValue() {
     return Optional.empty();
-  }
-
-  @Override
-  public OptionalDouble getNewMetricValue() {
-    return leakValue == null ? OptionalDouble.empty() : OptionalDouble.of(leakValue);
   }
 }

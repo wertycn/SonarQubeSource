@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, Link, SubTitle } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getQualityProfileExporterUrl } from '../../../api/quality-profiles';
-import { getBaseUrl } from '../../../helpers/system';
+import { translate } from '../../../helpers/l10n';
 import { Exporter, Profile } from '../types';
 
 interface Props {
@@ -28,38 +28,30 @@ interface Props {
   profile: Profile;
 }
 
-export default class ProfileExporters extends React.PureComponent<Props> {
-  getExportUrl(exporter: Exporter) {
-    const { profile } = this.props;
-    return `${getBaseUrl()}${getQualityProfileExporterUrl(exporter, profile)}`;
+export default function ProfileExporters({ exporters, profile }: Props) {
+  const exportersForLanguage = exporters.filter((e) => e.languages.includes(profile.language));
+
+  if (exportersForLanguage.length === 0) {
+    return null;
   }
 
-  render() {
-    const { exporters, profile } = this.props;
-    const exportersForLanguage = exporters.filter(e => e.languages.includes(profile.language));
-
-    if (exportersForLanguage.length === 0) {
-      return null;
-    }
-
-    return (
-      <div className="boxed-group quality-profile-exporters">
-        <h2>{translate('quality_profiles.exporters')}</h2>
-        <div className="boxed-group-inner">
-          <ul>
-            {exportersForLanguage.map((exporter, index) => (
-              <li
-                className={index > 0 ? 'spacer-top' : undefined}
-                data-key={exporter.key}
-                key={exporter.key}>
-                <a href={this.getExportUrl(exporter)} rel="noopener noreferrer" target="_blank">
-                  {exporter.name}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
+  return (
+    <section aria-label={translate('quality_profiles.exporters')}>
+      <div>
+        <SubTitle>{translate('quality_profiles.exporters')}</SubTitle>
       </div>
-    );
-  }
+      <FlagMessage className="sw-mb-4" variant="warning">
+        {translate('quality_profiles.exporters.deprecated')}
+      </FlagMessage>
+      <ul className="sw-flex sw-flex-col sw-gap-2">
+        {exportersForLanguage.map((exporter) => (
+          <li data-key={exporter.key} key={exporter.key}>
+            <Link isExternal showExternalIcon to={getQualityProfileExporterUrl(exporter, profile)}>
+              {exporter.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

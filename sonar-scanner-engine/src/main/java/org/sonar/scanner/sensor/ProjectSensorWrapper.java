@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,11 +20,14 @@
 package org.sonar.scanner.sensor;
 
 import org.sonar.api.scanner.sensor.ProjectSensor;
+import org.sonar.scanner.scan.branch.BranchConfiguration;
+import org.sonar.scanner.scan.filesystem.MutableFileSystem;
 
 public class ProjectSensorWrapper extends AbstractSensorWrapper<ProjectSensor> {
 
-  public ProjectSensorWrapper(ProjectSensor sensor, ProjectSensorContext context, ProjectSensorOptimizer optimizer) {
-    super(sensor, context, optimizer);
+  public ProjectSensorWrapper(ProjectSensor sensor, ProjectSensorContext context, ProjectSensorOptimizer optimizer,
+    MutableFileSystem fileSystem, BranchConfiguration branchConfiguration) {
+    super(sensor, context, optimizer, fileSystem, branchConfiguration);
   }
 
 }

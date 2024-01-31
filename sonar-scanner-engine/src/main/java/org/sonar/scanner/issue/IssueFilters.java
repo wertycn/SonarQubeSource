@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,6 +25,7 @@ import org.sonar.api.scan.issue.filter.FilterableIssue;
 import org.sonar.api.scan.issue.filter.IssueFilter;
 import org.sonar.api.scan.issue.filter.IssueFilterChain;
 import org.sonar.scanner.protocol.output.ScannerReport;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * @deprecated since 7.6, {@link IssueFilter} is deprecated
@@ -34,11 +35,13 @@ public class IssueFilters {
   private final IssueFilterChain filterChain;
   private final DefaultInputProject project;
 
+  @Autowired(required = false)
   public IssueFilters(DefaultInputProject project, IssueFilter[] exclusionFilters) {
     this.project = project;
     this.filterChain = new DefaultIssueFilterChain(exclusionFilters);
   }
 
+  @Autowired(required = false)
   public IssueFilters(DefaultInputProject project) {
     this(project, new IssueFilter[0]);
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,8 +44,6 @@ public class MetricDto {
   private int direction;
 
   private boolean qualitative;
-
-  private boolean userManaged;
 
   private Double worstValue;
 
@@ -135,15 +133,6 @@ public class MetricDto {
 
   public MetricDto setQualitative(boolean qualitative) {
     this.qualitative = qualitative;
-    return this;
-  }
-
-  public boolean isUserManaged() {
-    return userManaged;
-  }
-
-  public MetricDto setUserManaged(boolean userManaged) {
-    this.userManaged = userManaged;
     return this;
   }
 

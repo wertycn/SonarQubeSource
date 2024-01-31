@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,135 +17,157 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
-import * as React from 'react';
-import { DeleteButton, EditButton } from 'sonar-ui-common/components/controls/buttons';
-import ConfirmModal from 'sonar-ui-common/components/controls/ConfirmModal';
 import {
-  getLocalizedMetricName,
-  translate,
-  translateWithParameters
-} from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { deleteCondition } from '../../../api/quality-gates';
-import { getLocalizedMetricNameNoDiffMetric } from '../utils';
-import ConditionModal from './ConditionModal';
+  ActionCell,
+  ContentCell,
+  DangerButtonPrimary,
+  DestructiveIcon,
+  InteractiveIcon,
+  Modal,
+  NumericalCell,
+  PencilIcon,
+  TableRow,
+  TextError,
+  TrashIcon,
+} from 'design-system';
+import * as React from 'react';
+import { useMetrics } from '../../../app/components/metrics/withMetricsContext';
+import { getLocalizedMetricName, translate, translateWithParameters } from '../../../helpers/l10n';
+import { getOperatorLabel } from '../../../helpers/qualityGates';
+import { useDeleteConditionMutation } from '../../../queries/quality-gates';
+import { CaycStatus, Condition as ConditionType, Metric, QualityGate } from '../../../types/types';
+import { getLocalizedMetricNameNoDiffMetric, isConditionWithFixedValue } from '../utils';
+import ConditionValue from './ConditionValue';
+import EditConditionModal from './EditConditionModal';
+
+export enum ConditionChange {
+  Added = 'added',
+  Updated = 'updated',
+  Deleted = 'deleted',
+}
 
 interface Props {
-  condition: T.Condition;
+  condition: ConditionType;
   canEdit: boolean;
-  metric: T.Metric;
-  onRemoveCondition: (Condition: T.Condition) => void;
-  onSaveCondition: (newCondition: T.Condition, oldCondition: T.Condition) => void;
-  qualityGate: T.QualityGate;
-  updated?: boolean;
+  metric: Metric;
+  qualityGate: QualityGate;
+  showEdit?: boolean;
+  isCaycModal?: boolean;
 }
 
-interface State {
-  deleteFormOpen: boolean;
-  modal: boolean;
-}
+export default function ConditionComponent({
+  condition,
+  canEdit,
+  metric,
+  qualityGate,
+  showEdit,
+  isCaycModal,
+}: Readonly<Props>) {
+  const [deleteFormOpen, setDeleteFormOpen] = React.useState(false);
+  const [modal, setModal] = React.useState(false);
+  const { mutateAsync: deleteCondition } = useDeleteConditionMutation(qualityGate.name);
+  const metrics = useMetrics();
+  const { op = 'GT' } = condition;
 
-export default class Condition extends React.PureComponent<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      deleteFormOpen: false,
-      modal: false
-    };
-  }
-
-  handleUpdateCondition = (newCondition: T.Condition) => {
-    this.props.onSaveCondition(newCondition, this.props.condition);
+  const handleOpenUpdate = () => {
+    setModal(true);
   };
 
-  handleOpenUpdate = () => {
-    this.setState({ modal: true });
+  const handleUpdateClose = () => {
+    setModal(false);
   };
 
-  handleUpdateClose = () => {
-    this.setState({ modal: false });
+  const handleDeleteClick = () => {
+    setDeleteFormOpen(true);
   };
 
-  handleDeleteClick = () => {
-    this.setState({ deleteFormOpen: true });
+  const closeDeleteForm = () => {
+    setDeleteFormOpen(false);
   };
 
-  closeDeleteForm = () => {
-    this.setState({ deleteFormOpen: false });
-  };
+  const isCaycCompliantAndOverCompliant = qualityGate.caycStatus !== CaycStatus.NonCompliant;
 
-  removeCondition = (condition: T.Condition) => {
-    deleteCondition({ id: condition.id }).then(
-      () => this.props.onRemoveCondition(condition),
-      () => {}
-    );
-  };
+  return (
+    <TableRow>
+      <ContentCell>
+        {getLocalizedMetricNameNoDiffMetric(metric, metrics)}
+        {metric.hidden && <TextError className="sw-ml-1" text={translate('deprecated')} />}
+      </ContentCell>
 
-  renderOperator() {
-    // TODO can operator be missing?
-    const { op = 'GT' } = this.props.condition;
-    return this.props.metric.type === 'RATING'
-      ? translate('quality_gates.operator', op, 'rating')
-      : translate('quality_gates.operator', op);
-  }
+      <ContentCell className="sw-whitespace-nowrap">{getOperatorLabel(op, metric)}</ContentCell>
 
-  render() {
-    const { condition, canEdit, metric, qualityGate, updated } = this.props;
-    return (
-      <tr className={classNames({ highlighted: updated })}>
-        <td className="text-middle">
-          {getLocalizedMetricNameNoDiffMetric(metric)}
-          {metric.hidden && (
-            <span className="text-danger little-spacer-left">{translate('deprecated')}</span>
-          )}
-        </td>
-
-        <td className="text-middle nowrap">{this.renderOperator()}</td>
-
-        <td className="text-middle nowrap">{formatMeasure(condition.error, metric.type)}</td>
-
-        {canEdit && (
+      <NumericalCell className="sw-whitespace-nowrap">
+        <ConditionValue
+          metric={metric}
+          isCaycModal={isCaycModal}
+          condition={condition}
+          isCaycCompliantAndOverCompliant={isCaycCompliantAndOverCompliant}
+        />
+      </NumericalCell>
+      <ActionCell>
+        {!isCaycModal && canEdit && (
           <>
-            <td className="text-center thin">
-              <EditButton
-                data-test="quality-gates__condition-update"
-                onClick={this.handleOpenUpdate}
-              />
-            </td>
-            <td className="text-center thin">
-              <DeleteButton
-                data-test="quality-gates__condition-delete"
-                onClick={this.handleDeleteClick}
-              />
-            </td>
-            {this.state.modal && (
-              <ConditionModal
-                condition={condition}
-                header={translate('quality_gates.update_condition')}
-                metric={metric}
-                onAddCondition={this.handleUpdateCondition}
-                onClose={this.handleUpdateClose}
-                qualityGate={qualityGate}
-              />
-            )}
-            {this.state.deleteFormOpen && (
-              <ConfirmModal
-                confirmButtonText={translate('delete')}
-                confirmData={condition}
-                header={translate('quality_gates.delete_condition')}
-                isDestructive={true}
-                onClose={this.closeDeleteForm}
-                onConfirm={this.removeCondition}>
-                {translateWithParameters(
-                  'quality_gates.delete_condition.confirm.message',
-                  getLocalizedMetricName(this.props.metric)
+            {(!isCaycCompliantAndOverCompliant ||
+              !isConditionWithFixedValue(condition) ||
+              (isCaycCompliantAndOverCompliant && showEdit)) && (
+              <>
+                <InteractiveIcon
+                  Icon={PencilIcon}
+                  aria-label={translateWithParameters('quality_gates.condition.edit', metric.name)}
+                  data-test="quality-gates__condition-update"
+                  onClick={handleOpenUpdate}
+                  className="sw-mr-4"
+                  size="small"
+                />
+                {modal && (
+                  <EditConditionModal
+                    condition={condition}
+                    header={translate('quality_gates.update_condition')}
+                    metric={metric}
+                    onClose={handleUpdateClose}
+                    qualityGate={qualityGate}
+                  />
                 )}
-              </ConfirmModal>
+              </>
+            )}
+            {(!isCaycCompliantAndOverCompliant ||
+              !condition.isCaycCondition ||
+              (isCaycCompliantAndOverCompliant && showEdit)) && (
+              <>
+                <DestructiveIcon
+                  Icon={TrashIcon}
+                  aria-label={translateWithParameters(
+                    'quality_gates.condition.delete',
+                    metric.name,
+                  )}
+                  onClick={handleDeleteClick}
+                  size="small"
+                />
+                {deleteFormOpen && (
+                  <Modal
+                    headerTitle={translate('quality_gates.delete_condition')}
+                    onClose={closeDeleteForm}
+                    body={translateWithParameters(
+                      'quality_gates.delete_condition.confirm.message',
+                      getLocalizedMetricName(metric),
+                    )}
+                    primaryButton={
+                      <DangerButtonPrimary
+                        autoFocus
+                        type="submit"
+                        onClick={() => deleteCondition(condition)}
+                      >
+                        {translate('delete')}
+                      </DangerButtonPrimary>
+                    }
+                    secondaryButtonLabel={translate('close')}
+                  />
+                )}
+              </>
             )}
           </>
         )}
-      </tr>
-    );
-  }
+      </ActionCell>
+    </TableRow>
+  );
 }

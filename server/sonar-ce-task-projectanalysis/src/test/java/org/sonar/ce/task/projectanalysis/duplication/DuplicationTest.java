@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,13 +23,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.ReportComponent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 public class DuplicationTest {
@@ -41,55 +40,47 @@ public class DuplicationTest {
   private static final String FILE_KEY_1 = "1";
   private static final String FILE_KEY_2 = "2";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void constructor_throws_NPE_if_original_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("original TextBlock can not be null");
-
-    new Duplication(null, Collections.emptyList());
+    assertThatThrownBy(() -> new Duplication(null, Collections.emptyList()))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("original TextBlock can not be null");
   }
 
   @Test
   public void constructor_throws_NPE_if_duplicates_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("duplicates can not be null");
-
-    new Duplication(SOME_ORIGINAL_TEXTBLOCK, null);
+    assertThatThrownBy(() -> new Duplication(SOME_ORIGINAL_TEXTBLOCK, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("duplicates can not be null");
   }
 
   @Test
   public void constructor_throws_IAE_if_duplicates_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("duplicates can not be empty");
-
-    new Duplication(SOME_ORIGINAL_TEXTBLOCK, Collections.emptyList());
+    assertThatThrownBy(() -> new Duplication(SOME_ORIGINAL_TEXTBLOCK, Collections.emptyList()))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("duplicates can not be empty");
   }
 
   @Test
   public void constructor_throws_NPE_if_duplicates_contains_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("duplicates can not contain null");
-
-    new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(mock(Duplicate.class), null, mock(Duplicate.class)));
+    assertThatThrownBy(() -> new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(mock(Duplicate.class), null, mock(Duplicate.class))))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("duplicates can not contain null");
   }
 
   @Test
   public void constructor_throws_IAE_if_duplicates_contains_InnerDuplicate_of_original() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("TextBlock of an InnerDuplicate can not be the original TextBlock");
-
-    new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(mock(Duplicate.class), new InnerDuplicate(SOME_ORIGINAL_TEXTBLOCK), mock(Duplicate.class)));
+    assertThatThrownBy(() ->  new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(mock(Duplicate.class), new InnerDuplicate(SOME_ORIGINAL_TEXTBLOCK), mock(Duplicate.class))))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("TextBlock of an InnerDuplicate can not be the original TextBlock");
   }
 
   @Test
   public void constructor_throws_IAE_when_attempting_to_sort_Duplicate_of_unkown_type() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Unsupported type of Duplicate " + MyDuplicate.class.getName());
-
-    new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new MyDuplicate(), new MyDuplicate()));
+    assertThatThrownBy(() -> new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new MyDuplicate(), new MyDuplicate())))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Unsupported type of Duplicate " + MyDuplicate.class.getName());
   }
 
   private static final class MyDuplicate implements Duplicate {
@@ -153,17 +144,18 @@ public class DuplicationTest {
   public void equals_compares_on_original_and_duplicates() {
     Duplication duplication = new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1)));
 
-    assertThat(duplication).isEqualTo(duplication);
-    assertThat(duplication).isEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1))));
-    assertThat(duplication).isNotEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_2))));
-    assertThat(duplication).isNotEqualTo(new Duplication(TEXT_BLOCK_1, Arrays.asList(new InnerDuplicate(SOME_ORIGINAL_TEXTBLOCK))));
+    assertThat(duplication)
+      .isEqualTo(duplication)
+      .isEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1))))
+      .isNotEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_2))))
+      .isNotEqualTo(new Duplication(TEXT_BLOCK_1, Arrays.asList(new InnerDuplicate(SOME_ORIGINAL_TEXTBLOCK))));
   }
 
   @Test
   public void hashcode_is_based_on_original_only() {
     Duplication duplication = new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1)));
 
-    assertThat(duplication.hashCode()).isEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1))).hashCode());
+    assertThat(duplication).hasSameHashCodeAs(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1))));
     assertThat(duplication.hashCode()).isNotEqualTo(new Duplication(SOME_ORIGINAL_TEXTBLOCK, Arrays.asList(new InnerDuplicate(TEXT_BLOCK_2))).hashCode());
     assertThat(duplication.hashCode()).isNotEqualTo(new Duplication(TEXT_BLOCK_1, Arrays.asList(new InnerDuplicate(SOME_ORIGINAL_TEXTBLOCK))).hashCode());
   }
@@ -174,8 +166,8 @@ public class DuplicationTest {
       SOME_ORIGINAL_TEXTBLOCK,
       Arrays.asList(new InnerDuplicate(TEXT_BLOCK_1)));
 
-    assertThat(duplication.toString())
-      .isEqualTo("Duplication{original=TextBlock{start=1, end=2}, duplicates=[InnerDuplicate{textBlock=TextBlock{start=2, end=2}}]}");
+    assertThat(duplication)
+      .hasToString("Duplication{original=TextBlock{start=1, end=2}, duplicates=[InnerDuplicate{textBlock=TextBlock{start=2, end=2}}]}");
   }
 
   @SafeVarargs

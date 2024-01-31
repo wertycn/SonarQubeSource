@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,10 +18,13 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { Helmet } from 'react-helmet-async';
+import { translate } from '../../helpers/l10n';
 
 export default function FormattingHelp() {
   return (
     <div className="page page-limited">
+      <Helmet defer={false} title={translate('formatting.page')} />
       <h2 className="spacer-bottom">Formatting Syntax</h2>
       <table className="width-100 data zebra">
         <thead>
@@ -38,15 +41,19 @@ export default function FormattingHelp() {
             </td>
           </tr>
           <tr>
-            <td>https://sonarqube.org</td>
+            <td>https://www.sonarsource.com/products/sonarqube</td>
             <td className="markdown">
-              <a href="https://sonarqube.org">https://sonarqube.org</a>
+              <a href="https://www.sonarsource.com/products/sonarqube">
+                https://www.sonarsource.com/products/sonarqube
+              </a>
             </td>
           </tr>
           <tr>
-            <td className="text-top">[SonarQube™ Home Page](https://www.sonarqube.org)</td>
+            <td className="text-top">
+              [SonarQube™ Home Page](https://www.sonarsource.com/products/sonarqube)
+            </td>
             <td className="markdown text-top">
-              <a href="https://www.sonarqube.org">SonarQube™ Home Page</a>
+              <a href="https://www.sonarsource.com/products/sonarqube">SonarQube™ Home Page</a>
             </td>
           </tr>
           <tr>

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.server.projectlink.ws;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -100,7 +99,7 @@ public class SearchAction implements ProjectLinksWsAction {
     return SearchWsResponse.newBuilder()
       .addAllLinks(links.stream()
         .map(SearchAction::buildLink)
-        .collect(Collectors.toList()))
+        .toList())
       .build();
   }
 
@@ -119,8 +118,8 @@ public class SearchAction implements ProjectLinksWsAction {
       request.getProjectId(),
       request.getProjectKey(),
       ComponentFinder.ParamNames.PROJECT_ID_AND_KEY);
-    if (!userSession.hasProjectPermission(UserRole.ADMIN, project) &&
-      !userSession.hasProjectPermission(UserRole.USER, project)) {
+    if (!userSession.hasEntityPermission(UserRole.ADMIN, project) &&
+        !userSession.hasEntityPermission(UserRole.USER, project)) {
       throw insufficientPrivilegesException();
     }
     return project;

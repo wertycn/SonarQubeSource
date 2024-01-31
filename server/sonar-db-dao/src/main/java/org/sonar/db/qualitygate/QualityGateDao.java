@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.db.qualitygate;
 import java.util.Collection;
 import java.util.Date;
 import javax.annotation.CheckForNull;
+import org.apache.ibatis.session.ResultHandler;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DatabaseUtils;
@@ -56,6 +57,11 @@ public class QualityGateDao implements Dao {
     return mapper(session).selectByUuid(uuid);
   }
 
+  @CheckForNull
+  public QualityGateDto selectDefault(DbSession session) {
+    return mapper(session).selectDefault();
+  }
+
   public void delete(QualityGateDto qGate, DbSession session) {
     mapper(session).delete(qGate.getUuid());
   }
@@ -73,6 +79,10 @@ public class QualityGateDao implements Dao {
     mapper(dbSession).ensureOneBuiltInQualityGate(builtInName);
   }
 
+  public void selectQualityGateFindings(DbSession dbSession, String qualityGateUuid, ResultHandler<QualityGateFindingDto> handler) {
+    mapper(dbSession).selectQualityGateFindings(qualityGateUuid, handler);
+  }
+
   public QualityGateDto selectBuiltIn(DbSession dbSession) {
     return mapper(dbSession).selectBuiltIn();
   }
@@ -81,6 +91,7 @@ public class QualityGateDao implements Dao {
     return session.getMapper(QualityGateMapper.class);
   }
 
+  @CheckForNull
   public QualityGateDto selectByProjectUuid(DbSession dbSession, String projectUuid) {
     return mapper(dbSession).selectByProjectUuid(projectUuid);
   }

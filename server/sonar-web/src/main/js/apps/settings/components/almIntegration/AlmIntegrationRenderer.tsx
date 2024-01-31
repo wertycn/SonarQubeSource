@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,190 +17,175 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, Link, SubTitle, ToggleButton } from 'design-system';
 import * as React from 'react';
-import BoxedTabs from 'sonar-ui-common/components/controls/BoxedTabs';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
+import { FormattedMessage } from 'react-intl';
+import { translate } from '../../../../helpers/l10n';
+import { getBaseUrl } from '../../../../helpers/system';
+import { useGetValuesQuery } from '../../../../queries/settings';
 import {
   AlmKeys,
   AlmSettingsBindingDefinitions,
-  AlmSettingsBindingStatus
+  AlmSettingsBindingStatus,
 } from '../../../../types/alm-settings';
-import AzureTab from './AzureTab';
-import BitbucketTab from './BitbucketTab';
+import { SettingsKey } from '../../../../types/settings';
+import { Dict } from '../../../../types/types';
+import { AlmTabs } from './AlmIntegration';
+import AlmTab from './AlmTab';
 import DeleteModal from './DeleteModal';
-import GithubTab from './GithubTab';
-import GitlabTab from './GitlabTab';
 
 export interface AlmIntegrationRendererProps {
   branchesEnabled: boolean;
-  component?: T.Component;
-  currentAlm: AlmKeys;
+  currentAlmTab: AlmTabs;
   definitionKeyForDeletion?: string;
   definitions: AlmSettingsBindingDefinitions;
-  definitionStatus: T.Dict<AlmSettingsBindingStatus>;
+  definitionStatus: Dict<AlmSettingsBindingStatus>;
   loadingAlmDefinitions: boolean;
   loadingProjectCount: boolean;
   multipleAlmEnabled: boolean;
-  onCancel: () => void;
-  onCheck: (definitionKey: string) => void;
+  onCancelDelete: () => void;
+  onCheckConfiguration: (definitionKey: string) => void;
   onConfirmDelete: (definitionKey: string) => void;
   onDelete: (definitionKey: string) => void;
-  onSelectAlm: (alm: AlmKeys) => void;
+  onSelectAlmTab: (alm: AlmTabs) => void;
   onUpdateDefinitions: () => void;
   projectCount?: number;
 }
 
 const tabs = [
   {
-    key: AlmKeys.GitHub,
     label: (
       <>
         <img
           alt="github"
-          className="spacer-right"
+          className="sw-mr-2"
           height={16}
           src={`${getBaseUrl()}/images/alm/github.svg`}
         />
-        GitHub
+        {translate('settings.almintegration.tab.github')}
       </>
     ),
-    requiresBranchesEnabled: false
+    value: AlmKeys.GitHub,
   },
   {
-    key: AlmKeys.BitbucketServer,
     label: (
       <>
         <img
           alt="bitbucket"
-          className="spacer-right"
+          className="sw-mr-2"
           height={16}
           src={`${getBaseUrl()}/images/alm/bitbucket.svg`}
         />
-        Bitbucket
+        {translate('settings.almintegration.tab.bitbucket')}
       </>
     ),
-    requiresBranchesEnabled: false
+    value: AlmKeys.BitbucketServer,
   },
   {
-    key: AlmKeys.Azure,
     label: (
       <>
         <img
           alt="azure"
-          className="spacer-right"
+          className="sw-mr-2"
           height={16}
           src={`${getBaseUrl()}/images/alm/azure.svg`}
         />
-        Azure DevOps
+        {translate('settings.almintegration.tab.azure')}
       </>
     ),
-    requiresBranchesEnabled: false
+    value: AlmKeys.Azure,
   },
   {
-    key: AlmKeys.GitLab,
     label: (
       <>
         <img
           alt="gitlab"
-          className="spacer-right"
+          className="sw-mr-2"
           height={16}
           src={`${getBaseUrl()}/images/alm/gitlab.svg`}
         />
-        GitLab
+        {translate('settings.almintegration.tab.gitlab')}
       </>
     ),
-    requiresBranchesEnabled: false
-  }
+    value: AlmKeys.GitLab,
+  },
 ];
 
 export default function AlmIntegrationRenderer(props: AlmIntegrationRendererProps) {
   const {
-    component,
     definitionKeyForDeletion,
     definitions,
     definitionStatus,
-    currentAlm,
+    currentAlmTab,
     loadingAlmDefinitions,
     loadingProjectCount,
     branchesEnabled,
     multipleAlmEnabled,
-    projectCount
+    projectCount,
   } = props;
+
+  const bindingDefinitions = {
+    [AlmKeys.Azure]: definitions.azure,
+    [AlmKeys.GitLab]: definitions.gitlab,
+    [AlmKeys.GitHub]: definitions.github,
+    [AlmKeys.BitbucketServer]: [...definitions.bitbucket, ...definitions.bitbucketcloud],
+  };
+
+  const { data, isLoading } = useGetValuesQuery([SettingsKey.ServerBaseUrl]);
+  const hasServerBaseUrl = data?.length === 1 && data[0].value !== undefined;
 
   return (
     <>
-      <header className="page-header">
-        <h1 className="page-title">{translate('settings.almintegration.title')}</h1>
+      <header className="sw-mb-5">
+        <SubTitle>{translate('settings.almintegration.title')}</SubTitle>
       </header>
 
-      <div className="markdown small spacer-top big-spacer-bottom">
-        {translate('settings.almintegration.description')}
-      </div>
-      <BoxedTabs
-        onSelect={props.onSelectAlm}
-        selected={currentAlm}
-        tabs={tabs.filter(tab => !(tab.requiresBranchesEnabled && !branchesEnabled))}
-      />
+      {!hasServerBaseUrl && !isLoading && branchesEnabled && (
+        <FlagMessage variant="warning">
+          <p>
+            <FormattedMessage
+              id="settings.almintegration.empty.server_base_url"
+              defaultMessage={translate('settings.almintegration.empty.server_base_url')}
+              values={{
+                serverBaseUrl: (
+                  <Link to="/admin/settings?category=general#sonar.core.serverBaseURL">
+                    {translate('settings.almintegration.empty.server_base_url.setting_link')}
+                  </Link>
+                ),
+              }}
+            />
+          </p>
+        </FlagMessage>
+      )}
 
-      {currentAlm === AlmKeys.Azure && (
-        <AzureTab
-          branchesEnabled={branchesEnabled}
-          definitions={definitions.azure}
-          definitionStatus={definitionStatus}
-          loadingAlmDefinitions={loadingAlmDefinitions}
-          loadingProjectCount={loadingProjectCount}
-          multipleAlmEnabled={multipleAlmEnabled}
-          onCheck={props.onCheck}
-          onDelete={props.onDelete}
-          onUpdateDefinitions={props.onUpdateDefinitions}
+      <div className="sw-my-4">{translate('settings.almintegration.description')}</div>
+
+      <div className="sw-mb-6">
+        <ToggleButton
+          onChange={props.onSelectAlmTab}
+          options={tabs}
+          role="tablist"
+          value={currentAlmTab}
         />
-      )}
-      {currentAlm === AlmKeys.BitbucketServer && (
-        <BitbucketTab
-          branchesEnabled={branchesEnabled}
-          definitions={[...definitions.bitbucket, ...definitions.bitbucketcloud]}
-          definitionStatus={definitionStatus}
-          loadingAlmDefinitions={loadingAlmDefinitions}
-          loadingProjectCount={loadingProjectCount}
-          multipleAlmEnabled={multipleAlmEnabled}
-          onCheck={props.onCheck}
-          onDelete={props.onDelete}
-          onUpdateDefinitions={props.onUpdateDefinitions}
-        />
-      )}
-      {currentAlm === AlmKeys.GitHub && (
-        <GithubTab
-          branchesEnabled={branchesEnabled}
-          component={component}
-          definitions={definitions.github}
-          definitionStatus={definitionStatus}
-          loadingAlmDefinitions={loadingAlmDefinitions}
-          loadingProjectCount={loadingProjectCount}
-          multipleAlmEnabled={multipleAlmEnabled}
-          onCheck={props.onCheck}
-          onDelete={props.onDelete}
-          onUpdateDefinitions={props.onUpdateDefinitions}
-        />
-      )}
-      {currentAlm === AlmKeys.GitLab && (
-        <GitlabTab
-          branchesEnabled={branchesEnabled}
-          definitions={definitions.gitlab}
-          definitionStatus={definitionStatus}
-          loadingAlmDefinitions={loadingAlmDefinitions}
-          loadingProjectCount={loadingProjectCount}
-          multipleAlmEnabled={multipleAlmEnabled}
-          onCheck={props.onCheck}
-          onDelete={props.onDelete}
-          onUpdateDefinitions={props.onUpdateDefinitions}
-        />
-      )}
+      </div>
+
+      <AlmTab
+        almTab={currentAlmTab}
+        branchesEnabled={branchesEnabled}
+        definitions={bindingDefinitions[currentAlmTab]}
+        definitionStatus={definitionStatus}
+        loadingAlmDefinitions={loadingAlmDefinitions}
+        loadingProjectCount={loadingProjectCount}
+        multipleAlmEnabled={multipleAlmEnabled}
+        onCheck={props.onCheckConfiguration}
+        onDelete={props.onDelete}
+        onUpdateDefinitions={props.onUpdateDefinitions}
+      />
 
       {definitionKeyForDeletion && (
         <DeleteModal
           id={definitionKeyForDeletion}
-          onCancel={props.onCancel}
+          onCancel={props.onCancelDelete}
           onDelete={props.onConfirmDelete}
           projectCount={projectCount}
         />

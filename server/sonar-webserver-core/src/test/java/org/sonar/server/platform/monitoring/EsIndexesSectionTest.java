@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,7 +27,6 @@ import org.sonar.server.es.EsClient;
 import org.sonar.server.es.EsTester;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.process.systeminfo.SystemInfoUtils.attribute;
@@ -50,8 +49,8 @@ public class EsIndexesSectionTest {
     ProtobufSystemInfo.Section section = underTest.toProtobuf();
 
     // one index "issues"
-    assertThat(attribute(section, "Index issues - Docs").getLongValue()).isEqualTo(0L);
-    assertThat(attribute(section, "Index issues - Shards").getLongValue()).isGreaterThan(0);
+    assertThat(attribute(section, "Index issues - Docs").getLongValue()).isZero();
+    assertThat(attribute(section, "Index issues - Shards").getLongValue()).isPositive();
     assertThat(attribute(section, "Index issues - Store Size").getStringValue()).isNotNull();
   }
 

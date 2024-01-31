@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,21 +18,25 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { memoize } from 'lodash';
-import { cleanQuery, parseAsString, serializeString } from 'sonar-ui-common/helpers/query';
+import { cleanQuery, parseAsString, serializeString } from '../../helpers/query';
+import { RawQuery } from '../../types/types';
 
 export interface Query {
   search: string;
+  managed?: boolean;
 }
 
 export const parseQuery = memoize(
-  (urlQuery: T.RawQuery): Query => ({
-    search: parseAsString(urlQuery['search'])
-  })
+  (urlQuery: RawQuery): Query => ({
+    search: parseAsString(urlQuery['search']),
+    managed: urlQuery['managed'] !== undefined ? urlQuery['managed'] === 'true' : undefined,
+  }),
 );
 
 export const serializeQuery = memoize(
-  (query: Query): T.RawQuery =>
+  (query: Query): RawQuery =>
     cleanQuery({
-      search: query.search ? serializeString(query.search) : undefined
-    })
+      search: query.search ? serializeString(query.search) : undefined,
+      managed: query.managed,
+    }),
 );

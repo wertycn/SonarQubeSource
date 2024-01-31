@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -147,11 +147,11 @@ public final class Duplication {
       if (duplicate instanceof InnerDuplicate) {
         return "";
       }
-      if (duplicate instanceof InProjectDuplicate) {
-        return ((InProjectDuplicate) duplicate).getFile().getDbKey();
+      if (duplicate instanceof InProjectDuplicate inProjectDuplicate) {
+        return inProjectDuplicate.getFile().getKey();
       }
-      if (duplicate instanceof CrossProjectDuplicate) {
-        return ((CrossProjectDuplicate) duplicate).getFileKey();
+      if (duplicate instanceof CrossProjectDuplicate crossProjectDuplicate) {
+        return crossProjectDuplicate.getFileKey();
       }
       throw new IllegalArgumentException("Unsupported type of Duplicate " + duplicate.getClass().getName());
     }

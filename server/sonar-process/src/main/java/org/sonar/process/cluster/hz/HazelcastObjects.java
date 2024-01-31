@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,11 +23,6 @@ package org.sonar.process.cluster.hz;
  * This class holds all object keys accessible via Hazelcast
  */
 public final class HazelcastObjects {
-
-  private HazelcastObjects() {
-    // Holder for clustered objects
-  }
-
   /**
    * The key of replicated map that hold all operational processes
    */
@@ -57,4 +52,8 @@ public final class HazelcastObjects {
    * THe key of the replicated map holding the health state information of all SQ nodes.
    */
   public static final String SQ_HEALTH_STATE = "sq_health_state";
+
+  private HazelcastObjects() {
+    // Holder for clustered objects
+  }
 }

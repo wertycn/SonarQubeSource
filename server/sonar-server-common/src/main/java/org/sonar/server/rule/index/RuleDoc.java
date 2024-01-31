@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,15 +24,20 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rules.RuleType;
+import org.sonar.db.issue.ImpactDto;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleForIndexingDto;
 import org.sonar.markdown.Markdown;
@@ -40,6 +45,9 @@ import org.sonar.server.es.BaseDoc;
 import org.sonar.server.security.SecurityStandards;
 import org.sonar.server.security.SecurityStandards.SQCategory;
 
+import static java.util.stream.Collectors.joining;
+import static org.sonar.server.rule.index.RuleIndexDefinition.SUB_FIELD_SEVERITY;
+import static org.sonar.server.rule.index.RuleIndexDefinition.SUB_FIELD_SOFTWARE_QUALITY;
 import static org.sonar.server.rule.index.RuleIndexDefinition.TYPE_RULE;
 
 /**
@@ -168,6 +176,16 @@ public class RuleDoc extends BaseDoc {
   }
 
   @CheckForNull
+  public Collection<String> getOwaspTop10For2021() {
+    return getNullableField(RuleIndexDefinition.FIELD_RULE_OWASP_TOP_10_2021);
+  }
+
+  public RuleDoc setOwaspTop10For2021(@Nullable Collection<String> o) {
+    setField(RuleIndexDefinition.FIELD_RULE_OWASP_TOP_10_2021, o);
+    return this;
+  }
+
+  @CheckForNull
   public Collection<String> getSansTop25() {
     return getNullableField(RuleIndexDefinition.FIELD_RULE_SANS_TOP_25);
   }
@@ -248,7 +266,11 @@ public class RuleDoc extends BaseDoc {
 
   @CheckForNull
   public RuleType type() {
-    return RuleType.valueOfNullable(getNullableField(RuleIndexDefinition.FIELD_RULE_TYPE));
+    String type = getNullableField(RuleIndexDefinition.FIELD_RULE_TYPE);
+    if (type == null) {
+      return null;
+    }
+    return RuleType.valueOf(type);
   }
 
   public RuleDoc setType(@Nullable RuleType ruleType) {
@@ -257,7 +279,7 @@ public class RuleDoc extends BaseDoc {
   }
 
   public long createdAt() {
-    return (Long) getField(RuleIndexDefinition.FIELD_RULE_CREATED_AT);
+    return getField(RuleIndexDefinition.FIELD_RULE_CREATED_AT);
   }
 
   public RuleDoc setCreatedAt(@Nullable Long l) {
@@ -266,11 +288,28 @@ public class RuleDoc extends BaseDoc {
   }
 
   public long updatedAt() {
-    return (Long) getField(RuleIndexDefinition.FIELD_RULE_UPDATED_AT);
+    return getField(RuleIndexDefinition.FIELD_RULE_UPDATED_AT);
   }
 
   public RuleDoc setUpdatedAt(@Nullable Long l) {
     setField(RuleIndexDefinition.FIELD_RULE_UPDATED_AT, l);
+    return this;
+  }
+
+  public RuleDoc setCleanCodeAttributeCategory(@Nullable String cleanCodeAttributeCategory) {
+    setField(RuleIndexDefinition.FIELD_RULE_CLEAN_CODE_ATTRIBUTE_CATEGORY, cleanCodeAttributeCategory);
+    return this;
+  }
+
+  public RuleDoc setImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> impacts) {
+    List<Map<String, String>> convertedMap = impacts
+      .entrySet()
+      .stream()
+      .map(entry -> Map.of(
+        SUB_FIELD_SOFTWARE_QUALITY, entry.getKey().name(),
+        SUB_FIELD_SEVERITY, entry.getValue().name()))
+      .toList();
+    setField(RuleIndexDefinition.FIELD_RULE_IMPACTS, convertedMap);
     return this;
   }
 
@@ -279,8 +318,8 @@ public class RuleDoc extends BaseDoc {
     return ReflectionToStringBuilder.toString(this);
   }
 
-  public static RuleDoc of(RuleForIndexingDto dto, SecurityStandards securityStandards) {
-    RuleDoc ruleDoc = new RuleDoc()
+  public static RuleDoc createFrom(RuleForIndexingDto dto, SecurityStandards securityStandards) {
+    return new RuleDoc()
       .setUuid(dto.getUuid())
       .setKey(dto.getRuleKey().toString())
       .setRepository(dto.getRepository())
@@ -290,30 +329,50 @@ public class RuleDoc extends BaseDoc {
       .setLanguage(dto.getLanguage())
       .setCwe(securityStandards.getCwe())
       .setOwaspTop10(securityStandards.getOwaspTop10())
+      .setOwaspTop10For2021(securityStandards.getOwaspTop10For2021())
       .setSansTop25(securityStandards.getSansTop25())
       .setSonarSourceSecurityCategory(securityStandards.getSqCategory())
       .setName(dto.getName())
       .setRuleKey(dto.getPluginRuleKey())
       .setSeverity(dto.getSeverityAsString())
       .setStatus(dto.getStatus().toString())
-      .setType(dto.getTypeAsRuleType())
+      .setType(getType(dto))
       .setCreatedAt(dto.getCreatedAt())
       .setTags(Sets.union(dto.getTags(), dto.getSystemTags()))
-      .setUpdatedAt(dto.getUpdatedAt());
+      .setUpdatedAt(dto.getUpdatedAt())
+      .setHtmlDescription(getConcatenatedSectionsInHtml(dto))
+      .setTemplateKey(getRuleKey(dto))
+      .setCleanCodeAttributeCategory(dto.getTypeAsRuleType() != RuleType.SECURITY_HOTSPOT ? dto.getCleanCodeAttributeCategory() : null)
+      .setImpacts(dto.getImpacts().stream().collect(Collectors.toMap(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity)));
+  }
 
+  @CheckForNull
+  private static RuleType getType(RuleForIndexingDto dto) {
+    if (dto.isAdHoc() && dto.getAdHocType() != null) {
+      return RuleType.valueOf(dto.getAdHocType());
+    }
+    return dto.getTypeAsRuleType();
+  }
+
+  @CheckForNull
+  private static String getRuleKey(RuleForIndexingDto dto) {
     if (dto.getTemplateRuleKey() != null && dto.getTemplateRepository() != null) {
-      ruleDoc.setTemplateKey(RuleKey.of(dto.getTemplateRepository(), dto.getTemplateRuleKey()).toString());
-    } else {
-      ruleDoc.setTemplateKey(null);
+      return RuleKey.of(dto.getTemplateRepository(), dto.getTemplateRuleKey()).toString();
     }
+    return null;
+  }
 
-    if (dto.getDescription() != null && dto.getDescriptionFormat() != null) {
-      if (RuleDto.Format.HTML == dto.getDescriptionFormat()) {
-        ruleDoc.setHtmlDescription(dto.getDescription());
-      } else {
-        ruleDoc.setHtmlDescription(Markdown.convertToHtml(dto.getDescription()));
-      }
+  private static String getConcatenatedSectionsInHtml(RuleForIndexingDto dto) {
+    return dto.getRuleDescriptionSectionsDtos().stream()
+      .map(RuleDescriptionSectionDto::getContent)
+      .map(content -> convertToHtmlIfNecessary(dto.getDescriptionFormat(), content))
+      .collect(joining(" "));
+  }
+
+  private static String convertToHtmlIfNecessary(RuleDto.Format format, String content) {
+    if (RuleDto.Format.MARKDOWN.equals(format)) {
+      return Markdown.convertToHtml(content);
     }
-    return ruleDoc;
+    return content;
   }
 }

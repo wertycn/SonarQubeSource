@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -49,17 +49,19 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.sonar.process.MessageException;
 import org.sonar.process.ProcessId;
 import org.sonar.process.Props;
 
+import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.fail;
 import static org.slf4j.Logger.ROOT_LOGGER_NAME;
+import static org.sonar.process.ProcessId.WEB_SERVER;
 import static org.sonar.process.ProcessProperties.Property.PATH_LOGS;
 import static org.sonar.process.logging.RootLoggerConfig.newRootLoggerConfigBuilder;
 
@@ -68,8 +70,6 @@ public class LogbackHelperTest {
 
   @Rule
   public TemporaryFolder temp = new TemporaryFolder();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private Props props = new Props(new Properties());
   private LogbackHelper underTest = new LogbackHelper();
@@ -100,6 +100,16 @@ public class LogbackHelperTest {
   }
 
   @Test
+  public void buildLogPattern_adds_nodename() {
+    String pattern = underTest.buildLogPattern(newRootLoggerConfigBuilder()
+      .setProcessId(ProcessId.ELASTICSEARCH)
+      .setNodeNameField("my-nodename")
+      .build());
+
+    assertThat(pattern).isEqualTo("%d{yyyy.MM.dd HH:mm:ss} %-5level my-nodename es[][%logger{20}] %msg%n");
+  }
+
+  @Test
   public void buildLogPattern_puts_threadIdFieldPattern_from_RootLoggerConfig_non_null() {
     String threadIdFieldPattern = RandomStringUtils.randomAlphabetic(5);
     String pattern = underTest.buildLogPattern(
@@ -125,7 +135,7 @@ public class LogbackHelperTest {
   public void buildLogPattern_does_not_put_threadIdFieldPattern_from_RootLoggerConfig_is_empty() {
     String pattern = underTest.buildLogPattern(
       newRootLoggerConfigBuilder()
-        .setProcessId(ProcessId.WEB_SERVER)
+        .setProcessId(WEB_SERVER)
         .setThreadIdFieldPattern("")
         .build());
 
@@ -138,7 +148,7 @@ public class LogbackHelperTest {
     int countListeners = ctx.getCopyOfListenerList().size();
 
     LoggerContextListener propagator = underTest.enableJulChangePropagation(ctx);
-    assertThat(ctx.getCopyOfListenerList().size()).isEqualTo(countListeners + 1);
+    assertThat(ctx.getCopyOfListenerList()).hasSize(countListeners + 1);
 
     ctx.removeListener(propagator);
   }
@@ -148,7 +158,7 @@ public class LogbackHelperTest {
     LoggerContext ctx = underTest.getRootContext();
     String logbackRootLoggerName = underTest.getRootLoggerName();
     LogLevelConfig config = LogLevelConfig.newBuilder(logbackRootLoggerName)
-      .levelByDomain(logbackRootLoggerName, ProcessId.WEB_SERVER, LogDomain.JMX).build();
+      .levelByDomain(logbackRootLoggerName, WEB_SERVER, LogDomain.JMX).build();
     props.set("sonar.log.level.web", "TRACE");
     underTest.apply(config, props);
 
@@ -165,7 +175,7 @@ public class LogbackHelperTest {
     julLogger.severe("Message1");
 
     // JUL bridge has not been initialized, nothing in logs
-    assertThat(memoryAppender.getLogs()).isEmpty();
+    assertThat(memoryAppender.getLogs().stream().filter(l -> l.getMessage().equals("Message1")).collect(toList())).isEmpty();
 
     // Enabling JUL bridge
     LoggerContextListener propagator = underTest.enableJulChangePropagation(ctx);
@@ -185,7 +195,7 @@ public class LogbackHelperTest {
     assertThat(julLogger.isLoggable(java.util.logging.Level.WARNING)).isTrue();
 
     // We are expecting messages from info to severe
-    assertThat(memoryAppender.getLogs()).hasSize(6);
+    assertThat(memoryAppender.getLogs().stream().filter(l -> l.getMessage().equals("Message2")).collect(toList())).hasSize(6);
     memoryAppender.clear();
 
     ctx.getLogger(logbackRootLoggerName).setLevel(Level.INFO);
@@ -198,7 +208,7 @@ public class LogbackHelperTest {
     julLogger.severe("Message3");
 
     // We are expecting messages from finest to severe in TRACE mode
-    assertThat(memoryAppender.getLogs()).hasSize(3);
+    assertThat(memoryAppender.getLogs().stream().filter(l -> l.getMessage().equals("Message3")).collect(toList())).hasSize(3);
     memoryAppender.clear();
     memoryAppender.stop();
 
@@ -297,39 +307,36 @@ public class LogbackHelperTest {
   public void apply_fails_with_IAE_if_LogLevelConfig_does_not_have_ROOT_LOGGER_NAME_of_LogBack() {
     LogLevelConfig logLevelConfig = LogLevelConfig.newBuilder(randomAlphanumeric(2)).build();
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Value of LogLevelConfig#rootLoggerName must be \"ROOT\"");
-
-    underTest.apply(logLevelConfig, props);
+    assertThatThrownBy(() -> underTest.apply(logLevelConfig, props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Value of LogLevelConfig#rootLoggerName must be \"ROOT\"");
   }
 
   @Test
   public void apply_fails_with_IAE_if_global_property_has_unsupported_level() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
 
     props.set("sonar.log.level", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.apply(config, props);
+    assertThatThrownBy(() -> underTest.apply(config, props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void apply_fails_with_IAE_if_process_property_has_unsupported_level() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
 
     props.set("sonar.log.level.web", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.apply(config, props);
+    assertThatThrownBy(() -> underTest.apply(config, props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
   public void apply_sets_logger_to_INFO_if_no_property_is_set() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
 
     LoggerContext context = underTest.apply(config, props);
 
@@ -338,7 +345,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_logger_to_globlal_property_if_set() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
 
     props.set("sonar.log.level", "TRACE");
 
@@ -349,7 +356,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_logger_to_process_property_if_set() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
 
     props.set("sonar.log.level.web", "DEBUG");
 
@@ -360,7 +367,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_logger_to_process_property_over_global_property_if_both_set() {
-    LogLevelConfig config = newLogLevelConfig().rootLevelFor(ProcessId.WEB_SERVER).build();
+    LogLevelConfig config = newLogLevelConfig().rootLevelFor(WEB_SERVER).build();
     props.set("sonar.log.level", "DEBUG");
     props.set("sonar.log.level.web", "TRACE");
 
@@ -371,7 +378,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_domain_property_over_process_and_global_property_if_all_set() {
-    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", ProcessId.WEB_SERVER, LogDomain.ES).build();
+    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", WEB_SERVER, LogDomain.ES).build();
     props.set("sonar.log.level", "DEBUG");
     props.set("sonar.log.level.web", "DEBUG");
     props.set("sonar.log.level.web.es", "TRACE");
@@ -383,7 +390,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_domain_property_over_process_property_if_both_set() {
-    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", ProcessId.WEB_SERVER, LogDomain.ES).build();
+    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", WEB_SERVER, LogDomain.ES).build();
     props.set("sonar.log.level.web", "DEBUG");
     props.set("sonar.log.level.web.es", "TRACE");
 
@@ -394,7 +401,7 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_sets_domain_property_over_global_property_if_both_set() {
-    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", ProcessId.WEB_SERVER, LogDomain.ES).build();
+    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", WEB_SERVER, LogDomain.ES).build();
     props.set("sonar.log.level", "DEBUG");
     props.set("sonar.log.level.web.es", "TRACE");
 
@@ -405,14 +412,13 @@ public class LogbackHelperTest {
 
   @Test
   public void apply_fails_with_IAE_if_domain_property_has_unsupported_level() {
-    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", ProcessId.WEB_SERVER, LogDomain.JMX).build();
+    LogLevelConfig config = newLogLevelConfig().levelByDomain("foo", WEB_SERVER, LogDomain.JMX).build();
 
     props.set("sonar.log.level.web.jmx", "ERROR");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("log level ERROR in property sonar.log.level.web.jmx is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
-
-    underTest.apply(config, props);
+    assertThatThrownBy(() -> underTest.apply(config, props))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("log level ERROR in property sonar.log.level.web.jmx is not a supported value (allowed levels are [TRACE, DEBUG, INFO])");
   }
 
   @Test
@@ -428,8 +434,8 @@ public class LogbackHelperTest {
   @Test
   public void changeRoot_sets_level_of_ROOT_and_all_loggers_with_a_config_but_the_hardcoded_one() {
     LogLevelConfig config = newLogLevelConfig()
-      .rootLevelFor(ProcessId.WEB_SERVER)
-      .levelByDomain("foo", ProcessId.WEB_SERVER, LogDomain.JMX)
+      .rootLevelFor(WEB_SERVER)
+      .levelByDomain("foo", WEB_SERVER, LogDomain.JMX)
       .levelByDomain("bar", ProcessId.COMPUTE_ENGINE, LogDomain.ES)
       .immutableLevel("doh", Level.ERROR)
       .immutableLevel("pif", Level.TRACE)
@@ -481,7 +487,7 @@ public class LogbackHelperTest {
   @Test
   public void createEncoder_uses_pattern_by_default() {
     RootLoggerConfig config = newRootLoggerConfigBuilder()
-      .setProcessId(ProcessId.WEB_SERVER)
+      .setProcessId(WEB_SERVER)
       .build();
 
     Encoder<ILoggingEvent> encoder = underTest.createEncoder(props, config, underTest.getRootContext());
@@ -491,9 +497,9 @@ public class LogbackHelperTest {
 
   @Test
   public void createEncoder_uses_json_output() {
-    props.set("sonar.log.useJsonOutput", "true");
+    props.set("sonar.log.jsonOutput", "true");
     RootLoggerConfig config = newRootLoggerConfigBuilder()
-      .setProcessId(ProcessId.WEB_SERVER)
+      .setProcessId(WEB_SERVER)
       .build();
 
     Encoder<ILoggingEvent> encoder = underTest.createEncoder(props, config, underTest.getRootContext());
@@ -547,6 +553,54 @@ public class LogbackHelperTest {
     Properties properties = new Properties();
     properties.setProperty("sonar.log.console", "false");
     assertThat(underTest.isAllLogsToConsoleEnabled(new Props(properties))).isFalse();
+  }
+
+  @Test
+  public void newFileAppender_shouldStartAppender() {
+    PatternLayoutEncoder patternLayoutEncoder = new PatternLayoutEncoder();
+
+    FileAppender<ILoggingEvent> result = underTest.newFileAppender(underTest.getRootContext(), props, "foo", patternLayoutEncoder);
+
+    assertThat(result.isStarted()).isTrue();
+    assertThat(result.getName()).isEqualTo("file_foo");
+    assertThat(result.getEncoder()).isSameAs(patternLayoutEncoder);
+    assertThat(result.getContext()).isSameAs(underTest.getRootContext());
+  }
+
+  @Test
+  public void newFileAppender_whenConfig_shouldStartAppenderWithConfigFileName() {
+    PatternLayoutEncoder patternLayoutEncoder = new PatternLayoutEncoder();
+    RootLoggerConfig config = newRootLoggerConfigBuilder()
+      .setProcessId(WEB_SERVER)
+      .build();
+
+    FileAppender<ILoggingEvent> result = underTest.newFileAppender(underTest.getRootContext(), props, config, patternLayoutEncoder);
+
+    assertThat(result.isStarted()).isTrue();
+    assertThat(result.getName()).isEqualTo("file_" + WEB_SERVER.getLogFilenamePrefix());
+  }
+
+  @Test
+  public void createJsonEncoder_shouldStartJsonEncoder() {
+    RootLoggerConfig config = newRootLoggerConfigBuilder().setProcessId(WEB_SERVER).setExcludedFields(List.of("LOGIN")).build();
+    LogbackJsonLayout expectedJsonLayout = new LogbackJsonLayout(config.getProcessId().getKey(), config.getNodeNameField(), List.of("LOGIN"));
+
+    Encoder<ILoggingEvent> result = underTest.createJsonEncoder(underTest.getRootContext(), config);
+
+    assertThat(result.isStarted()).isTrue();
+    assertThat(result).isInstanceOf(LayoutWrappingEncoder.class);
+    LayoutWrappingEncoder layoutWrappingEncoder = (LayoutWrappingEncoder) result;
+    assertThat(layoutWrappingEncoder.getLayout()).usingRecursiveComparison().isEqualTo(expectedJsonLayout);
+    assertThat(layoutWrappingEncoder.getContext()).isSameAs(underTest.getRootContext());
+  }
+
+  @Test
+  public void createPatternLayoutEncoder_shouldStartPatternEncoder() {
+    PatternLayoutEncoder result = underTest.createPatternLayoutEncoder(underTest.getRootContext(), "foo");
+
+    assertThat(result.isStarted()).isTrue();
+    assertThat(result.getPattern()).isEqualTo("foo");
+    assertThat(result.getContext()).isSameAs(underTest.getRootContext());
   }
 
   public static class MemoryAppender extends AppenderBase<ILoggingEvent> {

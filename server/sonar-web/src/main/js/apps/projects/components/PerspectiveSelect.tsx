@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,54 +17,51 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect, LabelValueSelectOption, StyledPageTitle } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { VIEWS, VISUALIZATIONS } from '../utils';
-import PerspectiveSelectOption, { Option } from './PerspectiveSelectOption';
+import { translate } from '../../../helpers/l10n';
+import { VIEWS } from '../utils';
 
 interface Props {
-  className?: string;
-  onChange: (x: { view: string; visualization?: string }) => void;
+  onChange: (x: { view: string }) => void;
   view: string;
-  visualization?: string;
+}
+
+export interface PerspectiveOption {
+  value: string;
+  label: string;
 }
 
 export default class PerspectiveSelect extends React.PureComponent<Props> {
-  handleChange = (option: Option) => {
-    if (option.type === 'view') {
-      this.props.onChange({ view: option.value });
-    } else if (option.type === 'visualization') {
-      this.props.onChange({ view: 'visualizations', visualization: option.value });
-    }
+  handleChange = (option: PerspectiveOption) => {
+    this.props.onChange({ view: option.value });
   };
 
   render() {
-    const { view, visualization } = this.props;
-    const perspective = view === 'visualizations' ? visualization : view;
-    const options = [
-      ...VIEWS.map(opt => ({
-        type: 'view',
+    const { view } = this.props;
+    const options: PerspectiveOption[] = [
+      ...VIEWS.map((opt) => ({
         value: opt.value,
-        label: translate('projects.view', opt.label)
+        label: translate('projects.view', opt.label),
       })),
-      ...VISUALIZATIONS.map(opt => ({
-        type: 'visualization',
-        value: opt,
-        label: translate('projects.visualization', opt)
-      }))
     ];
     return (
-      <div className={this.props.className}>
-        <label>{translate('projects.perspective')}:</label>
-        <Select
-          className="little-spacer-left input-medium"
-          clearable={false}
-          onChange={this.handleChange}
-          optionComponent={PerspectiveSelectOption}
+      <div className="sw-flex sw-items-center">
+        <StyledPageTitle
+          id="aria-projects-perspective"
+          as="label"
+          className="sw-body-sm-highlight sw-mr-2"
+        >
+          {translate('projects.perspective')}
+        </StyledPageTitle>
+        <InputSelect
+          aria-labelledby="aria-projects-perspective"
+          className="sw-mr-4 sw-body-sm"
+          onChange={(data: LabelValueSelectOption<string>) => this.handleChange(data)}
           options={options}
-          searchable={false}
-          value={perspective}
+          placeholder={translate('project_activity.filter_events')}
+          size="small"
+          value={options.find((option) => option.value === view)}
         />
       </div>
     );

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,13 +22,11 @@ package org.sonar.api.batch.sensor.symbol.internal;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.TextRange;
-import org.sonar.api.batch.sensor.internal.SensorStorage;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
+import org.sonar.api.batch.sensor.internal.SensorStorage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -44,8 +42,6 @@ public class DefaultSymbolTableTest {
 
   private Map<TextRange, Set<TextRange>> referencesPerSymbol;
 
-  @Rule
-  public ExpectedException throwable = ExpectedException.none();
 
   @Before
   public void setUpSampleSymbols() {
@@ -53,11 +49,13 @@ public class DefaultSymbolTableTest {
     DefaultSymbolTable symbolTableBuilder = new DefaultSymbolTable(mock(SensorStorage.class))
       .onFile(INPUT_FILE);
     symbolTableBuilder
-      .newSymbol(0, 10)
-      .newReference(12, 15)
-      .newReference(2, 10, 2, 15);
+      .newSymbol(1, 0, 1, 10)
+      .newReference(2, 10, 2, 15)
+    .newReference(1, 16, 1, 20);
 
-    symbolTableBuilder.newSymbol(1, 12, 1, 15).newReference(52, 55);
+    symbolTableBuilder
+      .newSymbol(1, 12, 1, 15)
+      .newReference(2, 1, 2, 5);
 
     symbolTableBuilder.save();
 

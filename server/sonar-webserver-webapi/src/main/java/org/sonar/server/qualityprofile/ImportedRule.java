@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,27 +20,30 @@
 package org.sonar.server.qualityprofile;
 
 import java.util.Map;
+
 import org.sonar.api.rule.RuleKey;
 
 class ImportedRule {
-  private RuleKey ruleKey = null;
-  private RuleKey templateKey = null;
+  private String key = null;
+
+  private String repository = null;
+
+  private String template = null;
   private String name = null;
   private String type = null;
   private String severity = null;
   private String description = null;
   private Map<String, String> parameters = null;
-
   public Map<String, String> getParameters() {
     return parameters;
   }
 
   public RuleKey getRuleKey() {
-    return ruleKey;
+    return RuleKey.of(repository, key);
   }
 
   public RuleKey getTemplateKey() {
-    return templateKey;
+    return RuleKey.of(repository, template);
   }
 
   public String getName() {
@@ -57,16 +60,6 @@ class ImportedRule {
 
   public String getDescription() {
     return description;
-  }
-
-  ImportedRule setRuleKey(RuleKey ruleKey) {
-    this.ruleKey = ruleKey;
-    return this;
-  }
-
-  ImportedRule setTemplateKey(RuleKey templateKey) {
-    this.templateKey = templateKey;
-    return this;
   }
 
   ImportedRule setType(String type) {
@@ -95,6 +88,18 @@ class ImportedRule {
   }
 
   boolean isCustomRule() {
-    return templateKey != null;
+    return template != null;
+  }
+
+  public void setRepository(String repository) {
+    this.repository = repository;
+  }
+
+  public void setTemplate(String template) {
+    this.template = template;
+  }
+
+  public void setKey(String key) {
+    this.key = key;
   }
 }

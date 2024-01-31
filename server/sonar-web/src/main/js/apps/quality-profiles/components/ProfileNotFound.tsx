@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Link } from 'design-system';
 import * as React from 'react';
-import { IndexLink } from 'react-router';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { PROFILE_PATH } from '../utils';
+import { useIntl } from 'react-intl';
+import { PROFILE_PATH } from '../constants';
 
 export default function ProfileNotFound() {
-  return (
-    <div className="quality-profile-not-found">
-      <div className="note spacer-bottom">
-        <IndexLink className="text-muted" to={PROFILE_PATH}>
-          {translate('quality_profiles.page')}
-        </IndexLink>
-      </div>
+  const intl = useIntl();
 
-      <div>{translate('quality_profiles.not_found')}</div>
+  return (
+    <div className="sw-text-center sw-mt-4">
+      <h1 className="sw-body-md-highlight sw-mb-4">
+        {intl.formatMessage({ id: 'quality_profiles.not_found' })}
+      </h1>
+      <Link className="sw-body-sm-highlight" to={PROFILE_PATH}>
+        {intl.formatMessage({ id: 'quality_profiles.back_to_list' })}
+      </Link>
     </div>
   );
 }

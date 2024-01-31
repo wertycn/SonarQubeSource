@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,11 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { BranchLike } from './branch-like';
+import { MetricKey } from './metrics';
+import { CaycStatus, MeasureEnhanced, Metric, Status } from './types';
+import { UserBase } from './users';
 
 export interface QualityGateProjectStatus {
   conditions?: QualityGateProjectStatusCondition[];
   ignoredConditions: boolean;
-  status: T.Status;
+  status: Status;
+  caycStatus: CaycStatus;
 }
 
 export interface QualityGateProjectStatusCondition {
@@ -31,13 +35,13 @@ export interface QualityGateProjectStatusCondition {
   errorThreshold: string;
   metricKey: string;
   periodIndex: number;
-  status: T.Status;
+  status: Status;
 }
 
 export interface QualityGateApplicationStatus {
-  metrics: T.Metric[];
+  metrics: Metric[];
   projects: QualityGateApplicationStatusChildProject[];
-  status: T.Status;
+  status: Status;
 }
 
 export interface QualityGateApplicationStatusCondition {
@@ -46,7 +50,7 @@ export interface QualityGateApplicationStatusCondition {
   metric: string;
   periodIndex?: number;
   onLeak?: boolean;
-  status: T.Status;
+  status: Status;
   value: string;
   warningThreshold?: string;
 }
@@ -55,28 +59,65 @@ export interface QualityGateApplicationStatusChildProject {
   conditions: QualityGateApplicationStatusCondition[];
   key: string;
   name: string;
-  status: T.Status;
+  status: Status;
+  caycStatus: CaycStatus;
 }
 
 export interface QualityGateStatus {
   failedConditions: QualityGateStatusConditionEnhanced[];
   ignoredConditions?: boolean;
+  caycStatus: CaycStatus;
   key: string;
   name: string;
-  status: T.Status;
+  status: Status;
   branchLike?: BranchLike;
 }
 
 export interface QualityGateStatusCondition {
   actual?: string;
   error?: string;
-  level: T.Status;
-  metric: string;
+  level: Status;
+  metric: MetricKey;
   op: string;
   period?: number;
   warning?: string;
 }
 
 export interface QualityGateStatusConditionEnhanced extends QualityGateStatusCondition {
-  measure: T.MeasureEnhanced;
+  measure: MeasureEnhanced;
+}
+
+export interface SearchPermissionsParameters {
+  gateName: string;
+  q?: string;
+  selected?: 'all' | 'selected' | 'deselected';
+}
+
+export interface AddDeleteUserPermissionsParameters {
+  gateName: string;
+  login: string;
+}
+
+export interface AddDeleteGroupPermissionsParameters {
+  gateName: string;
+  groupName: string;
+}
+
+export interface Group {
+  name: string;
+}
+
+export function isUser(item: UserBase | Group): item is UserBase {
+  return item && (item as UserBase).login !== undefined;
+}
+
+export enum QGBadgeType {
+  'Missing' = 'missing',
+  'Weak' = 'weak',
+  'Ok' = 'ok',
+}
+
+export enum BadgeTarget {
+  QualityGate = 'quality_gate',
+  Condition = 'condition',
 }

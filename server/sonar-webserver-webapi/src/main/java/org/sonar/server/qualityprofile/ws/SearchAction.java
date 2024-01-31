@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,6 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.server.ws.WebService.NewAction;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.project.ProjectDto;
@@ -58,7 +57,6 @@ import static java.util.Optional.ofNullable;
 import static java.util.function.Function.identity;
 import static org.sonar.api.rule.RuleStatus.DEPRECATED;
 import static org.sonar.api.utils.DateUtils.formatDateTime;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
@@ -66,7 +64,6 @@ import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_DEFAULTS;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_LANGUAGE;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_PROJECT;
-import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_PROJECT_KEY;
 import static org.sonarqube.ws.client.qualityprofile.QualityProfileWsParameters.PARAM_QUALITY_PROFILE;
 
 public class SearchAction implements QProfileWsAction {
@@ -95,7 +92,8 @@ public class SearchAction implements QProfileWsAction {
       .setChangelog(
         new Change("6.5", format("The parameters '%s', '%s' and '%s' can be combined without any constraint", PARAM_DEFAULTS, PARAM_PROJECT, PARAM_LANGUAGE)),
         new Change("6.6", "Add available actions 'edit', 'copy' and 'setAsDefault' and global action 'create'"),
-        new Change("7.0", "Add available actions 'delete' and 'associateProjects'"))
+        new Change("7.0", "Add available actions 'delete' and 'associateProjects'"),
+        new Change("10.0", "Remove deprecated parameter 'project_key'. Please use 'project' instead."))
       .setResponseExample(getClass().getResource("search-example.json"));
 
     action
@@ -106,8 +104,6 @@ public class SearchAction implements QProfileWsAction {
 
     action.createParam(PARAM_PROJECT)
       .setDescription("Project key")
-      // still used by Scanner for MSBuild 4.7.1
-      .setDeprecatedKey(PARAM_PROJECT_KEY, "6.5")
       .setExampleValue(KEY_PROJECT_EXAMPLE_001);
 
     action
@@ -181,7 +177,7 @@ public class SearchAction implements QProfileWsAction {
     return Stream.concat(
       dbClient.qProfileEditUsersDao().selectQProfileUuidsByUser(dbSession, user).stream(),
       dbClient.qProfileEditGroupsDao().selectQProfileUuidsByGroups(dbSession, userSession.getGroups()).stream())
-      .collect(toList());
+      .toList();
   }
 
   private List<QProfileDto> searchProfiles(DbSession dbSession, SearchRequest request, List<QProfileDto> defaultProfiles, @Nullable ProjectDto project) {
@@ -194,7 +190,7 @@ public class SearchAction implements QProfileWsAction {
       .filter(byDefault(request, defaultProfiles))
       .filter(byProject(dbSession, project, defaultProfiles))
       .sorted(Q_PROFILE_COMPARATOR)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private Predicate<QProfileDto> hasLanguagePlugin() {
@@ -219,8 +215,8 @@ public class SearchAction implements QProfileWsAction {
       return p -> true;
     }
     Map<String, QProfileDto> effectiveProfiles = defaultProfiles.stream().collect(Collectors.toMap(QProfileDto::getLanguage, identity()));
-    effectiveProfiles.putAll(dbClient.qualityProfileDao().selectAssociatedToProjectUuidAndLanguages(dbSession, project, getLanguageKeys()).stream()
-      .collect(MoreCollectors.uniqueIndex(QProfileDto::getLanguage)));
+    effectiveProfiles.putAll(dbClient.qualityProfileDao().selectAssociatedToProjectAndLanguages(dbSession, project, getLanguageKeys()).stream()
+      .collect(Collectors.toMap(QProfileDto::getLanguage, identity())));
     return p -> Objects.equals(p.getKee(), effectiveProfiles.get(p.getLanguage()).getKee());
   }
 
@@ -229,7 +225,7 @@ public class SearchAction implements QProfileWsAction {
   }
 
   private Set<String> getLanguageKeys() {
-    return Arrays.stream(languages.all()).map(Language::getKey).collect(MoreCollectors.toSet());
+    return Arrays.stream(languages.all()).map(Language::getKey).collect(Collectors.toSet());
   }
 
   private SearchWsResponse buildResponse(SearchData data) {
@@ -265,8 +261,8 @@ public class SearchAction implements QProfileWsAction {
         .setEdit(!profile.isBuiltIn() && (isGlobalQProfileAdmin || data.isEditable(profile)))
         .setSetAsDefault(!isDefault && isGlobalQProfileAdmin)
         .setCopy(isGlobalQProfileAdmin)
-        .setDelete(!isDefault && !profile.isBuiltIn() && (isGlobalQProfileAdmin || data.isEditable(profile)))
-        .setAssociateProjects(!isDefault && (isGlobalQProfileAdmin || data.isEditable(profile))));
+        .setDelete(!isDefault && !profile.isBuiltIn() && isGlobalQProfileAdmin)
+        .setAssociateProjects(!isDefault && isGlobalQProfileAdmin));
     }
     return response.build();
   }

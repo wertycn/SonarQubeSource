@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,19 +22,22 @@ package org.sonar.ce.task.projectanalysis.measure;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class QualityGateStatusTest {
 
   private static final String SOME_TEXT = "some text";
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void one_arg_constructor_throws_NPE_if_Level_arg_is_null() {
-    new QualityGateStatus(null);
+    assertThatThrownBy(() -> new QualityGateStatus(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
   public void two_args_constructor_throws_NPE_if_Level_arg_is_null() {
-    new QualityGateStatus(null, SOME_TEXT);
+    assertThatThrownBy(() -> new QualityGateStatus(null, SOME_TEXT))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -68,12 +71,12 @@ public class QualityGateStatusTest {
       assertThat(status).isEqualTo(new QualityGateStatus(level, null));
       assertThat(status).isNotEqualTo(new QualityGateStatus(level, "bar"));
       assertThat(status).isNotEqualTo(new QualityGateStatus(level, ""));
-      assertThat(status).isNotEqualTo(null);
+      assertThat(status).isNotNull();
     }
   }
 
   @Test
   public void verify_toString() {
-    assertThat(new QualityGateStatus(Measure.Level.OK, "foo").toString()).isEqualTo("QualityGateStatus{status=OK, text=foo}");
+    assertThat(new QualityGateStatus(Measure.Level.OK, "foo")).hasToString("QualityGateStatus{status=OK, text=foo}");
   }
 }

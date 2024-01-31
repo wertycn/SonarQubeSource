@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,6 +23,8 @@ import com.google.common.annotations.VisibleForTesting;
 import java.sql.Connection;
 import java.sql.SQLException;
 import javax.annotation.CheckForNull;
+import javax.inject.Inject;
+
 import org.sonar.db.Database;
 import org.sonar.db.dialect.Dialect;
 import org.sonar.db.dialect.H2;
@@ -46,6 +48,7 @@ public class DatabaseCharsetChecker {
   private final Database db;
   private final SqlExecutor sqlExecutor;
 
+  @Inject
   public DatabaseCharsetChecker(Database db) {
     this(db, new SqlExecutor());
   }

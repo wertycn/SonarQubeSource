@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import java.io.StringWriter;
 import java.util.Optional;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
 import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.process.systeminfo.SystemInfoSection;
@@ -31,8 +30,6 @@ import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
 import org.sonar.server.ce.http.CeHttpClient;
 import org.sonar.server.ce.http.CeHttpClientImpl;
 import org.sonar.server.health.TestStandaloneHealthChecker;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoader;
 import org.sonar.server.tester.UserSessionRule;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,16 +42,12 @@ public class StandaloneSystemInfoWriterTest {
   public UserSessionRule userSessionRule = UserSessionRule.standalone()
     .logIn("login")
     .setName("name");
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final SystemInfoSection section1 = mock(SystemInfoSection.class);
   private final SystemInfoSection section2 = mock(SystemInfoSection.class);
   private final CeHttpClient ceHttpClient = mock(CeHttpClientImpl.class, Mockito.RETURNS_MOCKS);
   private final TestStandaloneHealthChecker healthChecker = new TestStandaloneHealthChecker();
-  private final TelemetryDataLoader telemetry = mock(TelemetryDataLoader.class, Mockito.RETURNS_MOCKS);
-  private final TelemetryDataJsonWriter dataJsonWriter = new TelemetryDataJsonWriter();
-  private final StandaloneSystemInfoWriter underTest = new StandaloneSystemInfoWriter(telemetry, ceHttpClient, healthChecker, dataJsonWriter, section1, section2);
+  private final StandaloneSystemInfoWriter underTest = new StandaloneSystemInfoWriter(ceHttpClient, healthChecker, section1, section2);
 
   @Test
   public void write_json() {
@@ -78,10 +71,7 @@ public class StandaloneSystemInfoWriterTest {
     underTest.write(jsonWriter);
     jsonWriter.endObject();
     // response does not contain empty "Section Three"
-    assertThat(writer).hasToString("{\"Health\":\"GREEN\",\"Health Causes\":[],\"Section One\":{\"foo\":\"bar\"},\"Section Two\":{\"one\":1,\"two\":2}," +
-      "\"Statistics\":{\"id\":\"\",\"version\":\"\",\"database\":{\"name\":\"\",\"version\":\"\"},\"plugins\":[],\"userCount\":0,\"projectCount\":0,\"usingBranches\":false," +
-      "\"ncloc\":0,\"projectCountByLanguage\":[],\"nclocByLanguage\":[],\"almIntegrationCount\":[],\"externalAuthProviders\":[],\"projectCountByScm\":[],"
-      + "\"projectCountByCI\":[],\"sonarlintWeeklyUsers\":0,\"installationDate\":0,\"installationVersion\":\"\",\"docker\":false}}");
+    assertThat(writer).hasToString("{\"Health\":\"GREEN\",\"Health Causes\":[],\"Section One\":{\"foo\":\"bar\"},\"Section Two\":{\"one\":1,\"two\":2}}");
   }
 
   private void logInAsSystemAdministrator() {

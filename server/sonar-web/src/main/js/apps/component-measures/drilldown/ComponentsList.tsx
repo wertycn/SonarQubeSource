@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,61 +17,80 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ContentCell, NumericalCell, Table, TableRow, TableRowInteractive } from 'design-system';
+import { times } from 'lodash';
 import * as React from 'react';
-import { getLocalizedMetricName } from 'sonar-ui-common/helpers/l10n';
+import { getLocalizedMetricName } from '../../../helpers/l10n';
 import { BranchLike } from '../../../types/branch-like';
+import { MeasurePageView } from '../../../types/measures';
+import { ComponentMeasure, ComponentMeasureEnhanced, Dict, Metric } from '../../../types/types';
 import { complementary } from '../config/complementary';
-import { View } from '../utils';
-import ComponentsListRow from './ComponentsListRow';
+import ComponentCell from './ComponentCell';
 import EmptyResult from './EmptyResult';
+import MeasureCell from './MeasureCell';
 
 interface Props {
   branchLike?: BranchLike;
-  components: T.ComponentMeasureEnhanced[];
-  onClick: (component: string) => void;
-  metric: T.Metric;
-  metrics: T.Dict<T.Metric>;
-  rootComponent: T.ComponentMeasure;
-  selectedComponent?: string;
-  view: View;
+  components: ComponentMeasureEnhanced[];
+  metric: Metric;
+  metrics: Dict<Metric>;
+  rootComponent: ComponentMeasure;
+  selectedComponent?: ComponentMeasureEnhanced;
+  view: MeasurePageView;
 }
 
 export default function ComponentsList({ components, metric, metrics, ...props }: Props) {
+  const { branchLike, rootComponent, selectedComponent } = props;
+
   if (!components.length) {
     return <EmptyResult />;
   }
 
-  const otherMetrics = (complementary[metric.key] || []).map(key => metrics[key]);
+  const otherMetrics = (complementary[metric.key] || []).map((key) => metrics[key]);
   return (
-    <table className="data zebra zebra-hover">
-      {otherMetrics.length > 0 && (
-        <thead>
-          <tr>
-            <th>&nbsp;</th>
-            <th className="text-right">
-              <span className="small">{getLocalizedMetricName(metric)}</span>
-            </th>
-            {otherMetrics.map(metric => (
-              <th className="text-right" key={metric.key}>
-                <span className="small">{getLocalizedMetricName(metric)}</span>
-              </th>
+    <Table
+      columnCount={otherMetrics.length + 2}
+      columnWidths={['auto', ...times(otherMetrics.length + 1, () => '1%')]}
+      header={
+        otherMetrics.length > 0 && (
+          <TableRow>
+            <ContentCell />
+            <NumericalCell className="sw-body-sm">{getLocalizedMetricName(metric)}</NumericalCell>
+            {otherMetrics.map((metric) => (
+              <NumericalCell className="sw-body-sm" key={metric.key}>
+                {getLocalizedMetricName(metric)}
+              </NumericalCell>
             ))}
-          </tr>
-        </thead>
-      )}
-
-      <tbody>
-        {components.map(component => (
-          <ComponentsListRow
+          </TableRow>
+        )
+      }
+    >
+      {components.map((component) => (
+        <TableRowInteractive
+          key={component.key}
+          className="it__measures-component-row"
+          selected={component.key === selectedComponent?.key}
+        >
+          <ComponentCell
+            branchLike={branchLike}
             component={component}
-            isSelected={component.key === props.selectedComponent}
-            key={component.key}
             metric={metric}
-            otherMetrics={otherMetrics}
-            {...props}
+            rootComponent={rootComponent}
+            view={props.view}
           />
-        ))}
-      </tbody>
-    </table>
+
+          <MeasureCell component={component} metric={metric} />
+
+          {otherMetrics.map((metric) => (
+            <MeasureCell
+              key={metric.key}
+              component={component}
+              measure={component.measures.find((measure) => measure.metric.key === metric.key)}
+              metric={metric}
+            />
+          ))}
+        </TableRowInteractive>
+      ))}
+    </Table>
   );
 }

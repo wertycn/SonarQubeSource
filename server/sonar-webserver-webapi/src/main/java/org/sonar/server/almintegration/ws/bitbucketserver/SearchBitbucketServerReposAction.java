@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,8 +33,6 @@ import org.sonar.alm.client.bitbucketserver.RepositoryList;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.alm.pat.AlmPatDto;
@@ -50,16 +48,12 @@ import org.sonarqube.ws.AlmIntegrations.BBSRepo;
 import org.sonarqube.ws.AlmIntegrations.SearchBitbucketserverReposWsResponse;
 
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 
 public class SearchBitbucketServerReposAction implements AlmIntegrationsWsAction {
-
-  private static final Logger LOG = Loggers.get(SearchBitbucketServerReposAction.class);
-
   private static final String PARAM_ALM_SETTING = "almSetting";
   private static final String PARAM_REPO_NAME = "repositoryName";
   private static final String PARAM_PROJECT_NAME = "projectName";
@@ -86,12 +80,13 @@ public class SearchBitbucketServerReposAction implements AlmIntegrationsWsAction
         "Requires the 'Create Projects' permission")
       .setPost(false)
       .setSince("8.2")
+      .setResponseExample(getClass().getResource("example-search_bitbucketserver_repos.json"))
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
     action.createParam(PARAM_PROJECT_NAME)
       .setRequired(false)
       .setMaximumLength(200)
@@ -116,20 +111,18 @@ public class SearchBitbucketServerReposAction implements AlmIntegrationsWsAction
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID cannot be null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
       Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
 
       String projectKey = request.param(PARAM_PROJECT_NAME);
       String repoName = request.param(PARAM_REPO_NAME);
       String pat = almPatDto.map(AlmPatDto::getPersonalAccessToken).orElseThrow(() -> new IllegalArgumentException("No personal access token found"));
-      String url = requireNonNull(almSettingDto.getUrl(), "ALM url cannot be null");
+      String url = requireNonNull(almSettingDto.getUrl(), "DevOps Platform url cannot be null");
       RepositoryList gsonBBSRepoList = bitbucketServerRestClient.getRepos(url, pat, projectKey, repoName);
-
-      LOG.info(gsonBBSRepoList.toString());
 
       Map<String, String> sqProjectsKeyByBBSKey = getSqProjectsKeyByBBSKey(dbSession, almSettingDto, gsonBBSRepoList);
       List<BBSRepo> bbsRepos = gsonBBSRepoList.getValues().stream().map(gsonBBSRepo -> toBBSRepo(gsonBBSRepo, sqProjectsKeyByBBSKey))
-        .collect(toList());
+        .toList();
 
       SearchBitbucketserverReposWsResponse.Builder builder = SearchBitbucketserverReposWsResponse.newBuilder()
         .setIsLastPage(gsonBBSRepoList.isLastPage())

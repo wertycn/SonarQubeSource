@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
 import { ScaleLinear, ScaleOrdinal } from 'd3-scale';
 import * as React from 'react';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
+import { formatMeasure } from '../../helpers/measures';
 import './ColorBoxLegend.css';
 
 interface Props {

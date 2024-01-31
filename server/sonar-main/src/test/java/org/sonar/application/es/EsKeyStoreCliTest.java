@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonar.application.es;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,21 +62,25 @@ public class EsKeyStoreCliTest {
     MockProcess process = (MockProcess) underTest.executeWith(EsKeyStoreCliTest::mockLaunch);
 
     JavaCommand<?> executedCommand = process.getExecutedCommand();
-    assertThat(executedCommand.getClassName()).isEqualTo("org.elasticsearch.common.settings.KeyStoreCli");
-    assertThat(executedCommand.getClasspath())
-      .containsExactly(homeDir.getAbsolutePath() + "/lib/*", homeDir.getAbsolutePath() + "/lib/tools/keystore-cli/*");
+
+    String expectedHomeLibPath = Paths.get(homeDir.toString(), "lib") + File.separator + "*";
+    String expectedHomeKeystorePath = Paths.get(homeDir.toString(), "lib", "cli-launcher") + File.separator + "*";
+
+    assertThat(executedCommand.getClassName()).isEqualTo("org.elasticsearch.launcher.CliToolLauncher");
+    assertThat(executedCommand.getClasspath()).containsExactly(expectedHomeLibPath, expectedHomeKeystorePath);
     assertThat(executedCommand.getParameters()).containsExactly("add", "-x", "-f", "test.property1", "test.property2", "test.property3");
     assertThat(executedCommand.getJvmOptions().getAll()).containsExactly(
-      "-Xshare:auto",
       "-Xms4m",
       "-Xmx64m",
-      "-Des.path.home=" + homeDir.getAbsolutePath(),
-      "-Des.path.conf=" + confDir.getAbsolutePath(),
-      "-Des.distribution=default",
-      "-Des.distribution.type=tar");
+      "-XX:+UseSerialGC",
+      "-Dcli.name=",
+      "-Dcli.script=bin/elasticsearch-keystore",
+      "-Dcli.libs=lib/tools/keystore-cli",
+      "-Des.path.home=" + homeDir.toPath(),
+      "-Des.path.conf=" + confDir.toPath());
 
     verify(process.getOutputStream()).write(argThat(new ArrayContainsMatcher("value1\nvalue2\nvalue3\n")), eq(0), eq(21));
-    verify(process.getOutputStream()).flush();
+    verify(process.getOutputStream(), atLeastOnce()).flush();
     verify(process.getMock()).waitFor(1L, TimeUnit.MINUTES);
   }
 

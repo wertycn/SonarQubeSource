@@ -8,7 +8,7 @@
     from group_roles gr
     inner join groups_users gu on gr.group_uuid=gu.group_uuid
     where
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gu.user_uuid=#{userUuid, jdbcType=VARCHAR}
 
     union
@@ -17,7 +17,7 @@
     from group_roles gr
     where
     gr.group_uuid is null and
-    gr.component_uuid is null
+    gr.entity_uuid is null
 
     union
 
@@ -25,14 +25,14 @@
     from user_roles ur
     where
     ur.user_uuid=#{userUuid, jdbcType=VARCHAR}
-    and ur.component_uuid is null
+    and ur.entity_uuid is null
   </select>
 
     <select id="selectGlobalPermissionsOfAnonymous" parameterType="map" resultType="string">
     select gr.role
     from group_roles gr
     where
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gr.group_uuid is null
   </select>
 
@@ -44,7 +44,7 @@
       inner join group_roles gr on gr.group_uuid = gu.group_uuid
       where
       gr.role = #{permission, jdbcType=VARCHAR} and
-      gr.component_uuid is null and
+      gr.entity_uuid is null and
       gr.group_uuid is not null and
       gr.group_uuid != #{excludedGroupUuid, jdbcType=VARCHAR}
 
@@ -53,7 +53,7 @@
       select ur.user_uuid
       from user_roles ur
       where
-      ur.component_uuid is null and
+      ur.entity_uuid is null and
       ur.role = #{permission, jdbcType=VARCHAR}
     ) remaining
   </select>
@@ -66,7 +66,7 @@
     inner join group_roles gr on gr.group_uuid = gu.group_uuid
     where
     gr.role = #{permission, jdbcType=VARCHAR} and
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gr.group_uuid is not null and
     gu.user_uuid != #{excludedUserUuid, jdbcType=VARCHAR}
 
@@ -75,7 +75,7 @@
     select ur.user_uuid
     from user_roles ur
     where
-    ur.component_uuid is null and
+    ur.entity_uuid is null and
     ur.role = #{permission, jdbcType=VARCHAR} and
     ur.user_uuid != #{excludedUserUuid, jdbcType=VARCHAR}
     ) remaining
@@ -87,7 +87,7 @@
     inner join group_roles gr on gr.group_uuid = gu.group_uuid
     where
     gr.role = #{permission, jdbcType=VARCHAR} and
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gr.group_uuid is not null
 
     union
@@ -95,7 +95,7 @@
     select ur.user_uuid
     from user_roles ur
     where
-    ur.component_uuid is null and
+    ur.entity_uuid is null and
     ur.role = #{permission, jdbcType=VARCHAR}
   </select>
 
@@ -107,7 +107,7 @@
     inner join group_roles gr on gr.group_uuid = gu.group_uuid
     where
     gr.role = #{permission, jdbcType=VARCHAR} and
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gr.group_uuid is not null and
     (gu.group_uuid != #{groupUuid, jdbcType=VARCHAR} or gu.user_uuid != #{userUuid, jdbcType=VARCHAR})
 
@@ -116,7 +116,7 @@
     select ur.user_uuid
     from user_roles ur
     where
-    ur.component_uuid is null and
+    ur.entity_uuid is null and
     ur.role = #{permission, jdbcType=VARCHAR}
     ) remaining
   </select>
@@ -129,7 +129,7 @@
     inner join group_roles gr on gr.group_uuid = gu.group_uuid
     where
     gr.role = #{permission, jdbcType=VARCHAR} and
-    gr.component_uuid is null and
+    gr.entity_uuid is null and
     gr.group_uuid is not null
 
     union
@@ -137,15 +137,15 @@
     select ur.user_uuid
     from user_roles ur
     where
-    ur.component_uuid is null and
+    ur.entity_uuid is null and
     ur.role = #{permission, jdbcType=VARCHAR} and
     ur.user_uuid != #{userUuid, jdbcType=VARCHAR}
     ) remaining
   </select>
 
-  <select id="keepAuthorizedProjectUuidsForUser" parameterType="map" resultType="String">
+  <select id="keepAuthorizedEntityUuidsForUser" parameterType="map" resultType="String">
     select
-      gr.component_uuid
+      gr.entity_uuid
     from
       group_roles gr
     where
@@ -162,61 +162,61 @@
             and gr.group_uuid = gu.group_uuid
         )
       )
-      and <foreach collection="projectUuids" open="(" close=")" item="element" index="index" separator=" or ">
-            gr.component_uuid=#{element, jdbcType=VARCHAR}
+      and <foreach collection="entityUuids" open="(" close=")" item="element" index="index" separator=" or ">
+            gr.entity_uuid=#{element, jdbcType=VARCHAR}
           </foreach>
 
     union
 
     select
-      p.uuid
+      entity.uuid
     from
       user_roles ur
-    inner join components p on
-      p.uuid = ur.component_uuid
+    inner join (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity on
+      entity.uuid = ur.entity_uuid
     where
       ur.role=#{role, jdbcType=VARCHAR}
       and ur.user_uuid=#{userUuid, jdbcType=INTEGER}
-      and <foreach collection="projectUuids" open="(" close=")" item="element" index="index" separator=" or ">
-        p.uuid=#{element, jdbcType=VARCHAR}
+      and <foreach collection="entityUuids" open="(" close=")" item="element" index="index" separator=" or ">
+        entity.uuid=#{element, jdbcType=VARCHAR}
       </foreach>
 
     union
 
-    <include refid="sqlSelectPublicProjectsIfRole"/>
+    <include refid="sqlSelectPublicEntitiesIfRole"/>
   </select>
 
-  <sql id="sqlSelectPublicProjectsIfRole">
+  <sql id="sqlSelectPublicEntitiesIfRole">
     select
-    p.uuid
+    entity.uuid
     from
-    components p
+    (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity
     where
-    <foreach collection="projectUuids" open="(" close=")" item="element" index="index" separator=" or ">
-      p.uuid=#{element ,jdbcType=VARCHAR}
+    <foreach collection="entityUuids" open="(" close=")" item="element" index="index" separator=" or ">
+      entity.uuid=#{element ,jdbcType=VARCHAR}
     </foreach>
-    and p.private = ${_false}
+    and entity.isPrivate = ${_false}
     and #{role, jdbcType=VARCHAR} in ('user','codeviewer')
   </sql>
 
-    <select id="keepAuthorizedProjectUuidsForAnonymous" parameterType="map" resultType="String">
+    <select id="keepAuthorizedEntityUuidsForAnonymous" parameterType="map" resultType="String">
     select
-      gr.component_uuid
+      gr.entity_uuid
     from
       group_roles gr
     where
       gr.role=#{role, jdbcType=VARCHAR}
       and gr.group_uuid is null
-      and <foreach collection="projectUuids" open="(" close=")" item="element" index="index" separator=" or ">
-            gr.component_uuid=#{element, jdbcType=VARCHAR}
+      and <foreach collection="entityUuids" open="(" close=")" item="element" index="index" separator=" or ">
+            gr.entity_uuid=#{element, jdbcType=VARCHAR}
           </foreach>
 
     union
 
-    <include refid="sqlSelectPublicProjectsIfRole"/>
+    <include refid="sqlSelectPublicEntitiesIfRole"/>
   </select>
 
-  <select id="keepAuthorizedUsersForRoleAndProject" parameterType="map" resultType="String">
+  <select id="keepAuthorizedUsersForRoleAndEntity" parameterType="map" resultType="String">
     select
       gu.user_uuid
     from
@@ -224,7 +224,7 @@
     inner join group_roles gr on
       gr.group_uuid=gu.group_uuid
     where
-      gr.component_uuid=#{componentUuid, jdbcType=VARCHAR}
+      gr.entity_uuid=#{entityUuid, jdbcType=VARCHAR}
       and gr.role=#{role, jdbcType=VARCHAR}
       and gu.user_uuid in
         <foreach collection="userUuids" open="(" close=")" item="uuid" separator=",">
@@ -238,7 +238,7 @@
     from
       user_roles ur
     where
-      ur.component_uuid=#{componentUuid, jdbcType=VARCHAR}
+      ur.entity_uuid=#{entityUuid, jdbcType=VARCHAR}
       and ur.role=#{role, jdbcType=VARCHAR}
       and ur.user_uuid IN
         <foreach collection="userUuids" open="(" close=")" item="uuid" separator=",">
@@ -260,20 +260,20 @@
         select
           1
         from
-          components p
+          (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity
         where
-          p.uuid =#{componentUuid, jdbcType=VARCHAR}
-          and p.private = ${_false}
+          entity.uuid =#{entityUuid, jdbcType=VARCHAR}
+          and entity.isPrivate = ${_false}
           and #{role, jdbcType=VARCHAR} in ('user','codeviewer')
       )
   </select>
 
-  <select id="selectProjectPermissions" parameterType="map" resultType="String">
+  <select id="selectEntityPermissions" parameterType="map" resultType="String">
     select ur.role
     from user_roles ur
-    inner join components p on p.uuid = ur.component_uuid
+    inner join  (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity on entity.uuid = ur.entity_uuid
     where
-      p.uuid = #{projectUuid, jdbcType=VARCHAR} and
+      entity.uuid = #{entityUuid, jdbcType=VARCHAR} and
       ur.user_uuid = #{userUuid, jdbcType=VARCHAR}
 
     union
@@ -281,29 +281,41 @@
     select gr.role
     from group_roles gr
     inner join groups_users gu on gr.group_uuid = gu.group_uuid
-    inner join components p on p.uuid = gr.component_uuid
+    inner join  (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity on entity.uuid = gr.entity_uuid
     where
-      p.uuid = #{projectUuid, jdbcType=VARCHAR} and
+      entity.uuid = #{entityUuid, jdbcType=VARCHAR} and
       gu.user_uuid = #{userUuid, jdbcType=VARCHAR}
 
     union
 
-    <include refid="sql_selectProjectPermissionsOfAnonymous"/>
+    <include refid="sql_selectEntityPermissionsOfAnonymous"/>
   </select>
 
-  <select id="selectProjectPermissionsOfAnonymous" parameterType="map" resultType="String">
-    <include refid="sql_selectProjectPermissionsOfAnonymous"/>
+  <select id="selectEntityPermissionsObtainedViaManagedGroup" parameterType="map" resultType="org.sonar.db.permission.UserAndPermissionDto">
+    select
+      gu.user_uuid,
+      gr.role
+    from group_roles gr
+    inner join groups_users gu on gr.group_uuid = gu.group_uuid
+    inner join external_groups eg on gr.group_uuid = eg.group_uuid
+    where
+      gr.entity_uuid = #{entityUuid, jdbcType=VARCHAR}
+      and eg.external_identity_provider = #{managedInstanceProvider, jdbcType=VARCHAR}
   </select>
 
-  <sql id="sql_selectProjectPermissionsOfAnonymous">
+  <select id="selectEntityPermissionsOfAnonymous" parameterType="map" resultType="String">
+    <include refid="sql_selectEntityPermissionsOfAnonymous"/>
+  </select>
+
+  <sql id="sql_selectEntityPermissionsOfAnonymous">
     select
       gr.role
     from
       group_roles gr
-    inner join components p on
-      p.uuid = gr.component_uuid
+    inner join  (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity on
+      entity.uuid = gr.entity_uuid
     where
-      p.uuid = #{projectUuid, jdbcType=VARCHAR}
+      entity.uuid = #{entityUuid, jdbcType=VARCHAR}
       and gr.group_uuid is null
   </sql>
 
@@ -317,7 +329,7 @@
     inner join user_roles ur on
       ur.user_uuid = u.uuid
       and ur.role=#{permission, jdbcType=VARCHAR}
-      and ur.component_uuid is null
+      and ur.entity_uuid is null
     where
       u.email is not null
 
@@ -333,13 +345,13 @@
     inner join group_roles gr on
       gr.group_uuid = gu.group_uuid
       and gr.role = #{permission, jdbcType=VARCHAR}
-      and gr.component_uuid is null
+      and gr.entity_uuid is null
     where
       u.email is not null
 
   </select>
 
-  <select id="keepAuthorizedLoginsOnProject" parameterType="map" resultType="String">
+  <select id="keepAuthorizedLoginsOnEntity" parameterType="map" resultType="String">
     select u.login
     from users u
     where
@@ -348,28 +360,28 @@
         exists (
           select 1
           from user_roles ur
-          inner join components p on p.uuid = ur.component_uuid
+          inner join (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity on entity.uuid = ur.entity_uuid
           where
-            p.kee =  #{projectKey, jdbcType=VARCHAR}
+            entity.kee =  #{entityKey, jdbcType=VARCHAR}
             and ur.role = #{permission, jdbcType=VARCHAR}
             and ur.user_uuid = u.uuid
         ) or exists (
           select 1
-          from components p
-          inner join group_roles gr on gr.component_uuid = p.uuid
+          from (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity
+          inner join group_roles gr on gr.entity_uuid = entity.uuid
           inner join groups_users gu on gu.group_uuid = gr.group_uuid
           where
-            p.kee  =  #{projectKey, jdbcType=VARCHAR}
+            entity.kee  =  #{entityKey, jdbcType=VARCHAR}
             and gu.user_uuid = u.uuid
             and gr.role = #{permission, jdbcType=VARCHAR}
         )
         <if test="permission == 'user' or permission == 'codeviewer'">
           or exists (
             select 1
-            from components p
+            from (<include refid="org.sonar.db.entity.EntityMapper.selectAll"/>) entity
             where
-              p.kee =  #{projectKey, jdbcType=VARCHAR}
-              and p.private = ${_false}
+              entity.kee =  #{entityKey, jdbcType=VARCHAR}
+              and entity.isPrivate = ${_false}
           )
         </if>
       )

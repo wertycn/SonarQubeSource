@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,13 +34,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.Immutable;
 import org.apache.ibatis.session.ResultContext;
 import org.apache.ibatis.session.ResultHandler;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.CrawlerDepthLimit;
@@ -53,7 +53,6 @@ import org.sonar.ce.task.projectanalysis.filemove.FileSimilarity.LazyFileImpl;
 import org.sonar.ce.task.projectanalysis.source.SourceLinesHashRepository;
 import org.sonar.ce.task.step.ComputationStep;
 import org.sonar.core.util.logs.Profiler;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.FileMoveRowDto;
@@ -63,7 +62,7 @@ import static org.sonar.ce.task.projectanalysis.component.ComponentVisitor.Order
 
 public class FileMoveDetectionStep implements ComputationStep {
   static final int MIN_REQUIRED_SCORE = 85;
-  private static final Logger LOG = Loggers.get(FileMoveDetectionStep.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileMoveDetectionStep.class);
   private static final Comparator<ScoreMatrix.ScoreFile> SCORE_FILE_COMPARATOR = (o1, o2) -> -1 * Integer.compare(o1.getLineCount(), o2.getLineCount());
   private static final double LOWER_BOUND_RATIO = 0.84;
   private static final double UPPER_BOUND_RATIO = 1.18;
@@ -97,6 +96,11 @@ public class FileMoveDetectionStep implements ComputationStep {
 
   @Override
   public void execute(ComputationStep.Context context) {
+    if (analysisMetadataHolder.isPullRequest()) {
+      LOG.debug("Currently within Pull Request scope. Do nothing.");
+      return;
+    }
+
     // do nothing if no files in db (first analysis)
     if (analysisMetadataHolder.isFirstAnalysis()) {
       LOG.debug("First analysis. Do nothing.");
@@ -173,8 +177,8 @@ public class FileMoveDetectionStep implements ComputationStep {
     LOG.debug("{} files moves found", electedMatches.size());
     for (Match validatedMatch : electedMatches) {
       movedFilesRepository.setOriginalFile(
-        reportFilesByUuid.get(validatedMatch.getReportUuid()),
-        toOriginalFile(dbFilesByUuid.get(validatedMatch.getDbUuid())));
+        reportFilesByUuid.get(validatedMatch.reportUuid()),
+        toOriginalFile(dbFilesByUuid.get(validatedMatch.dbUuid())));
       LOG.trace("File move found: {}", validatedMatch);
     }
   }
@@ -187,7 +191,7 @@ public class FileMoveDetectionStep implements ComputationStep {
     } else {
       Set<String> reallyAddedFileUuids = new HashSet<>(addedFileUuids);
       for (Match electedMatch : electedMatches) {
-        reallyAddedFileUuids.remove(electedMatch.getReportUuid());
+        reallyAddedFileUuids.remove(electedMatch.reportUuid());
       }
       reallyAddedFileUuids.stream()
         .map(reportFilesByUuid::get)
@@ -204,7 +208,7 @@ public class FileMoveDetectionStep implements ComputationStep {
           builder.add(new DbComponent(row.getKey(), row.getUuid(), row.getPath(), row.getLineCount()));
         });
       return builder.build().stream()
-        .collect(MoreCollectors.uniqueIndex(DbComponent::getUuid));
+        .collect(Collectors.toMap(DbComponent::uuid, Function.identity()));
     }
   }
 
@@ -240,7 +244,7 @@ public class FileMoveDetectionStep implements ComputationStep {
     ScoreMatrix.ScoreFile[] removedFiles = removedFileUuids.stream()
       .map(key -> {
         DbComponent dbComponent = dtosByUuid.get(key);
-        return new ScoreMatrix.ScoreFile(dbComponent.getUuid(), dbComponent.getLineCount());
+        return new ScoreMatrix.ScoreFile(dbComponent.uuid(), dbComponent.lineCount());
       })
       .toArray(ScoreMatrix.ScoreFile[]::new);
 
@@ -348,13 +352,13 @@ public class FileMoveDetectionStep implements ComputationStep {
     } else {
       matchesPerFileForScore.clear();
       for (Match match : matchesToValidate) {
-        matchesPerFileForScore.put(match.getDbUuid(), match);
-        matchesPerFileForScore.put(match.getReportUuid(), match);
+        matchesPerFileForScore.put(match.dbUuid(), match);
+        matchesPerFileForScore.put(match.reportUuid(), match);
       }
-      // validate non ambiguous matches (ie. the match is the only match of either the db file and the report file)
+      // validate non-ambiguous matches (i.e. the match is the only match of either the db file and the report file)
       for (Match match : matchesToValidate) {
-        int dbFileMatchesCount = matchesPerFileForScore.get(match.getDbUuid()).size();
-        int reportFileMatchesCount = matchesPerFileForScore.get(match.getReportUuid()).size();
+        int dbFileMatchesCount = matchesPerFileForScore.get(match.dbUuid()).size();
+        int reportFileMatchesCount = matchesPerFileForScore.get(match.reportUuid()).size();
         if (dbFileMatchesCount == 1 && reportFileMatchesCount == 1) {
           electedMatches.add(match);
         }
@@ -363,38 +367,10 @@ public class FileMoveDetectionStep implements ComputationStep {
   }
 
   private static MovedFilesRepository.OriginalFile toOriginalFile(DbComponent dbComponent) {
-    return new MovedFilesRepository.OriginalFile(dbComponent.getUuid(), dbComponent.getKey());
+    return new MovedFilesRepository.OriginalFile(dbComponent.uuid(), dbComponent.key());
   }
 
-  @Immutable
-  private static final class DbComponent {
-    private final String key;
-    private final String uuid;
-    private final String path;
-    private final int lineCount;
-
-    private DbComponent(String key, String uuid, String path, int lineCount) {
-      this.key = key;
-      this.uuid = uuid;
-      this.path = path;
-      this.lineCount = lineCount;
-    }
-
-    public String getKey() {
-      return key;
-    }
-
-    public String getUuid() {
-      return uuid;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    public int getLineCount() {
-      return lineCount;
-    }
+  public record DbComponent(String key, String uuid, String path, int lineCount) {
   }
 
   private static class ElectedMatches implements Iterable<Match> {
@@ -408,16 +384,16 @@ public class FileMoveDetectionStep implements ComputationStep {
 
     public void add(Match match) {
       matches.add(match);
-      matchedFileUuids.add(match.getDbUuid());
-      matchedFileUuids.add(match.getReportUuid());
+      matchedFileUuids.add(match.dbUuid());
+      matchedFileUuids.add(match.reportUuid());
     }
 
     public List<Match> filter(Collection<Match> matches) {
-      return matches.stream().filter(this::notAlreadyMatched).collect(Collectors.toList());
+      return matches.stream().filter(this::notAlreadyMatched).toList();
     }
 
     private boolean notAlreadyMatched(Match input) {
-      return !(matchedFileUuids.contains(input.getDbUuid()) || matchedFileUuids.contains(input.getReportUuid()));
+      return !(matchedFileUuids.contains(input.dbUuid()) || matchedFileUuids.contains(input.reportUuid()));
     }
 
     @Override

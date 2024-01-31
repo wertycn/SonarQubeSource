@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,12 +26,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.Component.FileStatus;
 import org.sonar.server.project.Project;
@@ -44,9 +44,7 @@ import static org.apache.commons.lang.StringUtils.trimToNull;
 import static org.sonar.scanner.protocol.output.ScannerReport.Component.ComponentType.FILE;
 
 public class ComponentTreeBuilder {
-
   private final ComponentKeyGenerator keyGenerator;
-  private final ComponentKeyGenerator publicKeyGenerator;
   /**
    * Will supply the UUID for any component in the tree, given it's key.
    * <p>
@@ -71,15 +69,13 @@ public class ComponentTreeBuilder {
 
   public ComponentTreeBuilder(
     ComponentKeyGenerator keyGenerator,
-    ComponentKeyGenerator publicKeyGenerator,
-    Function<String, String> uuidSupplier,
+    UnaryOperator<String> uuidSupplier,
     Function<Integer, ScannerReport.Component> scannerComponentSupplier,
     Project project,
     Branch branch,
     ProjectAttributes projectAttributes) {
 
     this.keyGenerator = keyGenerator;
-    this.publicKeyGenerator = publicKeyGenerator;
     this.uuidSupplier = uuidSupplier;
     this.scannerComponentSupplier = scannerComponentSupplier;
     this.project = project;
@@ -168,11 +164,9 @@ public class ComponentTreeBuilder {
   private Component buildProject(List<Component> children) {
     String projectKey = keyGenerator.generateKey(rootComponent.getKey(), null);
     String uuid = uuidSupplier.apply(projectKey);
-    String projectPublicKey = publicKeyGenerator.generateKey(rootComponent.getKey(), null);
     ComponentImpl.Builder builder = ComponentImpl.builder(Component.Type.PROJECT)
       .setUuid(uuid)
-      .setDbKey(projectKey)
-      .setKey(projectPublicKey)
+      .setKey(projectKey)
       .setStatus(convertStatus(rootComponent.getStatus()))
       .setProjectAttributes(projectAttributes)
       .setReportAttributes(createAttributesBuilder(rootComponent.getRef(), rootComponent.getProjectRelativePath(), scmBasePath).build())
@@ -183,11 +177,9 @@ public class ComponentTreeBuilder {
 
   private ComponentImpl buildFile(ScannerReport.Component component) {
     String key = keyGenerator.generateKey(rootComponent.getKey(), component.getProjectRelativePath());
-    String publicKey = publicKeyGenerator.generateKey(rootComponent.getKey(), component.getProjectRelativePath());
     return ComponentImpl.builder(Component.Type.FILE)
       .setUuid(uuidSupplier.apply(key))
-      .setDbKey(key)
-      .setKey(publicKey)
+      .setKey(key)
       .setName(component.getProjectRelativePath())
       .setShortName(FilenameUtils.getName(component.getProjectRelativePath()))
       .setStatus(convertStatus(component.getStatus()))
@@ -199,11 +191,9 @@ public class ComponentTreeBuilder {
 
   private ComponentImpl buildDirectory(String parentPath, String path, List<Component> children) {
     String key = keyGenerator.generateKey(rootComponent.getKey(), path);
-    String publicKey = publicKeyGenerator.generateKey(rootComponent.getKey(), path);
     return ComponentImpl.builder(Component.Type.DIRECTORY)
       .setUuid(uuidSupplier.apply(key))
-      .setDbKey(key)
-      .setKey(publicKey)
+      .setKey(key)
       .setName(path)
       .setShortName(removeStart(removeStart(path, parentPath), "/"))
       .setStatus(convertStatus(FileStatus.UNAVAILABLE))
@@ -261,13 +251,12 @@ public class ComponentTreeBuilder {
     return component.getChildren().stream()
       .map(ComponentTreeBuilder::buildChangedComponentTree)
       .filter(Objects::nonNull)
-      .collect(MoreCollectors.toList());
+      .toList();
   }
 
   private static ComponentImpl.Builder changedComponentBuilder(Component component, String newShortName) {
     return ComponentImpl.builder(component.getType())
       .setUuid(component.getUuid())
-      .setDbKey(component.getDbKey())
       .setKey(component.getKey())
       .setStatus(component.getStatus())
       .setReportAttributes(component.getReportAttributes())
@@ -344,7 +333,10 @@ public class ComponentTreeBuilder {
     return new FileAttributes(
       component.getIsTest(),
       lang != null ? lang.intern() : null,
-      component.getLines());
+      component.getLines(),
+      component.getMarkedAsUnchanged(),
+      component.getOldRelativeFilePath()
+    );
   }
 
   private static class Node {

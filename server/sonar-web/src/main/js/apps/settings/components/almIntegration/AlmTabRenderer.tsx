@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,30 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, FlagMessage, Link, Spinner, getTabId, getTabPanelId } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { FormattedMessage } from 'react-intl';
+import { translate } from '../../../../helpers/l10n';
 import {
   AlmBindingDefinition,
+  AlmBindingDefinitionBase,
   AlmKeys,
   AlmSettingsBindingStatus,
-  isBitbucketCloudBindingDefinition
+  isBitbucketCloudBindingDefinition,
 } from '../../../../types/alm-settings';
+import { Dict } from '../../../../types/types';
 import AlmBindingDefinitionBox from './AlmBindingDefinitionBox';
-import AlmBindingDefinitionForm, {
-  AlmBindingDefinitionFormChildrenProps
-} from './AlmBindingDefinitionForm';
+import AlmBindingDefinitionForm from './AlmBindingDefinitionForm';
+import { AlmTabs } from './AlmIntegration';
 import CreationTooltip from './CreationTooltip';
 
-export interface AlmTabRendererProps<B> {
-  alm: AlmKeys;
+export interface AlmTabRendererProps {
+  almTab: AlmTabs;
   branchesEnabled: boolean;
-  definitionStatus: T.Dict<AlmSettingsBindingStatus>;
-  editedDefinition?: B;
-  definitions: B[];
-  form: (props: AlmBindingDefinitionFormChildrenProps<B>) => React.ReactNode;
-  help: React.ReactNode;
+  definitionStatus: Dict<AlmSettingsBindingStatus>;
+  editDefinition?: boolean;
+  editedDefinition?: AlmBindingDefinition;
+  definitions: AlmBindingDefinition[];
   loadingAlmDefinitions: boolean;
   loadingProjectCount: boolean;
   multipleAlmEnabled: boolean;
@@ -49,74 +49,94 @@ export interface AlmTabRendererProps<B> {
   onCreate: () => void;
   onDelete: (definitionKey: string) => void;
   onEdit: (definitionKey: string) => void;
-  onSubmit: (config: B, originalKey: string) => void;
-  optionalFields?: Array<keyof B>;
-  submitting: boolean;
-  success: boolean;
+  afterSubmit: (config: AlmBindingDefinitionBase) => void;
 }
 
-export default function AlmTabRenderer<B extends AlmBindingDefinition>(
-  props: AlmTabRendererProps<B>
-) {
+const AUTHENTICATION_AVAILABLE_PLATFORMS = [
+  AlmKeys.GitHub,
+  AlmKeys.GitLab,
+  AlmKeys.BitbucketServer,
+];
+
+export default function AlmTabRenderer(props: Readonly<AlmTabRendererProps>) {
   const {
-    alm,
+    almTab,
     branchesEnabled,
     definitions,
     definitionStatus,
+    editDefinition,
     editedDefinition,
-    form,
     loadingAlmDefinitions,
     loadingProjectCount,
     multipleAlmEnabled,
-    optionalFields,
-    help
   } = props;
 
   const preventCreation = loadingProjectCount || (!multipleAlmEnabled && definitions.length > 0);
 
   return (
-    <div className="big-padded">
-      <DeferredSpinner loading={loadingAlmDefinitions}>
-        {definitions.length === 0 && (
-          <p className="spacer-top">{translate('settings.almintegration.empty', alm)}</p>
-        )}
+    <div role="tabpanel" id={getTabPanelId(almTab)} aria-labelledby={getTabId(almTab)}>
+      <div>
+        <Spinner loading={loadingAlmDefinitions}>
+          {definitions.length === 0 && (
+            <p className="sw-mt-2">{translate('settings.almintegration.empty', almTab)}</p>
+          )}
 
-        <div className={definitions.length > 0 ? 'spacer-bottom text-right' : 'big-spacer-top'}>
-          <CreationTooltip alm={alm} preventCreation={preventCreation}>
-            <Button
-              data-test="settings__alm-create"
-              disabled={preventCreation}
-              onClick={props.onCreate}>
-              {translate('settings.almintegration.create')}
-            </Button>
-          </CreationTooltip>
-        </div>
-        {definitions.map(def => (
-          <AlmBindingDefinitionBox
-            alm={isBitbucketCloudBindingDefinition(def) ? AlmKeys.BitbucketCloud : alm}
-            branchesEnabled={branchesEnabled}
-            definition={def}
-            key={def.key}
-            multipleDefinitions={definitions.length > 1}
-            onCheck={props.onCheck}
-            onDelete={props.onDelete}
-            onEdit={props.onEdit}
-            status={definitionStatus[def.key]}
-          />
-        ))}
+          <div className={definitions.length > 0 ? 'sw-mb-5' : 'sw-my-3'}>
+            <CreationTooltip alm={almTab} preventCreation={preventCreation}>
+              <ButtonPrimary
+                data-test="settings__alm-create"
+                disabled={preventCreation}
+                onClick={props.onCreate}
+              >
+                {translate('settings.almintegration.create')}
+              </ButtonPrimary>
+            </CreationTooltip>
+          </div>
+          {definitions.map((def) => (
+            <AlmBindingDefinitionBox
+              alm={isBitbucketCloudBindingDefinition(def) ? AlmKeys.BitbucketCloud : almTab}
+              branchesEnabled={branchesEnabled}
+              definition={def}
+              key={def.key}
+              onCheck={props.onCheck}
+              onDelete={props.onDelete}
+              onEdit={props.onEdit}
+              status={definitionStatus[def.key]}
+            />
+          ))}
 
-        {editedDefinition && (
-          <AlmBindingDefinitionForm
-            bindingDefinition={editedDefinition}
-            help={help}
-            isSecondInstance={definitions.length === 1}
-            onCancel={props.onCancel}
-            onSubmit={props.onSubmit}
-            optionalFields={optionalFields}>
-            {form}
-          </AlmBindingDefinitionForm>
-        )}
-      </DeferredSpinner>
+          {editDefinition && (
+            <AlmBindingDefinitionForm
+              alm={almTab}
+              bindingDefinition={editedDefinition}
+              onCancel={props.onCancel}
+              afterSubmit={props.afterSubmit}
+            />
+          )}
+        </Spinner>
+      </div>
+      {AUTHENTICATION_AVAILABLE_PLATFORMS.includes(almTab) && (
+        <FlagMessage className="sw-mt-2" variant="info">
+          <p>
+            <FormattedMessage
+              id="settings.almintegration.tabs.authentication-moved"
+              defaultMessage={translate('settings.almintegration.tabs.authentication_moved')}
+              values={{
+                link: (
+                  <Link
+                    to={{
+                      pathname: '/admin/settings',
+                      search: `category=authentication&tab=${almTab}`,
+                    }}
+                  >
+                    {translate('property.category.authentication')}
+                  </Link>
+                ),
+              }}
+            />
+          </p>
+        </FlagMessage>
+      )}
     </div>
   );
 }

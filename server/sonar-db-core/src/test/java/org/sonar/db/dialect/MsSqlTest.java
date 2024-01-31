@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,20 +21,17 @@ package org.sonar.db.dialect;
 
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mockito;
 import org.sonar.api.utils.MessageException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class MsSqlTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private MsSql underTest = new MsSql();
 
@@ -71,16 +68,17 @@ public class MsSqlTest {
 
   @Test
   public void getSqlFromDual() {
-    assertThat(underTest.getSqlFromDual()).isEqualTo("");
+    assertThat(underTest.getSqlFromDual()).isEmpty();
   }
 
   @Test
   public void init_throws_MessageException_if_mssql_2012() throws Exception {
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("Unsupported mssql version: 11.0. Minimal supported version is 12.0.");
-
-    DatabaseMetaData metadata = newMetadata( 11, 0);
-    underTest.init(metadata);
+    assertThatThrownBy(() -> {
+      DatabaseMetaData metadata = newMetadata( 11, 0);
+      underTest.init(metadata);
+    })
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Unsupported mssql version: 11.0. Minimal supported version is 12.0.");
   }
 
   @Test

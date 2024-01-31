@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,19 +19,24 @@
  */
 package org.sonar.server.ws;
 
+import com.tngtech.java.junit.dataprovider.DataProvider;
+import com.tngtech.java.junit.dataprovider.DataProviderRunner;
+import com.tngtech.java.junit.dataprovider.UseDataProvider;
 import java.util.function.Consumer;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.catalina.connector.ClientAbortException;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.slf4j.event.Level;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.RequestHandler;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
+import org.sonar.api.testfixtures.log.LogTester;
+import org.sonar.server.exceptions.BadConfigurationException;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonarqube.ws.MediaTypes;
 
@@ -45,13 +50,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(DataProviderRunner.class)
 public class WebServiceEngineTest {
 
   @Rule
   public LogTester logTester = new LogTester();
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+  @Before
+  public void setup() {
+    logTester.setLevel(Level.DEBUG);
+  }
 
   @Test
   public void load_ws_definitions_at_startup() {
@@ -60,7 +68,8 @@ public class WebServiceEngineTest {
       }),
       newWs("api/bar/index", a -> {
       })
-    });
+    },
+      new ActionInterceptor[] {});
     underTest.start();
     try {
       assertThat(underTest.controllers())
@@ -71,37 +80,27 @@ public class WebServiceEngineTest {
     }
   }
 
-  @Test
-  public void ws_returns_successful_response() {
-    Request request = new TestRequest().setPath("/api/ping");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("pong");
-    assertThat(response.stream().status()).isEqualTo(200);
+  @DataProvider
+  public static Object[][] responseData() {
+    return new Object[][] {
+      {"/api/ping", "pong", 200},
+      {"api/ping", "pong", 200},
+      {"api/ping.json", "pong", 200},
+      {"xxx/ping", "{\"errors\":[{\"msg\":\"Unknown url : xxx/ping\"}]}", 404},
+      {"api/xxx", "{\"errors\":[{\"msg\":\"Unknown url : api/xxx\"}]}", 404}
+    };
   }
 
   @Test
-  public void accept_path_that_does_not_start_with_slash() {
-    Request request = new TestRequest().setPath("api/ping");
+  @UseDataProvider("responseData")
+  public void ws_returns_successful_response(String path, String output, int statusCode) {
+    Request request = new TestRequest().setPath(path);
 
     DumbResponse response = run(request, newPingWs(a -> {
     }));
 
-    assertThat(response.stream().outputAsString()).isEqualTo("pong");
-    assertThat(response.stream().status()).isEqualTo(200);
-  }
-
-  @Test
-  public void request_path_can_contain_valid_media_type() {
-    Request request = new TestRequest().setPath("api/ping.json");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("pong");
-    assertThat(response.stream().status()).isEqualTo(200);
+    assertThat(response.stream().outputAsString()).isEqualTo(output);
+    assertThat(response.status()).isEqualTo(statusCode);
   }
 
   @Test
@@ -111,8 +110,8 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newPingWs(a -> {
     }));
 
-    assertThat(response.stream().status()).isEqualTo(400);
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(response.status()).isEqualTo(400);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"Unknown action extension: bat\"}]}");
   }
 
@@ -124,29 +123,7 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newWs("api/foo", a -> a.setHandler(handler)));
 
     assertThat(response.stream().outputAsString()).isEmpty();
-    assertThat(response.stream().status()).isEqualTo(204);
-  }
-
-  @Test
-  public void return_404_if_controller_does_not_exist() {
-    Request request = new TestRequest().setPath("xxx/ping");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"Unknown url : xxx/ping\"}]}");
-    assertThat(response.stream().status()).isEqualTo(404);
-  }
-
-  @Test
-  public void return_404_if_action_does_not_exist() {
-    Request request = new TestRequest().setPath("api/xxx");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"Unknown url : api/xxx\"}]}");
-    assertThat(response.stream().status()).isEqualTo(404);
+    assertThat(response.status()).isEqualTo(204);
   }
 
   @Test
@@ -156,40 +133,36 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newWs("api/foo", a -> a.setPost(true)));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"HTTP method POST is required\"}]}");
-    assertThat(response.stream().status()).isEqualTo(405);
+    assertThat(response.status()).isEqualTo(405);
   }
 
   @Test
-  public void POST_is_considered_as_GET_if_POST_is_not_supported() {
-    Request request = new TestRequest().setMethod("POST").setPath("api/ping");
+  public void fail_if_method_POST_is_not_allowed() {
+    Request request = new TestRequest().setMethod("POST").setPath("api/foo");
+
+    DumbResponse response = run(request, newWs("api/foo", a -> a.setPost(false)));
+
+    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"HTTP method GET is required\"}]}");
+    assertThat(response.status()).isEqualTo(405);
+  }
+
+  @DataProvider
+  public static String[] verbs() {
+    return new String[] {
+      "PUT", "DELETE", "HEAD", "PATCH", "CONNECT", "OPTIONS", "TRACE"
+    };
+  }
+
+  @Test
+  @UseDataProvider("verbs")
+  public void method_is_not_allowed(String verb) {
+    Request request = new TestRequest().setMethod(verb).setPath("/api/ping");
 
     DumbResponse response = run(request, newPingWs(a -> {
     }));
 
-    assertThat(response.stream().outputAsString()).isEqualTo("pong");
-    assertThat(response.stream().status()).isEqualTo(200);
-  }
-
-  @Test
-  public void method_PUT_is_not_allowed() {
-    Request request = new TestRequest().setMethod("PUT").setPath("/api/ping");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"HTTP method PUT is not allowed\"}]}");
-    assertThat(response.stream().status()).isEqualTo(405);
-  }
-
-  @Test
-  public void method_DELETE_is_not_allowed() {
-    Request request = new TestRequest().setMethod("DELETE").setPath("api/ping");
-
-    DumbResponse response = run(request, newPingWs(a -> {
-    }));
-
-    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"HTTP method DELETE is not allowed\"}]}");
-    assertThat(response.stream().status()).isEqualTo(405);
+    assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"HTTP method " + verb + " is not allowed\"}]}");
+    assertThat(response.status()).isEqualTo(405);
   }
 
   @Test
@@ -199,7 +172,7 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newPingWs(a -> a.setPost(true)));
 
     assertThat(response.stream().outputAsString()).isEqualTo("pong");
-    assertThat(response.stream().status()).isEqualTo(200);
+    assertThat(response.status()).isEqualTo(200);
   }
 
   @Test
@@ -209,7 +182,7 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newWs("api/foo", a -> a.setHandler((req, resp) -> request.param("unknown"))));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"BUG - parameter \\u0027unknown\\u0027 is undefined for action \\u0027foo\\u0027\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
+    assertThat(response.status()).isEqualTo(400);
   }
 
   @Test
@@ -222,7 +195,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"The \\u0027bar\\u0027 parameter is missing\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
+    assertThat(response.status()).isEqualTo(400);
   }
 
   @Test
@@ -236,7 +209,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"The \\u0027bar\\u0027 parameter is missing\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
+    assertThat(response.status()).isEqualTo(400);
   }
 
   @Test
@@ -249,7 +222,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("hello");
-    assertThat(response.stream().status()).isEqualTo(200);
+    assertThat(response.status()).isEqualTo(200);
   }
 
   @Test
@@ -262,7 +235,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("bar");
-    assertThat(response.stream().status()).isEqualTo(200);
+    assertThat(response.status()).isEqualTo(200);
   }
 
   @Test
@@ -275,7 +248,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("json");
-    assertThat(response.stream().status()).isEqualTo(200);
+    assertThat(response.status()).isEqualTo(200);
   }
 
   @Test
@@ -288,7 +261,7 @@ public class WebServiceEngineTest {
     }));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"Value of parameter \\u0027format\\u0027 (yml) must be one of: [json, xml]\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
+    assertThat(response.status()).isEqualTo(400);
   }
 
   @Test
@@ -298,9 +271,9 @@ public class WebServiceEngineTest {
     DumbResponse response = run(request, newFailWs());
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"An error has occurred. Please contact your administrator\"}]}");
-    assertThat(response.stream().status()).isEqualTo(500);
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
-    assertThat(logTester.logs(LoggerLevel.ERROR)).filteredOn(l -> l.contains("Fail to process request api/foo")).isNotEmpty();
+    assertThat(response.status()).isEqualTo(500);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(logTester.logs(Level.ERROR)).filteredOn(l -> l.contains("Fail to process request api/foo")).isNotEmpty();
   }
 
   @Test
@@ -313,9 +286,9 @@ public class WebServiceEngineTest {
 
     assertThat(response.stream().outputAsString()).isEqualTo(
       "{\"errors\":[{\"msg\":\"Bad request !\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
-    assertThat(logTester.logs(LoggerLevel.ERROR)).isEmpty();
+    assertThat(response.status()).isEqualTo(400);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
   }
 
   @Test
@@ -331,9 +304,24 @@ public class WebServiceEngineTest {
       + "{\"msg\":\"two\"},"
       + "{\"msg\":\"three\"}"
       + "]}");
-    assertThat(response.stream().status()).isEqualTo(400);
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
-    assertThat(logTester.logs(LoggerLevel.ERROR)).isEmpty();
+    assertThat(response.status()).isEqualTo(400);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
+  }
+
+  @Test
+  public void return_400_on_BadConfigurationException_with_single_message_and_scope() {
+    Request request = new TestRequest().setPath("api/foo");
+
+    DumbResponse response = run(request, newWs("api/foo", a -> a.setHandler((req, resp) -> {
+      throw new BadConfigurationException("PROJECT", "Bad request !");
+    })));
+
+    assertThat(response.stream().outputAsString()).isEqualTo(
+      "{\"scope\":\"PROJECT\",\"errors\":[{\"msg\":\"Bad request !\"}]}");
+    assertThat(response.status()).isEqualTo(400);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
   }
 
   @Test
@@ -345,8 +333,8 @@ public class WebServiceEngineTest {
     })));
 
     assertThat(response.stream().outputAsString()).isEqualTo("{\"errors\":[{\"msg\":\"this should not fail %s\"}]}");
-    assertThat(response.stream().status()).isEqualTo(400);
-    assertThat(response.stream().mediaType()).isEqualTo(MediaTypes.JSON);
+    assertThat(response.status()).isEqualTo(400);
+    assertThat(response.mediaType()).isEqualTo(MediaTypes.JSON);
   }
 
   @Test
@@ -368,7 +356,7 @@ public class WebServiceEngineTest {
     // response is committed (status is already sent), so status can't be changed
     verify(response.stream(), never()).setStatus(anyInt());
 
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).contains("Request api/foo has been aborted by client");
+    assertThat(logTester.logs(Level.DEBUG)).contains("Request api/foo has been aborted by client");
   }
 
   @Test
@@ -379,7 +367,7 @@ public class WebServiceEngineTest {
     run(request, response, newClientAbortWs());
 
     verify(response.stream()).setStatus(299);
-    assertThat(logTester.logs(LoggerLevel.DEBUG)).contains("Request api/foo has been aborted by client");
+    assertThat(logTester.logs(Level.DEBUG)).contains("Request api/foo has been aborted by client");
   }
 
   @Test
@@ -391,7 +379,7 @@ public class WebServiceEngineTest {
 
     // response is committed (status is already sent), so status can't be changed
     verify(response.stream(), never()).setStatus(anyInt());
-    assertThat(logTester.logs(LoggerLevel.ERROR)).contains("Fail to process request api/foo");
+    assertThat(logTester.logs(Level.ERROR)).contains("Fail to process request api/foo");
   }
 
   @Test
@@ -402,19 +390,20 @@ public class WebServiceEngineTest {
     run(request, response, newFailWs());
 
     verify(response.stream()).setStatus(500);
-    assertThat(logTester.logs(LoggerLevel.ERROR)).contains("Fail to process request api/foo");
+    assertThat(logTester.logs(Level.ERROR)).contains("Fail to process request api/foo");
   }
 
   @Test
   public void fail_when_start_in_not_called() {
     Request request = new TestRequest().setPath("/api/ping");
     DumbResponse response = new DumbResponse();
-    WebServiceEngine underTest = new WebServiceEngine(new WebService[] {newPingWs(a -> {
-    })});
+    WebServiceEngine underTest = new WebServiceEngine(new WebService[] {
+      newPingWs(a -> {
+      })}, new ActionInterceptor[] {});
 
     underTest.execute(request, response);
 
-    assertThat(logTester.logs(LoggerLevel.ERROR)).contains("Fail to process request /api/ping");
+    assertThat(logTester.logs(Level.ERROR)).contains("Fail to process request /api/ping");
   }
 
   private static WebService newWs(String path, Consumer<WebService.NewAction> consumer) {
@@ -447,7 +436,7 @@ public class WebServiceEngineTest {
   }
 
   private static Response run(Request request, Response response, WebService... webServices) {
-    WebServiceEngine underTest = new WebServiceEngine(webServices);
+    WebServiceEngine underTest = new WebServiceEngine(webServices, new ActionInterceptor[] {});
     underTest.start();
     try {
       underTest.execute(request, response);

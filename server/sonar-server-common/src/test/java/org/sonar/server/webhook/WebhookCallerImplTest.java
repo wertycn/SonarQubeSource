@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,21 +33,18 @@ import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.mockito.Mockito;
-import org.sonar.api.SonarEdition;
-import org.sonar.api.SonarQubeSide;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.config.internal.MapSettings;
-import org.sonar.api.internal.SonarRuntimeImpl;
 import org.sonar.api.impl.utils.TestSystem2;
 import org.sonar.api.utils.System2;
 import org.sonar.api.utils.Version;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.server.util.OkHttpClientProvider;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
-import static org.sonar.process.ProcessProperties.Property.SONAR_VALIDATE_WEBHOOKS;
+import static org.sonar.api.CoreProperties.SONAR_VALIDATE_WEBHOOKS_PROPERTY;
 
 public class WebhookCallerImplTest {
 
@@ -253,7 +250,7 @@ public class WebhookCallerImplTest {
 
   @Test
   public void silently_catch_error_when_url_is_local_network_interface() throws Exception {
-    String url = "https://192.168.1.21";
+    String url = "https://localhost";
 
     InetAddress inetAddress = InetAddress.getByName(HttpUrl.parse(url).host());
 
@@ -284,9 +281,10 @@ public class WebhookCallerImplTest {
   }
 
   private WebhookCaller newSender(boolean validateWebhook) {
-    SonarRuntime runtime = SonarRuntimeImpl.forSonarQube(Version.parse("6.2"), SonarQubeSide.SERVER, SonarEdition.COMMUNITY);
-    when(configuration.getBoolean(SONAR_VALIDATE_WEBHOOKS.getKey())).thenReturn(Optional.of(validateWebhook));
+    SonarQubeVersion version = new SonarQubeVersion(Version.parse("6.2"));
+    when(configuration.getBoolean(SONAR_VALIDATE_WEBHOOKS_PROPERTY))
+      .thenReturn(Optional.of(validateWebhook));
     WebhookCustomDns webhookCustomDns = new WebhookCustomDns(configuration, networkInterfaceProvider);
-    return new WebhookCallerImpl(system, new OkHttpClientProvider().provide(new MapSettings().asConfig(), runtime), webhookCustomDns);
+    return new WebhookCallerImpl(system, new OkHttpClientProvider().provide(new MapSettings().asConfig(), version), webhookCustomDns);
   }
 }

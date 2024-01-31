@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,8 +23,10 @@ import java.util.Arrays;
 import java.util.List;
 import org.sonar.ce.task.container.TaskContainer;
 import org.sonar.ce.task.projectanalysis.filemove.FileMoveDetectionStep;
+import org.sonar.ce.task.projectanalysis.filemove.PullRequestFileMoveDetectionStep;
 import org.sonar.ce.task.projectanalysis.language.HandleUnanalyzedLanguagesStep;
 import org.sonar.ce.task.projectanalysis.measure.PostMeasuresComputationChecksStep;
+import org.sonar.ce.task.projectanalysis.measure.PreMeasuresComputationChecksStep;
 import org.sonar.ce.task.projectanalysis.purge.PurgeDatastoresStep;
 import org.sonar.ce.task.projectanalysis.qualityprofile.RegisterQualityProfileStatusStep;
 import org.sonar.ce.task.projectanalysis.source.PersistFileSourcesStep;
@@ -47,13 +49,18 @@ public class ReportComputationSteps extends AbstractComputationSteps {
     ExecuteStatelessInitExtensionsStep.class,
     BuildComponentTreeStep.class,
     ValidateProjectStep.class,
-
     LoadQualityProfilesStep.class,
 
+    // Pre analysis operations
+    PreMeasuresComputationChecksStep.class,
+    SqUpgradeDetectionEventsStep.class,
+
     // load project related stuffs
+    LoadFileHashesAndStatusStep.class,
     LoadQualityGateStep.class,
     LoadPeriodsStep.class,
     FileMoveDetectionStep.class,
+    PullRequestFileMoveDetectionStep.class,
 
     // load duplications related stuff
     LoadDuplicationsFromReportStep.class,
@@ -64,7 +71,6 @@ public class ReportComputationSteps extends AbstractComputationSteps {
     NewCoverageMeasuresStep.class,
     CoverageMeasuresStep.class,
     CommentMeasuresStep.class,
-    CustomMeasuresCopyStep.class,
     DuplicationMeasuresStep.class,
     NewSizeMeasuresStep.class,
     LanguageDistributionMeasuresStep.class,
@@ -77,6 +83,9 @@ public class ReportComputationSteps extends AbstractComputationSteps {
 
     PostMeasuresComputationChecksStep.class,
 
+    // Must be executed after visitors execution
+    PullRequestFixedIssuesMeasureStep.class,
+
     QualityGateMeasuresStep.class,
     // Must be executed after computation of language distribution
     ComputeQProfileMeasureStep.class,
@@ -85,10 +94,12 @@ public class ReportComputationSteps extends AbstractComputationSteps {
 
     // Must be executed after computation of quality gate measure
     QualityGateEventsStep.class,
+    IssueDetectionEventsStep.class,
 
     HandleUnanalyzedLanguagesStep.class,
 
     // Persist data
+    PersistScannerAnalysisCacheStep.class,
     PersistComponentsStep.class,
     PersistAnalysisStep.class,
     PersistAnalysisPropertiesStep.class,
@@ -97,16 +108,21 @@ public class ReportComputationSteps extends AbstractComputationSteps {
     PersistDuplicationDataStep.class,
     PersistAdHocRulesStep.class,
     PersistIssuesStep.class,
+    CleanIssueChangesStep.class,
     PersistProjectLinksStep.class,
     PersistEventsStep.class,
     PersistFileSourcesStep.class,
     PersistCrossProjectDuplicationIndexStep.class,
     EnableAnalysisStep.class,
+    PersistPullRequestFixedIssueStep.class,
 
     UpdateQualityProfilesLastUsedDateStep.class,
     PurgeDatastoresStep.class,
+    LoadChangedIssuesStep.class,
     IndexAnalysisStep.class,
     UpdateNeedIssueSyncStep.class,
+    ProjectNclocComputationStep.class,
+    PersistPushEventsStep.class,
 
     // notifications are sent at the end, so that webapp displays up-to-date information
     SendIssueNotificationsStep.class,

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.db.plugin.PluginDto;
@@ -81,6 +80,7 @@ public class PluginWSCommons {
     ofNullable(installedPlugin).ifPresent(serverPlugin -> {
       builder.setFilename(installedPlugin.getJar().getFile().getName());
       builder.setHash(installedPlugin.getJar().getMd5());
+      builder.setType(installedPlugin.getType().name());
     });
 
     ofNullable(pluginInfo.getVersion()).ifPresent(v -> builder.setVersion(isNotBlank(pluginInfo.getDisplayVersion()) ? pluginInfo.getDisplayVersion() : v.getName()));
@@ -94,6 +94,7 @@ public class PluginWSCommons {
     ofNullable(pluginInfo.getIssueTrackerUrl()).ifPresent(builder::setIssueTrackerUrl);
     ofNullable(pluginInfo.getImplementationBuild()).ifPresent(builder::setImplementationBuild);
     ofNullable(pluginInfo.getDocumentationPath()).ifPresent(builder::setDocumentationPath);
+    builder.addAllRequiredForLanguages(pluginInfo.getRequiredForLanguages());
 
     return builder.build();
   }
@@ -109,9 +110,9 @@ public class PluginWSCommons {
 
   static List<Require> buildRequires(PluginUpdate pluginUpdate) {
     return pluginUpdate.getRelease().getOutgoingDependencies().stream().map(
-      org.sonar.updatecenter.common.Release::getArtifact)
-      .filter(release -> release instanceof Plugin)
-      .map(artifact -> (Plugin) artifact)
+        org.sonar.updatecenter.common.Release::getArtifact)
+      .filter(Plugin.class::isInstance)
+      .map(Plugin.class::cast)
       .map(artifact -> {
         Require.Builder builder = Require.newBuilder()
           .setKey(artifact.getKey());
@@ -119,7 +120,7 @@ public class PluginWSCommons {
         ofNullable(artifact.getDescription()).ifPresent(builder::setDescription);
         return builder.build();
       })
-      .collect(Collectors.toList());
+      .toList();
   }
 
   static UpdateStatus convertUpdateCenterStatus(PluginUpdate.Status status) {

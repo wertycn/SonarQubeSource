@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,16 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Spinner, Title } from 'design-system';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getMyProjects } from '../../../api/components';
+import { translate } from '../../../helpers/l10n';
+import { MyProject } from '../../../types/types';
 import Projects from './Projects';
 
 interface State {
   loading: boolean;
   page: number;
-  projects?: T.MyProject[];
+  projects?: MyProject[];
   total?: number;
 }
 
@@ -47,11 +49,11 @@ export default class ProjectsContainer extends React.PureComponent<{}, State> {
     this.setState({ loading: true });
     const data = { p: page, ps: 100 };
     return getMyProjects(data).then(({ paging, projects }) => {
-      this.setState(state => ({
+      this.setState((state) => ({
         projects: page > 1 ? [...(state.projects || []), ...projects] : projects,
         loading: false,
         page: paging.pageIndex,
-        total: paging.total
+        total: paging.total,
       }));
     });
   }
@@ -61,27 +63,18 @@ export default class ProjectsContainer extends React.PureComponent<{}, State> {
   };
 
   render() {
-    const helmet = <Helmet title={translate('my_account.projects')} />;
-
-    if (this.state.projects == null) {
-      return (
-        <div className="text-center">
-          {helmet}
-          <i className="spinner spacer" />
-        </div>
-      );
-    }
+    const { loading, projects = [], total } = this.state;
 
     return (
-      <div className="account-body account-container">
-        {helmet}
-        <Projects
-          loadMore={this.loadMore}
-          loading={this.state.loading}
-          projects={this.state.projects}
-          total={this.state.total}
-        />
-      </div>
+      <>
+        <Helmet title={translate('my_account.projects')} />
+
+        <Title>{translate('my_account.projects')}</Title>
+
+        <Spinner loading={loading && projects.length === 0}>
+          <Projects loadMore={this.loadMore} loading={loading} projects={projects} total={total} />
+        </Spinner>
+      </>
     );
   }
 }

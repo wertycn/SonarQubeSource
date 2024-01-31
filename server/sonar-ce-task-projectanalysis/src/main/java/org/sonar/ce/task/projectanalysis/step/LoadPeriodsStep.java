@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,10 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
-import java.util.function.Supplier;
+import org.sonar.api.utils.System2;
+import org.sonar.ce.task.log.CeTaskMessages;
+import org.sonar.ce.task.log.CeTaskMessages.Message;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.component.TreeRootHolder;
 import org.sonar.ce.task.projectanalysis.period.NewCodePeriodResolver;
@@ -34,7 +34,8 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.newcodeperiod.NewCodePeriodDao;
 import org.sonar.db.newcodeperiod.NewCodePeriodDto;
-import org.sonar.db.newcodeperiod.NewCodePeriodType;
+
+import static org.sonar.db.newcodeperiod.NewCodePeriodType.REFERENCE_BRANCH;
 
 /**
  * Populates the {@link PeriodHolder}
@@ -52,15 +53,19 @@ public class LoadPeriodsStep implements ComputationStep {
   private final PeriodHolderImpl periodsHolder;
   private final DbClient dbClient;
   private final NewCodePeriodResolver resolver;
+  private final CeTaskMessages ceTaskMessages;
+  private final System2 system2;
 
   public LoadPeriodsStep(AnalysisMetadataHolder analysisMetadataHolder, NewCodePeriodDao newCodePeriodDao, TreeRootHolder treeRootHolder,
-    PeriodHolderImpl periodsHolder, DbClient dbClient, NewCodePeriodResolver resolver) {
+    PeriodHolderImpl periodsHolder, DbClient dbClient, NewCodePeriodResolver resolver, CeTaskMessages ceTaskMessages, System2 system2) {
     this.analysisMetadataHolder = analysisMetadataHolder;
     this.newCodePeriodDao = newCodePeriodDao;
     this.treeRootHolder = treeRootHolder;
     this.periodsHolder = periodsHolder;
     this.dbClient = dbClient;
     this.resolver = resolver;
+    this.ceTaskMessages = ceTaskMessages;
+    this.system2 = system2;
   }
 
   @Override
@@ -79,33 +84,32 @@ public class LoadPeriodsStep implements ComputationStep {
     String branchUuid = treeRootHolder.getRoot().getUuid();
     String projectVersion = treeRootHolder.getRoot().getProjectAttributes().getProjectVersion();
 
+    var newCodePeriod = analysisMetadataHolder.getNewCodeReferenceBranch()
+      .filter(s -> !s.isBlank())
+      .map(b -> new NewCodePeriodDto().setType(REFERENCE_BRANCH).setValue(b))
+      .orElse(null);
+
     try (DbSession dbSession = dbClient.openSession(false)) {
-      Optional<NewCodePeriodDto> dto = firstPresent(Arrays.asList(
-        () -> getBranchSetting(dbSession, projectUuid, branchUuid),
-        () -> getProjectSetting(dbSession, projectUuid),
-        () -> getGlobalSetting(dbSession)
-      ));
+      Optional<NewCodePeriodDto> branchSpecificSetting = getBranchSetting(dbSession, projectUuid, branchUuid);
 
-      NewCodePeriodDto newCodePeriod = dto.orElse(NewCodePeriodDto.defaultInstance());
+      if (newCodePeriod == null) {
+        newCodePeriod = branchSpecificSetting
+          .or(() -> getProjectSetting(dbSession, projectUuid))
+          .or(() -> getGlobalSetting(dbSession))
+          .orElse(NewCodePeriodDto.defaultInstance());
 
-      if (analysisMetadataHolder.isFirstAnalysis() && newCodePeriod.getType() != NewCodePeriodType.REFERENCE_BRANCH) {
-        periodsHolder.setPeriod(null);
-        return;
+        if (analysisMetadataHolder.isFirstAnalysis() && newCodePeriod.getType() != REFERENCE_BRANCH) {
+          periodsHolder.setPeriod(null);
+          return;
+        }
+      } else if (branchSpecificSetting.isPresent()) {
+        ceTaskMessages.add(new Message("A scanner parameter is defining a new code reference branch, but this conflicts with the New Code Period"
+          + " setting of your branch. Please check your project configuration. You should use either one or the other but not both.", system2.now()));
       }
 
       Period period = resolver.resolve(dbSession, branchUuid, newCodePeriod, projectVersion);
       periodsHolder.setPeriod(period);
     }
-  }
-
-  private static <T> Optional<T> firstPresent(Collection<Supplier<Optional<T>>> suppliers) {
-    for (Supplier<Optional<T>> supplier : suppliers) {
-      Optional<T> result = supplier.get();
-      if (result.isPresent()) {
-        return result;
-      }
-    }
-    return Optional.empty();
   }
 
   private Optional<NewCodePeriodDto> getBranchSetting(DbSession dbSession, String projectUuid, String branchUuid) {

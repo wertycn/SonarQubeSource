@@ -1,4 +1,4 @@
-sonarqube {
+sonar {
   properties {
     property 'sonar.projectName', "${projectTitle} :: Database Core"
   }
@@ -7,38 +7,42 @@ sonarqube {
 dependencies {
   // please keep the list grouped by configuration and ordered by name
 
-  compile 'ch.qos.logback:logback-classic'
-  compile 'ch.qos.logback:logback-core'
-  compile 'com.google.guava:guava'
-  compile 'commons-io:commons-io'
-  compile 'commons-lang:commons-lang'
-  compile 'org.apache.commons:commons-dbcp2'
-  compile 'org.mybatis:mybatis'
-  compile 'org.picocontainer:picocontainer'
-  compile 'org.slf4j:slf4j-api'
-  compile project(':server:sonar-process')
-  compile project(path: ':sonar-plugin-api', configuration: 'shadow')
-  compile project(':sonar-plugin-api-impl')
+  api 'ch.qos.logback:logback-classic'
+  api 'ch.qos.logback:logback-core'
+  api 'com.google.guava:guava'
+  api 'commons-io:commons-io'
+  api 'commons-lang:commons-lang'
+  api 'com.zaxxer:HikariCP'
+  api 'org.mybatis:mybatis'
+  api 'org.slf4j:slf4j-api'
+  api 'org.sonarsource.api.plugin:sonar-plugin-api'
+  api project(':server:sonar-process')
+  api project(':sonar-plugin-api-impl')
 
-  compileOnly 'com.google.code.findbugs:jsr305'
+  compileOnlyApi 'com.google.code.findbugs:jsr305'
 
-  testCompile 'com.google.code.findbugs:jsr305'
-  testCompile 'com.h2database:h2'
-  testCompile 'com.microsoft.sqlserver:mssql-jdbc'
-  testCompile 'com.oracle.database.jdbc:ojdbc8'
-  testCompile 'com.tngtech.java:junit-dataprovider'
-  testCompile 'org.mockito:mockito-core'
-  testCompile 'org.postgresql:postgresql'
-  testCompile project(':sonar-testing-harness')
+  testImplementation 'com.google.code.findbugs:jsr305'
+  testImplementation 'com.h2database:h2'
+  testImplementation 'com.microsoft.sqlserver:mssql-jdbc'
+  testImplementation 'com.oracle.database.jdbc:ojdbc11'
+  testImplementation 'com.tngtech.java:junit-dataprovider'
+  testImplementation 'org.mockito:mockito-core'
+  testImplementation 'org.postgresql:postgresql'
+  testImplementation 'org.sonarsource.api.plugin:sonar-plugin-api-test-fixtures'
 
-  testRuntime 'com.h2database:h2'
-  testRuntime 'com.microsoft.sqlserver:mssql-jdbc'
-  testRuntime 'com.oracle.database.jdbc:ojdbc8'
-  testRuntime 'org.postgresql:postgresql'
+  testImplementation project(':sonar-testing-harness')
+
+  testRuntimeOnly 'com.h2database:h2'
+  testRuntimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
+  testRuntimeOnly 'com.oracle.database.jdbc:ojdbc11'
+  testRuntimeOnly 'org.postgresql:postgresql'
 
   testFixturesApi 'commons-dbutils:commons-dbutils'
   testFixturesApi 'junit:junit'
   testFixturesApi 'org.assertj:assertj-core'
+  testFixturesApi 'org.apache.commons:commons-collections4'
+
+  testFixturesImplementation 'com.oracle.database.jdbc:ojdbc11'
 
   testFixturesCompileOnly 'com.google.code.findbugs:jsr305'
 }

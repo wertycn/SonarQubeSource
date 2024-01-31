@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@ public class JavaCommandTest {
     command.setEnvVariable("JAVA_COMMAND_TEST", "1000");
     command.addClasspath("lib/*.jar");
     command.addClasspath("conf/*.xml");
-    JvmOptions<JvmOptions> jvmOptions = new JvmOptions<JvmOptions>() {};
+    JvmOptions<JvmOptions> jvmOptions = new JvmOptions<>() {};
     command.setJvmOptions(jvmOptions);
 
     assertThat(command.toString()).isNotNull();
@@ -57,8 +57,8 @@ public class JavaCommandTest {
     assertThat(command.getClassName()).isEqualTo("org.sonar.ElasticSearch");
 
     // copy current env variables
-    assertThat(command.getEnvVariables().get("JAVA_COMMAND_TEST")).isEqualTo("1000");
-    assertThat(command.getEnvVariables().size()).isEqualTo(System.getenv().size() + 1);
+    assertThat(command.getEnvVariables()).containsEntry("JAVA_COMMAND_TEST", "1000");
+    assertThat(command.getEnvVariables()).hasSize(System.getenv().size() + 1);
   }
 
 }

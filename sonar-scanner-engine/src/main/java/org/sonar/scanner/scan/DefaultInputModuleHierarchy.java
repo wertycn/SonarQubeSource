@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -56,7 +56,7 @@ public class DefaultInputModuleHierarchy implements InputModuleHierarchy {
     }
 
     this.children = Collections.unmodifiableMap(childrenBuilder);
-    this.parents = Collections.unmodifiableMap(new HashMap<>(parents));
+    this.parents = Map.copyOf(parents);
     this.root = root;
   }
 

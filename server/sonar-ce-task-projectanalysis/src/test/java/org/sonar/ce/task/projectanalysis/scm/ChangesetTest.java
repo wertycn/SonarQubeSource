@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,12 @@
  */
 package org.sonar.ce.task.projectanalysis.scm;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ChangesetTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void create_changeset() {
@@ -56,21 +52,21 @@ public class ChangesetTest {
 
   @Test
   public void fail_with_NPE_when_setting_null_date() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("Date cannot be null");
-
-    Changeset.newChangesetBuilder().setDate(null);
+    assertThatThrownBy(() -> Changeset.newChangesetBuilder().setDate(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("Date cannot be null");
   }
 
   @Test
   public void fail_with_NPE_when_building_without_date() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("Date cannot be null");
-
-    Changeset.newChangesetBuilder()
-      .setAuthor("john")
-      .setRevision("rev-1")
-      .build();
+    assertThatThrownBy(() -> {
+      Changeset.newChangesetBuilder()
+        .setAuthor("john")
+        .setRevision("rev-1")
+        .build();
+    })
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("Date cannot be null");
   }
 
   @Test
@@ -81,7 +77,7 @@ public class ChangesetTest {
       .setRevision("rev-1")
       .build();
 
-    assertThat(underTest.toString()).isEqualTo("Changeset{revision='rev-1', author='john', date=123456789}");
+    assertThat(underTest).hasToString("Changeset{revision='rev-1', author='john', date=123456789}");
   }
 
   @Test
@@ -106,14 +102,15 @@ public class ChangesetTest {
       .setRevision("rev-2")
       .build();
 
-    assertThat(changeset).isEqualTo(changeset);
-    assertThat(changeset).isEqualTo(sameChangeset);
-    assertThat(changeset).isNotEqualTo(anotherChangesetWithSameRevision);
-    assertThat(changeset).isNotEqualTo(anotherChangeset);
-
-    assertThat(changeset.hashCode()).isEqualTo(changeset.hashCode());
-    assertThat(changeset.hashCode()).isEqualTo(sameChangeset.hashCode());
-    assertThat(changeset.hashCode()).isNotEqualTo(anotherChangesetWithSameRevision.hashCode());
-    assertThat(changeset.hashCode()).isNotEqualTo(anotherChangeset.hashCode());
+    assertThat(changeset)
+      .isEqualTo(changeset)
+      .isEqualTo(sameChangeset)
+      .isNotEqualTo(anotherChangesetWithSameRevision)
+      .isNotEqualTo(anotherChangeset)
+      .hasSameHashCodeAs(changeset)
+      .hasSameHashCodeAs(sameChangeset);
+    assertThat(changeset.hashCode())
+      .isNotEqualTo(anotherChangesetWithSameRevision.hashCode())
+      .isNotEqualTo(anotherChangeset.hashCode());
   }
 }

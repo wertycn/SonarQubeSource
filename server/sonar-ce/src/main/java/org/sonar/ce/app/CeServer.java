@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,19 +23,20 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import java.util.concurrent.CountDownLatch;
 import javax.annotation.Nullable;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.ComputeEngine;
 import org.sonar.ce.ComputeEngineImpl;
 import org.sonar.ce.container.ComputeEngineContainerImpl;
 import org.sonar.ce.logging.CeProcessLogging;
 import org.sonar.process.MinimumViableSystem;
 import org.sonar.process.Monitored;
+import org.sonar.process.PluginSecurityManager;
 import org.sonar.process.ProcessEntryPoint;
 import org.sonar.process.Props;
-import org.sonar.process.SecurityManagement;
 
 import static com.google.common.base.Preconditions.checkState;
+import static org.sonar.process.ProcessId.COMPUTE_ENGINE;
 
 /**
  * The Compute Engine server which starts a daemon thread to run the {@link ComputeEngineImpl} when it's {@link #start()}
@@ -45,18 +46,18 @@ import static com.google.common.base.Preconditions.checkState;
  * </p>
  */
 public class CeServer implements Monitored {
-  private static final Logger LOG = Loggers.get(CeServer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CeServer.class);
 
   private static final String CE_MAIN_THREAD_NAME = "ce-main";
 
-  private CountDownLatch awaitStop = new CountDownLatch(1);
-
+  private final CountDownLatch awaitStop = new CountDownLatch(1);
   private final ComputeEngine computeEngine;
   @Nullable
   private CeMainThread ceMainThread = null;
 
   @VisibleForTesting
-  protected CeServer(ComputeEngine computeEngine, MinimumViableSystem mvs) {
+  protected CeServer(ComputeEngine computeEngine, MinimumViableSystem mvs, CeSecurityManager securityManager) {
+    securityManager.apply();
     this.computeEngine = computeEngine;
     mvs
       .checkWritableTempDir()
@@ -117,11 +118,11 @@ public class CeServer implements Monitored {
     ProcessEntryPoint entryPoint = ProcessEntryPoint.createForArguments(args);
     Props props = entryPoint.getProps();
     new CeProcessLogging().configure(props);
-    SecurityManagement.restrictPlugins();
 
     CeServer server = new CeServer(
       new ComputeEngineImpl(props, new ComputeEngineContainerImpl()),
-      new MinimumViableSystem());
+      new MinimumViableSystem(),
+      new CeSecurityManager(new PluginSecurityManager(), props));
     entryPoint.launch(server);
   }
 
@@ -159,22 +160,22 @@ public class CeServer implements Monitored {
 
     private boolean attemptStartup() {
       try {
-        LOG.info("Compute Engine starting up...");
+        LOG.info("{} starting up...", COMPUTE_ENGINE.getHumanReadableName());
         computeEngine.startup();
-        LOG.info("Compute Engine is operational");
+        LOG.info("{} is started", COMPUTE_ENGINE.getHumanReadableName());
         return true;
       } catch (org.sonar.api.utils.MessageException | org.sonar.process.MessageException e) {
-        LOG.error("Compute Engine startup failed: " + e.getMessage());
+        LOG.error("{} startup failed: {}", COMPUTE_ENGINE.getHumanReadableName(), e.getMessage());
         return false;
       } catch (Throwable e) {
-        LOG.error("Compute Engine startup failed", e);
+        LOG.error("{} startup failed", COMPUTE_ENGINE.getHumanReadableName(), e);
         return false;
       }
     }
 
     private void attemptShutdown() {
       try {
-        LOG.info("Compute Engine is stopping...");
+        LOG.info("{} is stopping...", COMPUTE_ENGINE.getHumanReadableName());
         if (!hardStop) {
           computeEngine.stopProcessing();
         }
@@ -182,9 +183,9 @@ public class CeServer implements Monitored {
         // make sure that interrupt flag is unset because we don't want to interrupt shutdown of pico container
         interrupted();
         computeEngine.shutdown();
-        LOG.info("Compute Engine is stopped");
+        LOG.info("{} is stopped", COMPUTE_ENGINE.getHumanReadableName());
       } catch (Throwable e) {
-        LOG.error("Compute Engine failed to stop", e);
+        LOG.error("{} failed to stop", COMPUTE_ENGINE.getHumanReadableName(), e);
       }
     }
 

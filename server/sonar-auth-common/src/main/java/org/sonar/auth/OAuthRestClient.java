@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import com.github.scribejava.core.oauth.OAuth20Service;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -38,7 +39,7 @@ import static java.lang.String.format;
 public class OAuthRestClient {
 
   private static final int DEFAULT_PAGE_SIZE = 100;
-  private static final Pattern NEXT_LINK_PATTERN = Pattern.compile(".*<(.*)>; rel=\"next\"");
+  private static final Pattern NEXT_LINK_PATTERN = Pattern.compile("<([^<]+)>; rel=\"next\"");
 
   private OAuthRestClient() {
     // Only static method
@@ -63,8 +64,13 @@ public class OAuthRestClient {
 
   public static <E> List<E> executePaginatedRequest(String request, OAuth20Service scribe, OAuth2AccessToken accessToken, Function<String, List<E>> function) {
     List<E> result = new ArrayList<>();
-    readPage(result, scribe, accessToken, request + "?per_page=" + DEFAULT_PAGE_SIZE, function);
+    readPage(result, scribe, accessToken, addPerPageQueryParameter(request, DEFAULT_PAGE_SIZE), function);
     return result;
+  }
+
+  public static String addPerPageQueryParameter(String request, int pageSize) {
+    String separator = request.contains("?") ? "&" : "?";
+    return request + separator + "per_page=" + pageSize;
   }
 
   private static <E> void readPage(List<E> result, OAuth20Service scribe, OAuth2AccessToken accessToken, String endPoint, Function<String, List<E>> function) {
@@ -81,10 +87,11 @@ public class OAuthRestClient {
   }
 
   private static Optional<String> readNextEndPoint(Response response) {
-    String link = response.getHeader("Link");
-    if (link == null || link.isEmpty() || !link.contains("rel=\"next\"")) {
-      return Optional.empty();
-    }
+    String link = response.getHeaders().entrySet().stream()
+      .filter(e -> "Link".equalsIgnoreCase(e.getKey()))
+      .map(Map.Entry::getValue)
+      .findAny().orElse("");
+
     Matcher nextLinkMatcher = NEXT_LINK_PATTERN.matcher(link);
     if (!nextLinkMatcher.find()) {
       return Optional.empty();

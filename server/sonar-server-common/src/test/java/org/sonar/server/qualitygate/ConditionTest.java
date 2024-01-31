@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,44 +20,37 @@
 package org.sonar.server.qualitygate;
 
 import java.util.Arrays;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ConditionTest {
   private static final String METRIC_KEY = "metric_key";
   private static final Condition.Operator OPERATOR = Condition.Operator.GREATER_THAN;
   private static final String ERROR_THRESHOLD = "2";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   private Condition underTest = new Condition(METRIC_KEY, OPERATOR, ERROR_THRESHOLD);
 
   @Test
   public void constructor_throws_NPE_if_metricKey_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("metricKey can't be null");
-
-    new Condition(null, OPERATOR, ERROR_THRESHOLD);
+    assertThatThrownBy(() -> new Condition(null, OPERATOR, ERROR_THRESHOLD))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("metricKey can't be null");
   }
 
   @Test
-  public void constructor_throws_NPE_if_operator_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("operator can't be null");
-
-    new Condition(METRIC_KEY, null, ERROR_THRESHOLD);
+  public void constructor_throws_NPE_if_operator_operator_is_null() {
+    assertThatThrownBy(() -> new Condition(METRIC_KEY, null, ERROR_THRESHOLD))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("operator can't be null");
   }
 
   @Test
   public void constructor_throws_NPE_if_errorThreshold_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("errorThreshold can't be null");
-
-    new Condition(METRIC_KEY, OPERATOR, null);
+    assertThatThrownBy(() -> new Condition(METRIC_KEY, OPERATOR, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("errorThreshold can't be null");
   }
 
   @Test
@@ -75,29 +68,29 @@ public class ConditionTest {
 
   @Test
   public void equals_is_based_on_all_fields() {
-    assertThat(underTest).isEqualTo(underTest);
-    assertThat(underTest).isNotEqualTo(null);
-    assertThat(underTest).isNotEqualTo(new Object());
-    assertThat(underTest).isEqualTo(new Condition(METRIC_KEY, OPERATOR, ERROR_THRESHOLD));
-    assertThat(underTest).isNotEqualTo(new Condition("other_metric_key", OPERATOR, ERROR_THRESHOLD));
+    assertThat(underTest)
+      .isEqualTo(underTest)
+      .isNotNull()
+      .isNotEqualTo(new Object())
+      .isEqualTo(new Condition(METRIC_KEY, OPERATOR, ERROR_THRESHOLD))
+      .isNotEqualTo(new Condition("other_metric_key", OPERATOR, ERROR_THRESHOLD));
     Arrays.stream(Condition.Operator.values())
-        .filter(s -> !OPERATOR.equals(s))
-        .forEach(otherOperator ->  assertThat(underTest)
-            .isNotEqualTo(new Condition(METRIC_KEY, otherOperator, ERROR_THRESHOLD)));
+      .filter(s -> !OPERATOR.equals(s))
+      .forEach(otherOperator -> assertThat(underTest)
+        .isNotEqualTo(new Condition(METRIC_KEY, otherOperator, ERROR_THRESHOLD)));
     assertThat(underTest).isNotEqualTo(new Condition(METRIC_KEY, OPERATOR, "other_error_threshold"));
   }
 
   @Test
   public void hashcode_is_based_on_all_fields() {
-    assertThat(underTest.hashCode()).isEqualTo(underTest.hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(null);
+    assertThat(underTest).hasSameHashCodeAs(underTest);
     assertThat(underTest.hashCode()).isNotEqualTo(new Object().hashCode());
-    assertThat(underTest.hashCode()).isEqualTo(new Condition(METRIC_KEY, OPERATOR, ERROR_THRESHOLD).hashCode());
+    assertThat(underTest).hasSameHashCodeAs(new Condition(METRIC_KEY, OPERATOR, ERROR_THRESHOLD));
     assertThat(underTest.hashCode()).isNotEqualTo(new Condition("other_metric_key", OPERATOR, ERROR_THRESHOLD).hashCode());
     Arrays.stream(Condition.Operator.values())
-        .filter(s -> !OPERATOR.equals(s))
-        .forEach(otherOperator ->  assertThat(underTest.hashCode())
-            .isNotEqualTo(new Condition(METRIC_KEY, otherOperator, ERROR_THRESHOLD).hashCode()));
+      .filter(s -> !OPERATOR.equals(s))
+      .forEach(otherOperator -> assertThat(underTest.hashCode())
+        .isNotEqualTo(new Condition(METRIC_KEY, otherOperator, ERROR_THRESHOLD).hashCode()));
     assertThat(underTest.hashCode()).isNotEqualTo(new Condition(METRIC_KEY, OPERATOR, "other_error_threshold").hashCode());
   }
 }

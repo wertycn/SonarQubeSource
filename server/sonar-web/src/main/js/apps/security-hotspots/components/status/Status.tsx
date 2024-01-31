@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,90 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { HighlightedSection } from 'design-system';
 import * as React from 'react';
-import { DropdownOverlay } from 'sonar-ui-common/components/controls/Dropdown';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import ChevronDownIcon from 'sonar-ui-common/components/icons/ChevronDownIcon';
-import { PopupPlacement } from 'sonar-ui-common/components/ui/popups';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { withCurrentUser } from '../../../../components/hoc/withCurrentUser';
-import { isLoggedIn } from '../../../../helpers/users';
-import { Hotspot } from '../../../../types/security-hotspots';
+import { Hotspot, HotspotStatusOption } from '../../../../types/security-hotspots';
 import { getStatusOptionFromStatusAndResolution } from '../../utils';
-import './Status.css';
 import StatusDescription from './StatusDescription';
-import StatusSelection from './StatusSelection';
+import StatusReviewButton from './StatusReviewButton';
 
 export interface StatusProps {
-  currentUser: T.CurrentUser;
   hotspot: Hotspot;
-
-  onStatusChange: () => Promise<void>;
+  onStatusChange: (statusOption: HotspotStatusOption) => Promise<void>;
 }
 
-export function Status(props: StatusProps) {
-  const { currentUser, hotspot } = props;
-  const [isOpen, setIsOpen] = React.useState(false);
+export default function Status(props: StatusProps) {
+  const { hotspot } = props;
 
   const statusOption = getStatusOptionFromStatusAndResolution(hotspot.status, hotspot.resolution);
-  const readonly = !hotspot.canChangeStatus || !isLoggedIn(currentUser);
-
-  const trigger = (
-    <div
-      aria-expanded={isOpen}
-      aria-haspopup={true}
-      className={classNames('padded bordered display-flex-column display-flex-justify-center', {
-        readonly
-      })}
-      id="status-trigger"
-      onClick={() => !readonly && setIsOpen(true)}
-      role="button"
-      tabIndex={0}>
-      <div className="display-flex-center display-flex-space-between">
-        {isOpen ? (
-          <span className="h3">{translate('hotspots.status.select_status')}</span>
-        ) : (
-          <StatusDescription showTitle={true} statusOption={statusOption} />
-        )}
-        {!readonly && <ChevronDownIcon className="big-spacer-left" />}
-      </div>
-    </div>
-  );
-
-  const actionableTrigger = (
-    <Toggler
-      closeOnClickOutside={true}
-      closeOnEscape={true}
-      onRequestClose={() => setIsOpen(false)}
-      open={isOpen}
-      overlay={
-        <DropdownOverlay noPadding={true} placement={PopupPlacement.Bottom}>
-          <StatusSelection
-            hotspot={hotspot}
-            onStatusOptionChange={async () => {
-              await props.onStatusChange();
-              setIsOpen(false);
-            }}
-          />
-        </DropdownOverlay>
-      }>
-      {trigger}
-    </Toggler>
-  );
 
   return (
-    <div className="dropdown">
-      {readonly ? (
-        <Tooltip overlay={translate('hotspots.status.cannot_change_status')} placement="bottom">
-          {trigger}
-        </Tooltip>
-      ) : (
-        actionableTrigger
-      )}
-    </div>
+    <HighlightedSection className="sw-flex sw-rounded-1 sw-p-4 sw-items-center sw-justify-between sw-gap-2 sw-flex-row">
+      <StatusDescription statusOption={statusOption} />
+      <StatusReviewButton hotspot={hotspot} onStatusChange={props.onStatusChange} />
+    </HighlightedSection>
   );
 }
-
-export default withCurrentUser(Status);

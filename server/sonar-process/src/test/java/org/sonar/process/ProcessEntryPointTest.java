@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -111,8 +111,8 @@ public class ProcessEntryPointTest {
     entryPoint.stop();
 
     assertThat(process.getState()).isEqualTo(State.STOPPED);
-    assertThat(process.wasStopped()).isEqualTo(true);
-    assertThat(process.wasHardStopped()).isEqualTo(false);
+    assertThat(process.wasStopped()).isTrue();
+    assertThat(process.wasHardStopped()).isFalse();
   }
 
   @Test
@@ -131,7 +131,7 @@ public class ProcessEntryPointTest {
     entryPoint.hardStop();
 
     assertThat(process.getState()).isEqualTo(State.STOPPED);
-    assertThat(process.wasHardStopped()).isEqualTo(true);
+    assertThat(process.wasHardStopped()).isTrue();
   }
 
   @Test
@@ -179,7 +179,7 @@ public class ProcessEntryPointTest {
     Props props = new Props(new Properties());
     props.set(PROPERTY_SHARED_PATH, temp.newFolder().getAbsolutePath());
     props.set(PROPERTY_PROCESS_INDEX, "1");
-    props.set(PROPERTY_PROCESS_KEY, "test");
+    props.set(PROPERTY_PROCESS_KEY, ProcessId.COMPUTE_ENGINE.getKey());
     props.set(PROPERTY_GRACEFUL_STOP_TIMEOUT_MS, "30000");
     return props;
   }
@@ -233,16 +233,6 @@ public class ProcessEntryPointTest {
     @Override
     public void setOperational() {
       operational.set(true);
-    }
-
-    @Override
-    public void ping() {
-
-    }
-
-    @Override
-    public long getLastPing() {
-      return 0;
     }
 
     @Override

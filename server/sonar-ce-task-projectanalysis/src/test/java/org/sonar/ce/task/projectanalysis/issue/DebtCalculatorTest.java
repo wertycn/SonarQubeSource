@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ import org.sonar.core.issue.DefaultIssue;
 import org.sonar.db.rule.RuleTesting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class DebtCalculatorTest {
 
@@ -77,10 +78,10 @@ public class DebtCalculatorTest {
   public void copy_effort_for_external_issues() {
     issue.setGap(null);
     issue.setIsFromExternalRuleEngine(true);
-    issue.setEffort(Duration.create(20l));
+    issue.setEffort(Duration.create(20L));
     rule.setFunction(null);
 
-    assertThat(underTest.calculate(issue).toMinutes()).isEqualTo(20l);
+    assertThat(underTest.calculate(issue).toMinutes()).isEqualTo(20L);
   }
 
   @Test
@@ -92,13 +93,14 @@ public class DebtCalculatorTest {
     assertThat(underTest.calculate(issue).toMinutes()).isEqualTo(2);
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void effort_to_fix_must_not_be_set_with_constant_function() {
     int constant = 2;
     issue.setGap(3.0);
     rule.setFunction(new DefaultDebtRemediationFunction(DebtRemediationFunction.Type.CONSTANT_ISSUE, null, constant + "min"));
 
-    underTest.calculate(issue);
+    assertThatThrownBy(() -> underTest.calculate(issue))
+      .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

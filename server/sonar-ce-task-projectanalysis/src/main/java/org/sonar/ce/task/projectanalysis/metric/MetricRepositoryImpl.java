@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
-import org.picocontainer.Startable;
+import org.sonar.api.Startable;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.metric.MetricDto;
@@ -85,6 +85,13 @@ public class MetricRepositoryImpl implements MetricRepository, Startable {
   @Override
   public Iterable<Metric> getAll() {
     return metricsByKey.values();
+  }
+
+  @Override
+  public List<Metric> getMetricsByType(Metric.MetricType type) {
+    verifyMetricsInitialized();
+    
+    return metricsByKey.values().stream().filter(m -> m.getType() == type).toList();
   }
 
   private void verifyMetricsInitialized() {

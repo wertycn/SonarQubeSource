@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,6 +38,4 @@ public class DaoUtilsTest {
     assertThat(buildLikeValue("like-\\_%/-value", AFTER)).isEqualTo(escapedValue + wildcard);
     assertThat(buildLikeValue("like-\\_%/-value", BEFORE_AND_AFTER)).isEqualTo(wildcard + escapedValue + wildcard);
   }
-
-
 }

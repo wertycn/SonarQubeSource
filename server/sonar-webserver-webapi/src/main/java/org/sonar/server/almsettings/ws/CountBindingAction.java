@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,15 +47,15 @@ public class CountBindingAction implements AlmSettingsWsAction {
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("count_binding")
-      .setDescription("Count number of project bound to an ALM setting.<br/>" +
+      .setDescription("Count number of project bound to an DevOps Platform setting.<br/>" +
         "Requires the 'Administer System' permission")
       .setSince("8.1")
-      .setResponseExample(getClass().getResource("count_binding-example.json"))
+      .setResponseExample(getClass().getResource("example-count_binding.json"))
       .setHandler(this);
 
     action
       .createParam(PARAM_ALM_SETTING)
-      .setDescription("ALM setting key")
+      .setDescription("DevOps Platform setting key")
       .setRequired(true);
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,33 +20,38 @@
 package org.sonar.core.platform;
 
 import org.junit.Test;
-import org.sonar.api.utils.log.Logger;
+import org.slf4j.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class ComponentKeysTest {
 
   ComponentKeys keys = new ComponentKeys();
 
   @Test
-  public void generate_key_of_class() {
+  public void generate_key_of_object() {
     assertThat(keys.of(FakeComponent.class)).isEqualTo(FakeComponent.class);
   }
 
   @Test
-  public void generate_key_of_object() {
-    assertThat(keys.of(new FakeComponent())).isEqualTo("org.sonar.core.platform.ComponentKeysTest.FakeComponent-fake");
+  public void generate_key_of_instance() {
+    assertThat((String) keys.of(new FakeComponent())).endsWith("-org.sonar.core.platform.ComponentKeysTest.FakeComponent-fake");
+  }
+
+  @Test
+  public void generate_key_of_class() {
+    assertThat(keys.ofClass(FakeComponent.class)).endsWith("-org.sonar.core.platform.ComponentKeysTest.FakeComponent");
   }
 
   @Test
   public void should_log_warning_if_toString_is_not_overridden() {
     Logger log = mock(Logger.class);
     keys.of(new Object(), log);
-    verifyZeroInteractions(log);
+    verifyNoInteractions(log);
 
     // only on non-first runs, to avoid false-positives on singletons
     keys.of(new Object(), log);

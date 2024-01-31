@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,6 @@ import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService.NewAction;
 import org.sonar.api.server.ws.WebService.NewController;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.QProfileDto;
@@ -77,7 +76,7 @@ public class DeleteAction implements QProfileWsAction {
 
     try (DbSession dbSession = dbClient.openSession(false)) {
       QProfileDto profile = wsSupport.getProfile(dbSession, QProfileReference.fromName(request));
-      wsSupport.checkCanEdit(dbSession, profile);
+      wsSupport.checkCanAdministrate(profile);
 
       Collection<QProfileDto> descendants = selectDescendants(dbSession, profile);
       ensureNoneIsMarkedAsDefault(dbSession, profile, descendants);
@@ -110,6 +109,6 @@ public class DeleteAction implements QProfileWsAction {
 
   private static List<QProfileDto> merge(QProfileDto profile, Collection<QProfileDto> descendants) {
     return Stream.concat(Stream.of(profile), descendants.stream())
-      .collect(MoreCollectors.toList(descendants.size() + 1));
+      .toList();
   }
 }

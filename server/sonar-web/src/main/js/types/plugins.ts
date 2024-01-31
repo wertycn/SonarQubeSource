@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,13 +73,13 @@ export interface Update {
 
 export enum PluginType {
   Bundled = 'BUNDLED',
-  External = 'EXTERNAL'
+  External = 'EXTERNAL',
 }
 
 export enum RiskConsent {
   Accepted = 'ACCEPTED',
   NotAccepted = 'NOT_ACCEPTED',
-  Required = 'REQUIRED'
+  Required = 'REQUIRED',
 }
 
 export function isAvailablePlugin(plugin: Plugin): plugin is AvailablePlugin {

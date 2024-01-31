@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@ import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.qualitygate.QualityGateDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.qualitygate.QualityGateFinder;
 import org.sonar.server.qualitygate.QualityGateFinder.QualityGateData;
@@ -70,6 +69,7 @@ public class GetByProjectAction implements QualityGatesWsAction {
       .setResponseExample(getClass().getResource("get_by_project-example.json"))
       .setHandler(this)
       .setChangelog(
+        new Change("10.0", "Field 'id' in the response has been removed"),
         new Change("8.4", "Field 'id' in the response is deprecated. Format changes from integer to string."),
         new Change("6.6", "The parameter 'projectId' has been removed"),
         new Change("6.6", "The parameter 'projectKey' has been renamed to 'project'"),
@@ -86,25 +86,23 @@ public class GetByProjectAction implements QualityGatesWsAction {
     try (DbSession dbSession = dbClient.openSession(false)) {
       ProjectDto project = componentFinder.getProjectByKey(dbSession, request.mandatoryParam(PARAM_PROJECT));
 
-      if (!userSession.hasProjectPermission(USER, project) &&
-        !userSession.hasProjectPermission(ADMIN, project)) {
+      if (!userSession.hasEntityPermission(USER, project) &&
+          !userSession.hasEntityPermission(ADMIN, project)) {
         throw insufficientPrivilegesException();
       }
 
-      QualityGateData data = qualityGateFinder.getQualityGate(dbSession, project);
+      QualityGateData data = qualityGateFinder.getEffectiveQualityGate(dbSession, project);
 
       writeProtobuf(buildResponse(data), request, response);
     }
   }
 
-  private static GetByProjectResponse buildResponse(QualityGateData data) {
-    QualityGateDto qualityGate = data.getQualityGate();
+  private static GetByProjectResponse buildResponse(QualityGateData qg) {
     GetByProjectResponse.Builder response = GetByProjectResponse.newBuilder();
 
     response.getQualityGateBuilder()
-      .setId(qualityGate.getUuid())
-      .setName(qualityGate.getName())
-      .setDefault(data.isDefault());
+      .setName(qg.getName())
+      .setDefault(qg.isDefault());
 
     return response.build();
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,36 +18,29 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { Component } from '../../../types/types';
 import StatPendingCount from './StatPendingCount';
 import StatPendingTime from './StatPendingTime';
 import StatStillFailing from './StatStillFailing';
 
 export interface Props {
-  component?: Pick<T.Component, 'key'>;
+  component?: Pick<Component, 'key'>;
   failingCount?: number;
   onCancelAllPending: () => void;
-  onShowFailing: () => void;
+  onShowFailing: (e: React.SyntheticEvent<HTMLAnchorElement>) => void;
   pendingCount?: number;
   pendingTime?: number;
 }
 
-export default function Stats({ component, pendingCount, pendingTime, ...props }: Props) {
+export default function Stats({ component, pendingCount, pendingTime, ...props }: Readonly<Props>) {
   return (
-    <section className="big-spacer-top big-spacer-bottom">
+    <section className="sw-flex sw-items-center sw-my-4 sw-gap-8 sw-body-md">
       <StatPendingCount onCancelAllPending={props.onCancelAllPending} pendingCount={pendingCount} />
       {!component && (
-        <StatPendingTime
-          className="huge-spacer-left"
-          pendingCount={pendingCount}
-          pendingTime={pendingTime}
-        />
-      )}
-      {!component && (
-        <StatStillFailing
-          className="huge-spacer-left"
-          failingCount={props.failingCount}
-          onShowFailing={props.onShowFailing}
-        />
+        <>
+          <StatPendingTime pendingCount={pendingCount} pendingTime={pendingTime} />
+          <StatStillFailing failingCount={props.failingCount} onShowFailing={props.onShowFailing} />
+        </>
       )}
     </section>
   );

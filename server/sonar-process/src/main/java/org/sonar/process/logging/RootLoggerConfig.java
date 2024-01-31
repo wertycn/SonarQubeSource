@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,11 @@
  */
 package org.sonar.process.logging;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import org.sonar.process.ProcessId;
 
 import static java.util.Objects.requireNonNull;
@@ -27,14 +31,22 @@ import static java.util.Objects.requireNonNull;
 public final class RootLoggerConfig {
   private final ProcessId processId;
   private final String threadIdFieldPattern;
+  private final String nodeNameField;
+  private final List<String> excludedFields;
 
   private RootLoggerConfig(Builder builder) {
     this.processId = requireNonNull(builder.processId);
     this.threadIdFieldPattern = builder.threadIdFieldPattern;
+    this.nodeNameField = Optional.ofNullable(builder.nodeNameField).orElse("");
+    this.excludedFields = Optional.ofNullable(builder.excludedFields).orElse(List.of());
   }
 
   public static Builder newRootLoggerConfigBuilder() {
     return new Builder();
+  }
+
+  public String getNodeNameField() {
+    return nodeNameField;
   }
 
   public ProcessId getProcessId() {
@@ -45,13 +57,24 @@ public final class RootLoggerConfig {
     return threadIdFieldPattern;
   }
 
+  public List<String> getExcludedFields() {
+    return excludedFields;
+  }
+
   public static final class Builder {
     @CheckForNull
     private ProcessId processId;
     private String threadIdFieldPattern = "";
+    private String nodeNameField;
+    private List<String> excludedFields;
 
     private Builder() {
       // prevents instantiation outside RootLoggerConfig, use static factory method
+    }
+
+    public Builder setNodeNameField(@Nullable String nodeNameField) {
+      this.nodeNameField = nodeNameField;
+      return this;
     }
 
     public Builder setProcessId(ProcessId processId) {
@@ -61,6 +84,11 @@ public final class RootLoggerConfig {
 
     public Builder setThreadIdFieldPattern(String threadIdFieldPattern) {
       this.threadIdFieldPattern = requireNonNull(threadIdFieldPattern, "threadIdFieldPattern can't be null");
+      return this;
+    }
+
+    public Builder setExcludedFields(Collection<String> excludedFields) {
+      this.excludedFields = excludedFields.stream().toList();
       return this;
     }
 

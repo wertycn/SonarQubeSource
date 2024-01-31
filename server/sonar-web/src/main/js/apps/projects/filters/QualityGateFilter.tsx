@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,50 +17,87 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FacetBox, FacetItem, HelperHintIcon, QualityGateIndicator } from 'design-system';
+import { without } from 'lodash';
 import * as React from 'react';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import Level from 'sonar-ui-common/components/ui/Level';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import { translate } from '../../../helpers/l10n';
+import { isDefined } from '../../../helpers/types';
+import { RawQuery, Status } from '../../../types/types';
+import { FacetItemsList } from '../../issues/sidebar/FacetItemsList';
+import { formatFacetStat } from '../../issues/utils';
 import { Facet } from '../types';
-import Filter from './Filter';
-import FilterHeader from './FilterHeader';
 
 export interface Props {
-  className?: string;
   facet?: Facet;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
-  value?: any;
+  onQueryChange: (change: RawQuery) => void;
+  value?: Array<string>;
 }
 
-export default function QualityGateFilter(props: Props) {
-  const hasWarnStatus = props.facet && props.facet['WARN'] !== undefined;
+const HEADER_ID = `facet_quality_gate`;
+
+export default function QualityGateFacet(props: Props) {
+  const { facet, maxFacetValue, onQueryChange, value } = props;
+  const hasWarnStatus = facet?.['WARN'] !== undefined;
   const options = hasWarnStatus ? ['OK', 'WARN', 'ERROR'] : ['OK', 'ERROR'];
 
+  const onItemClick = React.useCallback(
+    (itemValue: string, multiple: boolean) => {
+      const active = value?.includes(itemValue);
+
+      if (multiple) {
+        onQueryChange({
+          gate: (active ? without(value, itemValue) : [...(value ?? []), itemValue]).join(','),
+        });
+      } else {
+        onQueryChange({
+          gate: (active && value?.length === 1 ? [] : [itemValue]).join(','),
+        });
+      }
+    },
+    [onQueryChange, value],
+  );
+
   return (
-    <Filter
-      facet={props.facet}
-      header={<FilterHeader name={translate('projects.facets.quality_gate')} />}
-      maxFacetValue={props.maxFacetValue}
-      onQueryChange={props.onQueryChange}
-      options={options}
-      property="gate"
-      renderOption={renderOption}
-      value={props.value}
-    />
+    <FacetBox id={HEADER_ID} open name={translate('projects.facets.quality_gate')}>
+      <FacetItemsList labelledby={HEADER_ID}>
+        {options.map((option) => {
+          const facetValue = facet?.[option];
+
+          const statBarPercent =
+            isDefined(facetValue) && isDefined(maxFacetValue) && maxFacetValue > 0
+              ? facetValue / maxFacetValue
+              : undefined;
+
+          return (
+            <FacetItem
+              disableZero={false}
+              key={option}
+              active={value?.includes(option)}
+              name={renderOption(option)}
+              onClick={onItemClick}
+              value={option}
+              stat={formatFacetStat(facet?.[option]) ?? 0}
+              statBarPercent={statBarPercent}
+            />
+          );
+        })}
+      </FacetItemsList>
+    </FacetBox>
   );
 }
 
-function renderOption(option: string, selected: boolean) {
+function renderOption(option: string) {
   return (
-    <>
-      <Level level={option} muted={!selected} small={true} />
+    <div className="sw-flex sw-items-center">
+      <QualityGateIndicator status={option as Status} size="sm" />
+      <span className="sw-ml-1">{translate('metric.level', option)}</span>
       {option === 'WARN' && (
-        <HelpTooltip
-          className="little-spacer-left"
-          overlay={translate('projects.facets.quality_gate.warning_help')}
-        />
+        <HelpTooltip overlay={translate('projects.facets.quality_gate.warning_help')}>
+          <HelperHintIcon className="sw-ml-1" />
+        </HelpTooltip>
       )}
-    </>
+    </div>
   );
 }

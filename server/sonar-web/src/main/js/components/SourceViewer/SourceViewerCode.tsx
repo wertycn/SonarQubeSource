@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,44 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary, LightLabel, SonarCodeColorizer, Spinner } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { decorateWithUnderlineFlags } from '../../helpers/code-viewer';
+import { translate } from '../../helpers/l10n';
 import { BranchLike } from '../../types/branch-like';
 import { MetricKey } from '../../types/metrics';
-import Line from './components/Line';
-import { getSecondaryIssueLocationsForLine } from './helpers/issueLocations';
 import {
-  optimizeHighlightedSymbols,
-  optimizeLocationMessage,
-  optimizeSelectedIssue
-} from './helpers/lines';
+  Duplication,
+  FlowLocation,
+  Issue,
+  LineMap,
+  LinearIssueLocation,
+  SourceLine,
+} from '../../types/types';
+import Line from './components/Line';
+import LineIssuesList from './components/LineIssuesList';
+import { getSecondaryIssueLocationsForLine } from './helpers/issueLocations';
+import { optimizeHighlightedSymbols, optimizeLocationMessage } from './helpers/lines';
 
-const EMPTY_ARRAY: any[] = [];
+const EMPTY_ARRAY: unknown[] = [];
 
 const ZERO_LINE = {
   code: '',
   duplicated: false,
   isNew: false,
-  line: 0
+  line: 0,
 };
+
+interface State {
+  decoratedLinesMap: LineMap;
+  hoveredLine?: SourceLine;
+}
 
 interface Props {
   branchLike: BranchLike | undefined;
-  componentKey: string;
   displayAllIssues?: boolean;
-  displayIssueLocationsCount?: boolean;
-  displayIssueLocationsLink?: boolean;
   displayLocationMarkers?: boolean;
-  duplications: T.Duplication[] | undefined;
+  duplications: Duplication[] | undefined;
   duplicationsByLine: { [line: number]: number[] };
   hasSourcesAfter: boolean;
   hasSourcesBefore: boolean;
@@ -54,84 +62,129 @@ interface Props {
   highlightedLocationMessage: { index: number; text: string | undefined } | undefined;
   // `undefined` elements mean they are located in a different file,
   // but kept to maintain the location indexes
-  highlightedLocations: (T.FlowLocation | undefined)[] | undefined;
+  highlightedLocations: (FlowLocation | undefined)[] | undefined;
   highlightedSymbols: string[];
-  issueLocationsByLine: { [line: number]: T.LinearIssueLocation[] };
+  issueLocationsByLine: { [line: number]: LinearIssueLocation[] };
   issuePopup: { issue: string; name: string } | undefined;
-  issues: T.Issue[] | undefined;
-  issuesByLine: { [line: number]: T.Issue[] };
-  loadDuplications: (line: T.SourceLine) => void;
+  issues: Issue[] | undefined;
+  issuesByLine: { [line: number]: Issue[] };
+  loadDuplications: (line: SourceLine) => void;
   loadingSourcesAfter: boolean;
   loadingSourcesBefore: boolean;
   loadSourcesAfter: () => void;
   loadSourcesBefore: () => void;
-  onIssueChange: (issue: T.Issue) => void;
+  metricKey?: string;
+  onIssueChange: (issue: Issue) => void;
   onIssuePopupToggle: (issue: string, popupName: string, open?: boolean) => void;
-  onIssuesClose: (line: T.SourceLine) => void;
+  onIssuesClose: (line: SourceLine) => void;
   onIssueSelect: (issueKey: string) => void;
-  onIssuesOpen: (line: T.SourceLine) => void;
+  onIssuesOpen: (line: SourceLine) => void;
   onIssueUnselect: () => void;
   onLocationSelect: ((index: number) => void) | undefined;
   onSymbolClick: (symbols: string[]) => void;
   openIssuesByLine: { [line: number]: boolean };
   renderDuplicationPopup: (index: number, line: number) => React.ReactNode;
-  scroll?: (element: HTMLElement) => void;
-  metricKey?: string;
   selectedIssue: string | undefined;
-  sources: T.SourceLine[];
+  sources: SourceLine[];
   symbolsByLine: { [line: number]: string[] };
 }
 
-export default class SourceViewerCode extends React.PureComponent<Props> {
+export default class SourceViewerCode extends React.PureComponent<Props, State> {
   firstUncoveredLineFound = false;
+
+  constructor(props: Props) {
+    super(props);
+
+    this.state = {
+      decoratedLinesMap: this.getDecoratedLinesMap(props.sources),
+      hoveredLine: undefined,
+    };
+  }
 
   componentDidUpdate(prevProps: Props) {
     if (this.props.metricKey !== prevProps.metricKey) {
       this.firstUncoveredLineFound = false;
     }
+
+    if (this.props.sources !== prevProps.sources) {
+      this.setState({
+        decoratedLinesMap: this.getDecoratedLinesMap(this.props.sources),
+      });
+    }
   }
 
-  getDuplicationsForLine = (line: T.SourceLine): number[] => {
+  getDecoratedLinesMap = (sources: SourceLine[]) =>
+    sources.reduce((map: LineMap, line: SourceLine) => {
+      map[line.line] = decorateWithUnderlineFlags(line, map);
+
+      return map;
+    }, {});
+
+  getDuplicationsForLine = (line: SourceLine): number[] => {
     return this.props.duplicationsByLine[line.line] || EMPTY_ARRAY;
   };
 
-  getIssuesForLine = (line: T.SourceLine): T.Issue[] => {
+  getIssuesForLine = (line: SourceLine): Issue[] => {
     return this.props.issuesByLine[line.line] || EMPTY_ARRAY;
   };
 
-  getIssueLocationsForLine = (line: T.SourceLine): T.LinearIssueLocation[] => {
+  getIssueLocationsForLine = (line: SourceLine): LinearIssueLocation[] => {
     return this.props.issueLocationsByLine[line.line] || EMPTY_ARRAY;
   };
 
+  onLineMouseEnter = (hoveredLineNumber: number) =>
+    this.setState(({ decoratedLinesMap }) => ({
+      hoveredLine: decoratedLinesMap[hoveredLineNumber],
+    }));
+
+  onLineMouseLeave = (leftLineNumber: number) =>
+    this.setState(({ hoveredLine }) => ({
+      hoveredLine: hoveredLine?.line === leftLineNumber ? undefined : hoveredLine,
+    }));
+
   renderLine = ({
-    line,
-    index,
     displayCoverage,
     displayDuplications,
-    displayIssues
+    displayIssues,
+    index,
+    line,
   }: {
-    line: T.SourceLine;
-    index: number;
     displayCoverage: boolean;
     displayDuplications: boolean;
     displayIssues: boolean;
+    index: number;
+    line: SourceLine;
   }) => {
+    const { hoveredLine } = this.state;
+
     const {
+      branchLike,
+      displayAllIssues,
+      displayLocationMarkers,
+      duplications,
+      highlightedLine,
       highlightedLocationMessage,
       highlightedLocations,
+      highlightedSymbols,
+      issueLocationsByLine,
+      issuePopup,
       metricKey,
+      openIssuesByLine,
       selectedIssue,
-      sources
+      sources,
+      symbolsByLine,
     } = this.props;
 
     const secondaryIssueLocations = getSecondaryIssueLocationsForLine(line, highlightedLocations);
 
-    const duplicationsCount = this.props.duplications ? this.props.duplications.length : 0;
+    const duplicationsCount = duplications?.length ?? 0;
 
     const issuesForLine = this.getIssuesForLine(line);
-    const firstLineNumber = sources && sources.length ? sources[0].line : 0;
+
+    const firstLineNumber = sources?.length ? sources[0].line : 0;
 
     let scrollToUncoveredLine = false;
+
     if (
       !this.firstUncoveredLineFound &&
       displayCoverage &&
@@ -141,122 +194,151 @@ export default class SourceViewerCode extends React.PureComponent<Props> {
       scrollToUncoveredLine =
         (metricKey === MetricKey.new_uncovered_lines && line.isNew) ||
         metricKey === MetricKey.uncovered_lines;
+
       this.firstUncoveredLineFound = scrollToUncoveredLine;
     }
 
+    const displayCoverageUnderline = !!(
+      hoveredLine?.coverageBlock && hoveredLine.coverageBlock === line.coverageBlock
+    );
+
     return (
       <Line
-        branchLike={this.props.branchLike}
-        displayAllIssues={this.props.displayAllIssues}
+        displayAllIssues={displayAllIssues}
         displayCoverage={displayCoverage}
+        displayCoverageUnderline={displayCoverageUnderline}
         displayDuplications={displayDuplications}
-        displayIssueLocationsCount={this.props.displayIssueLocationsCount}
-        displayIssueLocationsLink={this.props.displayIssueLocationsLink}
         displayIssues={displayIssues}
-        displayLocationMarkers={this.props.displayLocationMarkers}
+        displayLocationMarkers={displayLocationMarkers}
+        displayNewCodeUnderline={hoveredLine?.newCodeBlock === line.line}
+        displaySCM={sources.length > 0}
         duplications={this.getDuplicationsForLine(line)}
         duplicationsCount={duplicationsCount}
         firstLineNumber={firstLineNumber}
-        highlighted={line.line === this.props.highlightedLine}
+        highlighted={line.line === highlightedLine}
         highlightedLocationMessage={optimizeLocationMessage(
           highlightedLocationMessage,
-          secondaryIssueLocations
+          secondaryIssueLocations,
         )}
         highlightedSymbols={optimizeHighlightedSymbols(
-          this.props.symbolsByLine[line.line],
-          this.props.highlightedSymbols
+          symbolsByLine[line.line],
+          highlightedSymbols,
         )}
         issueLocations={this.getIssueLocationsForLine(line)}
-        issuePopup={this.props.issuePopup}
         issues={issuesForLine}
-        key={line.line}
-        last={index === this.props.sources.length - 1 && !this.props.hasSourcesAfter}
+        key={line.line || line.code}
         line={line}
         loadDuplications={this.props.loadDuplications}
-        onIssueChange={this.props.onIssueChange}
-        onIssuePopupToggle={this.props.onIssuePopupToggle}
-        onIssueSelect={this.props.onIssueSelect}
-        onIssueUnselect={this.props.onIssueUnselect}
         onIssuesClose={this.props.onIssuesClose}
+        onIssueSelect={this.props.onIssueSelect}
         onIssuesOpen={this.props.onIssuesOpen}
+        onIssueUnselect={this.props.onIssueUnselect}
+        onLineMouseEnter={this.onLineMouseEnter}
+        onLineMouseLeave={this.onLineMouseLeave}
         onLocationSelect={this.props.onLocationSelect}
         onSymbolClick={this.props.onSymbolClick}
-        openIssues={this.props.openIssuesByLine[line.line] || false}
+        openIssues={openIssuesByLine[line.line] || false}
         previousLine={index > 0 ? sources[index - 1] : undefined}
         renderDuplicationPopup={this.props.renderDuplicationPopup}
-        scroll={this.props.scroll}
         scrollToUncoveredLine={scrollToUncoveredLine}
         secondaryIssueLocations={secondaryIssueLocations}
-        selectedIssue={optimizeSelectedIssue(selectedIssue, issuesForLine)}
-      />
+      >
+        <LineIssuesList
+          branchLike={branchLike}
+          displayAllIssues={displayAllIssues}
+          displayWhyIsThisAnIssue
+          issueLocationsByLine={issueLocationsByLine}
+          issuePopup={issuePopup}
+          issuesForLine={issuesForLine}
+          line={line}
+          onIssueChange={this.props.onIssueChange}
+          onIssueClick={this.props.onIssueSelect}
+          onIssuePopupToggle={this.props.onIssuePopupToggle}
+          openIssuesByLine={openIssuesByLine}
+          selectedIssue={selectedIssue}
+        />
+      </Line>
     );
   };
 
   render() {
-    const { issues = [], sources } = this.props;
+    const { decoratedLinesMap } = this.state;
 
-    const displayCoverage = sources.some(s => s.coverageStatus != null);
-    const displayDuplications = sources.some(s => !!s.duplicated);
+    const {
+      hasSourcesAfter,
+      hasSourcesBefore,
+      issues = [],
+      loadingSourcesAfter,
+      loadingSourcesBefore,
+      sources,
+    } = this.props;
+
+    const displayCoverage = sources.some((s) => s.coverageStatus != null);
+    const displayDuplications = sources.some((s) => !!s.duplicated);
     const displayIssues = issues.length > 0;
 
-    const hasFileIssues = displayIssues && issues.some(issue => !issue.textRange);
+    const hasFileIssues = displayIssues && issues.some((issue) => !issue.textRange);
 
     return (
-      <div className="source-viewer-code">
-        {this.props.hasSourcesBefore && (
-          <div className="source-viewer-more-code">
-            {this.props.loadingSourcesBefore ? (
-              <div className="js-component-viewer-loading-before">
-                <i className="spinner" />
-                <span className="note spacer-left">
-                  {translate('source_viewer.loading_more_code')}
-                </span>
-              </div>
-            ) : (
-              <Button
-                className="js-component-viewer-source-before"
-                onClick={this.props.loadSourcesBefore}>
-                {translate('source_viewer.load_more_code')}
-              </Button>
-            )}
-          </div>
-        )}
+      <SonarCodeColorizer>
+        <div className="it__source-viewer-code">
+          {hasSourcesBefore && (
+            <div className="sw-flex sw-justify-center sw-p-6">
+              {loadingSourcesBefore ? (
+                <div className="sw-flex sw-items-center">
+                  <Spinner loading />
+                  <LightLabel className="sw-ml-2">
+                    {translate('source_viewer.loading_more_code')}
+                  </LightLabel>
+                </div>
+              ) : (
+                <ButtonSecondary onClick={this.props.loadSourcesBefore}>
+                  {translate('source_viewer.load_more_code')}
+                </ButtonSecondary>
+              )}
+            </div>
+          )}
 
-        <table className="source-table">
-          <tbody>
-            {hasFileIssues &&
-              this.renderLine({
-                line: ZERO_LINE,
-                index: -1,
-                displayCoverage,
-                displayDuplications,
-                displayIssues
-              })}
-            {sources.map((line, index) =>
-              this.renderLine({ line, index, displayCoverage, displayDuplications, displayIssues })
-            )}
-          </tbody>
-        </table>
+          <table className="source-table">
+            <tbody>
+              {hasFileIssues &&
+                this.renderLine({
+                  displayCoverage,
+                  displayDuplications,
+                  displayIssues,
+                  index: -1,
+                  line: ZERO_LINE,
+                })}
+              {sources.map((line, index) =>
+                this.renderLine({
+                  displayCoverage,
+                  displayDuplications,
+                  displayIssues,
+                  index,
+                  line: decoratedLinesMap[line.line] || line,
+                }),
+              )}
+            </tbody>
+          </table>
 
-        {this.props.hasSourcesAfter && (
-          <div className="source-viewer-more-code">
-            {this.props.loadingSourcesAfter ? (
-              <div className="js-component-viewer-loading-after">
-                <i className="spinner" />
-                <span className="note spacer-left">
-                  {translate('source_viewer.loading_more_code')}
-                </span>
-              </div>
-            ) : (
-              <Button
-                className="js-component-viewer-source-after"
-                onClick={this.props.loadSourcesAfter}>
-                {translate('source_viewer.load_more_code')}
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+          {hasSourcesAfter && (
+            <div className="sw-flex sw-justify-center sw-p-6">
+              {loadingSourcesAfter ? (
+                <div className="sw-flex sw-items-center">
+                  <Spinner loading />
+                  <LightLabel className="sw-ml-2">
+                    {translate('source_viewer.loading_more_code')}
+                  </LightLabel>
+                </div>
+              ) : (
+                <ButtonSecondary onClick={this.props.loadSourcesAfter}>
+                  {translate('source_viewer.load_more_code')}
+                </ButtonSecondary>
+              )}
+            </div>
+          )}
+        </div>
+      </SonarCodeColorizer>
     );
   }
 }

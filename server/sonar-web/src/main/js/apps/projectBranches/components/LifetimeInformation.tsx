@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,14 +18,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { getValues } from '../../../api/settings';
-import { getAppState, Store } from '../../../store/rootReducer';
+import { getValue } from '../../../api/settings';
+import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
+import { AppState } from '../../../types/appstate';
 import { SettingsKey } from '../../../types/settings';
 import LifetimeInformationRenderer from './LifetimeInformationRenderer';
 
 interface Props {
-  canAdmin?: boolean;
+  appState: AppState;
 }
 
 interface State {
@@ -33,7 +33,7 @@ interface State {
   loading: boolean;
 }
 
-export class LifetimeInformation extends React.PureComponent<Props, State> {
+class LifetimeInformation extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = { loading: true };
 
@@ -47,12 +47,12 @@ export class LifetimeInformation extends React.PureComponent<Props, State> {
   }
 
   fetchBranchAndPullRequestLifetimeSetting() {
-    getValues({ keys: SettingsKey.DaysBeforeDeletingInactiveBranchesAndPRs }).then(
-      settings => {
+    getValue({ key: SettingsKey.DaysBeforeDeletingInactiveBranchesAndPRs }).then(
+      (settings) => {
         if (this.mounted) {
           this.setState({
             loading: false,
-            branchAndPullRequestLifeTimeInDays: settings.length > 0 ? settings[0].value : undefined
+            branchAndPullRequestLifeTimeInDays: settings?.value,
           });
         }
       },
@@ -60,12 +60,14 @@ export class LifetimeInformation extends React.PureComponent<Props, State> {
         if (this.mounted) {
           this.setState({ loading: false });
         }
-      }
+      },
     );
   }
 
   render() {
-    const { canAdmin } = this.props;
+    const {
+      appState: { canAdmin },
+    } = this.props;
     const { branchAndPullRequestLifeTimeInDays, loading } = this.state;
 
     return (
@@ -78,8 +80,4 @@ export class LifetimeInformation extends React.PureComponent<Props, State> {
   }
 }
 
-const mapStoreToProps = (state: Store) => ({
-  canAdmin: getAppState(state).canAdmin
-});
-
-export default connect(mapStoreToProps)(LifetimeInformation);
+export default withAppStateContext(LifetimeInformation);

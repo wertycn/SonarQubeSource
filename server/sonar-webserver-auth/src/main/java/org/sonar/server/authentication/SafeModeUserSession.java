@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,12 +37,22 @@ public class SafeModeUserSession extends AbstractUserSession {
   }
 
   @Override
-  protected Optional<String> componentUuidToProjectUuid(String componentUuid) {
+  protected Optional<String> componentUuidToEntityUuid(String componentUuid) {
     return Optional.empty();
   }
 
   @Override
-  protected boolean hasProjectUuidPermission(String permission, String projectUuid) {
+  protected boolean hasEntityUuidPermission(String permission, String entityUuid) {
+    return false;
+  }
+
+  @Override
+  protected boolean hasChildProjectsPermission(String permission, String applicationUuid) {
+    return false;
+  }
+
+  @Override
+  protected boolean hasPortfolioChildProjectsPermission(String permission, String portfolioUuid) {
     return false;
   }
 
@@ -90,12 +100,17 @@ public class SafeModeUserSession extends AbstractUserSession {
   }
 
   @Override
-  public boolean isRoot() {
+  public boolean isSystemAdministrator() {
     return false;
   }
 
   @Override
-  public boolean isSystemAdministrator() {
+  public boolean isActive() {
+    return false;
+  }
+
+  @Override
+  public boolean isAuthenticatedBrowserSession() {
     return false;
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,13 +24,11 @@ import org.apache.ibatis.annotations.Param;
 
 public interface ComponentKeyUpdaterMapper {
 
-  int countResourceByKey(String key);
+  int countComponentsByKey(String key);
 
-  ResourceDto selectProjectByUuid(@Param("uuid") String uuid);
+  ResourceDto selectComponentByUuid(@Param("uuid") String uuid);
 
-  List<ResourceDto> selectProjectResources(@Param("rootUuid") String rootUuid);
-
-  List<ResourceDto> selectDescendantProjects(@Param("rootUuid") String rootUuid);
+  List<ResourceDto> selectBranchResources(@Param("branchUuid") String branchUuid);
 
   void updateComponent(ResourceDto resource);
 

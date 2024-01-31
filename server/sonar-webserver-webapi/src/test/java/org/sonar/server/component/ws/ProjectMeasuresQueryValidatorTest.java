@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,17 +20,13 @@
 package org.sonar.server.component.ws;
 
 import java.util.Arrays;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.server.measure.index.ProjectMeasuresQuery;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.MetricCriterion.create;
 
 public class ProjectMeasuresQueryValidatorTest {
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void query_with_empty_metrics_is_valid() {
@@ -203,6 +199,16 @@ public class ProjectMeasuresQueryValidatorTest {
   }
 
   @Test
+  public void sort_by_creation_date_is_valid() {
+    assertValidSortKey("creationDate");
+  }
+
+  @Test
+  public void sort_by_analysis_date_is_valid() {
+    assertValidSortKey("analysisDate");
+  }
+
+  @Test
   public void sort_by_bla_is_invalid() {
     assertInvalidSortKey("bla");
   }
@@ -223,10 +229,9 @@ public class ProjectMeasuresQueryValidatorTest {
   }
 
   private void assertInvalidSortKey(String metricKey) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Following metrics are not supported: '" + metricKey + "'");
-
-    ProjectMeasuresQueryValidator.validate(new ProjectMeasuresQuery().setSort(metricKey));
+    assertThatThrownBy(() -> ProjectMeasuresQueryValidator.validate(new ProjectMeasuresQuery().setSort(metricKey)))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Following metrics are not supported: '" + metricKey + "'");
   }
 
   private static void assertValidFilterKey(String... metricKeys) {
@@ -239,9 +244,9 @@ public class ProjectMeasuresQueryValidatorTest {
   }
 
   private void assertInvalidFilterKeys(String message, String... metricKeys) {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage(message);
-    validateFilterKeys(metricKeys);
+    assertThatThrownBy(() -> validateFilterKeys(metricKeys))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage(message);
   }
 
   private static void validateFilterKeys(String... metricKeys) {

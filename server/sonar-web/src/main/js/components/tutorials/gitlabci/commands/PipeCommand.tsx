@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,54 +17,56 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { CodeSnippet } from 'design-system';
 import * as React from 'react';
-import CodeSnippet from '../../../common/CodeSnippet';
 import { BuildTools } from '../../types';
-import { GitlabBuildTools } from '../types';
 
 export interface PipeCommandProps {
-  branchesEnabled?: boolean;
-  buildTool: GitlabBuildTools;
+  buildTool: Exclude<BuildTools, BuildTools.CFamily>;
   projectKey: string;
 }
 
 const BUILD_TOOL_SPECIFIC = {
-  [BuildTools.Gradle]: { image: 'gradle:jre11-slim', script: () => 'gradle sonarqube' },
+  [BuildTools.Gradle]: {
+    image: 'gradle:8.2.0-jdk17-jammy',
+    script: () => 'gradle sonar',
+  },
   [BuildTools.Maven]: {
-    image: 'maven:3.6.3-jdk-11',
+    image: 'maven:3-eclipse-temurin-17',
     script: () => `
-    - mvn verify sonar:sonar`
+    - mvn verify sonar:sonar`,
   },
   [BuildTools.DotNet]: {
-    image: 'mcr.microsoft.com/dotnet/core/sdk:latest',
+    image: 'mcr.microsoft.com/dotnet/sdk:7.0',
     script: (projectKey: string) => `
       - "apt-get update"
-      - "apt-get install --yes openjdk-11-jre"
+      - "apt-get install --yes --no-install-recommends openjdk-17-jre"
       - "dotnet tool install --global dotnet-sonarscanner"
       - "export PATH=\\"$PATH:$HOME/.dotnet/tools\\""
-      - "dotnet sonarscanner begin /k:\\"${projectKey}\\" /d:sonar.login=\\"$SONAR_TOKEN\\" /d:\\"sonar.host.url=$SONAR_HOST_URL\\" "
+      - "dotnet sonarscanner begin /k:\\"${projectKey}\\" /d:sonar.token=\\"$SONAR_TOKEN\\" /d:\\"sonar.host.url=$SONAR_HOST_URL\\" "
       - "dotnet build"
-      - "dotnet sonarscanner end /d:sonar.login=\\"$SONAR_TOKEN\\""`
+      - "dotnet sonarscanner end /d:sonar.token=\\"$SONAR_TOKEN\\""`,
   },
   [BuildTools.Other]: {
     image: `
-    name: sonarsource/sonar-scanner-cli:latest
+    name: sonarsource/sonar-scanner-cli:5.0
     entrypoint: [""]`,
     script: () => `
-    - sonar-scanner`
-  }
+    - sonar-scanner`,
+  },
 };
 
-export default function PipeCommand({ projectKey, branchesEnabled, buildTool }: PipeCommandProps) {
-  const onlyBlock = branchesEnabled
-    ? `- merge_requests
-    - master
-    - develop`
-    : '- master # or the name of your main branch';
+export default function PipeCommand(props: PipeCommandProps) {
+  const { projectKey, buildTool } = props;
 
   const { image, script } = BUILD_TOOL_SPECIFIC[buildTool];
 
-  const command = `sonarqube-check:
+  const command = `stages:
+    - sonarqube-check
+    - sonarqube-vulnerability-report
+
+sonarqube-check:
+  stage: sonarqube-check
   image: ${image}
   variables:
     SONAR_USER_HOME: "\${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
@@ -76,8 +78,28 @@ export default function PipeCommand({ projectKey, branchesEnabled, buildTool }: 
   script: ${script(projectKey)}
   allow_failure: true
   only:
-    ${onlyBlock}
+    - merge_requests
+    - master
+    - main
+    - develop
+
+sonarqube-vulnerability-report:
+  stage: sonarqube-vulnerability-report
+  script:
+    - 'curl -u "\${SONAR_TOKEN}:" "\${SONAR_HOST_URL}/api/issues/gitlab_sast_export?projectKey=${projectKey}&branch=\${CI_COMMIT_BRANCH}&pullRequest=\${CI_MERGE_REQUEST_IID}" -o gl-sast-sonar-report.json'
+  allow_failure: true
+  only:
+    - merge_requests
+    - master
+    - main
+    - develop
+  artifacts:
+    expire_in: 1 day
+    reports:
+      sast: gl-sast-sonar-report.json
+  dependencies:
+    - sonarqube-check
 `;
 
-  return <CodeSnippet snippet={command} />;
+  return <CodeSnippet className="sw-p-6" snippet={command} language="yml" />;
 }

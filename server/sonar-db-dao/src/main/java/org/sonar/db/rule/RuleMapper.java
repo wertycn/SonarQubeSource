@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,39 +23,24 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.session.ResultHandler;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleQuery;
+import org.sonar.db.Pagination;
+import org.sonar.db.issue.ImpactDto;
 
 public interface RuleMapper {
 
   List<RuleDto> selectAll();
 
-  List<RuleDefinitionDto> selectAllDefinitions();
-
-  void selectEnabled(ResultHandler<RuleDefinitionDto> resultHandler);
+  List<RuleDto> selectEnabled();
 
   RuleDto selectByUuid(@Param("uuid") String uuid);
 
-  RuleDefinitionDto selectDefinitionByUuid(String uuid);
-
   List<RuleDto> selectByUuids(@Param("uuids") List<String> uuids);
-
-  List<RuleDefinitionDto> selectDefinitionByUuids(@Param("uuids") List<String> uuids);
 
   RuleDto selectByKey(@Param("ruleKey") RuleKey ruleKey);
 
-  RuleDefinitionDto selectDefinitionByKey(RuleKey ruleKey);
-
-  RuleMetadataDto selectMetadataByKey(@Param("ruleKey") RuleKey ruleKey);
-
   List<RuleDto> selectByKeys(@Param("ruleKeys") List<RuleKey> keys);
-
-  List<RuleDefinitionDto> selectDefinitionByKeys(@Param("ruleKeys") List<RuleKey> keys);
-
-  void scrollIndexingRules(ResultHandler<RuleForIndexingDto> handler);
-
-  List<RuleForIndexingDto> selectIndexingRulesByUuids(@Param("ruleUuids") List<String> ruleUuids);
 
   List<RuleExtensionForIndexingDto> selectIndexingRuleExtensionsByIds(@Param("ruleExtensionIds") List<String> ruleExtensionIds);
 
@@ -63,21 +48,29 @@ public interface RuleMapper {
 
   List<RuleDto> selectByTypeAndLanguages(@Param("types") List<Integer> types, @Param("languages") List<String> languages);
 
-  void insertDefinition(RuleDefinitionDto ruleDefinitionDto);
+  List<RuleDto> selectByLanguage(@Param("language") String language);
 
-  void updateDefinition(RuleDefinitionDto ruleDefinitionDto);
+  Long countByLanguage(@Param("language") String language);
 
-  int countMetadata(RuleMetadataDto ruleMetadataDto);
+  void insertRule(RuleDto ruleDefinitionDto);
 
-  void insertMetadata(RuleMetadataDto ruleMetadataDto);
+  void insertRuleDescriptionSection(@Param("ruleUuid") String ruleUuid, @Param("dto") RuleDescriptionSectionDto ruleDescriptionSectionDto);
 
-  void updateMetadata(RuleMetadataDto ruleMetadataDto);
+  void insertRuleDefaultImpact(@Param("ruleUuid") String ruleUuid, @Param("dto") ImpactDto ruleDefaultImpactDto);
+
+  void insertRuleTag(@Param("ruleUuid") String ruleUuid, @Param("value") String value, @Param("isSystemTag") boolean isSystemTag);
+
+  void updateRule(RuleDto ruleDefinitionDto);
+
+  void deleteRuleDescriptionSection(String ruleUuid);
 
   List<RuleParamDto> selectParamsByRuleUuids(@Param("ruleUuids") List<String> ruleUuids);
 
   List<RuleParamDto> selectParamsByRuleKey(RuleKey ruleKey);
 
   List<RuleParamDto> selectParamsByRuleKeys(@Param("ruleKeys") List<RuleKey> ruleKeys);
+
+  List<RuleParamDto> selectAllRuleParams();
 
   void insertParameter(RuleParamDto param);
 
@@ -92,4 +85,14 @@ public interface RuleMapper {
   void deleteDeprecatedRuleKeys(@Param("uuids") List<String> uuids);
 
   void insertDeprecatedRuleKey(DeprecatedRuleKeyDto deprecatedRuleKeyDto);
+
+  void deleteRuleDefaultImpacts(String ruleUuid);
+
+  void deleteRuleTags(String ruleUuid);
+
+  List<String> selectTags(@Param("query") String query, @Param("pagination") Pagination pagination);
+
+  List<String> selectRules(@Param("query") RuleListQuery query, @Param("pagination") Pagination pagination);
+
+  Long countByQuery(@Param("query") RuleListQuery query);
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,27 +19,37 @@
  */
 package org.sonar.ce.task.container;
 
+import org.junit.Before;
 import org.junit.Test;
-import org.picocontainer.Startable;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.api.Startable;
 import org.sonar.core.platform.ContainerPopulator;
+import org.sonar.core.platform.SpringComponentContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 public class TaskContainerImplTest {
-  private ComponentContainer parent = new ComponentContainer();
-  private ContainerPopulator<TaskContainer> populator = spy(new DummyContainerPopulator());
+  private final SpringComponentContainer parent = new SpringComponentContainer();
+  private final ContainerPopulator<TaskContainer> populator = spy(new DummyContainerPopulator());
 
-  @Test(expected = NullPointerException.class)
-  public void constructor_fails_fast_on_null_container() {
-    new TaskContainerImpl(null, populator);
+  @Before
+  public void before() {
+    parent.startComponents();
   }
 
-  @Test(expected = NullPointerException.class)
+  @Test
+  public void constructor_fails_fast_on_null_container() {
+    assertThatThrownBy(() -> new TaskContainerImpl(null, populator))
+      .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
   public void constructor_fails_fast_on_null_item() {
-    new TaskContainerImpl(new ComponentContainer(), null);
+    SpringComponentContainer c = new SpringComponentContainer();
+    assertThatThrownBy(() -> new TaskContainerImpl(c, null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -50,17 +60,9 @@ public class TaskContainerImplTest {
   }
 
   @Test
-  public void ce_container_is_not_child_of_specified_container() {
-    TaskContainerImpl ceContainer = new TaskContainerImpl(parent, populator);
-
-    assertThat(parent.getChildren()).isEmpty();
-    verify(populator).populateContainer(ceContainer);
-  }
-
-  @Test
   public void bootup_starts_components_lazily_unless_they_are_annotated_with_EagerStart() {
-    final DefaultStartable defaultStartable = new DefaultStartable();
-    final EagerStartable eagerStartable = new EagerStartable();
+    DefaultStartable defaultStartable = new DefaultStartable();
+    EagerStartable eagerStartable = new EagerStartable();
     TaskContainerImpl ceContainer = new TaskContainerImpl(parent, container -> {
       container.add(defaultStartable);
       container.add(eagerStartable);
@@ -69,7 +71,7 @@ public class TaskContainerImplTest {
 
     assertThat(defaultStartable.startCalls).isZero();
     assertThat(defaultStartable.stopCalls).isZero();
-    assertThat(eagerStartable.startCalls).isEqualTo(1);
+    assertThat(eagerStartable.startCalls).isOne();
     assertThat(eagerStartable.stopCalls).isZero();
   }
 
@@ -87,8 +89,8 @@ public class TaskContainerImplTest {
 
     assertThat(defaultStartable.startCalls).isZero();
     assertThat(defaultStartable.stopCalls).isZero();
-    assertThat(eagerStartable.startCalls).isEqualTo(1);
-    assertThat(eagerStartable.stopCalls).isEqualTo(1);
+    assertThat(eagerStartable.startCalls).isOne();
+    assertThat(eagerStartable.stopCalls).isOne();
   }
 
   public static class DefaultStartable implements Startable {

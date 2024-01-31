@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,11 +52,11 @@ import org.elasticsearch.cluster.metadata.IndexMetadata;
 import org.elasticsearch.common.document.DocumentField;
 import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
-import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.sort.SortOrder;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.utils.log.Profiler;
 import org.sonar.core.util.ProgressLogger;
 
@@ -71,7 +71,7 @@ import static java.lang.String.format;
  */
 public class BulkIndexer {
 
-  private static final Logger LOGGER = Loggers.get(BulkIndexer.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(BulkIndexer.class);
   private static final ByteSizeValue FLUSH_BYTE_SIZE = new ByteSizeValue(1, ByteSizeUnit.MB);
   private static final int FLUSH_ACTIONS = -1;
   private static final String REFRESH_INTERVAL_SETTING = "index.refresh_interval";
@@ -189,11 +189,14 @@ public class BulkIndexer {
   }
 
   public void addDeletion(IndexType indexType, String id) {
-    add(new DeleteRequest(indexType.getMainType().getIndex().getName(), indexType.getMainType().getType(), id));
+    add(new DeleteRequest(indexType.getMainType().getIndex().getName())
+      .id(id));
   }
 
   public void addDeletion(IndexType indexType, String id, @Nullable String routing) {
-    add(new DeleteRequest(indexType.getMainType().getIndex().getName(), indexType.getMainType().getType(), id).routing(routing));
+    add(new DeleteRequest(indexType.getMainType().getIndex().getName())
+      .id(id)
+      .routing(routing));
   }
 
   /**

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { memoize } from 'lodash';
-import { cleanQuery, parseAsString, serializeString } from 'sonar-ui-common/helpers/query';
-import { Plugin } from '../../types/plugins';
+import { findLastIndex, memoize } from 'lodash';
+import { getInstalledPlugins, getUpdatesPlugins } from '../../api/plugins';
+import { throwGlobalError } from '../../helpers/error';
+import { cleanQuery, parseAsString, serializeString } from '../../helpers/query';
+import { isDefined } from '../../helpers/types';
+import { InstalledPlugin, Plugin, Update } from '../../types/plugins';
+import { RawQuery } from '../../types/types';
 
 export interface Query {
   filter: string;
@@ -29,11 +33,11 @@ export interface Query {
 const EXCLUDED_PLUGINS = ['license'];
 export function filterPlugins(plugins: Plugin[], search?: string): Plugin[] {
   if (!search) {
-    return plugins.filter(plugin => !EXCLUDED_PLUGINS.includes(plugin.key));
+    return plugins.filter((plugin) => !EXCLUDED_PLUGINS.includes(plugin.key));
   }
 
   const s = search.toLowerCase();
-  return plugins.filter(plugin => {
+  return plugins.filter((plugin) => {
     return (
       !EXCLUDED_PLUGINS.includes(plugin.key) &&
       (plugin.name.toLowerCase().includes(s) ||
@@ -45,16 +49,81 @@ export function filterPlugins(plugins: Plugin[], search?: string): Plugin[] {
 
 export const DEFAULT_FILTER = 'all';
 export const parseQuery = memoize(
-  (urlQuery: T.RawQuery): Query => ({
+  (urlQuery: RawQuery): Query => ({
     filter: parseAsString(urlQuery['filter']) || DEFAULT_FILTER,
-    search: parseAsString(urlQuery['search'])
-  })
+    search: parseAsString(urlQuery['search']),
+  }),
 );
 
 export const serializeQuery = memoize(
-  (query: Query): T.RawQuery =>
+  (query: Query): RawQuery =>
     cleanQuery({
       filter: query.filter === DEFAULT_FILTER ? undefined : serializeString(query.filter),
-      search: query.search ? serializeString(query.search) : undefined
-    })
+      search: query.search ? serializeString(query.search) : undefined,
+    }),
 );
+
+function getLastUpdates(updates: undefined | Update[]): Update[] {
+  if (!updates) {
+    return [];
+  }
+  const lastUpdate = ['COMPATIBLE', 'REQUIRES_SYSTEM_UPGRADE', 'DEPS_REQUIRE_SYSTEM_UPGRADE'].map(
+    (status) => {
+      const index = findLastIndex(updates, (update) => update.status === status);
+      return index > -1 ? updates[index] : undefined;
+    },
+  );
+  return lastUpdate.filter(isDefined);
+}
+
+function addChangelog(update: Update, updates?: Update[]) {
+  if (!updates) {
+    return update;
+  }
+  const index = updates.indexOf(update);
+  const previousUpdates = index > 0 ? updates.slice(0, index) : [];
+  return { ...update, previousUpdates };
+}
+
+export function getInstalledPluginsWithUpdates(): Promise<InstalledPlugin[]> {
+  return Promise.all([getInstalledPlugins(), getUpdatesPlugins()])
+    .then(([installed, updates]) =>
+      installed.map((plugin: InstalledPlugin) => {
+        const updatePlugin: InstalledPlugin = updates.plugins.find(
+          (p: InstalledPlugin) => p.key === plugin.key,
+        );
+        if (updatePlugin) {
+          return {
+            ...updatePlugin,
+            ...plugin,
+            updates: getLastUpdates(updatePlugin.updates).map((update) =>
+              addChangelog(update, updatePlugin.updates),
+            ),
+          };
+        }
+        return plugin;
+      }),
+    )
+    .catch(throwGlobalError);
+}
+
+export function getPluginUpdates(): Promise<InstalledPlugin[]> {
+  return Promise.all([getUpdatesPlugins(), getInstalledPlugins()])
+    .then(([updates, installed]) =>
+      updates.plugins.map((updatePlugin: InstalledPlugin) => {
+        const updates = getLastUpdates(updatePlugin.updates).map((update) =>
+          addChangelog(update, updatePlugin.updates),
+        );
+        const plugin = installed.find((p: InstalledPlugin) => p.key === updatePlugin.key);
+        if (plugin) {
+          return {
+            ...plugin,
+            ...updatePlugin,
+            updates,
+          };
+        }
+        return { ...updatePlugin, updates };
+      }),
+    )
+    .catch(throwGlobalError);
+}

@@ -18,7 +18,10 @@
       "local": true,
       "externalIdentity": "fmallet",
       "externalProvider": "sonarqube",
-      "avatar": "2f9dff586d3f74f825b059e3798a3bbb"
+      "avatar": "2f9dff586d3f74f825b059e3798a3bbb",
+      "lastConnectionDate": "2019-03-27T09:51:50+0100",
+      "managed": false,
+      "sonarLintLastConnectionDate": "2019-03-27T09:51:50+0100"
     },
     {
       "login": "sbrandhof",
@@ -35,8 +38,9 @@
       "tokensCount": 3,
       "local": false,
       "externalIdentity": "sbrandhof@ldap.com",
-      "externalProvider": "LDAP",
-      "avatar": "3930ad855bc7fe48db8e9a663174cdd3"
+      "externalProvider": "sonarqube",
+      "avatar": "3930ad855bc7fe48db8e9a663174cdd3",
+      "managed": true
     }
   ]
 }

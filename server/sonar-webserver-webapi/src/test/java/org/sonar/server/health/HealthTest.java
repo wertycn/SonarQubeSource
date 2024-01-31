@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,17 +25,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.assertj.core.api.AbstractCharSequenceAssert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.sonar.server.health.Health.newHealthCheckBuilder;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 
 public class HealthTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private final Random random = new Random();
   private final Health.Status anyStatus = Health.Status.values()[random.nextInt(Health.Status.values().length)];
@@ -43,60 +40,51 @@ public class HealthTest {
 
   @Test
   public void build_throws_NPE_if_status_is_null() {
-    Health.Builder builder = newHealthCheckBuilder();
+    Health.Builder builder = Health.builder();
 
-    expectStatusNotNullNPE();
-
-    builder.build();
+    expectStatusNotNullNPE(() -> builder.build());
   }
 
   @Test
   public void setStatus_throws_NPE_if_status_is_null() {
-    Health.Builder builder = newHealthCheckBuilder();
+    Health.Builder builder = Health.builder();
 
-    expectStatusNotNullNPE();
-
-    builder.setStatus(null);
+    expectStatusNotNullNPE(() -> builder.setStatus(null));
   }
 
   @Test
   public void getStatus_returns_status_from_builder() {
-    Health underTest = newHealthCheckBuilder().setStatus(anyStatus).build();
+    Health underTest = Health.builder().setStatus(anyStatus).build();
 
     assertThat(underTest.getStatus()).isEqualTo(anyStatus);
   }
 
   @Test
   public void addCause_throws_NPE_if_arg_is_null() {
-    Health.Builder builder = newHealthCheckBuilder();
+    Health.Builder builder = Health.builder();
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("cause can't be null");
-
-    builder.addCause(null);
+    assertThatThrownBy(() -> builder.addCause(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessageContaining("cause can't be null");
   }
 
   @Test
   public void addCause_throws_IAE_if_arg_is_empty() {
-    Health.Builder builder = newHealthCheckBuilder();
+    Health.Builder builder = Health.builder();
 
-    expectCauseCannotBeEmptyIAE();
-
-    builder.addCause("");
+    expectCauseCannotBeEmptyIAE(() -> builder.addCause(""));
   }
 
   @Test
   public void addCause_throws_IAE_if_arg_contains_only_spaces() {
-    Health.Builder builder = newHealthCheckBuilder();
+    Health.Builder builder = Health.builder();
 
-    expectCauseCannotBeEmptyIAE();
-
-    builder.addCause(Strings.repeat(" ", 1 + random.nextInt(5)));
+    expectCauseCannotBeEmptyIAE(() -> builder.addCause(Strings.repeat(" ", 1 + random.nextInt(5))));
   }
 
   @Test
   public void getCause_returns_causes_from_builder() {
-    Health.Builder builder = newHealthCheckBuilder().setStatus(anyStatus);
+    Health.Builder builder = Health.builder().setStatus(anyStatus);
     randomCauses.forEach(builder::addCause);
     Health underTest = builder.build();
 
@@ -106,13 +94,13 @@ public class HealthTest {
 
   @Test
   public void green_constant() {
-    assertThat(Health.GREEN).isEqualTo(newHealthCheckBuilder().setStatus(Health.Status.GREEN).build());
+    assertThat(Health.builder().setStatus(Health.Status.GREEN).build()).isEqualTo(Health.GREEN);
   }
 
   @Test
   public void equals_is_based_on_status_and_causes() {
-    Health.Builder builder1 = newHealthCheckBuilder();
-    Health.Builder builder2 = newHealthCheckBuilder();
+    Health.Builder builder1 = Health.builder();
+    Health.Builder builder2 = Health.builder();
 
     builder1.setStatus(anyStatus);
     builder2.setStatus(anyStatus);
@@ -129,15 +117,16 @@ public class HealthTest {
 
   @Test
   public void not_equals_to_null_nor_other_type() {
-    assertThat(Health.GREEN).isNotEqualTo(null);
-    assertThat(Health.GREEN).isNotEqualTo(new Object());
-    assertThat(Health.GREEN).isNotEqualTo(Health.Status.GREEN);
+    assertThat(Health.GREEN)
+      .isNotNull()
+      .isNotEqualTo(new Object())
+      .isNotEqualTo(Health.Status.GREEN);
   }
 
   @Test
   public void hashcode_is_based_on_status_and_causes() {
-    Health.Builder builder1 = newHealthCheckBuilder();
-    Health.Builder builder2 = newHealthCheckBuilder();
+    Health.Builder builder1 = Health.builder();
+    Health.Builder builder2 = Health.builder();
     builder1.setStatus(anyStatus);
     builder2.setStatus(anyStatus);
     randomCauses.forEach(s -> {
@@ -153,8 +142,8 @@ public class HealthTest {
 
   @Test
   public void verify_toString() {
-    assertThat(Health.GREEN.toString()).isEqualTo("Health{GREEN, causes=[]}");
-    Health.Builder builder = newHealthCheckBuilder().setStatus(anyStatus);
+    assertThat(Health.GREEN).hasToString("Health{GREEN, causes=[]}");
+    Health.Builder builder = Health.builder().setStatus(anyStatus);
     randomCauses.forEach(builder::addCause);
 
     String underTest = builder.build().toString();
@@ -172,13 +161,15 @@ public class HealthTest {
     }
   }
 
-  private void expectStatusNotNullNPE() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("status can't be null");
+  private void expectStatusNotNullNPE(ThrowingCallable shouldRaiseThrowable) {
+    assertThatThrownBy(shouldRaiseThrowable)
+      .isInstanceOf(NullPointerException.class)
+      .hasMessageContaining("status can't be null");
   }
 
-  private void expectCauseCannotBeEmptyIAE() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("cause can't be empty");
+  private void expectCauseCannotBeEmptyIAE(ThrowingCallable shouldRaiseThrowable) {
+    assertThatThrownBy(shouldRaiseThrowable)
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("cause can't be empty");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,10 +26,13 @@ import java.sql.SQLException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.LoggerFactory;
+import org.sonar.db.version.SqTables;
 
 import static java.lang.String.format;
+import static java.util.Optional.ofNullable;
 import static org.apache.commons.lang.StringUtils.containsIgnoreCase;
 import static org.apache.commons.lang.StringUtils.isBlank;
 
@@ -55,7 +58,7 @@ class PostgresCharsetHandler extends CharsetHandler {
   }
 
   private void expectUtf8AsDefault(Connection connection) throws SQLException {
-    Loggers.get(getClass()).info("Verify that database charset supports UTF8");
+    LoggerFactory.getLogger(getClass()).info("Verify that database charset supports UTF8");
     String collation = metadata.getDefaultCharset(connection);
     if (!containsIgnoreCase(collation, UTF8)) {
       throw MessageException.of(format("Database charset is %s. It must support UTF8.", collation));
@@ -68,11 +71,14 @@ class PostgresCharsetHandler extends CharsetHandler {
     // Examples:
     // issues | key | ''
     // projects | name | utf8
-    List<String[]> rows = getSqlExecutor().select(connection, "select table_name, column_name, collation_name " +
+    var sqTables = getSqTables();
+    var schema = getSchema(connection);
+    List<String[]> rows = getSqlExecutor().select(connection, String.format("select table_name, column_name, collation_name " +
       "from information_schema.columns " +
-      "where table_schema='public' " +
+      "where table_schema='%s' " +
+      "and table_name in (%s) " +
       "and udt_name='varchar' " +
-      "order by table_name, column_name", new SqlExecutor.StringsConverter(3 /* columns returned by SELECT */));
+      "order by table_name, column_name", schema, sqTables), new SqlExecutor.StringsConverter(3 /* columns returned by SELECT */));
     Set<String> errors = new LinkedHashSet<>();
     for (String[] row : rows) {
       if (!isBlank(row[2]) && !containsIgnoreCase(row[2], UTF8)) {
@@ -83,6 +89,14 @@ class PostgresCharsetHandler extends CharsetHandler {
     if (!errors.isEmpty()) {
       throw MessageException.of(format("Database columns [%s] must have UTF8 charset.", Joiner.on(", ").join(errors)));
     }
+  }
+
+  private static String getSchema(Connection connection) throws SQLException {
+    return ofNullable(connection.getSchema()).orElse("public");
+  }
+
+  private static String getSqTables() {
+    return SqTables.TABLES.stream().map(s -> "'" + s + "'").collect(Collectors.joining(","));
   }
 
   @VisibleForTesting

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,26 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import classNames from 'classnames';
+import { LineCoverage, LineMeta, LineNumber, LineWrapper } from 'design-system';
 import { times } from 'lodash';
 import * as React from 'react';
-import { BranchLike } from '../../../types/branch-like';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { getCodeUrl, getPathUrlAsString } from '../../../helpers/urls';
+import { Issue, LinearIssueLocation, SourceLine } from '../../../types/types';
+import { useSourceViewerContext } from '../SourceViewerContext';
 import './Line.css';
-import LineCode from './LineCode';
-import LineCoverage from './LineCoverage';
+import { LineCode } from './LineCode';
 import LineDuplicationBlock from './LineDuplicationBlock';
 import LineIssuesIndicator from './LineIssuesIndicator';
-import LineNumber from './LineNumber';
+import LineOptionsPopup from './LineOptionsPopup';
 import LineSCM from './LineSCM';
 
-interface Props {
-  branchLike: BranchLike | undefined;
+export interface LineProps {
+  children?: React.ReactNode;
   displayAllIssues?: boolean;
   displayCoverage: boolean;
   displayDuplications: boolean;
-  displayIssueLocationsCount?: boolean;
-  displayIssueLocationsLink?: boolean;
   displayIssues: boolean;
+  displayLineNumberOptions?: boolean;
   displayLocationMarkers?: boolean;
   displaySCM?: boolean;
   duplications: number[];
@@ -45,159 +47,198 @@ interface Props {
   highlighted: boolean;
   highlightedLocationMessage: { index: number; text: string | undefined } | undefined;
   highlightedSymbols: string[] | undefined;
-  issueLocations: T.LinearIssueLocation[];
-  issuePopup: { issue: string; name: string } | undefined;
-  issues: T.Issue[];
-  last: boolean;
-  line: T.SourceLine;
-  loadDuplications: (line: T.SourceLine) => void;
-  onIssueChange: (issue: T.Issue) => void;
-  onIssuePopupToggle: (issueKey: string, popupName: string, open?: boolean) => void;
-  onIssuesClose: (line: T.SourceLine) => void;
+  issueLocations: LinearIssueLocation[];
+  issues: Issue[];
+  line: SourceLine;
+  loadDuplications: (line: SourceLine) => void;
+  onIssuesClose: (line: SourceLine) => void;
   onIssueSelect: (issueKey: string) => void;
-  onIssuesOpen: (line: T.SourceLine) => void;
+  onIssuesOpen: (line: SourceLine) => void;
   onIssueUnselect: () => void;
   onLocationSelect: ((x: number) => void) | undefined;
   onSymbolClick: (symbols: string[]) => void;
   openIssues: boolean;
-  previousLine: T.SourceLine | undefined;
+  previousLine: SourceLine | undefined;
   renderDuplicationPopup: (index: number, line: number) => React.ReactNode;
-  scroll?: (element: HTMLElement) => void;
   scrollToUncoveredLine?: boolean;
-  secondaryIssueLocations: T.LinearIssueLocation[];
-  selectedIssue: string | undefined;
-  verticalBuffer?: number;
+  secondaryIssueLocations: LinearIssueLocation[];
+  onLineMouseEnter: (line: number) => void;
+  onLineMouseLeave: (line: number) => void;
+  displayCoverageUnderline: boolean;
+  displayNewCodeUnderline: boolean;
+  hideLocationIndex?: boolean;
 }
 
-const LINE_HEIGHT = 18;
+export default function Line(props: LineProps) {
+  const {
+    children,
+    displayAllIssues,
+    displayCoverage,
+    displayDuplications,
+    displayLineNumberOptions = true,
+    displayLocationMarkers,
+    highlightedLocationMessage,
+    displayNewCodeUnderline,
+    displayIssues,
+    displaySCM = true,
+    duplications,
+    duplicationsCount,
+    firstLineNumber,
+    highlighted,
+    highlightedSymbols,
+    issueLocations,
+    issues,
+    line,
+    openIssues,
+    previousLine,
+    scrollToUncoveredLine,
+    secondaryIssueLocations,
+    displayCoverageUnderline,
+    hideLocationIndex,
+    onLineMouseEnter,
+    onLineMouseLeave,
+  } = props;
 
-export default class Line extends React.PureComponent<Props> {
-  handleIssuesIndicatorClick = () => {
-    if (this.props.openIssues) {
-      this.props.onIssuesClose(this.props.line);
-      this.props.onIssueUnselect();
+  const handleIssuesIndicatorClick = () => {
+    if (props.openIssues) {
+      props.onIssuesClose(props.line);
+      props.onIssueUnselect();
     } else {
-      this.props.onIssuesOpen(this.props.line);
+      props.onIssuesOpen(props.line);
 
-      const { issues } = this.props;
+      const { issues } = props;
       if (issues.length > 0) {
-        this.props.onIssueSelect(issues[0].key);
+        props.onIssueSelect(issues[0].key);
       }
     }
   };
 
-  render() {
-    const {
-      branchLike,
-      displayAllIssues,
-      displayCoverage,
-      displayDuplications,
-      displayIssueLocationsCount,
-      displayIssueLocationsLink,
-      displayLocationMarkers,
-      highlightedLocationMessage,
-      displayIssues,
-      displaySCM = true,
-      duplications,
-      duplicationsCount,
-      firstLineNumber,
-      highlighted,
-      highlightedSymbols,
-      issueLocations,
-      issuePopup,
-      issues,
-      last,
-      line,
-      openIssues,
-      previousLine,
-      scrollToUncoveredLine,
-      secondaryIssueLocations,
-      selectedIssue,
-      verticalBuffer
-    } = this.props;
+  const blocksLoaded = duplicationsCount > 0;
 
-    const className = classNames('source-line', {
-      'source-line-highlighted': highlighted,
-      'source-line-filtered': line.isNew,
-      'source-line-filtered-dark':
-        displayCoverage &&
-        (line.coverageStatus === 'uncovered' || line.coverageStatus === 'partially-covered'),
-      'source-line-last': last === true
-    });
+  const handleLineMouseEnter = React.useCallback(
+    () => onLineMouseEnter(line.line),
+    [line.line, onLineMouseEnter],
+  );
 
-    const bottomPadding = verticalBuffer ? verticalBuffer * LINE_HEIGHT : undefined;
+  const handleLineMouseLeave = React.useCallback(
+    () => onLineMouseLeave(line.line),
+    [line.line, onLineMouseLeave],
+  );
 
-    return (
-      <tr className={className} data-line-number={line.line}>
-        <LineNumber firstLineNumber={firstLineNumber} line={line} />
+  const { branchLike, file } = useSourceViewerContext();
+  const permalink = getPathUrlAsString(
+    getCodeUrl(file.project, branchLike, file.key, line.line),
+    false,
+  );
 
-        {displaySCM && <LineSCM line={line} previousLine={previousLine} />}
-        {displayIssues && !displayAllIssues ? (
-          <LineIssuesIndicator
-            issues={issues}
-            issuesOpen={openIssues}
-            line={line}
-            onClick={this.handleIssuesIndicatorClick}
-          />
-        ) : (
-          <td className="source-meta source-line-issues" />
-        )}
+  const getStatusTooltip = (line: SourceLine) => {
+    switch (line.coverageStatus) {
+      case 'uncovered':
+        return line.conditions
+          ? translateWithParameters('source_viewer.tooltip.uncovered.conditions', line.conditions)
+          : translate('source_viewer.tooltip.uncovered');
+      case 'covered':
+        return line.conditions
+          ? translateWithParameters('source_viewer.tooltip.covered.conditions', line.conditions)
+          : translate('source_viewer.tooltip.covered');
+      case 'partially-covered':
+        return line.conditions
+          ? translateWithParameters(
+              'source_viewer.tooltip.partially-covered.conditions',
+              line.coveredConditions ?? 0,
+              line.conditions,
+            )
+          : translate('source_viewer.tooltip.partially-covered');
+      default:
+        return undefined;
+    }
+  };
 
-        {displayDuplications && (
-          <LineDuplicationBlock
-            blocksLoaded={duplicationsCount > 0}
-            duplicated={Boolean(line.duplicated)}
-            index={0}
-            key={0}
-            line={this.props.line}
-            onClick={this.props.loadDuplications}
-            renderDuplicationPopup={this.props.renderDuplicationPopup}
-          />
-        )}
+  const status = getStatusTooltip(line);
 
-        {duplicationsCount > 1 &&
-          times(duplicationsCount - 1, index => (
+  return (
+    <LineWrapper
+      data-line-number={line.line}
+      displayCoverage={displayCoverage}
+      displaySCM={displaySCM}
+      duplicationsCount={!duplicationsCount && displayDuplications ? 1 : duplicationsCount}
+      highlighted={highlighted}
+      onMouseEnter={handleLineMouseEnter}
+      onMouseLeave={handleLineMouseLeave}
+      className={classNames('it__source-line', { 'it__source-line-filtered': line.isNew })}
+    >
+      <LineNumber
+        displayOptions={displayLineNumberOptions}
+        firstLineNumber={firstLineNumber}
+        lineNumber={line.line}
+        ariaLabel={translateWithParameters('source_viewer.line_X', line.line)}
+        popup={<LineOptionsPopup line={line} permalink={permalink} />}
+      />
+
+      {displaySCM && <LineSCM line={line} previousLine={previousLine} />}
+
+      {displayIssues && !displayAllIssues ? (
+        <LineIssuesIndicator
+          issues={issues}
+          issuesOpen={openIssues}
+          line={line}
+          onClick={handleIssuesIndicatorClick}
+        />
+      ) : (
+        <LineMeta data-line-number={line.line} />
+      )}
+
+      {displayDuplications && (
+        <LineDuplicationBlock
+          blocksLoaded={blocksLoaded}
+          duplicated={!blocksLoaded ? Boolean(line.duplicated) : duplications.includes(0)}
+          index={0}
+          key={0}
+          line={line}
+          onClick={props.loadDuplications}
+          renderDuplicationPopup={props.renderDuplicationPopup}
+        />
+      )}
+
+      {blocksLoaded &&
+        times(duplicationsCount - 1, (index) => {
+          return (
             <LineDuplicationBlock
-              blocksLoaded={true}
+              blocksLoaded={blocksLoaded}
               duplicated={duplications.includes(index + 1)}
               index={index + 1}
               key={index + 1}
-              line={this.props.line}
-              renderDuplicationPopup={this.props.renderDuplicationPopup}
+              line={line}
+              renderDuplicationPopup={props.renderDuplicationPopup}
             />
-          ))}
+          );
+        })}
 
-        {displayCoverage && (
-          <LineCoverage
-            line={line}
-            scroll={this.props.scroll}
-            scrollToUncoveredLine={scrollToUncoveredLine}
-          />
-        )}
-
-        <LineCode
-          branchLike={branchLike}
-          displayIssueLocationsCount={displayIssueLocationsCount}
-          displayIssueLocationsLink={displayIssueLocationsLink}
-          displayLocationMarkers={displayLocationMarkers}
-          highlightedLocationMessage={highlightedLocationMessage}
-          highlightedSymbols={highlightedSymbols}
-          issueLocations={issueLocations}
-          issuePopup={issuePopup}
-          issues={issues}
-          line={line}
-          onIssueChange={this.props.onIssueChange}
-          onIssuePopupToggle={this.props.onIssuePopupToggle}
-          onIssueSelect={this.props.onIssueSelect}
-          onLocationSelect={this.props.onLocationSelect}
-          onSymbolClick={this.props.onSymbolClick}
-          padding={bottomPadding}
-          scroll={this.props.scroll}
-          secondaryIssueLocations={secondaryIssueLocations}
-          selectedIssue={selectedIssue}
-          showIssues={openIssues || displayAllIssues}
+      {displayCoverage && (
+        <LineCoverage
+          lineNumber={line.line}
+          scrollToUncoveredLine={scrollToUncoveredLine}
+          status={status}
+          coverageStatus={line.coverageStatus}
         />
-      </tr>
-    );
-  }
+      )}
+
+      <LineCode
+        displayCoverageUnderline={displayCoverage && displayCoverageUnderline}
+        displayLocationMarkers={displayLocationMarkers}
+        displayNewCodeUnderlineLabel={displayNewCodeUnderline}
+        hideLocationIndex={hideLocationIndex}
+        highlightedLocationMessage={highlightedLocationMessage}
+        highlightedSymbols={highlightedSymbols}
+        issueLocations={issueLocations}
+        line={line}
+        onLocationSelect={props.onLocationSelect}
+        onSymbolClick={props.onSymbolClick}
+        previousLine={previousLine}
+        secondaryIssueLocations={secondaryIssueLocations}
+      >
+        {children}
+      </LineCode>
+    </LineWrapper>
+  );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,8 +20,10 @@
 package org.sonar.server.almintegration.ws;
 
 import org.sonar.alm.client.azure.AzureDevOpsHttpClient;
+import org.sonar.alm.client.bitbucket.bitbucketcloud.BitbucketCloudRestClient;
 import org.sonar.alm.client.bitbucketserver.BitbucketServerRestClient;
-import org.sonar.alm.client.gitlab.GitlabHttpClient;
+import org.sonar.alm.client.gitlab.GitlabApplicationClient;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
@@ -38,40 +40,46 @@ import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 public class CheckPatAction implements AlmIntegrationsWsAction {
 
   private static final String PARAM_ALM_SETTING = "almSetting";
+  private static final String APP_PASSWORD_CANNOT_BE_NULL = "App Password and Username cannot be null";
   private static final String PAT_CANNOT_BE_NULL = "PAT cannot be null";
   private static final String URL_CANNOT_BE_NULL = "URL cannot be null";
+  private static final String WORKSPACE_CANNOT_BE_NULL = "Workspace cannot be null";
 
   private final DbClient dbClient;
   private final UserSession userSession;
   private final AzureDevOpsHttpClient azureDevOpsHttpClient;
+  private final BitbucketCloudRestClient bitbucketCloudRestClient;
   private final BitbucketServerRestClient bitbucketServerRestClient;
-  private final GitlabHttpClient gitlabHttpClient;
+  private final GitlabApplicationClient gitlabApplicationClient;
 
   public CheckPatAction(DbClient dbClient, UserSession userSession,
     AzureDevOpsHttpClient azureDevOpsHttpClient,
+    BitbucketCloudRestClient bitbucketCloudRestClient,
     BitbucketServerRestClient bitbucketServerRestClient,
-    GitlabHttpClient gitlabHttpClient) {
+    GitlabApplicationClient gitlabApplicationClient) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.azureDevOpsHttpClient = azureDevOpsHttpClient;
+    this.bitbucketCloudRestClient = bitbucketCloudRestClient;
     this.bitbucketServerRestClient = bitbucketServerRestClient;
-    this.gitlabHttpClient = gitlabHttpClient;
+    this.gitlabApplicationClient = gitlabApplicationClient;
   }
 
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("check_pat")
-      .setDescription("Check validity of a Personal Access Token for the given ALM setting<br/>" +
+      .setDescription("Check validity of a Personal Access Token for the given DevOps Platform setting<br/>" +
         "Requires the 'Create Projects' permission")
       .setPost(false)
       .setInternal(true)
       .setSince("8.2")
-      .setHandler(this);
+      .setHandler(this)
+      .setChangelog(new Change("9.0", "Bitbucket Cloud support was added"));
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
   }
 
   @Override
@@ -87,7 +95,7 @@ public class CheckPatAction implements AlmIntegrationsWsAction {
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       String userUuid = requireNonNull(userSession.getUuid(), "User cannot be null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
 
       AlmPatDto almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto)
         .orElseThrow(() -> new IllegalArgumentException(String.format("personal access token for '%s' is missing", almSettingKey)));
@@ -105,14 +113,19 @@ public class CheckPatAction implements AlmIntegrationsWsAction {
             requireNonNull(almPatDto.getPersonalAccessToken(), PAT_CANNOT_BE_NULL));
           break;
         case GITLAB:
-          gitlabHttpClient.searchProjects(
+          gitlabApplicationClient.searchProjects(
             requireNonNull(almSettingDto.getUrl(), URL_CANNOT_BE_NULL),
             requireNonNull(almPatDto.getPersonalAccessToken(), PAT_CANNOT_BE_NULL),
-            null, 1, 10);
+            null, null, null);
+          break;
+        case BITBUCKET_CLOUD:
+          bitbucketCloudRestClient.validateAppPassword(
+            requireNonNull(almPatDto.getPersonalAccessToken(), APP_PASSWORD_CANNOT_BE_NULL),
+            requireNonNull(almSettingDto.getAppId(), WORKSPACE_CANNOT_BE_NULL));
           break;
         case GITHUB:
         default:
-          throw new IllegalArgumentException(String.format("unsupported ALM %s", almSettingDto.getAlm()));
+          throw new IllegalArgumentException(String.format("unsupported DevOps Platform %s", almSettingDto.getAlm()));
       }
 
     }

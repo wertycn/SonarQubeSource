@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,16 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Dict, Paging, Rule, RuleActivation } from './types';
+
+export interface RuleRepository {
+  key: string;
+  language: string;
+  name: string;
+}
+
 export interface GetRulesAppResponse {
   canWrite?: boolean;
-  repositories: { key: string; language: string; name: string }[];
+  repositories: RuleRepository[];
 }
 
 export interface SearchRulesResponse {
-  actives?: T.Dict<T.RuleActivation[]>;
+  actives?: Dict<RuleActivation[]>;
   facets?: { property: string; values: { count: number; val: string }[] }[];
-  p: number;
-  ps: number;
-  rules: T.Rule[];
-  total: number;
+  rules: Rule[];
+  paging: Paging;
 }

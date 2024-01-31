@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,8 +22,9 @@ package org.sonar.server.authentication;
 import java.util.Arrays;
 import java.util.Optional;
 import javax.annotation.Nullable;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
+import org.sonar.api.server.http.Cookie;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.server.http.JavaxHttpRequest.JavaxCookie;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.requireNonNull;
@@ -34,6 +35,8 @@ import static java.util.Objects.requireNonNull;
  * The {@link javax.servlet.http.Cookie#setSecure(boolean)} will automatically be set to true.
  */
 public class Cookies {
+  public static final String SET_COOKIE = "Set-Cookie";
+  public static final String SAMESITE_LAX = "Lax";
 
   private static final String HTTPS_HEADER = "X-Forwarded-Proto";
   private static final String HTTPS_VALUE = "https";
@@ -42,7 +45,7 @@ public class Cookies {
     // Only static methods
   }
 
-  public static Optional<Cookie> findCookie(String cookieName, HttpServletRequest request) {
+  public static Optional<Cookie> findCookie(String cookieName, HttpRequest request) {
     Cookie[] cookies = request.getCookies();
     if (cookies == null) {
       return Optional.empty();
@@ -52,20 +55,22 @@ public class Cookies {
       .findFirst();
   }
 
-  public static CookieBuilder newCookieBuilder(HttpServletRequest request) {
+  public static CookieBuilder newCookieBuilder(HttpRequest request) {
     return new CookieBuilder(request);
   }
 
   public static class CookieBuilder {
 
-    private final HttpServletRequest request;
+    private final HttpRequest request;
 
     private String name;
     private String value;
     private boolean httpOnly;
     private int expiry;
 
-    CookieBuilder(HttpServletRequest request) {
+    private String sameSite;
+
+    CookieBuilder(HttpRequest request) {
       this.request = request;
     }
 
@@ -86,6 +91,14 @@ public class Cookies {
     }
 
     /**
+     * SameSite attribute, only work for toString()
+     */
+    public CookieBuilder setSameSite(@Nullable String sameSite) {
+      this.sameSite = sameSite;
+      return this;
+    }
+
+    /**
      * Sets the flag that controls if this cookie will be hidden from scripts on the client side.
      */
     public CookieBuilder setHttpOnly(boolean httpOnly) {
@@ -102,19 +115,30 @@ public class Cookies {
     }
 
     public Cookie build() {
-      Cookie cookie = new Cookie(requireNonNull(name), value);
+      javax.servlet.http.Cookie cookie = new javax.servlet.http.Cookie(requireNonNull(name), value);
       cookie.setPath(getContextPath(request));
       cookie.setSecure(isHttps(request));
       cookie.setHttpOnly(httpOnly);
       cookie.setMaxAge(expiry);
-      return cookie;
+      return new JavaxCookie(cookie);
     }
 
-    private static boolean isHttps(HttpServletRequest request) {
+    public String toValueString() {
+      String output = String.format("%s=%s; Path=%s; SameSite=%s; Max-Age=%d", name, value, getContextPath(request), sameSite, expiry);
+      if (httpOnly) {
+        output += "; HttpOnly";
+      }
+      if (isHttps(request)) {
+        output += "; Secure";
+      }
+      return output;
+    }
+
+    private static boolean isHttps(HttpRequest request) {
       return HTTPS_VALUE.equalsIgnoreCase(request.getHeader(HTTPS_HEADER));
     }
 
-    private static String getContextPath(HttpServletRequest request) {
+    private static String getContextPath(HttpRequest request) {
       String path = request.getContextPath();
       return isNullOrEmpty(path) ? "/" : path;
     }

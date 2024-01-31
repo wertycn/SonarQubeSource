@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,6 +25,7 @@ import org.sonar.core.platform.PluginRepository;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,11 +44,12 @@ public class InstalledPluginReferentialFactoryTest {
     assertThat(factory.getInstalledPluginReferential().getPlugins()).hasSize(1);
   }
 
-  @Test(expected = RuntimeException.class)
+  @Test
   public void should_encapsulate_exception() {
     PluginRepository pluginRepository = mock(PluginRepository.class);
     when(pluginRepository.getPluginInfos()).thenThrow(new IllegalArgumentException());
     InstalledPluginReferentialFactory factory = new InstalledPluginReferentialFactory(pluginRepository);
-    factory.start();
+    assertThatThrownBy(factory::start)
+      .isInstanceOf(RuntimeException.class);
   }
 }

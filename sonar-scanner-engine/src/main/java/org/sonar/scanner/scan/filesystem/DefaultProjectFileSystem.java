@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,16 @@
  */
 package org.sonar.scanner.scan.filesystem;
 
-import org.sonar.api.batch.fs.internal.DefaultFileSystem;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
 import org.sonar.api.batch.fs.internal.predicates.DefaultFilePredicates;
 
-public class DefaultProjectFileSystem extends DefaultFileSystem {
+import javax.annotation.Priority;
+import javax.inject.Inject;
 
+@Priority(2)
+public class DefaultProjectFileSystem extends MutableFileSystem {
+
+  @Inject
   public DefaultProjectFileSystem(InputComponentStore inputComponentStore, DefaultInputProject project) {
     super(project.getBaseDir(), inputComponentStore, new DefaultFilePredicates(project.getBaseDir()));
     setFields(project);

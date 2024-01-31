@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.platform.web;
 
-import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
@@ -32,16 +31,15 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.sonar.core.util.stream.MoreCollectors;
 
 import static java.lang.String.format;
 
 public class RedirectFilter implements Filter {
-
   private static final String EMPTY = "";
 
-  private static final List<Redirect> REDIRECTS = ImmutableList.of(
-    newSimpleRedirect("/api", "/api/webservices/list"));
+  private static final List<Redirect> REDIRECTS = List.of(
+    newSimpleRedirect("/api", "/api/webservices/list")
+  );
 
   @Override
   public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain chain) throws IOException, ServletException {
@@ -51,7 +49,7 @@ public class RedirectFilter implements Filter {
     Predicate<Redirect> match = redirect -> redirect.test(path);
     List<Redirect> redirects = REDIRECTS.stream()
       .filter(match)
-      .collect(MoreCollectors.toList());
+      .toList();
 
     switch (redirects.size()) {
       case 0:

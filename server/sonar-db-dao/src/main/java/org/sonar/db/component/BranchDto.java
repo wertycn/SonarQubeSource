@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,7 @@ import org.sonar.db.protobuf.DbProjectBranches;
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class BranchDto {
-  public static final String DEFAULT_MAIN_BRANCH_NAME = "master";
+  public static final String DEFAULT_MAIN_BRANCH_NAME = "main";
 
   /**
    * Maximum length of column "kee"
@@ -86,6 +86,8 @@ public class BranchDto {
 
   private boolean needIssueSync = false;
 
+  private Boolean isMain;
+
   public String getUuid() {
     return uuid;
   }
@@ -105,7 +107,12 @@ public class BranchDto {
   }
 
   public boolean isMain() {
-    return projectUuid.equals(uuid);
+    return isMain;
+  }
+
+  public BranchDto setIsMain(boolean isMain) {
+    this.isMain = isMain;
+    return this;
   }
 
   /**
@@ -200,6 +207,16 @@ public class BranchDto {
     return this;
   }
 
+  @CheckForNull
+  public String getBranchKey() {
+    return branchType == BranchType.BRANCH ? kee : null;
+  }
+
+  @CheckForNull
+  public String getPullRequestKey() {
+    return branchType == BranchType.PULL_REQUEST ? kee : null;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -211,6 +228,7 @@ public class BranchDto {
     BranchDto branchDto = (BranchDto) o;
     return Objects.equals(uuid, branchDto.uuid) &&
       Objects.equals(projectUuid, branchDto.projectUuid) &&
+      Objects.equals(isMain, branchDto.isMain) &&
       Objects.equals(kee, branchDto.kee) &&
       branchType == branchDto.branchType &&
       Objects.equals(mergeBranchUuid, branchDto.mergeBranchUuid) &&
@@ -219,7 +237,7 @@ public class BranchDto {
 
   @Override
   public int hashCode() {
-    return Objects.hash(uuid, projectUuid, kee, branchType, mergeBranchUuid, needIssueSync);
+    return Objects.hash(uuid, projectUuid, isMain, kee, branchType, mergeBranchUuid, needIssueSync);
   }
 
   @Override
@@ -227,6 +245,7 @@ public class BranchDto {
     return "BranchDto{" +
       "uuid='" + uuid + '\'' +
       ", projectUuid='" + projectUuid + '\'' +
+      ", isMain='" + isMain + '\'' +
       ", kee='" + kee + '\'' +
       ", branchType=" + branchType +
       ", mergeBranchUuid='" + mergeBranchUuid + '\'' +

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,18 @@
  */
 package org.sonar.db.ce;
 
-import java.util.HashSet;
 import java.util.Set;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.unmodifiableSet;
+import static org.sonar.core.ce.CeTaskCharacteristics.BRANCH;
+import static org.sonar.core.ce.CeTaskCharacteristics.BRANCH_TYPE;
+import static org.sonar.core.ce.CeTaskCharacteristics.DEVOPS_PLATFORM_PROJECT_IDENTIFIER;
+import static org.sonar.core.ce.CeTaskCharacteristics.DEVOPS_PLATFORM_URL;
+import static org.sonar.core.ce.CeTaskCharacteristics.PULL_REQUEST;
 
 public class CeTaskCharacteristicDto {
 
-  public static final String BRANCH_KEY = "branch";
-  public static final String BRANCH_TYPE_KEY = "branchType";
-  public static final String PULL_REQUEST = "pullRequest";
-  public static final Set<String> SUPPORTED_KEYS = unmodifiableSet(new HashSet<>(asList(BRANCH_KEY, BRANCH_TYPE_KEY, PULL_REQUEST)));
+
+  public static final Set<String> SUPPORTED_KEYS = Set.of(BRANCH, BRANCH_TYPE, PULL_REQUEST, DEVOPS_PLATFORM_URL, DEVOPS_PLATFORM_PROJECT_IDENTIFIER);
 
   private String uuid;
   private String taskUuid;

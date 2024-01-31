@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,12 +29,12 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.sonar.api.rule.RuleKey;
@@ -62,6 +62,7 @@ import org.sonar.server.issue.notification.NewIssuesNotification.RuleDefinition;
 import static java.util.Collections.emptyMap;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -71,7 +72,6 @@ import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.DIRECTORY;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.FILE;
 import static org.sonar.ce.task.projectanalysis.component.Component.Type.PROJECT;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 @RunWith(DataProviderRunner.class)
 public class NotificationFactoryTest {
@@ -81,41 +81,22 @@ public class NotificationFactoryTest {
   public RuleRepositoryRule ruleRepository = new RuleRepositoryRule();
   @Rule
   public AnalysisMetadataHolderRule analysisMetadata = new AnalysisMetadataHolderRule();
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
-  private Durations durations = new Durations();
   private IssuesChangesNotificationSerializer issuesChangesSerializer = mock(IssuesChangesNotificationSerializer.class);
-  private NotificationFactory underTest = new NotificationFactory(treeRootHolder, analysisMetadata, ruleRepository, durations, issuesChangesSerializer);
+  private NotificationFactory underTest = new NotificationFactory(treeRootHolder, analysisMetadata, ruleRepository, issuesChangesSerializer);
 
   @Test
   public void newMyNewIssuesNotification_throws_NPE_if_assigneesByUuid_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("assigneesByUuid can't be null");
-
-    underTest.newMyNewIssuesNotification(null);
+    assertThatThrownBy(() -> underTest.newMyNewIssuesNotification(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("assigneesByUuid can't be null");
   }
 
   @Test
   public void newNewIssuesNotification_throws_NPE_if_assigneesByUuid_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("assigneesByUuid can't be null");
-
-    underTest.newNewIssuesNotification(null);
-  }
-
-  @Test
-  public void newMyNewIssuesNotification_returns_MyNewIssuesNotification_object_with_the_constructor_Durations() {
-    MyNewIssuesNotification notification = underTest.newMyNewIssuesNotification(emptyMap());
-
-    assertThat(readDurationsField(notification)).isSameAs(durations);
-  }
-
-  @Test
-  public void newNewIssuesNotification_returns_NewIssuesNotification_object_with_the_constructor_Durations() {
-    NewIssuesNotification notification = underTest.newNewIssuesNotification(emptyMap());
-
-    assertThat(readDurationsField(notification)).isSameAs(durations);
+    assertThatThrownBy(() -> underTest.newNewIssuesNotification(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("assigneesByUuid can't be null");
   }
 
   @Test
@@ -124,10 +105,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("uuid can't be null");
-
-    detailsSupplier.getUserNameByUuid(null);
+    assertThatThrownBy(() -> detailsSupplier.getUserNameByUuid(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("uuid can't be null");
   }
 
   @Test
@@ -145,7 +125,7 @@ public class NotificationFactoryTest {
       .collect(Collectors.toSet());
 
     MyNewIssuesNotification underTest = this.underTest.newMyNewIssuesNotification(
-      users.stream().collect(uniqueIndex(UserDto::getUuid)));
+      users.stream().collect(Collectors.toMap(UserDto::getUuid, Function.identity())));
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
     assertThat(detailsSupplier.getUserNameByUuid("foo")).isEmpty();
@@ -169,10 +149,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("uuid can't be null");
-
-    detailsSupplier.getUserNameByUuid(null);
+    assertThatThrownBy(() -> detailsSupplier.getUserNameByUuid(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("uuid can't be null");
   }
 
   @Test
@@ -190,7 +169,7 @@ public class NotificationFactoryTest {
       .collect(Collectors.toSet());
 
     NewIssuesNotification underTest = this.underTest.newNewIssuesNotification(
-      users.stream().collect(uniqueIndex(UserDto::getUuid)));
+      users.stream().collect(Collectors.toMap(UserDto::getUuid, Function.identity())));
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
     assertThat(detailsSupplier.getUserNameByUuid("foo")).isEmpty();
@@ -214,10 +193,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Holder has not been initialized yet");
-
-    detailsSupplier.getComponentNameByUuid("foo");
+    assertThatThrownBy(() -> detailsSupplier.getComponentNameByUuid("foo"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Holder has not been initialized yet");
   }
 
   @Test
@@ -228,10 +206,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("uuid can't be null");
-
-    detailsSupplier.getComponentNameByUuid(null);
+    assertThatThrownBy(() -> detailsSupplier.getComponentNameByUuid(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("uuid can't be null");
   }
 
   @Test
@@ -275,10 +252,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Holder has not been initialized yet");
-
-    detailsSupplier.getComponentNameByUuid("foo");
+    assertThatThrownBy(() -> detailsSupplier.getComponentNameByUuid("foo"))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Holder has not been initialized yet");
   }
 
   @Test
@@ -288,10 +264,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("uuid can't be null");
-
-    detailsSupplier.getComponentNameByUuid(null);
+    assertThatThrownBy(() -> detailsSupplier.getComponentNameByUuid(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("uuid can't be null");
   }
 
   @Test
@@ -336,10 +311,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("ruleKey can't be null");
-
-    detailsSupplier.getRuleDefinitionByRuleKey(null);
+    assertThatThrownBy(() -> detailsSupplier.getRuleDefinitionByRuleKey(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("ruleKey can't be null");
   }
 
   @Test
@@ -381,10 +355,9 @@ public class NotificationFactoryTest {
 
     DetailsSupplier detailsSupplier = readDetailsSupplier(underTest);
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("ruleKey can't be null");
-
-    detailsSupplier.getRuleDefinitionByRuleKey(null);
+    assertThatThrownBy(() -> detailsSupplier.getRuleDefinitionByRuleKey(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("ruleKey can't be null");
   }
 
   @Test
@@ -427,10 +400,9 @@ public class NotificationFactoryTest {
       .collect(Collectors.toSet());
     Map<String, UserDto> assigneesByUuid = nonEmptyAssigneesByUuid();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Analysis date has not been set");
-
-    underTest.newIssuesChangesNotification(issues, assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(issues, assigneesByUuid))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Analysis date has not been set");
   }
 
   @Test
@@ -438,10 +410,9 @@ public class NotificationFactoryTest {
     analysisMetadata.setAnalysisDate(new Random().nextLong());
     Map<String, UserDto> assigneesByUuid = nonEmptyAssigneesByUuid();
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("issues can't be empty");
-
-    underTest.newIssuesChangesNotification(Collections.emptySet(), assigneesByUuid);
+    assertThatThrownBy(() ->  underTest.newIssuesChangesNotification(Collections.emptySet(), assigneesByUuid))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("issues can't be empty");
   }
 
   @Test
@@ -450,9 +421,8 @@ public class NotificationFactoryTest {
     Map<String, UserDto> assigneesByUuid = nonEmptyAssigneesByUuid();
     analysisMetadata.setAnalysisDate(new Random().nextLong());
 
-    expectedException.expect(NullPointerException.class);
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
@@ -463,10 +433,9 @@ public class NotificationFactoryTest {
     Map<String, UserDto> assigneesByUuid = nonEmptyAssigneesByUuid();
     analysisMetadata.setAnalysisDate(new Random().nextLong());
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Can not find rule " + ruleKey + " in RuleRepository");
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Can not find rule " + ruleKey + " in RuleRepository");
   }
 
   @Test
@@ -478,10 +447,9 @@ public class NotificationFactoryTest {
     ruleRepository.add(ruleKey);
     analysisMetadata.setAnalysisDate(new Random().nextLong());
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Holder has not been initialized yet");
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Holder has not been initialized yet");
   }
 
   @Test
@@ -494,10 +462,9 @@ public class NotificationFactoryTest {
     analysisMetadata.setAnalysisDate(new Random().nextLong());
     treeRootHolder.setRoot(ReportComponent.builder(PROJECT, 1).build());
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Branch has not been set");
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Branch has not been set");
   }
 
   @Test
@@ -511,10 +478,9 @@ public class NotificationFactoryTest {
     analysisMetadata.setAnalysisDate(new Random().nextLong());
     analysisMetadata.setBranch(mock(Branch.class));
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("key can't be null");
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("key can't be null");
   }
 
   @Test
@@ -529,10 +495,9 @@ public class NotificationFactoryTest {
     analysisMetadata.setAnalysisDate(new Random().nextLong());
     analysisMetadata.setBranch(mock(Branch.class));
 
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("newStatus can't be null");
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() -> underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("newStatus can't be null");
   }
 
   @Test
@@ -652,10 +617,9 @@ public class NotificationFactoryTest {
     analysisMetadata.setAnalysisDate(new Random().nextLong());
     analysisMetadata.setBranch(newNonMainBranch(BranchType.BRANCH, randomAlphabetic(12)));
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Can not find DTO for assignee uuid " + assigneeUuid);
-
-    underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid);
+    assertThatThrownBy(() ->  underTest.newIssuesChangesNotification(ImmutableSet.of(issue), assigneesByUuid))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Can not find DTO for assignee uuid " + assigneeUuid);
   }
 
   @Test
@@ -743,12 +707,11 @@ public class NotificationFactoryTest {
     IssuesChangesNotificationBuilder builder = verifyAndCaptureIssueChangeNotificationBuilder();
     assertThat(builder.getIssues()).hasSize(issues.size());
     Map<String, ChangedIssue> changedIssuesByKey = builder.getIssues().stream()
-      .collect(uniqueIndex(ChangedIssue::getKey));
+      .collect(Collectors.toMap(ChangedIssue::getKey, Function.identity()));
     issues.forEach(
       issue -> {
         ChangedIssue changedIssue = changedIssuesByKey.get(issue.key());
         assertThat(changedIssue.getNewStatus()).isEqualTo(issue.status());
-        assertThat(changedIssue.getNewResolution()).isEmpty();
         assertThat(changedIssue.getAssignee()).isEmpty();
         assertThat(changedIssue.getRule().getKey()).isEqualTo(issue.ruleKey());
         assertThat(changedIssue.getRule().getName()).isEqualTo(ruleRepository.getByKey(issue.ruleKey()).getName());
@@ -758,7 +721,7 @@ public class NotificationFactoryTest {
   private static Map<String, UserDto> nonEmptyAssigneesByUuid() {
     return IntStream.range(0, 1 + new Random().nextInt(3))
       .boxed()
-      .collect(uniqueIndex(i -> "uuid_" + i, i -> new UserDto()));
+      .collect(Collectors.toMap(i -> "uuid_" + i, i1 -> new UserDto()));
   }
 
   private IssuesChangesNotificationBuilder verifyAndCaptureIssueChangeNotificationBuilder() {

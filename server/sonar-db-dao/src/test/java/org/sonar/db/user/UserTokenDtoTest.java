@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,21 +19,32 @@
  */
 package org.sonar.db.user;
 
-import org.junit.Rule;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class UserTokenDtoTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void fail_if_token_hash_is_longer_than_255_characters() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Token hash length (256) is longer than the maximum authorized (255)");
-
-    new UserTokenDto().setTokenHash(randomAlphabetic(256));
+    assertThatThrownBy(() -> new UserTokenDto().setTokenHash(randomAlphabetic(256)))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Token hash length (256) is longer than the maximum authorized (255)");
   }
+
+  @Test
+  public void token_isExpired_is_properly_calculated() {
+    UserTokenDto tokenWithNoExpirationDate =  new UserTokenDto();
+    UserTokenDto expiredToken =  new UserTokenDto().setExpirationDate(0L);
+    UserTokenDto nonExpiredToken =  new UserTokenDto().setExpirationDate(ZonedDateTime.now(ZoneId.systemDefault()).plusDays(10).toInstant().toEpochMilli());
+
+    assertThat(tokenWithNoExpirationDate.isExpired()).isFalse();
+    assertThat(expiredToken.isExpired()).isTrue();
+    assertThat(nonExpiredToken.isExpired()).isFalse();
+  }
+
 }

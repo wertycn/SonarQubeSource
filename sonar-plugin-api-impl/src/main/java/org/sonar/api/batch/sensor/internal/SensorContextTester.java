@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Stream;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.SonarQubeSide;
@@ -48,6 +47,8 @@ import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.rule.internal.ActiveRulesBuilder;
 import org.sonar.api.batch.sensor.Sensor;
 import org.sonar.api.batch.sensor.SensorContext;
+import org.sonar.api.batch.sensor.cache.ReadCache;
+import org.sonar.api.batch.sensor.cache.WriteCache;
 import org.sonar.api.batch.sensor.code.NewSignificantCode;
 import org.sonar.api.batch.sensor.code.internal.DefaultSignificantCode;
 import org.sonar.api.batch.sensor.coverage.NewCoverage;
@@ -111,7 +112,11 @@ public class SensorContextTester implements SensorContext {
   private DefaultInputProject project;
   private DefaultInputModule module;
   private SonarRuntime runtime;
+  private ReadCache readCache;
+  private WriteCache writeCache;
+  private boolean canSkipUnchangedFiles;
   private boolean cancelled;
+  private boolean cacheEnabled = false;
 
   private SensorContextTester(Path moduleBaseDir) {
     this.settings = new MapSettings();
@@ -120,7 +125,7 @@ public class SensorContextTester implements SensorContext {
     this.sensorStorage = new InMemorySensorStorage();
     this.project = new DefaultInputProject(ProjectDefinition.create().setKey("projectKey").setBaseDir(moduleBaseDir.toFile()).setWorkDir(moduleBaseDir.resolve(".sonar").toFile()));
     this.module = new DefaultInputModule(ProjectDefinition.create().setKey("projectKey").setBaseDir(moduleBaseDir.toFile()).setWorkDir(moduleBaseDir.resolve(".sonar").toFile()));
-    this.runtime = SonarRuntimeImpl.forSonarQube(MetadataLoader.loadVersion(System2.INSTANCE), SonarQubeSide.SCANNER, MetadataLoader.loadEdition(System2.INSTANCE));
+    this.runtime = SonarRuntimeImpl.forSonarQube(MetadataLoader.loadApiVersion(System2.INSTANCE), SonarQubeSide.SCANNER, MetadataLoader.loadEdition(System2.INSTANCE));
   }
 
   public static SensorContextTester create(File moduleBaseDir) {
@@ -199,6 +204,16 @@ public class SensorContextTester implements SensorContext {
   }
 
   @Override
+  public boolean canSkipUnchangedFiles() {
+    return canSkipUnchangedFiles;
+  }
+
+  public SensorContextTester setCanSkipUnchangedFiles(boolean canSkipUnchangedFiles) {
+    this.canSkipUnchangedFiles = canSkipUnchangedFiles;
+    return this;
+  }
+
+  @Override
   public InputModule module() {
     return module;
   }
@@ -260,7 +275,6 @@ public class SensorContextTester implements SensorContext {
   public Integer lineHits(String fileKey, int line) {
     return sensorStorage.coverageByComponent.getOrDefault(fileKey, Collections.emptyList()).stream()
       .map(c -> c.hitsByLine().get(line))
-      .flatMap(Stream::of)
       .filter(Objects::nonNull)
       .reduce(null, SensorContextTester::sumOrNull);
   }
@@ -274,7 +288,6 @@ public class SensorContextTester implements SensorContext {
   public Integer conditions(String fileKey, int line) {
     return sensorStorage.coverageByComponent.getOrDefault(fileKey, Collections.emptyList()).stream()
       .map(c -> c.conditionsByLine().get(line))
-      .flatMap(Stream::of)
       .filter(Objects::nonNull)
       .reduce(null, SensorContextTester::maxOrNull);
   }
@@ -283,7 +296,6 @@ public class SensorContextTester implements SensorContext {
   public Integer coveredConditions(String fileKey, int line) {
     return sensorStorage.coverageByComponent.getOrDefault(fileKey, Collections.emptyList()).stream()
       .map(c -> c.coveredConditionsByLine().get(line))
-      .flatMap(Stream::of)
       .filter(Objects::nonNull)
       .reduce(null, SensorContextTester::maxOrNull);
   }
@@ -399,6 +411,38 @@ public class SensorContextTester implements SensorContext {
   public void markForPublishing(InputFile inputFile) {
     DefaultInputFile file = (DefaultInputFile) inputFile;
     file.setPublished(true);
+  }
+
+  @Override
+  public void markAsUnchanged(InputFile inputFile) {
+    ((DefaultInputFile) inputFile).setMarkedAsUnchanged(true);
+  }
+
+  @Override
+  public WriteCache nextCache() {
+    return writeCache;
+  }
+
+  public void setNextCache(WriteCache writeCache) {
+    this.writeCache = writeCache;
+  }
+
+  @Override
+  public ReadCache previousCache() {
+    return readCache;
+  }
+
+  public void setPreviousCache(ReadCache cache) {
+    this.readCache = cache;
+  }
+
+  @Override
+  public boolean isCacheEnabled() {
+    return cacheEnabled;
+  }
+
+  public void setCacheEnabled(boolean enabled) {
+    this.cacheEnabled = enabled;
   }
 
   @Override

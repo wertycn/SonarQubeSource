@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,37 +17,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+/* eslint-disable react/no-unused-prop-types */
+
+import { NumberedList, TutorialStep } from 'design-system';
 import * as React from 'react';
-import { FormattedMessage } from 'react-intl';
-import { Button, ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 import {
   AlmKeys,
   AlmSettingsInstance,
-  ProjectAlmBindingResponse
+  ProjectAlmBindingResponse,
 } from '../../../types/alm-settings';
-import Step from '../components/Step';
 import WebhookStepBitbucket from './WebhookStepBitbucket';
-import WebhookStepGithub from './WebhookStepGithub';
 import WebhookStepGitLab from './WebhookStepGitLab';
+import WebhookStepGithub from './WebhookStepGithub';
 
 export interface WebhookStepProps {
+  alm: AlmKeys;
   almBinding?: AlmSettingsInstance;
   branchesEnabled: boolean;
-  finished: boolean;
-  onDone: () => void;
-  onOpen: () => void;
-  open: boolean;
-  projectBinding: ProjectAlmBindingResponse;
+  projectBinding?: ProjectAlmBindingResponse;
 }
 
 function renderAlmSpecificInstructions(props: WebhookStepProps) {
-  const { almBinding, branchesEnabled, projectBinding } = props;
+  const { alm, almBinding, branchesEnabled, projectBinding } = props;
 
-  switch (projectBinding.alm) {
+  switch (alm) {
+    case AlmKeys.BitbucketCloud:
     case AlmKeys.BitbucketServer:
       return (
         <WebhookStepBitbucket
+          alm={alm}
           almBinding={almBinding}
           branchesEnabled={branchesEnabled}
           projectBinding={projectBinding}
@@ -72,34 +71,14 @@ function renderAlmSpecificInstructions(props: WebhookStepProps) {
 }
 
 export default function WebhookStep(props: WebhookStepProps) {
-  const { finished, open, projectBinding } = props;
+  const { alm } = props;
 
   return (
-    <Step
-      finished={finished}
-      onOpen={props.onOpen}
-      open={open}
-      renderForm={() => (
-        <div className="boxed-group-inner">
-          <p className="big-spacer-bottom">
-            <FormattedMessage
-              defaultMessage={translate('onboarding.tutorial.with.jenkins.webhook.intro.sentence')}
-              id="onboarding.tutorial.with.jenkins.webhook.intro.sentence"
-              values={{
-                link: (
-                  <ButtonLink onClick={props.onDone}>
-                    {translate('onboarding.tutorial.with.jenkins.webhook.intro.link')}
-                  </ButtonLink>
-                )
-              }}
-            />
-          </p>
-          <ol className="list-styled">{renderAlmSpecificInstructions(props)}</ol>
-          <Button onClick={props.onDone}>{translate('continue')}</Button>
-        </div>
-      )}
-      stepNumber={2}
-      stepTitle={translate('onboarding.tutorial.with.jenkins.webhook', projectBinding.alm, 'title')}
-    />
+    <TutorialStep title={translate('onboarding.tutorial.with.jenkins.webhook', alm, 'title')}>
+      <p className="sw-mb-4">
+        {translate('onboarding.tutorial.with.jenkins.webhook.intro.sentence')}
+      </p>
+      <NumberedList>{renderAlmSpecificInstructions(props)}</NumberedList>
+    </TutorialStep>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,57 +17,40 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
-import { shallow } from 'enzyme';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { fetchLanguages as realFetchLanguages } from '../../../store/rootActions';
+import { mockAppState } from '../../../helpers/testMocks';
+import { renderComponent } from '../../../helpers/testReactTestingUtils';
 import { App } from '../App';
 
-jest.mock('react-redux', () => ({
-  connect: jest.fn(() => (a: any) => a)
-}));
+it('should render correctly with gravatar', () => {
+  renderApp({
+    appState: mockAppState({
+      settings: {
+        'sonar.lf.enableGravatar': 'true',
+        'sonar.lf.gravatarServerUrl': 'http://example.com',
+      },
+    }),
+  });
 
-jest.mock('../../../store/rootReducer', () => ({
-  getGlobalSettingValue: jest.fn((_, key: string) => ({
-    value: key === 'sonar.lf.enableGravatar' ? 'true' : 'http://gravatar.com'
-  }))
-}));
-
-it('should render correctly', () => {
-  expect(shallowRender()).toMatchSnapshot('default');
-  expect(
-    shallowRender({ enableGravatar: true, gravatarServerUrl: 'http://example.com' })
-  ).toMatchSnapshot('with gravatar');
-});
-
-it('should correctly fetch available languages', () => {
-  const fetchLanguages = jest.fn();
-  shallowRender({ fetchLanguages });
-  expect(fetchLanguages).toBeCalled();
+  // eslint-disable-next-line testing-library/no-node-access
+  expect(document.head.querySelector('link')).toHaveAttribute('href', 'http://example.com');
 });
 
 it('should correctly set the scrollbar width as a custom property', () => {
-  shallowRender();
+  renderApp();
   expect(document.body.style.getPropertyValue('--sbw')).toBe('0px');
 });
 
-describe('redux', () => {
-  it('should correctly map state and dispatch props', () => {
-    const [mapStateToProps, mapDispatchToProps] = (connect as jest.Mock).mock.calls[0];
-
-    expect(mapStateToProps({})).toEqual({
-      enableGravatar: true,
-      gravatarServerUrl: 'http://gravatar.com'
-    });
-    expect(mapDispatchToProps).toEqual(
-      expect.objectContaining({ fetchLanguages: realFetchLanguages })
-    );
-  });
-});
-
-function shallowRender(props: Partial<App['props']> = {}) {
-  return shallow<App>(
-    <App fetchLanguages={jest.fn()} enableGravatar={false} gravatarServerUrl="" {...props} />
+function renderApp(props: Partial<App['props']> = {}) {
+  return renderComponent(
+    <App
+      appState={mockAppState({
+        settings: {
+          'sonar.lf.enableGravatar': 'false',
+          'sonar.lf.gravatarServerUrl': '',
+        },
+      })}
+      {...props}
+    />,
   );
 }

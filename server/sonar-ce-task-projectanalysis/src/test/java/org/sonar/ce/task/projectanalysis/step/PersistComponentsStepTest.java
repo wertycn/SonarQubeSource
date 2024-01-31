@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,8 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.utils.System2;
-import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.component.BranchPersister;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.MutableDisabledComponentsHolder;
@@ -36,15 +33,13 @@ import org.sonar.db.component.ComponentDao;
 
 import static java.util.Collections.emptyList;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 public class PersistComponentsStepTest {
-
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   @Test
   public void should_fail_if_project_is_not_stored_in_database_yet() {
@@ -55,20 +50,18 @@ public class PersistComponentsStepTest {
     String projectKey = randomAlphabetic(20);
 
     doReturn(component).when(treeRootHolder).getRoot();
-    doReturn(projectKey).when(component).getDbKey();
+    doReturn(projectKey).when(component).getKey();
     doReturn(componentDao).when(dbClient).componentDao();
-    doReturn(emptyList()).when(componentDao).selectAllComponentsFromProjectKey(any(DbSession.class), eq(projectKey));
+    doReturn(emptyList()).when(componentDao).selectByBranchUuid(eq(projectKey), any(DbSession.class));
 
-    thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("The project '" + projectKey + "' is not stored in the database, during a project analysis");
-
-    new PersistComponentsStep(
+    assertThatThrownBy(() -> new PersistComponentsStep(
       dbClient,
       treeRootHolder,
       System2.INSTANCE,
       mock(MutableDisabledComponentsHolder.class),
-      mock(AnalysisMetadataHolder.class),
       mock(BranchPersister.class),
-      mock(ProjectPersister.class)).execute(new TestComputationStepContext());
+      mock(ProjectPersister.class)).execute(new TestComputationStepContext()))
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessageContaining("The project '" + projectKey + "' is not stored in the database, during a project analysis");
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,10 @@
  */
 package org.sonar.scanner.protocol.viewer;
 
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -31,7 +34,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import javax.annotation.CheckForNull;
-import javax.swing.*;
+import javax.swing.JEditorPane;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTree;
+import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
@@ -41,6 +52,7 @@ import javax.swing.tree.TreeSelectionModel;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.core.util.CloseableIterator;
+import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.FileStructure.Domain;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.Changesets;
@@ -111,19 +123,15 @@ public class ScannerReportViewerApp {
    * Launch the application.
    */
   public static void main(String[] args) {
-    EventQueue.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          ScannerReportViewerApp window = new ScannerReportViewerApp();
-          window.frame.setVisible(true);
+    EventQueue.invokeLater(() -> {
+      try {
+        ScannerReportViewerApp window = new ScannerReportViewerApp();
+        window.frame.setVisible(true);
 
-          window.loadReport();
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
+        window.loadReport();
+      } catch (Exception e) {
+        e.printStackTrace();
       }
-
     });
   }
 
@@ -184,7 +192,8 @@ public class ScannerReportViewerApp {
   }
 
   private void loadReport(File file) {
-    reader = new ScannerReportReader(file);
+    FileStructure fileStructure = new FileStructure(file);
+    reader = new ScannerReportReader(fileStructure);
     metadata = reader.readMetadata();
     updateTitle();
     loadComponents();
@@ -651,14 +660,6 @@ public class ScannerReportViewerApp {
     return componentTree;
   }
 
-  /**
-   * @wbp.factory
-   */
-  public static JPanel createComponentPanel() {
-    JPanel panel = new JPanel();
-    return panel;
-  }
-
   protected JEditorPane getComponentEditor() {
     return componentEditor;
   }
@@ -667,15 +668,13 @@ public class ScannerReportViewerApp {
    * @wbp.factory
    */
   public static JEditorPane createSourceEditor() {
-    JEditorPane editorPane = new JEditorPane();
-    return editorPane;
+    return new JEditorPane();
   }
 
   /**
    * @wbp.factory
    */
   public TextLineNumber createTextLineNumber() {
-    TextLineNumber textLineNumber = new TextLineNumber(sourceEditor);
-    return textLineNumber;
+    return new TextLineNumber(sourceEditor);
   }
 }

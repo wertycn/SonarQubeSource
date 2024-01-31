@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,121 +17,91 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import styled from '@emotion/styled';
+import classNames from 'classnames';
 import { isEqual } from 'date-fns';
-import { throttle } from 'lodash';
+import { Badge, HelperHintIcon, LightLabel, Spinner, themeColor } from 'design-system';
 import * as React from 'react';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import DateFormatter from 'sonar-ui-common/components/intl/DateFormatter';
-import { toShortNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import Tooltip from '../../../components/controls/Tooltip';
+import DateFormatter from '../../../components/intl/DateFormatter';
+import { toShortISO8601String } from '../../../helpers/dates';
+import { translate } from '../../../helpers/l10n';
+
 import { ComponentQualifier } from '../../../types/component';
-import { activityQueryChanged, getAnalysesByVersionByDay, Query } from '../utils';
-import ProjectActivityAnalysis from './ProjectActivityAnalysis';
+import { ParsedAnalysis } from '../../../types/project-activity';
+import { AnalysesByDay, Query, activityQueryChanged, getAnalysesByVersionByDay } from '../utils';
+import ProjectActivityAnalysis, { BaselineMarker } from './ProjectActivityAnalysis';
 
 interface Props {
-  addCustomEvent: (analysis: string, name: string, category?: string) => Promise<void>;
-  addVersion: (analysis: string, version: string) => Promise<void>;
-  analyses: T.ParsedAnalysis[];
+  onAddCustomEvent: (analysis: string, name: string, category?: string) => Promise<void>;
+  onAddVersion: (analysis: string, version: string) => Promise<void>;
+  analyses: ParsedAnalysis[];
   analysesLoading: boolean;
   canAdmin?: boolean;
   canDeleteAnalyses?: boolean;
-  changeEvent: (event: string, name: string) => Promise<void>;
-  deleteAnalysis: (analysis: string) => Promise<void>;
-  deleteEvent: (analysis: string, event: string) => Promise<void>;
+  onChangeEvent: (event: string, name: string) => Promise<void>;
+  onDeleteAnalysis: (analysis: string) => Promise<void>;
+  onDeleteEvent: (analysis: string, event: string) => Promise<void>;
   initializing: boolean;
   leakPeriodDate?: Date;
   project: { qualifier: string };
   query: Query;
-  updateQuery: (changes: Partial<Query>) => void;
+  onUpdateQuery: (changes: Partial<Query>) => void;
 }
 
+const LIST_MARGIN_TOP = 24;
+
 export default class ProjectActivityAnalysesList extends React.PureComponent<Props> {
-  analyses?: HTMLCollectionOf<HTMLElement>;
-  badges?: HTMLCollectionOf<HTMLElement>;
   scrollContainer?: HTMLUListElement | null;
 
-  constructor(props: Props) {
-    super(props);
-    this.handleScroll = throttle(this.handleScroll, 20);
-  }
-
-  componentDidMount() {
-    this.badges = document.getElementsByClassName(
-      'project-activity-version-badge'
-    ) as HTMLCollectionOf<HTMLElement>;
-    this.analyses = document.getElementsByClassName(
-      'project-activity-analysis'
-    ) as HTMLCollectionOf<HTMLElement>;
-  }
-
   componentDidUpdate(prevProps: Props) {
-    if (!this.scrollContainer) {
-      return;
-    }
-    if (activityQueryChanged(prevProps.query, this.props.query)) {
-      this.resetScrollTop(0, true);
+    const selectedDate = this.props.query.selectedDate
+      ? this.props.query.selectedDate.valueOf()
+      : null;
+
+    if (
+      this.scrollContainer &&
+      activityQueryChanged(prevProps.query, this.props.query) &&
+      !this.props.analyses.some(({ date }) => date.valueOf() === selectedDate)
+    ) {
+      this.scrollContainer.scrollTop = 0;
     }
   }
 
-  handleScroll = () => this.updateStickyBadges(true);
-
-  resetScrollTop = (newScrollTop: number, forceBadgeAlignement?: boolean) => {
-    if (this.scrollContainer) {
-      this.scrollContainer.scrollTop = newScrollTop;
-    }
-    if (this.badges) {
-      for (let i = 1; i < this.badges.length; i++) {
-        this.badges[i].removeAttribute('originOffsetTop');
-        this.badges[i].classList.remove('sticky');
-      }
-    }
-    this.updateStickyBadges(forceBadgeAlignement);
+  handleUpdateSelectedDate = (date: Date) => {
+    this.props.onUpdateQuery({ selectedDate: date });
   };
 
-  updateStickyBadges = (forceBadgeAlignement?: boolean) => {
-    if (!this.scrollContainer || !this.badges) {
-      return;
+  getNewCodePeriodStartKey(versionByDay: AnalysesByDay[]): {
+    firstNewCodeAnalysisKey: string | undefined;
+    baselineAnalysisKey: string | undefined;
+  } {
+    const { leakPeriodDate } = this.props;
+    if (!leakPeriodDate) {
+      return { firstNewCodeAnalysisKey: undefined, baselineAnalysisKey: undefined };
     }
-
-    const { scrollTop } = this.scrollContainer;
-    if (scrollTop == null) {
-      return;
-    }
-
-    let newScrollTop;
-    for (let i = 1; i < this.badges.length; i++) {
-      const badge = this.badges[i];
-      let originOffsetTop = badge.getAttribute('originOffsetTop');
-      if (originOffsetTop == null) {
-        // Set the originOffsetTop attribute, to avoid using getBoundingClientRect
-        originOffsetTop = String(badge.offsetTop);
-        badge.setAttribute('originOffsetTop', originOffsetTop);
-      }
-      if (Number(originOffsetTop) < scrollTop + 18 + i * 2) {
-        if (forceBadgeAlignement && !badge.classList.contains('sticky')) {
-          newScrollTop = originOffsetTop;
+    // In response, the first new code analysis comes before the baseline analysis
+    // This variable is to track the previous analysis and return when next is baseline analysis
+    let prevAnalysis;
+    for (const version of versionByDay) {
+      const days = Object.keys(version.byDay);
+      for (const day of days) {
+        for (const analysis of version.byDay[day]) {
+          if (isEqual(leakPeriodDate, analysis.date)) {
+            return {
+              firstNewCodeAnalysisKey: prevAnalysis?.key,
+              baselineAnalysisKey: analysis.key,
+            };
+          }
+          prevAnalysis = analysis;
         }
-        badge.classList.add('sticky');
-      } else {
-        badge.classList.remove('sticky');
       }
     }
 
-    if (forceBadgeAlignement && newScrollTop != null) {
-      this.scrollContainer.scrollTop = Number(newScrollTop) - 6;
-    }
-  };
-
-  updateSelectedDate = (date: Date) => {
-    this.props.updateQuery({ selectedDate: date });
-  };
-
-  shouldRenderBaselineMarker(analysis: T.ParsedAnalysis): boolean {
-    return Boolean(this.props.leakPeriodDate && isEqual(this.props.leakPeriodDate, analysis.date));
+    return { firstNewCodeAnalysisKey: undefined, baselineAnalysisKey: undefined };
   }
 
-  renderAnalysis(analysis: T.ParsedAnalysis) {
+  renderAnalysis(analysis: ParsedAnalysis, newCodeKey?: string) {
     const firstAnalysisKey = this.props.analyses[0].key;
 
     const selectedDate = this.props.query.selectedDate
@@ -140,39 +110,41 @@ export default class ProjectActivityAnalysesList extends React.PureComponent<Pro
 
     return (
       <ProjectActivityAnalysis
-        addCustomEvent={this.props.addCustomEvent}
-        addVersion={this.props.addVersion}
+        onAddCustomEvent={this.props.onAddCustomEvent}
+        onAddVersion={this.props.onAddVersion}
         analysis={analysis}
         canAdmin={this.props.canAdmin}
         canCreateVersion={this.props.project.qualifier === ComponentQualifier.Project}
         canDeleteAnalyses={this.props.canDeleteAnalyses}
-        changeEvent={this.props.changeEvent}
-        deleteAnalysis={this.props.deleteAnalysis}
-        deleteEvent={this.props.deleteEvent}
-        isBaseline={this.shouldRenderBaselineMarker(analysis)}
+        onChangeEvent={this.props.onChangeEvent}
+        onDeleteAnalysis={this.props.onDeleteAnalysis}
+        onDeleteEvent={this.props.onDeleteEvent}
+        isBaseline={analysis.key === newCodeKey}
         isFirst={analysis.key === firstAnalysisKey}
         key={analysis.key}
-        parentScrollContainer={this.scrollContainer}
         selected={analysis.date.valueOf() === selectedDate}
-        updateSelectedDate={this.updateSelectedDate}
+        onUpdateSelectedDate={this.handleUpdateSelectedDate}
       />
     );
   }
 
   render() {
     const byVersionByDay = getAnalysesByVersionByDay(this.props.analyses, this.props.query);
+    const newCodePeriod = this.getNewCodePeriodStartKey(byVersionByDay);
     const hasFilteredData =
       byVersionByDay.length > 1 ||
       (byVersionByDay.length === 1 && Object.keys(byVersionByDay[0].byDay).length > 0);
     if (this.props.analyses.length === 0 || !hasFilteredData) {
       return (
-        <div className="boxed-group-inner">
+        <div>
           {this.props.initializing ? (
-            <div className="text-center">
-              <i className="spinner" />
+            <div className="sw-p-4 sw-body-sm">
+              <Spinner />
             </div>
           ) : (
-            <span className="note">{translate('no_results')}</span>
+            <div className="sw-p-4 sw-body-sm">
+              <LightLabel>{translate('no_results')}</LightLabel>
+            </div>
           )}
         </div>
       );
@@ -180,40 +152,70 @@ export default class ProjectActivityAnalysesList extends React.PureComponent<Pro
 
     return (
       <ul
-        className="project-activity-versions-list"
-        onScroll={this.handleScroll}
-        ref={element => (this.scrollContainer = element)}
+        className="it__project-activity-versions-list sw-box-border sw-overflow-auto sw-grow sw-shrink-0 sw-py-0 sw-px-4"
+        ref={(element) => (this.scrollContainer = element)}
         style={{
-          paddingTop: this.props.project.qualifier === ComponentQualifier.Project ? 52 : undefined
-        }}>
+          height: 'calc(100vh - 250px)',
+          marginTop:
+            this.props.project.qualifier === ComponentQualifier.Project
+              ? LIST_MARGIN_TOP
+              : undefined,
+        }}
+      >
+        {newCodePeriod.baselineAnalysisKey !== undefined &&
+          newCodePeriod.firstNewCodeAnalysisKey === undefined && (
+            <BaselineMarker className="sw-body-sm sw-mb-2">
+              <span className="sw-py-1/2 sw-px-1">
+                {translate('project_activity.new_code_period_start')}
+              </span>
+              <Tooltip
+                overlay={translate('project_activity.new_code_period_start.help')}
+                placement="top"
+              >
+                <HelperHintIcon className="sw-ml-1" />
+              </Tooltip>
+            </BaselineMarker>
+          )}
+
         {byVersionByDay.map((version, idx) => {
           const days = Object.keys(version.byDay);
           if (days.length <= 0) {
             return null;
           }
+
           return (
             <li key={version.key || 'noversion'}>
               {version.version && (
-                <div className={classNames('project-activity-version-badge', { first: idx === 0 })}>
+                <VersionTagStyled
+                  className={classNames(
+                    'sw-sticky sw-top-0 sw-left-0 sw-pb-1 -sw-ml-4 sw-z-normal',
+                    {
+                      'sw-top-0 sw-pt-0': idx === 0,
+                    },
+                  )}
+                >
                   <Tooltip
                     mouseEnterDelay={0.5}
-                    overlay={`${translate('version')} ${version.version}`}>
-                    <span className="analysis-version">{version.version}</span>
+                    overlay={`${translate('version')} ${version.version}`}
+                  >
+                    <Badge className="sw-p-1">{version.version}</Badge>
                   </Tooltip>
-                </div>
+                </VersionTagStyled>
               )}
-              <ul className="project-activity-days-list">
-                {days.map(day => (
+              <ul className="it__project-activity-days-list">
+                {days.map((day) => (
                   <li
-                    className="project-activity-day"
-                    data-day={toShortNotSoISOString(Number(day))}
-                    key={day}>
-                    <div className="project-activity-date">
-                      <DateFormatter date={Number(day)} long={true} />
+                    className="it__project-activity-day sw-mt-1 sw-mb-4"
+                    data-day={toShortISO8601String(Number(day))}
+                    key={day}
+                  >
+                    <div className="sw-body-md-highlight sw-mb-3">
+                      <DateFormatter date={Number(day)} long />
                     </div>
-                    <ul className="project-activity-analyses-list">
-                      {version.byDay[day] != null &&
-                        version.byDay[day].map(analysis => this.renderAnalysis(analysis))}
+                    <ul className="it__project-activity-analyses-list">
+                      {version.byDay[day]?.map((analysis) =>
+                        this.renderAnalysis(analysis, newCodePeriod.firstNewCodeAnalysisKey),
+                      )}
                     </ul>
                   </li>
                 ))}
@@ -222,11 +224,15 @@ export default class ProjectActivityAnalysesList extends React.PureComponent<Pro
           );
         })}
         {this.props.analysesLoading && (
-          <li className="text-center">
-            <i className="spinner" />
+          <li className="sw-text-center">
+            <Spinner />
           </li>
         )}
       </ul>
     );
   }
 }
+
+const VersionTagStyled = styled.div`
+  background-color: ${themeColor('backgroundSecondary')};
+`;

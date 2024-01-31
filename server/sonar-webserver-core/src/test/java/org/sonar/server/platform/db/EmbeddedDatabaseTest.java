@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,16 +27,16 @@ import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.utils.System2;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.process.NetworkUtilsImpl;
 
 import static junit.framework.Assert.fail;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.sonar.process.ProcessProperties.Property.JDBC_EMBEDDED_PORT;
@@ -49,8 +49,6 @@ public class EmbeddedDatabaseTest {
 
   private static final String LOOPBACK_ADDRESS = InetAddress.getLoopbackAddress().getHostAddress();
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
   @Rule
   public LogTester logTester = new LogTester();
   @Rule
@@ -71,30 +69,27 @@ public class EmbeddedDatabaseTest {
 
   @Test
   public void start_fails_with_IAE_if_property_Data_Path_is_not_set() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Missing property " + PATH_DATA.getKey());
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing property " + PATH_DATA.getKey());
   }
 
   @Test
   public void start_fails_with_IAE_if_property_Data_Path_is_empty() {
     settings.setProperty(PATH_DATA.getKey(), "");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Missing property " + PATH_DATA.getKey());
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing property " + PATH_DATA.getKey());
   }
 
   @Test
   public void start_fails_with_IAE_if_JDBC_URL_settings_is_not_set() throws IOException {
     settings.setProperty(PATH_DATA.getKey(), temporaryFolder.newFolder().getAbsolutePath());
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Missing property " + JDBC_URL.getKey());
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing property " + JDBC_URL.getKey());
   }
 
   @Test
@@ -103,10 +98,9 @@ public class EmbeddedDatabaseTest {
       .setProperty(PATH_DATA.getKey(), temporaryFolder.newFolder().getAbsolutePath())
       .setProperty(JDBC_URL.getKey(), "jdbc url");
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Missing property " + JDBC_EMBEDDED_PORT.getKey());
-
-    underTest.start();
+    assertThatThrownBy(() -> underTest.start())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Missing property " + JDBC_EMBEDDED_PORT.getKey());
   }
 
   @Test
@@ -157,7 +151,7 @@ public class EmbeddedDatabaseTest {
 
   private void checkDbIsUp(int port, String user, String password) {
     try {
-      String driverUrl = String.format("jdbc:h2:tcp://%s:%d/sonar;USER=%s;PASSWORD=%s", LOOPBACK_ADDRESS, port, user, password);
+      String driverUrl = String.format("jdbc:h2:tcp://%s:%d/sonar;USER=%s;PASSWORD=%s;NON_KEYWORDS=VALUE", LOOPBACK_ADDRESS, port, user, password);
       DriverManager.registerDriver(new Driver());
       DriverManager.getConnection(driverUrl).close();
     } catch (Exception ex) {

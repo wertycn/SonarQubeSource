@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -76,22 +76,22 @@ public class LoadReportAnalysisMetadataHolderStep implements ComputationStep {
   }
 
   private void loadMetadata(ScannerReport.Metadata reportMetadata) {
-    analysisMetadata.setForkDate(reportMetadata.getForkDate() > 0 ? reportMetadata.getForkDate() : null);
     analysisMetadata.setAnalysisDate(reportMetadata.getAnalysisDate());
     analysisMetadata.setRootComponentRef(reportMetadata.getRootComponentRef());
     analysisMetadata.setCrossProjectDuplicationEnabled(reportMetadata.getCrossProjectDuplicationActivated());
     analysisMetadata.setScmRevision(reportMetadata.getScmRevisionId());
+    analysisMetadata.setNewCodeReferenceBranch(reportMetadata.getNewCodeReferenceBranch());
   }
 
   /**
    * @return a {@link Runnable} to execute some checks on the project at the end of the step
    */
   private Runnable loadProject(ScannerReport.Metadata reportMetadata) {
-    CeTask.Component mainComponent = mandatoryComponent(ceTask.getMainComponent());
-    String mainComponentKey = mainComponent.getKey()
+    CeTask.Component entity = mandatoryComponent(ceTask.getEntity());
+    String entityKey = entity.getKey()
       .orElseThrow(() -> MessageException.of(format(
-        "Compute Engine task main component key is null. Project with UUID %s must have been deleted since report was uploaded. Can not proceed.",
-        mainComponent.getUuid())));
+        "Compute Engine task entity key is null. Project with UUID %s must have been deleted since report was uploaded. Can not proceed.",
+        entity.getUuid())));
     CeTask.Component component = mandatoryComponent(ceTask.getComponent());
     if (!component.getKey().isPresent()) {
       throw MessageException.of(format(
@@ -100,20 +100,19 @@ public class LoadReportAnalysisMetadataHolderStep implements ComputationStep {
     }
 
     ProjectDto dto = toProject(reportMetadata.getProjectKey());
-    analysisMetadata.setProject(Project.from(dto));
+    analysisMetadata.setProject(Project.fromProjectDtoWithTags(dto));
     return () -> {
-      if (!mainComponentKey.equals(reportMetadata.getProjectKey())) {
+      if (!entityKey.equals(reportMetadata.getProjectKey())) {
         throw MessageException.of(format(
           "ProjectKey in report (%s) is not consistent with projectKey under which the report has been submitted (%s)",
           reportMetadata.getProjectKey(),
-          mainComponentKey));
+          entityKey));
       }
     };
   }
 
-  private static CeTask.Component mandatoryComponent(Optional<CeTask.Component> mainComponent) {
-    return mainComponent
-      .orElseThrow(() -> new IllegalStateException("component missing on ce task"));
+  private static CeTask.Component mandatoryComponent(Optional<CeTask.Component> entity) {
+    return entity.orElseThrow(() -> new IllegalStateException("component missing on ce task"));
   }
 
   private void loadQualityProfiles(ScannerReport.Metadata reportMetadata) {

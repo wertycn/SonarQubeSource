@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,11 +22,11 @@ package org.sonar.server.platform.ws;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.server.app.ProcessCommandWrapper;
 import org.sonar.server.app.RestartFlagHolder;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.user.UserSession;
 
 /**
@@ -34,25 +34,26 @@ import org.sonar.server.user.UserSession;
  */
 public class RestartAction implements SystemWsAction {
 
-  private static final Logger LOGGER = Loggers.get(RestartAction.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(RestartAction.class);
 
   private final UserSession userSession;
   private final ProcessCommandWrapper processCommandWrapper;
   private final RestartFlagHolder restartFlagHolder;
-  private final WebServer webServer;
+  private final NodeInformation nodeInformation;
 
   public RestartAction(UserSession userSession, ProcessCommandWrapper processCommandWrapper, RestartFlagHolder restartFlagHolder,
-    WebServer webServer) {
+    NodeInformation nodeInformation) {
     this.userSession = userSession;
     this.processCommandWrapper = processCommandWrapper;
     this.restartFlagHolder = restartFlagHolder;
-    this.webServer = webServer;
+    this.nodeInformation = nodeInformation;
   }
 
   @Override
   public void define(WebService.NewController controller) {
     controller.createAction("restart")
-      .setDescription("Restart server. Require 'Administer System' permission. Perform a full restart of the Web, Search and Compute Engine Servers processes.")
+      .setDescription("Restarts server. Requires 'Administer System' permission. Performs a full restart of the Web, Search and Compute Engine Servers processes."
+         + " Does not reload sonar.properties.")
       .setSince("4.3")
       .setPost(true)
       .setHandler(this);
@@ -60,7 +61,7 @@ public class RestartAction implements SystemWsAction {
 
   @Override
   public void handle(Request request, Response response) {
-    if (!webServer.isStandalone()) {
+    if (!nodeInformation.isStandalone()) {
       throw new IllegalArgumentException("Restart not allowed for cluster nodes");
     }
 

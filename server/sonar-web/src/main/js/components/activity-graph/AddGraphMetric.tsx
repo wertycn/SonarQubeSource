@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,21 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { find, sortBy } from 'lodash';
+import { ButtonSecondary, ChevronDownIcon, Dropdown, TextMuted } from 'design-system';
+import { sortBy } from 'lodash';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Dropdown from 'sonar-ui-common/components/controls/Dropdown';
-import DropdownIcon from 'sonar-ui-common/components/icons/DropdownIcon';
-import { getLocalizedMetricName, translate } from 'sonar-ui-common/helpers/l10n';
+import { getLocalizedMetricName, translate } from '../../helpers/l10n';
 import { isDiffMetric } from '../../helpers/measures';
+import { MetricType } from '../../types/metrics';
+import { Metric } from '../../types/types';
 import AddGraphMetricPopup from './AddGraphMetricPopup';
 
 interface Props {
-  addMetric: (metric: string) => void;
-  className?: string;
-  metrics: T.Metric[];
+  metrics: Metric[];
   metricsTypeFilter?: string[];
-  removeMetric: (metric: string) => void;
+  onAddMetric: (metric: string) => void;
+  onRemoveMetric: (metric: string) => void;
   selectedMetrics: string[];
 }
 
@@ -45,31 +44,27 @@ export default class AddGraphMetric extends React.PureComponent<Props, State> {
   state: State = {
     metrics: [],
     query: '',
-    selectedMetrics: []
+    selectedMetrics: [],
   };
 
   filterSelected = (query: string, selectedElements: string[]) => {
-    return selectedElements.filter(element =>
-      this.getLocalizedMetricNameFromKey(element)
-        .toLowerCase()
-        .includes(query.toLowerCase())
+    return selectedElements.filter((element) =>
+      this.getLocalizedMetricNameFromKey(element).toLowerCase().includes(query.toLowerCase()),
     );
   };
 
   filterMetricsElements = (
     { metricsTypeFilter, metrics, selectedMetrics }: Props,
-    query: string
+    query: string,
   ) => {
     return metrics
-      .filter(metric => {
+      .filter((metric) => {
         if (
           metric.hidden ||
           isDiffMetric(metric.key) ||
-          ['DATA', 'DISTRIB'].includes(metric.type) ||
+          [MetricType.Data, MetricType.Distribution].includes(metric.type as MetricType) ||
           selectedMetrics.includes(metric.key) ||
-          !getLocalizedMetricName(metric)
-            .toLowerCase()
-            .includes(query.toLowerCase())
+          !getLocalizedMetricName(metric).toLowerCase().includes(query.toLowerCase())
         ) {
           return false;
         }
@@ -78,16 +73,17 @@ export default class AddGraphMetric extends React.PureComponent<Props, State> {
         }
         return true;
       })
-      .map(metric => metric.key);
+      .map((metric) => metric.key);
   };
 
-  getSelectedMetricsElements = (metrics: T.Metric[], selectedMetrics?: string[]) => {
-    const selected = selectedMetrics || this.props.selectedMetrics;
-    return metrics.filter(metric => selected.includes(metric.key)).map(metric => metric.key);
+  getSelectedMetricsElements = (metrics: Metric[], selectedMetrics: string[]) => {
+    return metrics
+      .filter((metric) => selectedMetrics.includes(metric.key))
+      .map((metric) => metric.key);
   };
 
   getLocalizedMetricNameFromKey = (key: string) => {
-    const metric = find(this.props.metrics, { key });
+    const metric = this.props.metrics.find((m) => m.key === key);
     return metric === undefined ? key : getLocalizedMetricName(metric);
   };
 
@@ -97,21 +93,21 @@ export default class AddGraphMetric extends React.PureComponent<Props, State> {
   };
 
   onSelect = (metric: string) => {
-    this.props.addMetric(metric);
-    this.setState(state => {
+    this.props.onAddMetric(metric);
+    this.setState((state) => {
       return {
         selectedMetrics: sortBy([...state.selectedMetrics, metric]),
-        metrics: this.filterMetricsElements(this.props, state.query)
+        metrics: this.filterMetricsElements(this.props, state.query),
       };
     });
   };
 
   onUnselect = (metric: string) => {
-    this.props.removeMetric(metric);
-    this.setState(state => {
+    this.props.onRemoveMetric(metric);
+    this.setState((state) => {
       return {
         metrics: sortBy([...state.metrics, metric]),
-        selectedMetrics: state.selectedMetrics.filter(selected => selected !== metric)
+        selectedMetrics: state.selectedMetrics.filter((selected) => selected !== metric),
       };
     });
   };
@@ -121,13 +117,15 @@ export default class AddGraphMetric extends React.PureComponent<Props, State> {
     const filteredMetrics = this.filterMetricsElements(this.props, query);
     const selectedMetrics = this.getSelectedMetricsElements(
       this.props.metrics,
-      this.props.selectedMetrics
+      this.props.selectedMetrics,
     );
+
     return (
       <Dropdown
-        className="display-inline-block"
+        allowResizing
+        size="large"
         closeOnClick={false}
-        closeOnClickOutside={true}
+        id="activity-graph-custom-metric-selector"
         overlay={
           <AddGraphMetricPopup
             elements={filteredMetrics}
@@ -136,16 +134,20 @@ export default class AddGraphMetric extends React.PureComponent<Props, State> {
             onSearch={this.onSearch}
             onSelect={this.onSelect}
             onUnselect={this.onUnselect}
-            renderLabel={element => this.getLocalizedMetricNameFromKey(element)}
+            renderLabel={(element) => this.getLocalizedMetricNameFromKey(element)}
             selectedElements={selectedMetrics}
           />
-        }>
-        <Button className="spacer-left">
-          <span className="text-ellipsis text-middle">
-            {translate('project_activity.graphs.custom.add')}
-          </span>
-          <DropdownIcon className="text-top little-spacer-left" />
-        </Button>
+        }
+      >
+        <ButtonSecondary
+          className={
+            'sw-ml-2 sw-body-sm sw-flex sw-flex-row sw-justify-between sw-pl-3 sw-pr-2 sw-w-32 ' +
+            'sw-z-normal' // needed because the legends overlap part of the button
+          }
+        >
+          <TextMuted text={translate('project_activity.graphs.custom.add')} />
+          <ChevronDownIcon className="sw-ml-1 sw-mr-0 sw-pr-0" />
+        </ButtonSecondary>
       </Dropdown>
     );
   }

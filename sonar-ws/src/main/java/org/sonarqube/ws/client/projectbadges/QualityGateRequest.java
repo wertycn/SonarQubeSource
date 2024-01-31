@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ public class QualityGateRequest {
 
   private String branch;
   private String project;
+  private String token;
 
   /**
    * Example value: "feature/my_branch"
@@ -56,5 +57,17 @@ public class QualityGateRequest {
 
   public String getProject() {
     return project;
+  }
+
+  /**
+   * This is aan optional parameter.
+   */
+  public QualityGateRequest setToken(String token) {
+    this.token = token;
+    return this;
+  }
+
+  public String getToken() {
+    return token;
   }
 }

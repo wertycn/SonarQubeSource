@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ package org.sonar.server.issue;
 
 import org.junit.Test;
 import org.sonar.api.rule.RuleKey;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleTesting;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +38,7 @@ public class RulesAggregationTest {
   public void count_rules() {
     RulesAggregation rulesAggregation = new RulesAggregation();
     RuleKey ruleKey = RuleKey.of("xoo", "S001");
-    RuleDefinitionDto ruleDto = RuleTesting.newRule(ruleKey).setName("Rule name");
+    RuleDto ruleDto = RuleTesting.newRule(ruleKey).setName("Rule name");
     rulesAggregation.add(ruleDto);
     rulesAggregation.add(ruleDto);
 
@@ -53,7 +53,7 @@ public class RulesAggregationTest {
   public void count_rules_with_different_rules() {
     RulesAggregation rulesAggregation = new RulesAggregation();
 
-    RuleDefinitionDto ruleDto = RuleTesting.newRule(RuleKey.of("xoo", "S001")).setName("Rule name 1");
+    RuleDto ruleDto = RuleTesting.newRule(RuleKey.of("xoo", "S001")).setName("Rule name 1");
     rulesAggregation.add(ruleDto);
     rulesAggregation.add(ruleDto);
     rulesAggregation.add(RuleTesting.newRule(RuleKey.of("xoo", "S002")).setName("Rule name 2"));
@@ -67,12 +67,12 @@ public class RulesAggregationTest {
     RulesAggregation.Rule ruleSameRuleKey = new RulesAggregation.Rule(RuleKey.of("xoo", "S001"), "S001");
     RulesAggregation.Rule ruleWithDifferentRuleKey = new RulesAggregation.Rule(RuleKey.of("xoo", "S002"), "S002");
 
-    assertThat(rule).isEqualTo(rule);
-    assertThat(rule).isEqualTo(ruleSameRuleKey);
-    assertThat(rule).isNotEqualTo(ruleWithDifferentRuleKey);
-
-    assertThat(rule.hashCode()).isEqualTo(rule.hashCode());
-    assertThat(rule.hashCode()).isEqualTo(ruleSameRuleKey.hashCode());
+    assertThat(rule)
+      .isEqualTo(rule)
+      .isEqualTo(ruleSameRuleKey)
+      .isNotEqualTo(ruleWithDifferentRuleKey)
+      .hasSameHashCodeAs(rule)
+      .hasSameHashCodeAs(ruleSameRuleKey);
     assertThat(rule.hashCode()).isNotEqualTo(ruleWithDifferentRuleKey.hashCode());
   }
 }

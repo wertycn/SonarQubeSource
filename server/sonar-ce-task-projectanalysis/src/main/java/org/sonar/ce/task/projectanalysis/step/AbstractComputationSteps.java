@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,29 +22,21 @@ package org.sonar.ce.task.projectanalysis.step;
 import com.google.common.collect.Iterables;
 import org.sonar.ce.task.step.ComputationStep;
 import org.sonar.ce.task.step.ComputationSteps;
-import org.sonar.core.platform.ContainerPopulator;
+import org.sonar.core.platform.Container;
 
 /**
  * Abstract implementation of {@link ComputationStep} which provides the implementation of {@link ComputationSteps#instances()}
- * based on a {@link org.sonar.core.platform.ContainerPopulator.Container}.
+ * based on a {@link org.sonar.core.platform.Container}.
  */
 public abstract class AbstractComputationSteps implements ComputationSteps {
-  private final ContainerPopulator.Container container;
+  private final Container container;
 
-  protected AbstractComputationSteps(ContainerPopulator.Container container) {
+  protected AbstractComputationSteps(Container container) {
     this.container = container;
   }
 
   @Override
   public Iterable<ComputationStep> instances() {
-    return Iterables.transform(
-      orderedStepClasses(),
-      input -> {
-        ComputationStep computationStepType = container.getComponentByType(input);
-        if (computationStepType == null) {
-          throw new IllegalStateException(String.format("Component not found: %s", input));
-        }
-        return computationStepType;
-      });
+    return Iterables.transform(orderedStepClasses(), container::getComponentByType);
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,39 +18,40 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { scaleLinear, scaleOrdinal } from 'd3-scale';
+import { TreeMap, TreeMapItem } from 'design-system';
 import * as React from 'react';
 import { AutoSizer } from 'react-virtualized/dist/commonjs/AutoSizer';
-import ColorGradientLegend from 'sonar-ui-common/components/charts/ColorGradientLegend';
-import TreeMap, { TreeMapItem } from 'sonar-ui-common/components/charts/TreeMap';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import {
-  getLocalizedMetricName,
-  translate,
-  translateWithParameters
-} from 'sonar-ui-common/helpers/l10n';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { isDefined } from 'sonar-ui-common/helpers/types';
 import { colors } from '../../../app/theme';
 import ColorBoxLegend from '../../../components/charts/ColorBoxLegend';
-import { isDiffMetric } from '../../../helpers/measures';
-import { BranchLike } from '../../../types/branch-like';
-import { MetricKey } from '../../../types/metrics';
+import ColorGradientLegend from '../../../components/charts/ColorGradientLegend';
+import QualifierIcon from '../../../components/icons/QualifierIcon';
+import { getComponentMeasureUniqueKey } from '../../../helpers/component';
+import { RATING_COLORS } from '../../../helpers/constants';
+import { getLocalizedMetricName, translate } from '../../../helpers/l10n';
+import { formatMeasure, isDiffMetric } from '../../../helpers/measures';
+import { isDefined } from '../../../helpers/types';
+import { MetricKey, MetricType } from '../../../types/metrics';
+import { ComponentMeasureEnhanced, ComponentMeasureIntern, Metric } from '../../../types/types';
 import EmptyResult from './EmptyResult';
 
 interface Props {
-  branchLike?: BranchLike;
-  components: T.ComponentMeasureEnhanced[];
-  handleSelect: (component: string) => void;
-  metric: T.Metric;
+  components: ComponentMeasureEnhanced[];
+  handleSelect: (component: ComponentMeasureIntern) => void;
+  metric: Metric;
 }
 
 interface State {
-  treemapItems: TreeMapItem[];
+  treemapItems: Array<TreeMapItem<ComponentMeasureIntern>>;
 }
 
 const HEIGHT = 500;
-const COLORS = [colors.green, colors.lightGreen, colors.yellow, colors.orange, colors.red];
-const LEVEL_COLORS = [colors.red, colors.orange, colors.green, colors.gray71];
+const COLORS = RATING_COLORS.map(({ fill }) => fill);
+const LEVEL_COLORS = [
+  colors.error500,
+  colors.orange,
+  colors.success500,
+  colors.disabledQualityGate,
+];
 const NA_GRADIENT = `linear-gradient(-45deg, ${colors.gray71} 25%, ${colors.gray60} 25%, ${colors.gray60} 50%, ${colors.gray71} 50%, ${colors.gray71} 75%, ${colors.gray60} 75%, ${colors.gray60} 100%)`;
 
 export default class TreeMapView extends React.PureComponent<Props, State> {
@@ -67,12 +68,17 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
     }
   }
 
-  getTreemapComponents = ({ components, metric }: Props) => {
+  getTreemapComponents = ({
+    components,
+    metric,
+  }: Props): Array<TreeMapItem<ComponentMeasureIntern>> => {
     const colorScale = this.getColorScale(metric);
     return components
-      .map(component => {
-        const colorMeasure = component.measures.find(measure => measure.metric.key === metric.key);
-        const sizeMeasure = component.measures.find(measure => measure.metric.key !== metric.key);
+      .map((component) => {
+        const colorMeasure = component.measures.find(
+          (measure) => measure.metric.key === metric.key,
+        );
+        const sizeMeasure = component.measures.find((measure) => measure.metric.key !== metric.key);
         if (!sizeMeasure) {
           return undefined;
         }
@@ -89,48 +95,45 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
         if (sizeValue < 1) {
           return undefined;
         }
+
         return {
+          key: getComponentMeasureUniqueKey(component) ?? '',
           color: colorValue ? (colorScale as Function)(colorValue) : undefined,
           gradient: !colorValue ? NA_GRADIENT : undefined,
           icon: <QualifierIcon fill={colors.baseFontColor} qualifier={component.qualifier} />,
-          key: component.refKey || component.key,
-          label: component.name,
+          label: [component.name, component.branch].filter((s) => !!s).join(' / '),
           size: sizeValue,
           measureValue: colorValue,
           metric,
           tooltip: this.getTooltip({
             colorMetric: metric,
             colorValue,
-            componentName: component.name,
+            component,
             sizeMetric: sizeMeasure.metric,
-            sizeValue
-          })
+            sizeValue,
+          }),
+          sourceData: component,
         };
       })
       .filter(isDefined);
   };
 
   getLevelColorScale = () =>
-    scaleOrdinal<string, string>()
-      .domain(['ERROR', 'WARN', 'OK', 'NONE'])
-      .range(LEVEL_COLORS);
+    scaleOrdinal<string, string>().domain(['ERROR', 'WARN', 'OK', 'NONE']).range(LEVEL_COLORS);
 
-  getPercentColorScale = (metric: T.Metric) => {
+  getPercentColorScale = (metric: Metric) => {
     const color = scaleLinear<string, string>().domain([0, 25, 50, 75, 100]);
     color.range(metric.higherValuesAreBetter ? [...COLORS].reverse() : COLORS);
     return color;
   };
 
-  getRatingColorScale = () =>
-    scaleLinear<string, string>()
-      .domain([1, 2, 3, 4, 5])
-      .range(COLORS);
+  getRatingColorScale = () => scaleLinear<string, string>().domain([1, 2, 3, 4, 5]).range(COLORS);
 
-  getColorScale = (metric: T.Metric) => {
-    if (metric.type === 'LEVEL') {
+  getColorScale = (metric: Metric) => {
+    if (metric.type === MetricType.Level) {
       return this.getLevelColorScale();
     }
-    if (metric.type === 'RATING') {
+    if (metric.type === MetricType.Rating) {
       return this.getRatingColorScale();
     }
     return this.getPercentColorScale(metric);
@@ -139,21 +142,21 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
   getTooltip = ({
     colorMetric,
     colorValue,
-    componentName,
+    component,
     sizeMetric,
-    sizeValue
+    sizeValue,
   }: {
-    colorMetric: T.Metric;
+    colorMetric: Metric;
     colorValue?: string;
-    componentName: string;
-    sizeMetric: T.Metric;
+    component: ComponentMeasureEnhanced;
+    sizeMetric: Metric;
     sizeValue: number;
   }) => {
     const formatted =
       colorMetric && colorValue !== undefined ? formatMeasure(colorValue, colorMetric.type) : '—';
     return (
       <div className="text-left">
-        {componentName}
+        {[component.name, component.branch].filter((s) => !!s).join(' / ')}
         <br />
         {`${getLocalizedMetricName(sizeMetric)}: ${formatMeasure(sizeValue, sizeMetric.type)}`}
         <br />
@@ -162,10 +165,16 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
     );
   };
 
+  handleSelect(node: TreeMapItem<ComponentMeasureIntern>) {
+    if (node.sourceData) {
+      this.props.handleSelect(node.sourceData);
+    }
+  }
+
   renderLegend() {
     const { metric } = this.props;
     const colorScale = this.getColorScale(metric);
-    if (['LEVEL', 'RATING'].includes(metric.type)) {
+    if ([MetricType.Level, MetricType.Rating].includes(metric.type as MetricType)) {
       return (
         <ColorBoxLegend
           className="measure-details-treemap-legend color-box-full"
@@ -177,7 +186,7 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
     return (
       <ColorGradientLegend
         className="measure-details-treemap-legend"
-        showColorNA={true}
+        showColorNA
         colorScale={colorScale}
         height={30}
         width={200}
@@ -193,35 +202,31 @@ export default class TreeMapView extends React.PureComponent<Props, State> {
     const { components, metric } = this.props;
     const sizeMeasure =
       components.length > 0
-        ? components[0].measures.find(measure => measure.metric.key !== metric.key)
+        ? components[0].measures.find((measure) => measure.metric.key !== metric.key)
         : null;
     return (
-      <div className="measure-details-treemap">
+      <div className="measure-details-treemap" data-testid="treemap">
         <div className="display-flex-start note spacer-bottom">
           <span>
-            {translateWithParameters(
-              'component_measures.legend.color_x',
-              getLocalizedMetricName(metric)
-            )}
+            <strong className="sw-mr-1">{translate('component_measures.legend.color')}</strong>
+            {getLocalizedMetricName(metric)}
           </span>
           <span className="spacer-left flex-1">
-            {translateWithParameters(
-              'component_measures.legend.size_x',
-              translate(
-                'metric',
-                sizeMeasure && sizeMeasure.metric ? sizeMeasure.metric.key : MetricKey.ncloc,
-                'name'
-              )
+            <strong className="sw-mr-1">{translate('component_measures.legend.size')}</strong>
+            {translate(
+              'metric',
+              sizeMeasure && sizeMeasure.metric ? sizeMeasure.metric.key : MetricKey.ncloc,
+              'name',
             )}
           </span>
           <span>{this.renderLegend()}</span>
         </div>
-        <AutoSizer disableHeight={true}>
+        <AutoSizer disableHeight>
           {({ width }) => (
-            <TreeMap
+            <TreeMap<ComponentMeasureIntern>
               height={HEIGHT}
               items={treemapItems}
-              onRectangleClick={this.props.handleSelect}
+              onRectangleClick={this.handleSelect.bind(this)}
               width={width}
             />
           )}

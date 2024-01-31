@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,6 +24,9 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.apache.commons.lang.StringUtils.abbreviate;
+import static org.apache.commons.lang.StringUtils.trimToNull;
+import static org.sonar.db.component.ComponentValidator.MAX_COMPONENT_NAME_LENGTH;
 
 /**
  * The attributes specific to a Component of type {@link Component.Type#FILE}.
@@ -33,13 +36,25 @@ public class FileAttributes {
   private final boolean unitTest;
   @CheckForNull
   private final String languageKey;
+  private final boolean markedAsUnchanged;
   private final int lines;
+  private String oldRelativePath;
 
   public FileAttributes(boolean unitTest, @Nullable String languageKey, int lines) {
+    this(unitTest, languageKey, lines, false, null);
+  }
+
+  public FileAttributes(boolean unitTest, @Nullable String languageKey, int lines, boolean markedAsUnchanged, @Nullable String oldRelativePath) {
     this.unitTest = unitTest;
     this.languageKey = languageKey;
+    this.markedAsUnchanged = markedAsUnchanged;
     checkArgument(lines > 0, "Number of lines must be greater than zero");
     this.lines = lines;
+    this.oldRelativePath = formatOldRelativePath(oldRelativePath);
+  }
+
+  public boolean isMarkedAsUnchanged() {
+    return markedAsUnchanged;
   }
 
   public boolean isUnitTest() {
@@ -49,6 +64,14 @@ public class FileAttributes {
   @CheckForNull
   public String getLanguageKey() {
     return languageKey;
+  }
+
+  /**
+   * The old relative path of a file when a move is detected by the SCM in the scope of a Pull Request.
+   */
+  @CheckForNull
+  public String getOldRelativePath() {
+    return oldRelativePath;
   }
 
   /**
@@ -64,6 +87,12 @@ public class FileAttributes {
       "languageKey='" + languageKey + '\'' +
       ", unitTest=" + unitTest +
       ", lines=" + lines +
+      ", markedAsUnchanged=" + markedAsUnchanged +
+      ", oldRelativePath='" + oldRelativePath + '\'' +
       '}';
+  }
+
+  private static String formatOldRelativePath(@Nullable String path) {
+    return abbreviate(trimToNull(path), MAX_COMPONENT_NAME_LENGTH);
   }
 }

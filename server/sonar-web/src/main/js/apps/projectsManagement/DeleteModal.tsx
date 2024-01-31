@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { DangerButtonPrimary, FlagMessage, Modal } from 'design-system';
 import * as React from 'react';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { toNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { bulkDeleteProjects } from '../../api/components';
+import { Project, bulkDeleteProjects } from '../../api/project-management';
+import { toISO8601WithOffsetString } from '../../helpers/dates';
+import { translate, translateWithParameters } from '../../helpers/l10n';
 
 export interface Props {
   analyzedBefore: Date | undefined;
@@ -32,7 +30,7 @@ export interface Props {
   provisioned: boolean;
   qualifier: string;
   query: string;
-  selection: string[];
+  selection: Project[];
   total: number;
 }
 
@@ -57,13 +55,13 @@ export default class DeleteModal extends React.PureComponent<Props, State> {
     const { analyzedBefore } = this.props;
     const parameters = this.props.selection.length
       ? {
-          projects: this.props.selection.join()
+          projects: this.props.selection.map((s) => s.key).join(),
         }
       : {
-          analyzedBefore: analyzedBefore && toNotSoISOString(analyzedBefore),
+          analyzedBefore: analyzedBefore && toISO8601WithOffsetString(analyzedBefore),
           onProvisionedOnly: this.props.provisioned || undefined,
           qualifiers: this.props.qualifier,
-          q: this.props.query || undefined
+          q: this.props.query || undefined,
         };
     bulkDeleteProjects(parameters).then(
       () => {
@@ -75,46 +73,48 @@ export default class DeleteModal extends React.PureComponent<Props, State> {
         if (this.mounted) {
           this.setState({ loading: false });
         }
-      }
+      },
     );
   };
 
   renderWarning = () => (
-    <Alert variant="warning">
+    <FlagMessage variant="warning">
       {this.props.selection.length
         ? translateWithParameters(
             'projects_management.delete_selected_warning',
-            this.props.selection.length
+            this.props.selection.length,
           )
         : translateWithParameters('projects_management.delete_all_warning', this.props.total)}
-    </Alert>
+    </FlagMessage>
   );
 
   render() {
     const header = translate('qualifiers.delete', this.props.qualifier);
 
     return (
-      <Modal contentLabel={header} onRequestClose={this.props.onClose}>
-        <header className="modal-head">
-          <h2>{header}</h2>
-        </header>
-
-        <div className="modal-body">
-          {this.renderWarning()}
-          {translate('qualifiers.delete_confirm', this.props.qualifier)}
-        </div>
-
-        <footer className="modal-foot">
-          {this.state.loading && <i className="spinner spacer-right" />}
-          <SubmitButton
-            className="button-red"
+      <Modal
+        headerTitle={header}
+        onClose={this.props.onClose}
+        body={
+          <>
+            {this.renderWarning()}
+            <p className="sw-mt-2">
+              {translate('qualifiers.delete_confirm', this.props.qualifier)}
+            </p>
+          </>
+        }
+        primaryButton={
+          <DangerButtonPrimary
+            autoFocus
             disabled={this.state.loading}
-            onClick={this.handleConfirmClick}>
+            onClick={this.handleConfirmClick}
+            type="submit"
+          >
             {translate('delete')}
-          </SubmitButton>
-          <ResetButtonLink onClick={this.props.onClose}>{translate('cancel')}</ResetButtonLink>
-        </footer>
-      </Modal>
+          </DangerButtonPrimary>
+        }
+        secondaryButtonLabel={translate('cancel')}
+      />
     );
   }
 }

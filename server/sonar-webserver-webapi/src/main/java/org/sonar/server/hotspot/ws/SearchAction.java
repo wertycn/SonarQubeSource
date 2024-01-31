@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,43 +19,45 @@
  */
 package org.sonar.server.hotspot.ws;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
+import org.apache.lucene.search.TotalHits;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.SearchHit;
+import org.jetbrains.annotations.NotNull;
 import org.sonar.api.resources.Qualifiers;
-import org.sonar.api.resources.Scopes;
-import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleType;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.Paging;
 import org.sonar.api.utils.System2;
-import org.sonar.api.web.UserRole;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.protobuf.DbIssues;
+import org.sonar.server.component.ComponentFinder;
+import org.sonar.server.component.ComponentFinder.ProjectAndBranch;
 import org.sonar.server.es.SearchOptions;
 import org.sonar.server.exceptions.NotFoundException;
+import org.sonar.server.hotspot.ws.HotspotWsResponseFormatter.SearchResponseData;
 import org.sonar.server.issue.index.IssueIndex;
 import org.sonar.server.issue.index.IssueIndexSyncProgressChecker;
 import org.sonar.server.issue.index.IssueQuery;
@@ -65,50 +67,59 @@ import org.sonarqube.ws.Common;
 import org.sonarqube.ws.Hotspots;
 import org.sonarqube.ws.Hotspots.SearchWsResponse;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
+import static org.sonar.api.issue.Issue.RESOLUTION_ACKNOWLEDGED;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
 import static org.sonar.api.issue.Issue.RESOLUTION_SAFE;
 import static org.sonar.api.issue.Issue.STATUS_REVIEWED;
 import static org.sonar.api.issue.Issue.STATUS_TO_REVIEW;
 import static org.sonar.api.server.ws.WebService.Param.PAGE;
 import static org.sonar.api.server.ws.WebService.Param.PAGE_SIZE;
-import static org.sonar.api.utils.DateUtils.formatDateTime;
 import static org.sonar.api.utils.DateUtils.longToDate;
 import static org.sonar.api.utils.Paging.forPageIndex;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
+import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.db.newcodeperiod.NewCodePeriodType.REFERENCE_BRANCH;
+import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_INSECURE_INTERACTION;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_POROUS_DEFENSES;
 import static org.sonar.server.security.SecurityStandards.SANS_TOP_25_RISKY_RESOURCE;
-import static org.sonar.server.security.SecurityStandards.fromSecurityStandards;
 import static org.sonar.server.ws.KeyExamples.KEY_BRANCH_EXAMPLE_001;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
 import static org.sonar.server.ws.KeyExamples.KEY_PULL_REQUEST_EXAMPLE_001;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
-import static org.sonarqube.ws.WsUtils.nullToEmpty;
 
 public class SearchAction implements HotspotsWsAction {
-  private static final Set<String> SUPPORTED_QUALIFIERS = ImmutableSet.of(Qualifiers.PROJECT, Qualifiers.APP);
+  private static final Set<String> SUPPORTED_QUALIFIERS = Set.of(Qualifiers.PROJECT, Qualifiers.APP);
+  private static final String PARAM_PROJECT = "project";
   private static final String PARAM_PROJECT_KEY = "projectKey";
   private static final String PARAM_STATUS = "status";
   private static final String PARAM_RESOLUTION = "resolution";
   private static final String PARAM_HOTSPOTS = "hotspots";
   private static final String PARAM_BRANCH = "branch";
   private static final String PARAM_PULL_REQUEST = "pullRequest";
-  private static final String PARAM_SINCE_LEAK_PERIOD = "sinceLeakPeriod";
+  private static final String PARAM_IN_NEW_CODE_PERIOD = "inNewCodePeriod";
   private static final String PARAM_ONLY_MINE = "onlyMine";
-  private static final String PARAM_OWASP_TOP_10 = "owaspTop10";
+  private static final String PARAM_OWASP_ASVS_LEVEL = "owaspAsvsLevel";
+  private static final String PARAM_PCI_DSS_32 = "pciDss-3.2";
+  private static final String PARAM_PCI_DSS_40 = "pciDss-4.0";
+  private static final String PARAM_OWASP_ASVS_40 = "owaspAsvs-4.0";
+  private static final String PARAM_OWASP_TOP_10_2017 = "owaspTop10";
+  private static final String PARAM_OWASP_TOP_10_2021 = "owaspTop10-2021";
+  /**
+   * @deprecated SansTop25 report is outdated, it has been completely deprecated in version 10.0 and will be removed from version 11.0
+   */
+  @Deprecated(since = "10.0", forRemoval = true)
   private static final String PARAM_SANS_TOP_25 = "sansTop25";
   private static final String PARAM_SONARSOURCE_SECURITY = "sonarsourceSecurity";
   private static final String PARAM_CWE = "cwe";
+  private static final String PARAM_FILES = "files";
 
-  private static final List<String> STATUSES = ImmutableList.of(STATUS_TO_REVIEW, STATUS_REVIEWED);
+  private static final List<String> STATUSES = List.of(STATUS_TO_REVIEW, STATUS_REVIEWED);
 
   private final DbClient dbClient;
   private final UserSession userSession;
@@ -116,34 +127,40 @@ public class SearchAction implements HotspotsWsAction {
   private final IssueIndexSyncProgressChecker issueIndexSyncProgressChecker;
   private final HotspotWsResponseFormatter responseFormatter;
   private final System2 system2;
+  private final ComponentFinder componentFinder;
 
-  public SearchAction(DbClient dbClient, UserSession userSession, IssueIndex issueIndex,
-    IssueIndexSyncProgressChecker issueIndexSyncProgressChecker,
-    HotspotWsResponseFormatter responseFormatter, System2 system2) {
+  public SearchAction(DbClient dbClient, UserSession userSession, IssueIndex issueIndex, IssueIndexSyncProgressChecker issueIndexSyncProgressChecker,
+    HotspotWsResponseFormatter responseFormatter, System2 system2, ComponentFinder componentFinder) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.issueIndex = issueIndex;
     this.issueIndexSyncProgressChecker = issueIndexSyncProgressChecker;
     this.responseFormatter = responseFormatter;
     this.system2 = system2;
+    this.componentFinder = componentFinder;
+  }
+
+  private static Set<String> setFromList(@Nullable List<String> list) {
+    return list != null ? Set.copyOf(list) : Set.of();
   }
 
   private static WsRequest toWsRequest(Request request) {
-    List<String> hotspotList = request.paramAsStrings(PARAM_HOTSPOTS);
-    Set<String> hotspotKeys = hotspotList != null ? ImmutableSet.copyOf(hotspotList) : ImmutableSet.of();
-    List<String> owaspTop10List = request.paramAsStrings(PARAM_OWASP_TOP_10);
-    Set<String> owaspTop10 = owaspTop10List != null ? ImmutableSet.copyOf(owaspTop10List) : ImmutableSet.of();
-    List<String> sansTop25List = request.paramAsStrings(PARAM_SANS_TOP_25);
-    Set<String> sansTop25 = sansTop25List != null ? ImmutableSet.copyOf(sansTop25List) : ImmutableSet.of();
-    List<String> sonarsourceSecurityList = request.paramAsStrings(PARAM_SONARSOURCE_SECURITY);
-    Set<String> sonarsourceSecurity = sonarsourceSecurityList != null ? ImmutableSet.copyOf(sonarsourceSecurityList) : ImmutableSet.of();
-    List<String> cwesList = request.paramAsStrings(PARAM_CWE);
-    Set<String> cwes = cwesList != null ? ImmutableSet.copyOf(cwesList) : ImmutableSet.of();
+    Set<String> hotspotKeys = setFromList(request.paramAsStrings(PARAM_HOTSPOTS));
+    Set<String> pciDss32 = setFromList(request.paramAsStrings(PARAM_PCI_DSS_32));
+    Set<String> pciDss40 = setFromList(request.paramAsStrings(PARAM_PCI_DSS_40));
+    Set<String> owaspAsvs40 = setFromList(request.paramAsStrings(PARAM_OWASP_ASVS_40));
+    Set<String> owasp2017Top10 = setFromList(request.paramAsStrings(PARAM_OWASP_TOP_10_2017));
+    Set<String> owasp2021Top10 = setFromList(request.paramAsStrings(PARAM_OWASP_TOP_10_2021));
+    Set<String> sansTop25 = setFromList(request.paramAsStrings(PARAM_SANS_TOP_25));
+    Set<String> sonarsourceSecurity = setFromList(request.paramAsStrings(PARAM_SONARSOURCE_SECURITY));
+    Set<String> cwes = setFromList(request.paramAsStrings(PARAM_CWE));
+    Set<String> files = setFromList(request.paramAsStrings(PARAM_FILES));
 
     return new WsRequest(
-      request.mandatoryParamAsInt(PAGE), request.mandatoryParamAsInt(PAGE_SIZE), request.param(PARAM_PROJECT_KEY), request.param(PARAM_BRANCH),
+      request.mandatoryParamAsInt(PAGE), request.mandatoryParamAsInt(PAGE_SIZE), request.param(PARAM_PROJECT), request.param(PARAM_BRANCH),
       request.param(PARAM_PULL_REQUEST), hotspotKeys, request.param(PARAM_STATUS), request.param(PARAM_RESOLUTION),
-      request.paramAsBoolean(PARAM_SINCE_LEAK_PERIOD), request.paramAsBoolean(PARAM_ONLY_MINE), owaspTop10, sansTop25, sonarsourceSecurity, cwes);
+      request.paramAsBoolean(PARAM_IN_NEW_CODE_PERIOD), request.paramAsBoolean(PARAM_ONLY_MINE), request.paramAsInt(PARAM_OWASP_ASVS_LEVEL),
+      pciDss32, pciDss40, owaspAsvs40, owasp2017Top10, owasp2021Top10, sansTop25, sonarsourceSecurity, cwes, files);
   }
 
   @Override
@@ -152,10 +169,9 @@ public class SearchAction implements HotspotsWsAction {
     validateParameters(wsRequest);
     try (DbSession dbSession = dbClient.openSession(false)) {
       checkIfNeedIssueSync(dbSession, wsRequest);
-      Optional<ComponentDto> project = getAndValidateProjectOrApplication(dbSession, wsRequest);
+      Optional<ProjectAndBranch> project = getAndValidateProjectOrApplication(dbSession, wsRequest);
       SearchResponseData searchResponseData = searchHotspots(wsRequest, dbSession, project.orElse(null));
       loadComponents(dbSession, searchResponseData);
-      loadRules(dbSession, searchResponseData);
       writeProtobuf(formatResponse(searchResponseData), request, response);
     }
   }
@@ -170,18 +186,56 @@ public class SearchAction implements HotspotsWsAction {
     }
   }
 
+  private static void addSecurityStandardFilters(WsRequest wsRequest, IssueQuery.Builder builder) {
+    if (!wsRequest.getPciDss32().isEmpty()) {
+      builder.pciDss32(wsRequest.getPciDss32());
+    }
+    if (!wsRequest.getPciDss40().isEmpty()) {
+      builder.pciDss40(wsRequest.getPciDss40());
+    }
+    if (!wsRequest.getOwaspAsvs40().isEmpty()) {
+      builder.owaspAsvs40(wsRequest.getOwaspAsvs40());
+      wsRequest.getOwaspAsvsLevel().ifPresent(builder::owaspAsvsLevel);
+    }
+    if (!wsRequest.getOwaspTop10For2017().isEmpty()) {
+      builder.owaspTop10(wsRequest.getOwaspTop10For2017());
+    }
+    if (!wsRequest.getOwaspTop10For2021().isEmpty()) {
+      builder.owaspTop10For2021(wsRequest.getOwaspTop10For2021());
+    }
+    if (!wsRequest.getSansTop25().isEmpty()) {
+      builder.sansTop25(wsRequest.getSansTop25());
+    }
+    if (!wsRequest.getSonarsourceSecurity().isEmpty()) {
+      builder.sonarsourceSecurity(wsRequest.getSonarsourceSecurity());
+    }
+    if (!wsRequest.getCwe().isEmpty()) {
+      builder.cwe(wsRequest.getCwe());
+    }
+  }
+
   @Override
   public void define(WebService.NewController controller) {
     WebService.NewAction action = controller
       .createAction("search")
       .setHandler(this)
-      .setDescription("Search for Security Hotpots."
-        + "<br/>When issue indexation is in progress returns 503 service unavailable HTTP code.")
+      .setDescription("Search for Security Hotpots. <br>"
+        + "Requires the 'Browse' permission on the specified project(s). <br>"
+        + "For applications, it also requires 'Browse' permission on its child projects. <br>"
+        + "When issue indexing is in progress returns 503 service unavailable HTTP code.")
       .setSince("8.1")
-      .setInternal(true);
+      .setChangelog(
+        new Change("10.2", format("Parameter '%s' renamed to '%s'", PARAM_PROJECT_KEY, PARAM_PROJECT)),
+        new Change("10.0", "Parameter 'sansTop25' is deprecated"),
+        new Change("9.6", "Added parameters 'pciDss-3.2' and 'pciDss-4.0"),
+        new Change("9.7", "Hotspot flows in the response may contain a description and a type"),
+        new Change("9.7", "Hotspot in the response contain the corresponding ruleKey"),
+        new Change("9.8", "Endpoint visibility change from internal to public"),
+        new Change("9.8", "Add message formatting to issue and locations response"));
 
     action.addPagingParams(100);
-    action.createParam(PARAM_PROJECT_KEY)
+    action.createParam(PARAM_PROJECT)
+      .setDeprecatedKey(PARAM_PROJECT_KEY, "10.2")
       .setDescription(format(
         "Key of the project or application. This parameter is required unless %s is provided.",
         PARAM_HOTSPOTS))
@@ -195,71 +249,194 @@ public class SearchAction implements HotspotsWsAction {
     action.createParam(PARAM_HOTSPOTS)
       .setDescription(format(
         "Comma-separated list of Security Hotspot keys. This parameter is required unless %s is provided.",
-        PARAM_PROJECT_KEY))
-      .setExampleValue(KEY_PROJECT_EXAMPLE_001);
+        PARAM_PROJECT))
+      .setExampleValue("AWhXpLoInp4On-Y3xc8x");
     action.createParam(PARAM_STATUS)
-      .setDescription("If '%s' is provided, only Security Hotspots with the specified status are returned.", PARAM_PROJECT_KEY)
+      .setDescription("If '%s' is provided, only Security Hotspots with the specified status are returned.", PARAM_PROJECT)
       .setPossibleValues(STATUSES)
       .setRequired(false);
     action.createParam(PARAM_RESOLUTION)
       .setDescription(format(
         "If '%s' is provided and if status is '%s', only Security Hotspots with the specified resolution are returned.",
-        PARAM_PROJECT_KEY, STATUS_REVIEWED))
-      .setPossibleValues(RESOLUTION_FIXED, RESOLUTION_SAFE)
+        PARAM_PROJECT, STATUS_REVIEWED))
+      .setPossibleValues(RESOLUTION_FIXED, RESOLUTION_SAFE, RESOLUTION_ACKNOWLEDGED)
       .setRequired(false);
-    action.createParam(PARAM_SINCE_LEAK_PERIOD)
-      .setDescription("If '%s' is provided, only Security Hotspots created since the leak period are returned.")
+    action.createParam(PARAM_IN_NEW_CODE_PERIOD)
+      .setDescription("If '%s' is provided, only Security Hotspots created in the new code period are returned.", PARAM_IN_NEW_CODE_PERIOD)
       .setBooleanPossibleValues()
-      .setDefaultValue("false");
+      .setDefaultValue("false")
+      .setSince("9.5");
+    action.createParam(PARAM_OWASP_ASVS_LEVEL)
+      .setDescription("Filters hotspots with lower or equal OWASP ASVS level to the parameter value. Should be used in combination with the 'owaspAsvs-4.0' parameter.")
+      .setSince("9.7")
+      .setPossibleValues(1, 2, 3)
+      .setRequired(false)
+      .setExampleValue("2");
+    action.createParam(PARAM_PCI_DSS_32)
+      .setDescription("Comma-separated list of PCI DSS v3.2 categories.")
+      .setSince("9.6")
+      .setExampleValue("4,6.5.8,10.1");
+    action.createParam(PARAM_PCI_DSS_40)
+      .setDescription("Comma-separated list of PCI DSS v4.0 categories.")
+      .setSince("9.6")
+      .setExampleValue("4,6.5.8,10.1");
+    action.createParam(PARAM_OWASP_ASVS_40)
+      .setDescription("Comma-separated list of OWASP ASVS v4.0 categories or rules.")
+      .setSince("9.7")
+      .setExampleValue("6,6.1.2");
     action.createParam(PARAM_ONLY_MINE)
       .setDescription("If 'projectKey' is provided, returns only Security Hotspots assigned to the current user")
       .setBooleanPossibleValues()
       .setRequired(false);
-    action.createParam(PARAM_OWASP_TOP_10)
-      .setDescription("Comma-separated list of OWASP Top 10 lowercase categories.")
+    action.createParam(PARAM_OWASP_TOP_10_2017)
+      .setDescription("Comma-separated list of OWASP 2017 Top 10 lowercase categories.")
       .setSince("8.6")
+      .setPossibleValues("a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10");
+    action.createParam(PARAM_OWASP_TOP_10_2021)
+      .setDescription("Comma-separated list of OWASP 2021 Top 10 lowercase categories.")
+      .setSince("9.4")
       .setPossibleValues("a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10");
     action.createParam(PARAM_SANS_TOP_25)
       .setDescription("Comma-separated list of SANS Top 25 categories.")
+      .setDeprecatedSince("10.0")
       .setSince("8.6")
       .setPossibleValues(SANS_TOP_25_INSECURE_INTERACTION, SANS_TOP_25_RISKY_RESOURCE, SANS_TOP_25_POROUS_DEFENSES);
     action.createParam(PARAM_SONARSOURCE_SECURITY)
       .setDescription("Comma-separated list of SonarSource security categories. Use '" + SecurityStandards.SQCategory.OTHERS.getKey() +
         "' to select issues not associated with any category")
       .setSince("8.6")
-      .setPossibleValues(Arrays.stream(SecurityStandards.SQCategory.values()).map(SecurityStandards.SQCategory::getKey).collect(Collectors.toList()));
+      .setPossibleValues(Arrays.stream(SecurityStandards.SQCategory.values()).map(SecurityStandards.SQCategory::getKey).toList());
     action.createParam(PARAM_CWE)
       .setDescription("Comma-separated list of CWE numbers")
       .setExampleValue("89,434,352")
       .setSince("8.8");
+    action.createParam(PARAM_FILES)
+      .setDescription("Comma-separated list of files. Returns only hotspots found in those files")
+      .setExampleValue("src/main/java/org/sonar/server/Test.java")
+      .setSince("9.0");
 
     action.setResponseExample(getClass().getResource("search-example.json"));
+  }
+
+  private Optional<ProjectAndBranch> getAndValidateProjectOrApplication(DbSession dbSession, WsRequest wsRequest) {
+    return wsRequest.getProjectKey().map(projectKey -> {
+      ProjectAndBranch appOrProjectAndBranch = componentFinder.getAppOrProjectAndBranch(dbSession, projectKey, wsRequest.getBranch().orElse(null),
+        wsRequest.getPullRequest().orElse(null));
+
+      if (!SUPPORTED_QUALIFIERS.contains(appOrProjectAndBranch.getProject().getQualifier())) {
+        throw new NotFoundException(format("Project '%s' not found", projectKey));
+      }
+      userSession.checkEntityPermission(USER, appOrProjectAndBranch.getProject());
+      userSession.checkChildProjectsPermission(USER, appOrProjectAndBranch.getProject());
+      return appOrProjectAndBranch;
+    });
+  }
+
+  private SearchResponseData searchHotspots(WsRequest wsRequest, DbSession dbSession, @Nullable ProjectAndBranch projectorApp) {
+    SearchResponse result = doIndexSearch(wsRequest, dbSession, projectorApp);
+    result.getHits();
+    List<String> issueKeys = Arrays.stream(result.getHits().getHits())
+      .map(SearchHit::getId)
+      .toList();
+
+    List<IssueDto> hotspots = toIssueDtos(dbSession, issueKeys);
+
+    Paging paging = forPageIndex(wsRequest.getPage()).withPageSize(wsRequest.getIndex()).andTotal((int) getTotalHits(result).value);
+    return new SearchResponseData(paging, hotspots);
+  }
+
+  private static TotalHits getTotalHits(SearchResponse response) {
+    return ofNullable(response.getHits().getTotalHits()).orElseThrow(() -> new IllegalStateException("Could not get total hits of search results"));
+  }
+
+  private List<IssueDto> toIssueDtos(DbSession dbSession, List<String> issueKeys) {
+    List<IssueDto> unorderedHotspots = dbClient.issueDao().selectByKeys(dbSession, issueKeys);
+    Map<String, IssueDto> hotspotsByKey = unorderedHotspots
+      .stream()
+      .collect(Collectors.toMap(IssueDto::getKey, Function.identity()));
+
+    return issueKeys.stream()
+      .map(hotspotsByKey::get)
+      .filter(Objects::nonNull)
+      .toList();
+  }
+
+  private SearchResponse doIndexSearch(WsRequest wsRequest, DbSession dbSession, @Nullable ProjectAndBranch projectOrAppAndBranch) {
+    var builder = IssueQuery.builder()
+      .types(singleton(RuleType.SECURITY_HOTSPOT.name()))
+      .sort(IssueQuery.SORT_HOTSPOTS)
+      .asc(true)
+      .statuses(wsRequest.getStatus().map(Collections::singletonList).orElse(STATUSES));
+
+    if (projectOrAppAndBranch != null) {
+      ProjectDto projectOrApp = projectOrAppAndBranch.getProject();
+      BranchDto projectOrAppBranch = projectOrAppAndBranch.getBranch();
+
+      if (Qualifiers.APP.equals(projectOrApp.getQualifier())) {
+        builder.viewUuids(singletonList(projectOrAppBranch.getUuid()));
+        if (wsRequest.isInNewCodePeriod() && wsRequest.getPullRequest().isEmpty()) {
+          addInNewCodePeriodFilterByProjects(builder, dbSession, projectOrAppBranch);
+        }
+      } else {
+        builder.projectUuids(singletonList(projectOrApp.getUuid()));
+        if (wsRequest.isInNewCodePeriod() && wsRequest.getPullRequest().isEmpty()) {
+          addInNewCodePeriodFilter(dbSession, projectOrAppBranch, builder);
+        }
+      }
+
+      addMainBranchFilter(projectOrAppAndBranch.getBranch(), builder);
+    }
+
+    Set<String> hotspotKeys = wsRequest.getHotspotKeys();
+    if (!hotspotKeys.isEmpty()) {
+      checkArgument(hotspotKeys.size() <= MAX_PAGE_SIZE, "Number of issue keys must be less than " + MAX_PAGE_SIZE + " (got " + hotspotKeys.size() + ")");
+      builder.issueKeys(hotspotKeys);
+    }
+
+    if (!wsRequest.getFiles().isEmpty()) {
+      builder.files(wsRequest.getFiles());
+    }
+
+    if (wsRequest.isOnlyMine()) {
+      userSession.checkLoggedIn();
+      builder.assigneeUuids(Collections.singletonList(userSession.getUuid()));
+    }
+
+    wsRequest.getStatus().ifPresent(status -> builder.resolved(STATUS_REVIEWED.equals(status)));
+    wsRequest.getResolution().ifPresent(resolution -> builder.resolutions(singleton(resolution)));
+    addSecurityStandardFilters(wsRequest, builder);
+
+    IssueQuery query = builder.build();
+    SearchOptions searchOptions = new SearchOptions()
+      .setPage(wsRequest.page, wsRequest.index);
+    return issueIndex.search(query, searchOptions);
   }
 
   private void validateParameters(WsRequest wsRequest) {
     Optional<String> projectKey = wsRequest.getProjectKey();
     Optional<String> branch = wsRequest.getBranch();
     Optional<String> pullRequest = wsRequest.getPullRequest();
+
     Set<String> hotspotKeys = wsRequest.getHotspotKeys();
     checkArgument(
       projectKey.isPresent() || !hotspotKeys.isEmpty(),
-      "A value must be provided for either parameter '%s' or parameter '%s'", PARAM_PROJECT_KEY, PARAM_HOTSPOTS);
+      "A value must be provided for either parameter '%s' or parameter '%s'", PARAM_PROJECT, PARAM_HOTSPOTS);
 
     checkArgument(
-      !branch.isPresent() || projectKey.isPresent(),
-      "Parameter '%s' must be used with parameter '%s'", PARAM_BRANCH, PARAM_PROJECT_KEY);
+      branch.isEmpty() || projectKey.isPresent(),
+      "Parameter '%s' must be used with parameter '%s'", PARAM_BRANCH, PARAM_PROJECT);
     checkArgument(
-      !pullRequest.isPresent() || projectKey.isPresent(),
-      "Parameter '%s' must be used with parameter '%s'", PARAM_PULL_REQUEST, PARAM_PROJECT_KEY);
+      pullRequest.isEmpty() || projectKey.isPresent(),
+      "Parameter '%s' must be used with parameter '%s'", PARAM_PULL_REQUEST, PARAM_PROJECT);
     checkArgument(
       !(branch.isPresent() && pullRequest.isPresent()),
       "Only one of parameters '%s' and '%s' can be provided", PARAM_BRANCH, PARAM_PULL_REQUEST);
 
     Optional<String> status = wsRequest.getStatus();
     Optional<String> resolution = wsRequest.getResolution();
-    checkArgument(!status.isPresent() || hotspotKeys.isEmpty(),
+    checkArgument(status.isEmpty() || hotspotKeys.isEmpty(),
       "Parameter '%s' can't be used with parameter '%s'", PARAM_STATUS, PARAM_HOTSPOTS);
-    checkArgument(!resolution.isPresent() || hotspotKeys.isEmpty(),
+    checkArgument(resolution.isEmpty() || hotspotKeys.isEmpty(),
       "Parameter '%s' can't be used with parameter '%s'", PARAM_RESOLUTION, PARAM_HOTSPOTS);
 
     resolution.ifPresent(
@@ -271,155 +448,119 @@ public class SearchAction implements HotspotsWsAction {
       checkArgument(userSession.isLoggedIn(),
         "Parameter '%s' requires user to be logged in", PARAM_ONLY_MINE);
       checkArgument(wsRequest.getProjectKey().isPresent(),
-        "Parameter '%s' can be used with parameter '%s' only", PARAM_ONLY_MINE, PARAM_PROJECT_KEY);
+        "Parameter '%s' can be used with parameter '%s' only", PARAM_ONLY_MINE, PARAM_PROJECT);
     }
   }
 
-  private Optional<ComponentDto> getAndValidateProjectOrApplication(DbSession dbSession, WsRequest wsRequest) {
-    return wsRequest.getProjectKey().map(projectKey -> {
-      ComponentDto project = getProject(dbSession, projectKey, wsRequest.getBranch().orElse(null), wsRequest.getPullRequest().orElse(null))
-        .filter(t -> Scopes.PROJECT.equals(t.scope()) && SUPPORTED_QUALIFIERS.contains(t.qualifier()))
-        .filter(ComponentDto::isEnabled)
-        .orElseThrow(() -> new NotFoundException(format("Project '%s' not found", projectKey)));
-      userSession.checkComponentPermission(UserRole.USER, project);
-      return project;
-    });
+  private static void addMainBranchFilter(@NotNull BranchDto branch, IssueQuery.Builder builder) {
+    if (branch.isMain()) {
+      builder.mainBranch(true);
+    } else {
+      builder.branchUuid(branch.getUuid());
+      builder.mainBranch(false);
+    }
   }
 
-  private Optional<ComponentDto> getProject(DbSession dbSession, String projectKey, @Nullable String branch, @Nullable String pullRequest) {
-    if (branch != null) {
-      return dbClient.componentDao().selectByKeyAndBranch(dbSession, projectKey, branch);
-    } else if (pullRequest != null) {
-      return dbClient.componentDao().selectByKeyAndPullRequest(dbSession, projectKey, pullRequest);
+  private void addInNewCodePeriodFilter(DbSession dbSession, @NotNull BranchDto projectBranch, IssueQuery.Builder builder) {
+    Optional<SnapshotDto> snapshot = dbClient.snapshotDao().selectLastAnalysisByComponentUuid(dbSession, projectBranch.getUuid());
+
+    boolean isLastAnalysisUsingReferenceBranch = snapshot.map(SnapshotDto::getPeriodMode)
+      .orElse("").equals(REFERENCE_BRANCH.name());
+
+    if (isLastAnalysisUsingReferenceBranch) {
+      builder.newCodeOnReference(true);
+    } else {
+      var sinceDate = snapshot
+        .map(s -> longToDate(s.getPeriodDate()))
+        .orElseGet(() -> new Date(system2.now()));
+
+      builder.createdAfter(sinceDate, false);
     }
-    return dbClient.componentDao().selectByKey(dbSession, projectKey);
   }
 
-  private SearchResponseData searchHotspots(WsRequest wsRequest, DbSession dbSession, @Nullable ComponentDto project) {
-    SearchResponse result = doIndexSearch(wsRequest, dbSession, project);
-    List<String> issueKeys = Arrays.stream(result.getHits().getHits())
-      .map(SearchHit::getId)
-      .collect(toList(result.getHits().getHits().length));
+  private void addInNewCodePeriodFilterByProjects(IssueQuery.Builder builder, DbSession dbSession, BranchDto appBranch) {
+    Set<String> branchUuids;
 
-    List<IssueDto> hotspots = toIssueDtos(dbSession, issueKeys);
-
-    Paging paging = forPageIndex(wsRequest.getPage()).withPageSize(wsRequest.getIndex()).andTotal((int) result.getHits().getTotalHits().value);
-    return new SearchResponseData(paging, hotspots);
-  }
-
-  private List<IssueDto> toIssueDtos(DbSession dbSession, List<String> issueKeys) {
-    List<IssueDto> unorderedHotspots = dbClient.issueDao().selectByKeys(dbSession, issueKeys);
-    Map<String, IssueDto> hotspotsByKey = unorderedHotspots
-      .stream()
-      .collect(uniqueIndex(IssueDto::getKey, unorderedHotspots.size()));
-
-    return issueKeys.stream()
-      .map(hotspotsByKey::get)
-      .filter(Objects::nonNull)
-      .collect(Collectors.toList());
-  }
-
-  private SearchResponse doIndexSearch(WsRequest wsRequest, DbSession dbSession, @Nullable ComponentDto project) {
-    IssueQuery.Builder builder = IssueQuery.builder()
-      .types(singleton(RuleType.SECURITY_HOTSPOT.name()))
-      .sort(IssueQuery.SORT_HOTSPOTS)
-      .asc(true)
-      .statuses(wsRequest.getStatus().map(Collections::singletonList).orElse(STATUSES));
-
-    if (project != null) {
-      String projectUuid = firstNonNull(project.getMainBranchProjectUuid(), project.uuid());
-      if (Qualifiers.APP.equals(project.qualifier())) {
-        builder.viewUuids(singletonList(projectUuid));
-        addCreatedAfterByProjects(builder, dbSession, wsRequest, project);
-      } else {
-        builder.projectUuids(singletonList(projectUuid));
-        if (wsRequest.isSinceLeakPeriod() && !wsRequest.getPullRequest().isPresent()) {
-          Date sinceDate = dbClient.snapshotDao().selectLastAnalysisByComponentUuid(dbSession, project.uuid())
-            .map(s -> longToDate(s.getPeriodDate()))
-            .orElseGet(() -> new Date(system2.now()));
-          builder.createdAfter(sinceDate, false);
-        }
-      }
-
-      if (project.getMainBranchProjectUuid() == null) {
-        builder.mainBranch(true);
-      } else {
-        builder.branchUuid(project.uuid());
-        builder.mainBranch(false);
-      }
+    if (appBranch.isMain()) {
+      branchUuids = dbClient.applicationProjectsDao().selectProjectsMainBranchesOfApplication(dbSession, appBranch.getProjectUuid()).stream()
+        .map(BranchDto::getUuid)
+        .collect(Collectors.toSet());
+    } else {
+      branchUuids = dbClient.applicationProjectsDao().selectProjectBranchesFromAppBranchUuid(dbSession, appBranch.getUuid()).stream()
+        .map(BranchDto::getUuid)
+        .collect(Collectors.toSet());
     }
 
-    if (!wsRequest.getHotspotKeys().isEmpty()) {
-      builder.issueKeys(wsRequest.getHotspotKeys());
-    }
-
-    if (wsRequest.isOnlyMine()) {
-      userSession.checkLoggedIn();
-      builder.assigneeUuids(Collections.singletonList(userSession.getUuid()));
-    }
-
-    wsRequest.getStatus().ifPresent(status -> builder.resolved(STATUS_REVIEWED.equals(status)));
-    wsRequest.getResolution().ifPresent(resolution -> builder.resolutions(singleton(resolution)));
-    if (!wsRequest.getOwaspTop10().isEmpty()) {
-      builder.owaspTop10(wsRequest.getOwaspTop10());
-    }
-    if (!wsRequest.getSansTop25().isEmpty()) {
-      builder.sansTop25(wsRequest.getSansTop25());
-    }
-    if (!wsRequest.getSonarsourceSecurity().isEmpty()) {
-      builder.sonarsourceSecurity(wsRequest.getSonarsourceSecurity());
-    }
-
-    if (!wsRequest.getCwe().isEmpty()) {
-      builder.cwe(wsRequest.getCwe());
-    }
-
-    IssueQuery query = builder.build();
-    SearchOptions searchOptions = new SearchOptions()
-      .setPage(wsRequest.page, wsRequest.index);
-    return issueIndex.search(query, searchOptions);
-  }
-
-  private void addCreatedAfterByProjects(IssueQuery.Builder builder, DbSession dbSession, WsRequest wsRequest, ComponentDto application) {
-    if (!wsRequest.isSinceLeakPeriod() || wsRequest.getPullRequest().isPresent()) {
-      return;
-    }
-
-    Set<String> projectUuids = dbClient.applicationProjectsDao().selectProjects(dbSession, application.uuid()).stream()
-      .map(ProjectDto::getUuid)
-      .collect(Collectors.toSet());
     long now = system2.now();
-    Map<String, IssueQuery.PeriodStart> leakByProjects = dbClient.snapshotDao().selectLastAnalysesByRootComponentUuids(dbSession, projectUuids).stream()
-      .collect(uniqueIndex(SnapshotDto::getComponentUuid, s ->
-        new IssueQuery.PeriodStart(longToDate(s.getPeriodDate() == null ? now : s.getPeriodDate()), false)));
+
+    List<SnapshotDto> snapshots = dbClient.snapshotDao().selectLastAnalysesByRootComponentUuids(dbSession, branchUuids);
+
+    Set<String> newCodeReferenceByProjects = snapshots
+      .stream()
+      .filter(s -> !isNullOrEmpty(s.getPeriodMode()) && s.getPeriodMode().equals(REFERENCE_BRANCH.name()))
+      .map(SnapshotDto::getRootComponentUuid)
+      .collect(Collectors.toSet());
+
+    Map<String, IssueQuery.PeriodStart> leakByProjects = snapshots
+      .stream()
+      .filter(s -> isNullOrEmpty(s.getPeriodMode()) || !s.getPeriodMode().equals(REFERENCE_BRANCH.name()))
+      .collect(Collectors.toMap(SnapshotDto::getRootComponentUuid, s1 -> new IssueQuery.PeriodStart(longToDate(s1.getPeriodDate() == null ? now : s1.getPeriodDate()), false)));
 
     builder.createdAfterByProjectUuids(leakByProjects);
+    builder.newCodeOnReferenceByProjectUuids(newCodeReferenceByProjects);
   }
 
   private void loadComponents(DbSession dbSession, SearchResponseData searchResponseData) {
-    Set<String> componentKeys = searchResponseData.getOrderedHotspots().stream()
-      .flatMap(hotspot -> Stream.of(hotspot.getComponentKey(), hotspot.getProjectKey()))
+    Set<String> componentUuids = searchResponseData.getHotspots().stream()
+      .flatMap(hotspot -> Stream.of(hotspot.getComponentUuid(), hotspot.getProjectUuid()))
       .collect(Collectors.toSet());
-    if (!componentKeys.isEmpty()) {
-      searchResponseData.addComponents(dbClient.componentDao().selectByDbKeys(dbSession, componentKeys));
+
+    Set<String> locationComponentUuids = searchResponseData.getHotspots()
+      .stream()
+      .flatMap(hotspot -> getHotspotLocationComponentUuids(hotspot).stream())
+      .collect(Collectors.toSet());
+
+    Set<String> aggregatedComponentUuids = Stream.of(componentUuids, locationComponentUuids)
+      .flatMap(Collection::stream)
+      .collect(Collectors.toSet());
+
+    if (!aggregatedComponentUuids.isEmpty()) {
+      List<ComponentDto> componentDtos = dbClient.componentDao().selectByUuids(dbSession, aggregatedComponentUuids);
+      searchResponseData.addComponents(componentDtos);
+
+      Set<String> branchUuids = componentDtos.stream().map(c -> c.getCopyComponentUuid() != null ? c.getCopyComponentUuid() : c.branchUuid()).collect(Collectors.toSet());
+      List<BranchDto> branchDtos = dbClient.branchDao().selectByUuids(dbSession, branchUuids);
+      searchResponseData.addBranches(branchDtos);
     }
   }
 
-  private void loadRules(DbSession dbSession, SearchResponseData searchResponseData) {
-    Set<RuleKey> ruleKeys = searchResponseData.getOrderedHotspots()
-      .stream()
-      .map(IssueDto::getRuleKey)
-      .collect(Collectors.toSet());
-    if (!ruleKeys.isEmpty()) {
-      searchResponseData.addRules(dbClient.ruleDao().selectDefinitionByKeys(dbSession, ruleKeys));
+  private static Set<String> getHotspotLocationComponentUuids(IssueDto hotspot) {
+    Set<String> locationComponentUuids = new HashSet<>();
+    DbIssues.Locations locations = hotspot.parseLocations();
+
+    if (locations == null) {
+      return locationComponentUuids;
     }
+
+    List<DbIssues.Flow> flows = locations.getFlowList();
+
+    for (DbIssues.Flow flow : flows) {
+      List<DbIssues.Location> flowLocations = flow.getLocationList();
+      for (DbIssues.Location location : flowLocations) {
+        if (location.hasComponentId()) {
+          locationComponentUuids.add(location.getComponentId());
+        }
+      }
+    }
+
+    return locationComponentUuids;
   }
 
   private SearchWsResponse formatResponse(SearchResponseData searchResponseData) {
     SearchWsResponse.Builder responseBuilder = SearchWsResponse.newBuilder();
     formatPaging(searchResponseData, responseBuilder);
-    if (!searchResponseData.isEmpty()) {
-      formatHotspots(searchResponseData, responseBuilder);
+    if (searchResponseData.isPresent()) {
+      responseFormatter.formatHotspots(searchResponseData, responseBuilder);
       formatComponents(searchResponseData, responseBuilder);
     }
     return responseBuilder.build();
@@ -435,48 +576,20 @@ public class SearchAction implements HotspotsWsAction {
     responseBuilder.setPaging(pagingBuilder.build());
   }
 
-  private static void formatHotspots(SearchResponseData searchResponseData, SearchWsResponse.Builder responseBuilder) {
-    List<IssueDto> orderedHotspots = searchResponseData.getOrderedHotspots();
-    if (orderedHotspots.isEmpty()) {
-      return;
-    }
-
-    SearchWsResponse.Hotspot.Builder builder = SearchWsResponse.Hotspot.newBuilder();
-    for (IssueDto hotspot : orderedHotspots) {
-      RuleDefinitionDto rule = searchResponseData.getRule(hotspot.getRuleKey())
-        // due to join with table Rule when retrieving data from Issues, this can't happen
-        .orElseThrow(() -> new IllegalStateException(format(
-          "Rule with key '%s' not found for Hotspot '%s'", hotspot.getRuleKey(), hotspot.getKey())));
-      SecurityStandards.SQCategory sqCategory = fromSecurityStandards(rule.getSecurityStandards()).getSqCategory();
-      builder
-        .clear()
-        .setKey(hotspot.getKey())
-        .setComponent(hotspot.getComponentKey())
-        .setProject(hotspot.getProjectKey())
-        .setSecurityCategory(sqCategory.getKey())
-        .setVulnerabilityProbability(sqCategory.getVulnerability().name());
-      ofNullable(hotspot.getStatus()).ifPresent(builder::setStatus);
-      ofNullable(hotspot.getResolution()).ifPresent(builder::setResolution);
-      ofNullable(hotspot.getLine()).ifPresent(builder::setLine);
-      builder.setMessage(nullToEmpty(hotspot.getMessage()));
-      ofNullable(hotspot.getAssigneeUuid()).ifPresent(builder::setAssignee);
-      builder.setAuthor(nullToEmpty(hotspot.getAuthorLogin()));
-      builder.setCreationDate(formatDateTime(hotspot.getIssueCreationDate()));
-      builder.setUpdateDate(formatDateTime(hotspot.getIssueUpdateDate()));
-
-      responseBuilder.addHotspots(builder.build());
-    }
-  }
-
   private void formatComponents(SearchResponseData searchResponseData, SearchWsResponse.Builder responseBuilder) {
-    Set<ComponentDto> components = searchResponseData.getComponents();
+    Collection<ComponentDto> components = searchResponseData.getComponents();
     if (components.isEmpty()) {
       return;
     }
 
     Hotspots.Component.Builder builder = Hotspots.Component.newBuilder();
     for (ComponentDto component : components) {
-      responseBuilder.addComponents(responseFormatter.formatComponent(builder, component));
+      String branchUuid = component.getCopyComponentUuid() != null ? component.getCopyComponentUuid() : component.branchUuid();
+      BranchDto branchDto = searchResponseData.getBranch(branchUuid);
+      if (branchDto == null && component.getCopyComponentUuid() == null) {
+        throw new IllegalStateException("Could not find a branch for a component " + component.getKey() + " with uuid " + component.uuid());
+      }
+      responseBuilder.addComponents(responseFormatter.formatComponent(builder, component, branchDto));
     }
   }
 
@@ -489,19 +602,25 @@ public class SearchAction implements HotspotsWsAction {
     private final Set<String> hotspotKeys;
     private final String status;
     private final String resolution;
-    private final boolean sinceLeakPeriod;
+    private final boolean inNewCodePeriod;
     private final boolean onlyMine;
-    private final Set<String> owaspTop10;
+    private final Integer owaspAsvsLevel;
+    private final Set<String> pciDss32;
+    private final Set<String> pciDss40;
+    private final Set<String> owaspAsvs40;
+    private final Set<String> owaspTop10For2017;
+    private final Set<String> owaspTop10For2021;
     private final Set<String> sansTop25;
     private final Set<String> sonarsourceSecurity;
     private final Set<String> cwe;
+    private final Set<String> files;
 
     private WsRequest(int page, int index,
-      @Nullable String projectKey, @Nullable String branch, @Nullable String pullRequest,
-      Set<String> hotspotKeys,
-      @Nullable String status, @Nullable String resolution, @Nullable Boolean sinceLeakPeriod,
-      @Nullable Boolean onlyMine, Set<String> owaspTop10, Set<String> sansTop25, Set<String> sonarsourceSecurity,
-      Set<String> cwe) {
+      @Nullable String projectKey, @Nullable String branch, @Nullable String pullRequest, Set<String> hotspotKeys,
+      @Nullable String status, @Nullable String resolution, @Nullable Boolean inNewCodePeriod, @Nullable Boolean onlyMine,
+      @Nullable Integer owaspAsvsLevel, Set<String> pciDss32, Set<String> pciDss40, Set<String> owaspAsvs40,
+      Set<String> owaspTop10For2017, Set<String> owaspTop10For2021, Set<String> sansTop25, Set<String> sonarsourceSecurity,
+      Set<String> cwe, @Nullable Set<String> files) {
       this.page = page;
       this.index = index;
       this.projectKey = projectKey;
@@ -510,12 +629,18 @@ public class SearchAction implements HotspotsWsAction {
       this.hotspotKeys = hotspotKeys;
       this.status = status;
       this.resolution = resolution;
-      this.sinceLeakPeriod = sinceLeakPeriod != null && sinceLeakPeriod;
+      this.inNewCodePeriod = inNewCodePeriod != null && inNewCodePeriod;
       this.onlyMine = onlyMine != null && onlyMine;
-      this.owaspTop10 = owaspTop10;
+      this.owaspAsvsLevel = owaspAsvsLevel;
+      this.pciDss32 = pciDss32;
+      this.pciDss40 = pciDss40;
+      this.owaspAsvs40 = owaspAsvs40;
+      this.owaspTop10For2017 = owaspTop10For2017;
+      this.owaspTop10For2021 = owaspTop10For2021;
       this.sansTop25 = sansTop25;
       this.sonarsourceSecurity = sonarsourceSecurity;
       this.cwe = cwe;
+      this.files = files;
     }
 
     int getPage() {
@@ -550,16 +675,36 @@ public class SearchAction implements HotspotsWsAction {
       return ofNullable(resolution);
     }
 
-    boolean isSinceLeakPeriod() {
-      return sinceLeakPeriod;
+    boolean isInNewCodePeriod() {
+      return inNewCodePeriod;
     }
 
     boolean isOnlyMine() {
       return onlyMine;
     }
 
-    public Set<String> getOwaspTop10() {
-      return owaspTop10;
+    public Optional<Integer> getOwaspAsvsLevel() {
+      return ofNullable(owaspAsvsLevel);
+    }
+
+    public Set<String> getPciDss32() {
+      return pciDss32;
+    }
+
+    public Set<String> getPciDss40() {
+      return pciDss40;
+    }
+
+    public Set<String> getOwaspAsvs40() {
+      return owaspAsvs40;
+    }
+
+    public Set<String> getOwaspTop10For2017() {
+      return owaspTop10For2017;
+    }
+
+    public Set<String> getOwaspTop10For2021() {
+      return owaspTop10For2021;
     }
 
     public Set<String> getSansTop25() {
@@ -573,46 +718,9 @@ public class SearchAction implements HotspotsWsAction {
     public Set<String> getCwe() {
       return cwe;
     }
-  }
 
-  private static final class SearchResponseData {
-    private final Paging paging;
-    private final List<IssueDto> orderedHotspots;
-    private final Set<ComponentDto> components = new HashSet<>();
-    private final Map<RuleKey, RuleDefinitionDto> rulesByRuleKey = new HashMap<>();
-
-    private SearchResponseData(Paging paging, List<IssueDto> orderedHotspots) {
-      this.paging = paging;
-      this.orderedHotspots = orderedHotspots;
+    public Set<String> getFiles() {
+      return files;
     }
-
-    boolean isEmpty() {
-      return orderedHotspots.isEmpty();
-    }
-
-    public Paging getPaging() {
-      return paging;
-    }
-
-    List<IssueDto> getOrderedHotspots() {
-      return orderedHotspots;
-    }
-
-    void addComponents(Collection<ComponentDto> components) {
-      this.components.addAll(components);
-    }
-
-    Set<ComponentDto> getComponents() {
-      return components;
-    }
-
-    void addRules(Collection<RuleDefinitionDto> rules) {
-      rules.forEach(t -> rulesByRuleKey.put(t.getKey(), t));
-    }
-
-    Optional<RuleDefinitionDto> getRule(RuleKey ruleKey) {
-      return ofNullable(rulesByRuleKey.get(ruleKey));
-    }
-
   }
 }

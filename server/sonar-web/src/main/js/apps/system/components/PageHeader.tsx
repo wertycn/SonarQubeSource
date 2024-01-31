@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Card, ClipboardButton, FlagMessage, Spinner, Title } from 'design-system';
 import * as React from 'react';
-import { ClipboardButton } from 'sonar-ui-common/components/controls/clipboard';
-import { toShortNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
+import { toShortISO8601String } from '../../../helpers/dates';
+import { translate } from '../../../helpers/l10n';
+import { AppState } from '../../../types/appstate';
 import PageActions from './PageActions';
 
 export interface Props {
@@ -28,62 +30,66 @@ export interface Props {
   loading: boolean;
   logLevel: string;
   onLogLevelChange: () => void;
+  appState: AppState;
   serverId?: string;
-  showActions: boolean;
   version?: string;
 }
 
-export default function PageHeader(props: Props) {
-  const { isCluster, loading, logLevel, serverId, showActions, version } = props;
+function PageHeader(props: Readonly<Props>) {
+  const { isCluster, loading, logLevel, serverId, version, appState } = props;
   return (
-    <header className="page-header">
-      <h1 className="page-title">{translate('system_info.page')}</h1>
-      {showActions && (
-        <PageActions
-          canDownloadLogs={!isCluster}
-          canRestart={!isCluster}
-          cluster={isCluster}
-          logLevel={logLevel}
-          onLogLevelChange={props.onLogLevelChange}
-          serverId={serverId}
-        />
-      )}
-      {loading && (
-        <div className="page-actions">
-          <i className="spinner" />
+    <header className="sw-mt-8">
+      <div className="sw-flex sw-items-start sw-justify-between">
+        <Title>{translate('system_info.page')}</Title>
+
+        <div className="sw-flex sw-items-center">
+          <Spinner className="sw-mr-4 sw-mt-1" loading={loading} />
+
+          <PageActions
+            canDownloadLogs={!isCluster}
+            cluster={isCluster}
+            logLevel={logLevel}
+            onLogLevelChange={props.onLogLevelChange}
+            serverId={serverId}
+          />
         </div>
-      )}
+      </div>
+
       {serverId && version && (
-        <div className="system-info-copy-paste-id-info boxed-group display-flex-center">
-          <div className="flex-1">
-            <table className="width-100">
-              <tbody>
-                <tr>
-                  <th>
-                    <strong>{translate('system.server_id')}</strong>
-                  </th>
-                  <td>{serverId}</td>
-                </tr>
-                <tr>
-                  <th>
-                    <strong>{translate('system.version')}</strong>
-                  </th>
-                  <td>{version}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <ClipboardButton
-            className="flex-0"
-            copyValue={`SonarQube ID information
+        <Card className="sw-max-w-1/2 sw-mb-8">
+          {!appState.productionDatabase && (
+            <FlagMessage className="sw-mb-2" variant="warning">
+              {translate('system.not_production_database_warning')}
+            </FlagMessage>
+          )}
+          <div className="sw-flex sw-items-center sw-justify-between">
+            <div>
+              <div className="sw-flex sw-items-center">
+                <strong className="sw-w-32">{translate('system.server_id')}</strong>
+                <span className="sw-code">{serverId}</span>
+              </div>
+              <div className="sw-flex sw-items-center">
+                <strong className="sw-w-32">{translate('system.version')}</strong>
+                <span>{version}</span>
+              </div>
+            </div>
+            <ClipboardButton
+              className="sw-ml-4"
+              copyValue={`SonarQube ID information
 Server ID: ${serverId}
 Version: ${version}
-Date: ${toShortNotSoISOString(Date.now())}
-`}>
-            {translate('system.copy_id_info')}
-          </ClipboardButton>
-        </div>
+Date: ${toShortISO8601String(Date.now())}
+`}
+            >
+              <span className="sw-ml-1 sw-whitespace-nowrap">
+                {translate('system.copy_id_info')}
+              </span>
+            </ClipboardButton>
+          </div>
+        </Card>
       )}
     </header>
   );
 }
+
+export default withAppStateContext(PageHeader);

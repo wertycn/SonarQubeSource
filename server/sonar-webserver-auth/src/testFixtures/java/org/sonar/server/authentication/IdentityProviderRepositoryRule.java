@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,6 +25,10 @@ import org.junit.runners.model.Statement;
 import org.sonar.api.server.authentication.IdentityProvider;
 
 public class IdentityProviderRepositoryRule extends IdentityProviderRepository implements TestRule {
+
+  public IdentityProviderRepositoryRule() {
+    super(null);
+  }
 
   public IdentityProviderRepositoryRule addIdentityProvider(IdentityProvider identityProvider) {
     providersByKey.put(identityProvider.getKey(), identityProvider);

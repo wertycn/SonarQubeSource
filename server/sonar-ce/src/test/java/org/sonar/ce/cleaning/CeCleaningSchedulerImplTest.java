@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -127,7 +127,7 @@ public class CeCleaningSchedulerImplTest {
             assertThat(unit).isEqualTo(TimeUnit.MINUTES);
             break;
           default:
-            fail("Unknwon call of scheduleWithFixedDelay");
+            fail("Unknown call of scheduleWithFixedDelay");
         }
         // synchronously execute command
         command.run();
@@ -138,7 +138,7 @@ public class CeCleaningSchedulerImplTest {
       mockedInternalCeQueue, mockCeDistributedInformation(jobLock));
 
     underTest.startScheduling();
-    assertThat(executorService.schedulerCounter).isEqualTo(1);
+    assertThat(executorService.schedulerCounter).isOne();
   }
 
   private CeConfiguration mockCeConfiguration(long cleanCeTasksInitialDelay, long cleanCeTasksDelay) {

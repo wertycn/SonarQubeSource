@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,38 +29,41 @@ import org.sonar.api.batch.fs.InputFile.Status;
 import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.scm.ScmProvider;
 import org.sonar.api.notifications.AnalysisWarnings;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.core.documentation.DocumentationLinkGenerator;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.Changesets.Builder;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
 import org.sonar.scanner.report.ReportPublisher;
 import org.sonar.scanner.repository.FileData;
-import org.sonar.scanner.repository.ProjectRepositoriesSupplier;
+import org.sonar.scanner.repository.ProjectRepositories;
 import org.sonar.scanner.scan.branch.BranchConfiguration;
 import org.sonar.scanner.scan.filesystem.InputComponentStore;
 
 public final class ScmPublisher {
 
-  private static final Logger LOG = Loggers.get(ScmPublisher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ScmPublisher.class);
 
   private final ScmConfiguration configuration;
-  private final ProjectRepositoriesSupplier projectRepositoriesSupplier;
+  private final ProjectRepositories projectRepositories;
   private final InputComponentStore componentStore;
   private final FileSystem fs;
   private final ScannerReportWriter writer;
-  private AnalysisWarnings analysisWarnings;
+  private final AnalysisWarnings analysisWarnings;
   private final BranchConfiguration branchConfiguration;
+  private final DocumentationLinkGenerator documentationLinkGenerator;
 
-  public ScmPublisher(ScmConfiguration configuration, ProjectRepositoriesSupplier projectRepositoriesSupplier,
-    InputComponentStore componentStore, FileSystem fs, ReportPublisher reportPublisher, BranchConfiguration branchConfiguration, AnalysisWarnings analysisWarnings) {
+  public ScmPublisher(ScmConfiguration configuration, ProjectRepositories projectRepositories, InputComponentStore componentStore, FileSystem fs,
+    ReportPublisher reportPublisher, BranchConfiguration branchConfiguration, AnalysisWarnings analysisWarnings, DocumentationLinkGenerator documentationLinkGenerator) {
     this.configuration = configuration;
-    this.projectRepositoriesSupplier = projectRepositoriesSupplier;
+    this.projectRepositories = projectRepositories;
     this.componentStore = componentStore;
     this.fs = fs;
     this.branchConfiguration = branchConfiguration;
     this.writer = reportPublisher.getWriter();
     this.analysisWarnings = analysisWarnings;
+    this.documentationLinkGenerator = documentationLinkGenerator;
   }
 
   public void publish() {
@@ -79,7 +82,7 @@ public final class ScmPublisher {
     if (!filesToBlame.isEmpty()) {
       String key = provider.key();
       LOG.info("SCM Publisher SCM provider for this project is: " + key);
-      DefaultBlameOutput output = new DefaultBlameOutput(writer, analysisWarnings, filesToBlame);
+      DefaultBlameOutput output = new DefaultBlameOutput(writer, analysisWarnings, filesToBlame, documentationLinkGenerator);
       try {
         provider.blameCommand().blame(new DefaultBlameInput(fs, filesToBlame), output);
       } catch (Exception e) {
@@ -99,7 +102,7 @@ public final class ScmPublisher {
       if (configuration.forceReloadAll() || f.status() != Status.SAME) {
         addIfNotEmpty(filesToBlame, f);
       } else if (!branchConfiguration.isPullRequest()) {
-        FileData fileData = projectRepositoriesSupplier.get().fileData(componentStore.findModule(f).key(), f);
+        FileData fileData = projectRepositories.fileData(componentStore.findModule(f).key(), f);
         if (fileData == null || StringUtils.isEmpty(fileData.revision())) {
           addIfNotEmpty(filesToBlame, f);
         } else {

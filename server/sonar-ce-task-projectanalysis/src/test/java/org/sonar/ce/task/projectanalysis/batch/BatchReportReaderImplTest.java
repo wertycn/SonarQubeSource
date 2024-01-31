@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,11 +28,13 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.impl.utils.JUnitTempFolder;
 import org.sonar.core.util.CloseableIterator;
+import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
 
 import static com.google.common.collect.ImmutableList.of;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class BatchReportReaderImplTest {
   private static final int COMPONENT_REF = 1;
@@ -58,12 +60,14 @@ public class BatchReportReaderImplTest {
   public void setUp() {
     BatchReportDirectoryHolder holder = new ImmutableBatchReportDirectoryHolder(tempFolder.newDir());
     underTest = new BatchReportReaderImpl(holder);
-    writer = new ScannerReportWriter(holder.getDirectory());
+    FileStructure fileStructure = new FileStructure(holder.getDirectory());
+    writer = new ScannerReportWriter(fileStructure);
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void readMetadata_throws_ISE_if_no_metadata() {
-    underTest.readMetadata();
+    assertThatThrownBy(() -> underTest.readMetadata())
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -134,9 +138,10 @@ public class BatchReportReaderImplTest {
     assertThat(underTest.readChangesets(COMPONENT_REF)).isNotSameAs(underTest.readChangesets(COMPONENT_REF));
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void readComponent_throws_ISE_if_file_does_not_exist() {
-    underTest.readComponent(COMPONENT_REF);
+    assertThatThrownBy(() -> underTest.readComponent(COMPONENT_REF))
+      .isInstanceOf(IllegalStateException.class);
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,63 +18,68 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
-import Suggestions from '../../../app/components/embed-docs-modal/Suggestions';
-import { Router, withRouter } from '../../../components/hoc/withRouter';
+import { Helmet } from 'react-helmet-async';
+import withAvailableFeatures, {
+  WithAvailableFeaturesProps,
+} from '../../../app/components/available-features/withAvailableFeatures';
+import withComponentContext from '../../../app/components/componentContext/withComponentContext';
+import Suggestions from '../../../components/embed-docs-modal/Suggestions';
 import { isPullRequest } from '../../../helpers/branch-like';
-import { ProjectAlmBindingResponse } from '../../../types/alm-settings';
-import { BranchLike } from '../../../types/branch-like';
+import { translate } from '../../../helpers/l10n';
+import { useBranchesQuery } from '../../../queries/branch';
 import { isPortfolioLike } from '../../../types/component';
+import { Feature } from '../../../types/features';
+import { Component } from '../../../types/types';
 import BranchOverview from '../branches/BranchOverview';
+import PullRequestOverview from '../pullRequests/PullRequestOverview';
+import EmptyOverview from './EmptyOverview';
 
-const EmptyOverview = lazyLoadComponent(() => import('./EmptyOverview'));
-const PullRequestOverview = lazyLoadComponent(() => import('../pullRequests/PullRequestOverview'));
-
-interface Props {
-  branchLike?: BranchLike;
-  branchLikes: BranchLike[];
-  component: T.Component;
-  isInProgress?: boolean;
-  isPending?: boolean;
-  projectBinding?: ProjectAlmBindingResponse;
-  router: Pick<Router, 'replace'>;
+interface AppProps extends WithAvailableFeaturesProps {
+  component: Component;
 }
 
-export class App extends React.PureComponent<Props> {
-  isPortfolio = () => {
-    return isPortfolioLike(this.props.component.qualifier);
-  };
+export function App(props: AppProps) {
+  const { component } = props;
+  const branchSupportEnabled = props.hasFeature(Feature.BranchSupport);
+  const { data } = useBranchesQuery(component);
 
-  render() {
-    const { branchLike, branchLikes, component, projectBinding } = this.props;
-
-    if (this.isPortfolio()) {
-      return null;
-    }
-
-    return isPullRequest(branchLike) ? (
-      <>
-        <Suggestions suggestions="pull_requests" />
-        <PullRequestOverview branchLike={branchLike} component={component} />
-      </>
-    ) : (
-      <>
-        <Suggestions suggestions="overview" />
-
-        {!component.analysisDate ? (
-          <EmptyOverview
-            branchLike={branchLike}
-            branchLikes={branchLikes}
-            component={component}
-            hasAnalyses={this.props.isPending || this.props.isInProgress}
-            projectBinding={projectBinding}
-          />
-        ) : (
-          <BranchOverview branch={branchLike} component={component} />
-        )}
-      </>
-    );
+  if (isPortfolioLike(component.qualifier) || !data) {
+    return null;
   }
+
+  const { branchLike, branchLikes } = data;
+
+  return (
+    <>
+      <Helmet defer={false} title={translate('overview.page')} />
+      {isPullRequest(branchLike) ? (
+        <main>
+          <Suggestions suggestions="pull_requests" />
+          <PullRequestOverview pullRequest={branchLike} component={component} />
+        </main>
+      ) : (
+        <main>
+          <Suggestions suggestions="overview" />
+
+          {!component.analysisDate && (
+            <EmptyOverview
+              branchLike={branchLike}
+              branchLikes={branchLikes}
+              component={component}
+            />
+          )}
+
+          {component.analysisDate && (
+            <BranchOverview
+              branch={branchLike}
+              branchesEnabled={branchSupportEnabled}
+              component={component}
+            />
+          )}
+        </main>
+      )}
+    </>
+  );
 }
 
-export default withRouter(App);
+export default withComponentContext(withAvailableFeatures(App));

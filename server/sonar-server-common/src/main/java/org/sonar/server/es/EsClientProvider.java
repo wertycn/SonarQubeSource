@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,15 +28,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.http.HttpHost;
 import org.elasticsearch.common.settings.Settings;
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.config.Configuration;
 import org.sonar.api.server.ServerSide;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.process.cluster.NodeType;
+import org.springframework.context.annotation.Bean;
 
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HTTP_KEYSTORE;
+import static org.sonar.process.ProcessProperties.Property.CLUSTER_ES_HTTP_KEYSTORE_PASSWORD;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NAME;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_NODE_TYPE;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_SEARCH_HOSTS;
@@ -47,50 +49,49 @@ import static org.sonar.process.cluster.NodeType.SEARCH;
 
 @ComputeEngineSide
 @ServerSide
-public class EsClientProvider extends ProviderAdapter {
+public class EsClientProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(EsClientProvider.class);
 
-  private static final Logger LOGGER = Loggers.get(EsClientProvider.class);
-
-  private EsClient cache;
-
+  @Bean("EsClient")
   public EsClient provide(Configuration config) {
-    if (cache == null) {
-      Settings.Builder esSettings = Settings.builder();
+    Settings.Builder esSettings = Settings.builder();
 
-      // mandatory property defined by bootstrap process
-      esSettings.put("cluster.name", config.get(CLUSTER_NAME.getKey()).get());
+    // mandatory property defined by bootstrap process
+    esSettings.put("cluster.name", config.get(CLUSTER_NAME.getKey()).get());
 
-      boolean clusterEnabled = config.getBoolean(CLUSTER_ENABLED.getKey()).orElse(false);
-      boolean searchNode = !clusterEnabled || SEARCH.equals(NodeType.parse(config.get(CLUSTER_NODE_TYPE.getKey()).orElse(null)));
-      List<HttpHost> httpHosts;
-      if (clusterEnabled && !searchNode) {
-        httpHosts = getHttpHosts(config);
+    boolean clusterEnabled = config.getBoolean(CLUSTER_ENABLED.getKey()).orElse(false);
+    boolean searchNode = !clusterEnabled || SEARCH.equals(NodeType.parse(config.get(CLUSTER_NODE_TYPE.getKey()).orElse(null)));
+    List<HttpHost> httpHosts;
+    if (clusterEnabled && !searchNode) {
+      httpHosts = getHttpHosts(config);
 
-        LOGGER.info("Connected to remote Elasticsearch: [{}]", displayedAddresses(httpHosts));
-      } else {
-        // defaults provided in:
-        // * in org.sonar.process.ProcessProperties.Property.SEARCH_HOST
-        // * in org.sonar.process.ProcessProperties.Property.SEARCH_PORT
-        HostAndPort host = HostAndPort.fromParts(config.get(SEARCH_HOST.getKey()).get(), config.getInt(SEARCH_PORT.getKey()).get());
-        httpHosts = Collections.singletonList(toHttpHost(host));
-        LOGGER.info("Connected to local Elasticsearch: [{}]", displayedAddresses(httpHosts));
-      }
-
-      cache = new EsClient(config.get(CLUSTER_SEARCH_PASSWORD.getKey()).orElse(null), httpHosts.toArray(new HttpHost[0]));
+      LOGGER.info("Connected to remote Elasticsearch: [{}]", displayedAddresses(httpHosts));
+    } else {
+      // defaults provided in:
+      // * in org.sonar.process.ProcessProperties.Property.SEARCH_HOST
+      // * in org.sonar.process.ProcessProperties.Property.SEARCH_PORT
+      HostAndPort host = HostAndPort.fromParts(config.get(SEARCH_HOST.getKey()).get(), config.getInt(SEARCH_PORT.getKey()).get());
+      httpHosts = Collections.singletonList(toHttpHost(host, config));
+      LOGGER.info("Connected to local Elasticsearch: [{}]", displayedAddresses(httpHosts));
     }
-    return cache;
+
+    return new EsClient(config.get(CLUSTER_SEARCH_PASSWORD.getKey()).orElse(null),
+      config.get(CLUSTER_ES_HTTP_KEYSTORE.getKey()).orElse(null),
+      config.get(CLUSTER_ES_HTTP_KEYSTORE_PASSWORD.getKey()).orElse(null),
+      httpHosts.toArray(new HttpHost[0]));
   }
 
   private static List<HttpHost> getHttpHosts(Configuration config) {
     return Arrays.stream(config.getStringArray(CLUSTER_SEARCH_HOSTS.getKey()))
       .map(HostAndPort::fromString)
-      .map(EsClientProvider::toHttpHost)
-      .collect(Collectors.toList());
+      .map(host -> toHttpHost(host, config))
+      .toList();
   }
 
-  private static HttpHost toHttpHost(HostAndPort host) {
+  private static HttpHost toHttpHost(HostAndPort host, Configuration config) {
     try {
-      return new HttpHost(InetAddress.getByName(host.getHost()), host.getPortOrDefault(9001));
+      String scheme = config.get(CLUSTER_ES_HTTP_KEYSTORE.getKey()).isPresent() ? "https" : HttpHost.DEFAULT_SCHEME_NAME;
+      return new HttpHost(InetAddress.getByName(host.getHost()), host.getPortOrDefault(9001), scheme);
     } catch (UnknownHostException e) {
       throw new IllegalStateException("Can not resolve host [" + host + "]", e);
     }

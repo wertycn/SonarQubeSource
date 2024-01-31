@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,63 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
 import * as React from 'react';
-import { mockComponent, mockLocation } from '../../../../helpers/testMocks';
-import {
-  ProjectAdminPageExtension,
-  ProjectAdminPageExtensionProps
-} from '../ProjectAdminPageExtension';
+import { HelmetProvider } from 'react-helmet-async';
+import { IntlProvider } from 'react-intl';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { getExtensionStart } from '../../../../helpers/extensions';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { ComponentContextShape } from '../../../../types/component';
+import { Component } from '../../../../types/types';
+import { ComponentContext } from '../../componentContext/ComponentContext';
+import ProjectAdminPageExtension from '../ProjectAdminPageExtension';
 
-it('should render correctly', () => {
-  expect(
-    shallowRender({
-      component: mockComponent({
-        configuration: { extensions: [{ key: 'foo/bar', name: 'Foo Bar' }] }
-      })
-    })
-  ).toMatchSnapshot('extension exists');
-  expect(shallowRender()).toMatchSnapshot('extension not found');
+jest.mock('../../../../helpers/extensions', () => ({
+  getExtensionStart: jest.fn().mockResolvedValue(jest.fn()),
+}));
+
+it('should render correctly when the extension is found', () => {
+  renderProjectAdminPageExtension(
+    mockComponent({
+      configuration: { extensions: [{ key: 'pluginId/extensionId', name: 'name' }] },
+    }),
+    { pluginKey: 'pluginId', extensionKey: 'extensionId' },
+  );
+  expect(getExtensionStart).toHaveBeenCalledWith('pluginId/extensionId');
 });
 
-function shallowRender(props: Partial<ProjectAdminPageExtensionProps> = {}) {
-  return shallow(
-    <ProjectAdminPageExtension
-      component={mockComponent()}
-      location={mockLocation()}
-      params={{ extensionKey: 'bar', pluginKey: 'foo' }}
-      {...props}
-    />
+it('should render correctly when the extension is not found', () => {
+  renderProjectAdminPageExtension(
+    mockComponent({ extensions: [{ key: 'pluginId/extensionId', name: 'name' }] }),
+    { pluginKey: 'not-found-plugin', extensionKey: 'not-found-extension' },
+  );
+  expect(screen.getByText('page_not_found')).toBeInTheDocument();
+});
+
+function renderProjectAdminPageExtension(
+  component: Component,
+  params: {
+    extensionKey: string;
+    pluginKey: string;
+  },
+) {
+  const { pluginKey, extensionKey } = params;
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <HelmetProvider context={{}}>
+        <IntlProvider defaultLocale="en" locale="en">
+          <ComponentContext.Provider value={{ component } as ComponentContextShape}>
+            <MemoryRouter initialEntries={[`/${pluginKey}/${extensionKey}`]}>
+              <Routes>
+                <Route path="/:pluginKey/:extensionKey" element={<ProjectAdminPageExtension />} />
+              </Routes>
+            </MemoryRouter>
+          </ComponentContext.Provider>
+        </IntlProvider>
+      </HelmetProvider>
+    </QueryClientProvider>,
   );
 }

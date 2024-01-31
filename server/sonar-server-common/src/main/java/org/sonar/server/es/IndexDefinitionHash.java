@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,15 +19,14 @@
  */
 package org.sonar.server.es;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.SortedMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.sonar.server.es.newindex.BuiltIndex;
-
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 
 /**
  * Hash of index definition is stored in the index itself in order to detect changes of mappings
@@ -44,8 +43,8 @@ class IndexDefinitionHash {
     IndexType.IndexMainType mainType = index.getMainType();
     return of(
       index.getSettings().toString(),
-      ImmutableMap.of(mainType.getIndex(), mainType),
-      index.getRelationTypes().stream().collect(uniqueIndex(IndexType.IndexRelationType::getName, t -> t)),
+      Map.of(mainType.getIndex(), mainType),
+      index.getRelationTypes().stream().collect(Collectors.toMap(IndexType.IndexRelationType::getName, Function.identity())),
       index.getAttributes());
   }
 
@@ -67,12 +66,12 @@ class IndexDefinitionHash {
   }
 
   private static void appendObject(StringBuilder sb, Object value) {
-    if (value instanceof Object[]) {
-      sb.append(Arrays.toString((Object[]) value));
-    } else if (value instanceof Map) {
-      appendMap(sb, (Map) value);
-    } else if (value instanceof IndexType) {
-      sb.append(((IndexType) value).format());
+    if (value instanceof Object[] arrayValue) {
+      sb.append(Arrays.toString(arrayValue));
+    } else if (value instanceof Map<?, ?> map) {
+      appendMap(sb, map);
+    } else if (value instanceof IndexType indexType) {
+      sb.append(indexType.format());
     } else {
       sb.append(value);
     }

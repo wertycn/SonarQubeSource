@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,6 +39,7 @@ import org.sonarqube.ws.client.issue.IssuesWsParameters;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.requireNonNull;
+import static org.sonar.core.issue.IssueChangeContext.issueChangeContextByUserBuilder;
 import static org.sonar.core.util.Uuids.UUID_EXAMPLE_01;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ISSUE;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_TEXT;
@@ -71,6 +72,12 @@ public class AddCommentAction implements IssuesWsAction {
         "Requires authentication and the following permission: 'Browse' on the project of the specified issue.")
       .setSince("3.6")
       .setChangelog(
+        new Change("10.4", "The response fields 'severity' and 'type' are deprecated. Please use 'impacts' instead."),
+        new Change("10.4", "The response fields 'status' and 'resolution' are deprecated. Please use 'issueStatus' instead."),
+        new Change("10.4", "Add 'issueStatus' field to the response."),
+        new Change("10.2", "Add 'impacts', 'cleanCodeAttribute', 'cleanCodeAttributeCategory' fields to the response"),
+        new Change("9.6", "Response field 'ruleDescriptionContextKey' added"),
+        new Change("8.8", "The response field components.uuid is removed"),
         new Change("6.3", "the response returns the issue with all its details"),
         new Change("6.5", "the database ids of the components are removed from the response"),
         new Change("6.5", "the response field components.uuid is deprecated. Use components.key instead."))
@@ -94,10 +101,10 @@ public class AddCommentAction implements IssuesWsAction {
     AddCommentRequest wsRequest = toWsRequest(request);
     try (DbSession dbSession = dbClient.openSession(false)) {
       IssueDto issueDto = issueFinder.getByKey(dbSession, wsRequest.getIssue());
-      IssueChangeContext context = IssueChangeContext.createUser(new Date(system2.now()), userSession.getUuid());
+      IssueChangeContext context = issueChangeContextByUserBuilder(new Date(system2.now()), userSession.getUuid()).build();
       DefaultIssue defaultIssue = issueDto.toDefaultIssue();
       issueFieldsSetter.addComment(defaultIssue, wsRequest.getText(), context);
-      SearchResponseData preloadedSearchResponseData = issueUpdater.saveIssueAndPreloadSearchResponseData(dbSession, defaultIssue, context, false);
+      SearchResponseData preloadedSearchResponseData = issueUpdater.saveIssueAndPreloadSearchResponseData(dbSession, issueDto, defaultIssue, context);
       responseWriter.write(defaultIssue.key(), preloadedSearchResponseData, request, response);
     }
   }

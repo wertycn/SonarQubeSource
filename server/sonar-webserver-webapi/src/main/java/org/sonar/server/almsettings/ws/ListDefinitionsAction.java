@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -57,14 +57,15 @@ public class ListDefinitionsAction implements AlmSettingsWsAction {
   @Override
   public void define(WebService.NewController context) {
     context.createAction("list_definitions")
-      .setDescription("List ALM Settings, sorted by created date.<br/>" +
+      .setDescription("List DevOps Platform Settings, sorted by created date.<br/>" +
         "Requires the 'Administer System' permission")
       .setSince("8.1")
       .setResponseExample(getClass().getResource("list_definitions-example.json"))
       .setChangelog(new Change("8.2", "Field 'URL' added for GitLab definitions"),
         new Change("8.6", "Field 'URL' added for Azure definitions"),
         new Change("8.7", "Fields 'personalAccessToken', 'privateKey', and 'clientSecret' are no longer returned"))
-      .setHandler(this);
+      .setHandler(this)
+      .setResponseExample(getClass().getResource("example-list_definitions.json"));
   }
 
   @Override
@@ -81,23 +82,23 @@ public class ListDefinitionsAction implements AlmSettingsWsAction {
       List<AlmSettingGithub> githubSettings = settingsByAlm.getOrDefault(ALM.GITHUB, emptyList())
         .stream()
         .sorted(Comparator.comparing(AlmSettingDto::getCreatedAt))
-        .map(ListDefinitionsAction::toGitHub).collect(Collectors.toList());
+        .map(ListDefinitionsAction::toGitHub).toList();
       List<AlmSettingAzure> azureSettings = settingsByAlm.getOrDefault(ALM.AZURE_DEVOPS, emptyList())
         .stream()
         .sorted(Comparator.comparing(AlmSettingDto::getCreatedAt))
-        .map(ListDefinitionsAction::toAzure).collect(Collectors.toList());
+        .map(ListDefinitionsAction::toAzure).toList();
       List<AlmSettingBitbucket> bitbucketSettings = settingsByAlm.getOrDefault(ALM.BITBUCKET, emptyList())
         .stream()
         .sorted(Comparator.comparing(AlmSettingDto::getCreatedAt))
-        .map(ListDefinitionsAction::toBitbucket).collect(Collectors.toList());
+        .map(ListDefinitionsAction::toBitbucket).toList();
       List<AlmSettingBitbucketCloud> bitbucketCloudSettings = settingsByAlm.getOrDefault(ALM.BITBUCKET_CLOUD, emptyList())
         .stream()
         .sorted(Comparator.comparing(AlmSettingDto::getCreatedAt))
-        .map(ListDefinitionsAction::toBitbucketCloud).collect(Collectors.toList());
+        .map(ListDefinitionsAction::toBitbucketCloud).toList();
       List<AlmSettingGitlab> gitlabSettings = settingsByAlm.getOrDefault(ALM.GITLAB, emptyList())
         .stream()
         .sorted(Comparator.comparing(AlmSettingDto::getCreatedAt))
-        .map(ListDefinitionsAction::toGitlab).collect(Collectors.toList());
+        .map(ListDefinitionsAction::toGitlab).toList();
       return ListDefinitionsWsResponse.newBuilder()
         .addAllGithub(githubSettings)
         .addAllAzure(azureSettings)
@@ -112,8 +113,8 @@ public class ListDefinitionsAction implements AlmSettingsWsAction {
     AlmSettingGithub.Builder builder = AlmSettingGithub
       .newBuilder()
       .setKey(settingDto.getKey())
-      .setUrl(requireNonNull(settingDto.getUrl(), "URL cannot be null for GitHub ALM setting"))
-      .setAppId(requireNonNull(settingDto.getAppId(), "App ID cannot be null for GitHub ALM setting"));
+      .setUrl(requireNonNull(settingDto.getUrl(), "URL cannot be null for GitHub setting"))
+      .setAppId(requireNonNull(settingDto.getAppId(), "App ID cannot be null for GitHub setting"));
     // Don't fail if clientId is not set for migration cases
     Optional.ofNullable(settingDto.getClientId()).ifPresent(builder::setClientId);
     return builder.build();
@@ -145,7 +146,7 @@ public class ListDefinitionsAction implements AlmSettingsWsAction {
     return AlmSettingBitbucket
       .newBuilder()
       .setKey(settingDto.getKey())
-      .setUrl(requireNonNull(settingDto.getUrl(), "URL cannot be null for Bitbucket ALM setting"))
+      .setUrl(requireNonNull(settingDto.getUrl(), "URL cannot be null for Bitbucket setting"))
       .build();
   }
 
@@ -154,7 +155,7 @@ public class ListDefinitionsAction implements AlmSettingsWsAction {
       .newBuilder()
       .setKey(settingDto.getKey())
       .setWorkspace(requireNonNull(settingDto.getAppId()))
-      .setClientId(requireNonNull(settingDto.getClientId(), "Client ID cannot be null for Bitbucket Cloud ALM setting"));
+      .setClientId(requireNonNull(settingDto.getClientId(), "Client ID cannot be null for Bitbucket Cloud setting"));
     return builder.build();
   }
 }

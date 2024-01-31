@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,21 +18,39 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { DefaultInputProps, isCategoryDefinition } from '../../utils';
+import { SettingType } from '../../../../types/settings';
+import {
+  DefaultInputProps,
+  DefaultSpecializedInputProps,
+  getUniqueName,
+  isCategoryDefinition,
+  isDefaultOrInherited,
+  isSecuredDefinition,
+} from '../../utils';
+import InputForSecured from './InputForSecured';
 import MultiValueInput from './MultiValueInput';
 import PrimitiveInput from './PrimitiveInput';
 import PropertySetInput from './PropertySetInput';
 
-export default function Input(props: DefaultInputProps) {
-  const { definition } = props.setting;
+export default function Input(props: Readonly<DefaultInputProps>) {
+  const { setting } = props;
+  const { definition } = setting;
+  const name = getUniqueName(definition);
+
+  let Input: React.ComponentType<React.PropsWithChildren<DefaultSpecializedInputProps>> =
+    PrimitiveInput;
 
   if (isCategoryDefinition(definition) && definition.multiValues) {
-    return <MultiValueInput {...props} />;
+    Input = MultiValueInput;
   }
 
-  if (definition.type === 'PROPERTY_SET') {
-    return <PropertySetInput {...props} />;
+  if (definition.type === SettingType.PROPERTY_SET) {
+    Input = PropertySetInput;
   }
 
-  return <PrimitiveInput {...props} />;
+  if (isSecuredDefinition(definition)) {
+    return <InputForSecured input={Input} {...props} />;
+  }
+
+  return <Input {...props} name={name} isDefault={isDefaultOrInherited(setting)} />;
 }

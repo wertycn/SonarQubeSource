@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,13 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { IndexRoute } from 'react-router';
-import { lazyLoadComponent } from 'sonar-ui-common/components/lazyLoadComponent';
+import { Route } from 'react-router-dom';
+import MaintenanceAppContainer from './components/MaintenanceAppContainer';
+import SetupAppContainer from './components/SetupAppContainer';
 
-export const maintenanceRoutes = (
-  <IndexRoute component={lazyLoadComponent(() => import('./components/MaintenanceAppContainer'))} />
+const routes = () => (
+  <>
+    <Route path="maintenance" element={<MaintenanceAppContainer />} />
+    <Route path="setup" element={<SetupAppContainer />} />
+  </>
 );
 
-export const setupRoutes = (
-  <IndexRoute component={lazyLoadComponent(() => import('./components/SetupAppContainer'))} />
-);
+export default routes;

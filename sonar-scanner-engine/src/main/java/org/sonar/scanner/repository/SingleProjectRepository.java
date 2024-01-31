@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.scanner.repository;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.CheckForNull;
 import javax.annotation.concurrent.Immutable;
@@ -37,7 +36,7 @@ public class SingleProjectRepository extends ProjectRepositories {
 
   public SingleProjectRepository(Map<String, FileData> fileDataByPath) {
     super(true);
-    this.fileDataByPath = Collections.unmodifiableMap(new HashMap<>(fileDataByPath));
+    this.fileDataByPath = Map.copyOf(fileDataByPath);
   }
 
   @CheckForNull

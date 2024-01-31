@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,11 +26,11 @@ describe('issuesByComponentAndLine', () => {
       mockIssue(true, { component: 'foo.js' }),
       mockIssue(false, {
         component: 'foo.js',
-        textRange: { startLine: 5, endLine: 5, startOffset: 0, endOffset: 0 }
+        textRange: { startLine: 5, endLine: 5, startOffset: 0, endOffset: 0 },
       }),
       mockIssue(false, { component: 'bar.js' }),
       mockIssue(),
-      mockIssue()
+      mockIssue(),
     ];
     const result = issuesByComponentAndLine(issues);
     expect(Object.keys(result['foo.js'])).toHaveLength(2);
@@ -49,12 +49,12 @@ describe('symbolsByLine', () => {
     const lines = [
       { line: 1, code: '<span class="sym-54 sym"><span class="sym-56 sym">foo</span></span>' },
       { line: 2, code: '<span class="sym-56 sym">bar</span>' },
-      { line: 3, code: '<span class="k">qux</span>' }
+      { line: 3, code: '<span class="k">qux</span>' },
     ];
     expect(symbolsByLine(lines)).toEqual({
       1: ['sym-54', 'sym-56'],
       2: ['sym-56'],
-      3: []
+      3: [],
     });
   });
 });

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,6 @@ import org.apache.commons.lang.StringUtils;
 import org.sonar.api.ExtensionPoint;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.notifications.Notification;
-import org.sonar.api.notifications.NotificationChannel;
 import org.sonar.api.server.ServerSide;
 
 /**

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -55,11 +55,6 @@
   margin: 0 1px 0 0;
 }
 
-.markdown-tips {
-  font-size: var(--smallFontSize);
-  color: var(--secondFontColor);
-}
-
 .rule-desc,
 .markdown {
   line-height: 1.5;
@@ -100,20 +95,43 @@
   margin: 1em 0;
 }
 
-.rule-desc h2,
 .markdown h2 {
   font-size: var(--bigFontSize);
   font-weight: 400;
 }
 
-.rule-desc h3,
 .markdown h3,
-.rule-desc h4,
 .markdown h4,
-.rule-desc h5,
 .markdown h5,
-.rule-desc h6,
 .markdown h6 {
+  font-size: var(--baseFontSize);
+  font-weight: 600;
+}
+
+.rule-desc h2 {
+  font-size: 22px;
+  font-weight: 500;
+  border-bottom: 1px solid #e6e6e6;
+  line-height: 2rem;
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+
+.rule-desc *:first-child {
+  margin-top: 0;
+}
+
+.rule-desc h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.rule-desc h4 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.rule-desc h5,
+.rule-desc h6 {
   font-size: var(--baseFontSize);
   font-weight: 600;
 }
@@ -128,11 +146,13 @@
 
 .rule-desc pre,
 .markdown pre {
-  padding: 10px;
-  border-top: 1px solid var(--barBorderColor);
-  border-bottom: 1px solid var(--barBorderColor);
-  line-height: 18px;
-  overflow: auto;
+  background-color: var(--codeBackground);
+  border-radius: 8px;
+  border: 1px solid var(--codeBorder);
+  padding: calc(2 * var(--gridSize));
+  margin-top: 0;
+  margin-bottom: 0;
+  overflow-x: auto;
 }
 
 .rule-desc code,
@@ -230,15 +250,6 @@ code.rule {
   list-style-type: decimal;
   list-style-position: inside;
   margin: 10px;
-}
-
-.width100 {
-  width: 100%;
-}
-
-textarea.width100 {
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .property {

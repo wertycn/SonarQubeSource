@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,16 @@
  */
 export enum TaskTypes {
   Report = 'REPORT',
-  IssueSync = 'ISSUE_SYNC'
+  IssueSync = 'ISSUE_SYNC',
+  GithubProvisioning = 'GITHUB_AUTH_PROVISIONING',
+  GithubProjectPermissionsProvisioning = 'GITHUB_PROJECT_PERMISSIONS_PROVISIONING',
+  GitlabProvisioning = 'GITLAB_AUTH_PROVISIONING',
+  AppRefresh = 'APP_REFRESH',
+  ViewRefresh = 'VIEW_REFRESH',
+  ProjectExport = 'PROJECT_EXPORT',
+  ProjectImport = 'PROJECT_IMPORT',
+  ReportSubmit = 'REPORT_SUBMIT',
+  AuditPurge = 'AUDIT_PURGE',
 }
 
 export enum TaskStatuses {
@@ -27,12 +36,13 @@ export enum TaskStatuses {
   InProgress = 'IN_PROGRESS',
   Success = 'SUCCESS',
   Failed = 'FAILED',
-  Canceled = 'CANCELED'
+  Canceled = 'CANCELED',
 }
 
 export interface Task {
   analysisId?: string;
   branch?: string;
+  nodeName?: string;
   componentKey?: string;
   componentName?: string;
   componentQualifier?: string;
@@ -54,10 +64,23 @@ export interface Task {
   type: TaskTypes;
   warningCount?: number;
   warnings?: string[];
+  infoMessages?: string[];
 }
 
 export interface TaskWarning {
   key: string;
   message: string;
   dismissable: boolean;
+}
+
+export interface ActivityRequestParameters {
+  component?: string;
+  p?: number;
+  ps?: number;
+  status?: string;
+  type?: string;
+  onlyCurrents?: boolean;
+  minSubmittedAt?: string;
+  maxExecutedAt?: string;
+  q?: string;
 }

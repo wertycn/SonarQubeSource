@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 // IMPORTANT: any change in this file requires restart of the dev server
 const grid = 8;
+const baseFontSizeRaw = 13;
 
 module.exports = {
   colors: {
@@ -32,16 +33,20 @@ module.exports = {
     veryLightGreen: '#f5f9fc',
     yellow: '#eabe06',
     orange: '#ed7d20',
-    red: '#d4333f',
+    red: '#D02F3A',
     purple: '#9139d4',
-    white: '#ffffff',
 
     gray94: '#efefef',
     gray80: '#cdcdcd',
     gray71: '#b4b4b4',
     gray67: '#aaa',
-    gray60: '#999',
+    gray60: '#888',
+    gray52: '#525252',
     gray40: '#404040',
+
+    disabledQualityGate: '#757575',
+
+    sizeRatingBackground: '#297BAE',
 
     transparentWhite: 'rgba(255,255,255,0.62)',
     transparentGray: 'rgba(200, 200, 200, 0.5)',
@@ -57,12 +62,18 @@ module.exports = {
 
     globalNavBarBg: '#262626',
 
+    educationPrinciplesBgColor: '#F4F6FF',
+    educationPrinciplesBorderColor: '#B0BDF9',
+
+    favoriteColor: '#e77213',
+    homepageColor: '#D86C13',
+
     // table
     rowHoverHighlight: '#ecf6fe',
 
     // fonts
     baseFontColor: '#333',
-    secondFontColor: '#666',
+    secondFontColor: '#656565',
 
     // forms
     mandatoryFieldColor: '#a4030f',
@@ -72,6 +83,7 @@ module.exports = {
     leakSecondaryColor: '#f1e8cb',
 
     // issues
+    secondIssueBgColor: '#f8eeee',
     issueBgColor: '#f2dede',
     hotspotBgColor: '#eeeff4',
     issueLocationSelected: '#f4b1b0',
@@ -117,37 +129,82 @@ module.exports = {
     github: '#e1e4e8',
 
     // code/pre
-    codeBackground: '#e6e6e6',
+    codeBackground: '#f5f5f5',
+    codeBorder: '#e6e6e6',
+    codeAdded: '#dff0d8',
+    codeRemoved: '#f2dede',
 
-    // sonarcloud
-    sonarcloudOrange500: '#fd6a00',
-    sonarcloudOrange600: '#e26003',
-    sonarcloudOrange700: '#db5700',
+    // promotion
+    darkBackground: '#292929',
+    darkBackgroundSeparator: '#413b3b',
+    darkBackgroundFontColor: '#f6f8fa',
 
-    sonarcloudBlack100: '#ffffff',
-    sonarcloudBlack200: '#f9f9fb',
-    sonarcloudBlack250: '#e6e8ea',
-    sonarcloudBlack300: '#cfd3d7',
-    sonarcloudBlack500: '#8a8c8f',
-    sonarcloudBlack700: '#434447',
-    sonarcloudBlack800: '#2d3032',
-    sonarcloudBlack900: '#070706',
+    //quality gate badges
+    badgeGreenBackground: '#f0faec',
+    badgeRedBackground: '#ffeaea',
 
-    sonarcloudBlue500: '#4c9bd6',
-    sonarcloudBlue600: '#327bb3',
-    sonarcloudBlue900: '#0b3c62',
+    // new color palette
+    // Some of these colors duplicate what we have above, but this will make it
+    // easier to align with the UX designers on what colors to use where.
+    // Colors that have transparency are suffixed with an "a" followed by the percentage
+    // value of the alpha channel.
+    primary: '#236a97',
+    primarya40: 'rgba(35, 107, 151, 0.40)',
+    primary400: '#297BAE',
 
-    sonarcloudBorderGray: 'rgba(207, 211, 215, 0.5)'
+    info50: '#ECF6FE',
+    info100: '#D9EDF7',
+    info200: '#B1DFF3',
+    info400: '#4B9FD5',
+    info500: '#0271B9',
+
+    success300: '#6CD46C',
+    success300a20: 'rgba(108, 212, 108, 0.2)',
+    success500: '#008223',
+    success500a20: 'rgba(0, 138, 37, 0.20)',
+    successVariant: '#C6E056',
+    successVarianta20: 'rgba(198, 224, 86, 0.2)',
+    successVariantDark: '#809E00',
+
+    warning: '#B95E04',
+    warningVariant: '#F4D348',
+    warningVarianta20: 'rgba(244, 211, 72, 0.2)',
+    warningVariantDark: '#B18F00',
+    warningAccent: '#F69D53',
+    warningAccenta20: 'rgba(246, 157, 83, 0.2)',
+
+    error400: '#F0878E',
+    error400a20: 'rgba(240, 135, 142, 0.2)',
+    error500: '#D02F3A',
+    error500a20: 'rgba(208, 47, 58, 0.20)',
+    error700: '#B81723',
+
+    neutral50: '#F3F3F3',
+    neutral200: '#CCCCCC',
+    neutral600: '#666666',
+    neutral800: '#333333',
+
+    white: '#FFFFFF',
+    whitea18: 'rgba(255, 255, 255, 0.18)',
+    whitea60: 'rgba(255, 255, 255, 0.60)',
+
+    black: '#000000',
+    blacka06: 'rgba(0, 0, 0, 0.06)',
+    blacka38: 'rgba(0, 0, 0, 0.38)',
+    blacka60: 'rgba(0, 0, 0, 0.60)',
+    blacka75: 'rgba(0, 0, 0, 0.75)',
+    blacka87: 'rgba(0, 0, 0, 0.87)',
   },
 
   sizes: {
     gridSize: `${grid}px`,
 
-    baseFontSize: '13px',
+    baseFontSize: `${baseFontSizeRaw}px`,
     verySmallFontSize: '10px',
     smallFontSize: '12px',
     mediumFontSize: '14px',
     bigFontSize: '16px',
+    veryBigFontSize: '18px',
     hugeFontSize: '24px',
     giganticFontSize: '36px',
 
@@ -163,20 +220,21 @@ module.exports = {
 
     maxPageWidth: '1320px',
     minPageWidth: '1080px',
-    pagePadding: '20px'
+    pagePadding: '20px',
   },
 
   rawSizes: {
     grid,
+    baseFontSizeRaw,
     globalNavHeightRaw: 6 * grid,
     globalNavContentHeightRaw: 4 * grid,
-    contextNavHeightRaw: 9 * grid
+    contextNavHeightRaw: 9 * grid,
   },
 
   fonts: {
     baseFontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
     systemFontFamily: "-apple-system,'BlinkMacSystemFont','Helvetica','Arial',sans-serif",
-    sourceCodeFontFamily: "Consolas, 'Ubuntu Mono', 'Liberation Mono', Menlo, Courier, monospace"
+    sourceCodeFontFamily: "Consolas, 'Ubuntu Mono', 'Liberation Mono', Menlo, Courier, monospace",
   },
 
   // z-index
@@ -193,14 +251,14 @@ module.exports = {
 
     // ui elements
     pageMainZIndex: '50',
-    pageSideZIndex: '51',
+    pageSideZIndex: '50',
     pageHeaderZIndex: '55',
 
     globalBannerZIndex: '60',
 
     contextbarZIndex: '420',
 
-    tooltipZIndex: '8000',
+    tooltipZIndex: '9001',
 
     dropdownMenuZIndex: '7500',
 
@@ -209,10 +267,10 @@ module.exports = {
     modalZIndex: '6001',
     modalOverlayZIndex: '6000',
 
-    popupZIndex: '5000'
+    popupZIndex: '5000',
   },
 
   others: {
-    defaultShadow: '0 6px 12px rgba(0, 0, 0, 0.175)'
-  }
+    defaultShadow: '0 6px 12px rgba(0, 0, 0, 0.175)',
+  },
 };

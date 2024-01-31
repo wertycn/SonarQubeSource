@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,15 @@
  */
 package org.sonar.server.issue;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.protobuf.DbCommons;
 import org.sonar.db.protobuf.DbIssues;
+import org.sonar.server.ws.MessageFormattingUtils;
 import org.sonarqube.ws.Common;
 
 import static java.util.Optional.ofNullable;
@@ -46,10 +49,40 @@ public class TextRangeResponseFormatter {
     }
   }
 
+  public List<Common.Flow> formatFlows(DbIssues.Locations locations, String issueComponent, Map<String, ComponentDto> componentsByUuid) {
+    return locations.getFlowList().stream().map(flow -> {
+      Common.Flow.Builder targetFlow = Common.Flow.newBuilder();
+      for (DbIssues.Location flowLocation : flow.getLocationList()) {
+        targetFlow.addLocations(formatLocation(flowLocation, issueComponent, componentsByUuid));
+      }
+      if (flow.hasDescription()) {
+        targetFlow.setDescription(flow.getDescription());
+      }
+      if (flow.hasType()) {
+        convertFlowType(flow.getType()).ifPresent(targetFlow::setType);
+      }
+      return targetFlow.build();
+    }).toList();
+  }
+
+  private static Optional<Common.FlowType> convertFlowType(DbIssues.FlowType flowType) {
+    switch (flowType) {
+      case DATA:
+        return Optional.of(Common.FlowType.DATA);
+      case EXECUTION:
+        return Optional.of(Common.FlowType.EXECUTION);
+      case UNDEFINED:
+        // we should only get this value if no type was set (since it's the default value of the enum), in which case this method shouldn't be called.
+      default:
+        throw new IllegalArgumentException("Unrecognized flow type: " + flowType);
+    }
+  }
+
   public Common.Location formatLocation(DbIssues.Location source, String issueComponent, Map<String, ComponentDto> componentsByUuid) {
     Common.Location.Builder target = Common.Location.newBuilder();
     if (source.hasMsg()) {
       target.setMsg(source.getMsg());
+      target.addAllMsgFormattings(MessageFormattingUtils.dbMessageFormattingListToWs(source.getMsgFormattingList()));
     }
     if (source.hasTextRange()) {
       DbCommons.TextRange sourceRange = source.getTextRange();

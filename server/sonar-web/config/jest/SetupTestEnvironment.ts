@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import ThemeContext from 'sonar-ui-common/components/theme';
-import SonarUiCommonInitializer, { DEFAULT_LOCALE } from 'sonar-ui-common/helpers/init';
-import * as theme from '../../src/main/js/app/theme';
+import React from 'react';
+
+(window as any).React = React;
+
+const MockObserver = {
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+};
 
 const content = document.createElement('div');
 content.id = 'content';
@@ -27,11 +33,138 @@ document.documentElement.appendChild(content);
 
 const baseUrl = '';
 (window as any).baseUrl = baseUrl;
-SonarUiCommonInitializer.setLocale(DEFAULT_LOCALE)
-  .setMessages({})
-  .setUrlContext(baseUrl);
 
-// Hack : override the default value of the context used for theme by emotion
-// This allows tests to get the theme value without specifiying a theme provider
-ThemeContext['_currentValue'] = theme;
-ThemeContext['_currentValue2'] = theme;
+Element.prototype.scrollIntoView = () => {};
+
+jest.mock('../../src/main/js/helpers/l10n', () => ({
+  ...jest.requireActual('../../src/main/js/helpers/l10n'),
+  hasMessage: () => true,
+  translate: (...keys: string[]) => keys.join('.'),
+  translateWithParameters: (messageKey: string, ...parameters: Array<string | number>) =>
+    [messageKey, ...parameters].join('.'),
+}));
+
+const MockIntersectionObserverEntries = [{ isIntersecting: true }];
+
+(window as any).IntersectionObserver = jest.fn().mockImplementation((callback) => {
+  callback(MockIntersectionObserverEntries, MockObserver);
+  return MockObserver;
+});
+
+// Copied from pollyfill.io
+// To be remove when upgrading jsdom https://github.com/jsdom/jsdom/releases/tag/22.1.0
+// jest-environment-jsdom to v30
+function number(v) {
+  return v === undefined ? 0 : Number(v);
+}
+
+function different(u, v) {
+  return u !== v && !(isNaN(u) && isNaN(v));
+}
+
+global.DOMRect = function DOMRect(xArg, yArg, wArg, hArg) {
+  let x;
+  let y;
+  let width;
+  let height;
+  let left;
+  let right;
+  let top;
+  let bottom;
+
+  x = number(xArg);
+  y = number(yArg);
+  width = number(wArg);
+  height = number(hArg);
+
+  Object.defineProperties(this, {
+    x: {
+      get() {
+        return x;
+      },
+      set(newX) {
+        if (different(x, newX)) {
+          x = newX;
+          left = undefined;
+          right = undefined;
+        }
+      },
+      enumerable: true,
+    },
+    y: {
+      get() {
+        return y;
+      },
+      set(newY) {
+        if (different(y, newY)) {
+          y = newY;
+          top = undefined;
+          bottom = undefined;
+        }
+      },
+      enumerable: true,
+    },
+    width: {
+      get() {
+        return width;
+      },
+      set(newWidth) {
+        if (different(width, newWidth)) {
+          width = newWidth;
+          left = undefined;
+          right = undefined;
+        }
+      },
+      enumerable: true,
+    },
+    height: {
+      get() {
+        return height;
+      },
+      set(newHeight) {
+        if (different(height, newHeight)) {
+          height = newHeight;
+          top = undefined;
+          bottom = undefined;
+        }
+      },
+      enumerable: true,
+    },
+    left: {
+      get() {
+        if (left === undefined) {
+          left = x + Math.min(0, width);
+        }
+        return left;
+      },
+      enumerable: true,
+    },
+    right: {
+      get() {
+        if (right === undefined) {
+          right = x + Math.max(0, width);
+        }
+        return right;
+      },
+      enumerable: true,
+    },
+    top: {
+      get() {
+        if (top === undefined) {
+          top = y + Math.min(0, height);
+        }
+        return top;
+      },
+      enumerable: true,
+    },
+    bottom: {
+      get() {
+        if (bottom === undefined) {
+          bottom = y + Math.max(0, height);
+        }
+        return bottom;
+      },
+      enumerable: true,
+    },
+  });
+};

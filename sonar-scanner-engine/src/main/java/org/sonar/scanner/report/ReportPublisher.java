@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.scanner.report;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,16 +34,20 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import okhttp3.HttpUrl;
 import org.apache.commons.io.FileUtils;
-import org.picocontainer.Startable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.api.Startable;
+import org.sonar.api.notifications.AnalysisWarnings;
 import org.sonar.api.platform.Server;
 import org.sonar.api.utils.MessageException;
 import org.sonar.api.utils.TempFolder;
 import org.sonar.api.utils.ZipUtils;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.sonar.core.ce.CeTaskCharacteristics;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
 import org.sonar.scanner.bootstrap.GlobalAnalysisMode;
+import org.sonar.scanner.ci.CiConfiguration;
 import org.sonar.scanner.fs.InputModuleHierarchy;
+import org.sonar.scanner.protocol.output.FileStructure;
 import org.sonar.scanner.protocol.output.ScannerReportReader;
 import org.sonar.scanner.protocol.output.ScannerReportWriter;
 import org.sonar.scanner.scan.ScanProperties;
@@ -52,21 +57,29 @@ import org.sonarqube.ws.Ce;
 import org.sonarqube.ws.MediaTypes;
 import org.sonarqube.ws.client.HttpException;
 import org.sonarqube.ws.client.PostRequest;
+import org.sonarqube.ws.client.RequestWithPayload.Part;
 import org.sonarqube.ws.client.WsResponse;
 
 import static java.net.URLEncoder.encode;
 import static org.apache.commons.lang.StringUtils.EMPTY;
 import static org.apache.commons.lang.StringUtils.isBlank;
+import static org.sonar.core.ce.CeTaskCharacteristics.BRANCH_TYPE;
+import static org.sonar.core.ce.CeTaskCharacteristics.DEVOPS_PLATFORM_PROJECT_IDENTIFIER;
+import static org.sonar.core.ce.CeTaskCharacteristics.DEVOPS_PLATFORM_URL;
 import static org.sonar.core.util.FileUtils.deleteQuietly;
+import static org.sonar.core.util.FileUtils.humanReadableByteCountSI;
 import static org.sonar.scanner.scan.branch.BranchType.PULL_REQUEST;
 
 public class ReportPublisher implements Startable {
-  private static final int DEFAULT_WRITE_TIMEOUT = 30_000;
-  private static final Logger LOG = Loggers.get(ReportPublisher.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ReportPublisher.class);
   private static final String CHARACTERISTIC = "characteristic";
   private static final String DASHBOARD = "dashboard";
   private static final String BRANCH = "branch";
   private static final String ID = "id";
+
+  @VisibleForTesting
+  static final String SUPPORT_OF_32_BIT_JRE_IS_DEPRECATED_MESSAGE = "You are using a 32 bits JRE. "
+    + "The support of 32 bits JRE is deprecated and a future version of the scanner will remove it completely.";
 
   private final DefaultScannerWsClient wsClient;
   private final AnalysisContextReportPublisher contextPublisher;
@@ -79,13 +92,18 @@ public class ReportPublisher implements Startable {
   private final ScanProperties properties;
   private final CeTaskReportDataHolder ceTaskReportDataHolder;
 
-  private Path reportDir;
-  private ScannerReportWriter writer;
-  private ScannerReportReader reader;
+  private final Path reportDir;
+  private final ScannerReportWriter writer;
+  private final ScannerReportReader reader;
+  private final AnalysisWarnings analysisWarnings;
+  private final JavaArchitectureInformationProvider javaArchitectureInformationProvider;
+
+  private final CiConfiguration ciConfiguration;
 
   public ReportPublisher(ScanProperties properties, DefaultScannerWsClient wsClient, Server server, AnalysisContextReportPublisher contextPublisher,
     InputModuleHierarchy moduleHierarchy, GlobalAnalysisMode analysisMode, TempFolder temp, ReportPublisherStep[] publishers, BranchConfiguration branchConfiguration,
-    CeTaskReportDataHolder ceTaskReportDataHolder) {
+    CeTaskReportDataHolder ceTaskReportDataHolder, AnalysisWarnings analysisWarnings,
+    JavaArchitectureInformationProvider javaArchitectureInformationProvider, FileStructure fileStructure, CiConfiguration ciConfiguration) {
     this.wsClient = wsClient;
     this.server = server;
     this.contextPublisher = contextPublisher;
@@ -96,13 +114,16 @@ public class ReportPublisher implements Startable {
     this.branchConfiguration = branchConfiguration;
     this.properties = properties;
     this.ceTaskReportDataHolder = ceTaskReportDataHolder;
+    this.reportDir = fileStructure.root().toPath();
+    this.analysisWarnings = analysisWarnings;
+    this.javaArchitectureInformationProvider = javaArchitectureInformationProvider;
+    this.writer = new ScannerReportWriter(fileStructure);
+    this.reader = new ScannerReportReader(fileStructure);
+    this.ciConfiguration = ciConfiguration;
   }
 
   @Override
   public void start() {
-    reportDir = moduleHierarchy.root().getWorkDir().resolve("scanner-report");
-    writer = new ScannerReportWriter(reportDir.toFile());
-    reader = new ScannerReportReader(reportDir.toFile());
     contextPublisher.init(writer);
 
     if (!analysisMode.isMediumTest()) {
@@ -133,6 +154,7 @@ public class ReportPublisher implements Startable {
   }
 
   public void execute() {
+    logDeprecationWarningIf32bitJava();
     File report = generateReportFile();
     if (properties.shouldKeepReport()) {
       LOG.info("Analysis report generated in " + reportDir);
@@ -145,13 +167,10 @@ public class ReportPublisher implements Startable {
     logSuccess();
   }
 
-  private void logSuccess() {
-    if (analysisMode.isMediumTest()) {
-      LOG.info("ANALYSIS SUCCESSFUL");
-    } else if (!properties.shouldWaitForQualityGate()) {
-      LOG.info("ANALYSIS SUCCESSFUL, you can browse {}", ceTaskReportDataHolder.getDashboardUrl());
-      LOG.info("Note that you will be able to access the updated dashboard once the server has processed the submitted analysis report");
-      LOG.info("More about the report processing at {}", ceTaskReportDataHolder.getCeTaskUrl());
+  private void logDeprecationWarningIf32bitJava() {
+    if (!javaArchitectureInformationProvider.is64bitJavaVersion()) {
+      analysisWarnings.addUnique(SUPPORT_OF_32_BIT_JRE_IS_DEPRECATED_MESSAGE);
+      LOG.warn(SUPPORT_OF_32_BIT_JRE_IS_DEPRECATED_MESSAGE);
     }
   }
 
@@ -162,16 +181,26 @@ public class ReportPublisher implements Startable {
         publisher.publish(writer);
       }
       long stopTime = System.currentTimeMillis();
-      LOG.info("Analysis report generated in {}ms, dir size={}", stopTime - startTime, FileUtils.byteCountToDisplaySize(FileUtils.sizeOfDirectory(reportDir.toFile())));
+      LOG.info("Analysis report generated in {}ms, dir size={}", stopTime - startTime, humanReadableByteCountSI(FileUtils.sizeOfDirectory(reportDir.toFile())));
 
       startTime = System.currentTimeMillis();
       File reportZip = temp.newFile("scanner-report", ".zip");
       ZipUtils.zipDir(reportDir.toFile(), reportZip);
       stopTime = System.currentTimeMillis();
-      LOG.info("Analysis report compressed in {}ms, zip size={}", stopTime - startTime, FileUtils.byteCountToDisplaySize(FileUtils.sizeOf(reportZip)));
+      LOG.info("Analysis report compressed in {}ms, zip size={}", stopTime - startTime, humanReadableByteCountSI(FileUtils.sizeOf(reportZip)));
       return reportZip;
     } catch (IOException e) {
       throw new IllegalStateException("Unable to prepare analysis report", e);
+    }
+  }
+
+  private void logSuccess() {
+    if (analysisMode.isMediumTest()) {
+      LOG.info("ANALYSIS SUCCESSFUL");
+    } else if (!properties.shouldWaitForQualityGate()) {
+      LOG.info("ANALYSIS SUCCESSFUL, you can find the results at: {}", ceTaskReportDataHolder.getDashboardUrl());
+      LOG.info("Note that you will be able to access the updated dashboard once the server has processed the submitted analysis report");
+      LOG.info("More about the report processing at {}", ceTaskReportDataHolder.getCeTaskUrl());
     }
   }
 
@@ -181,31 +210,40 @@ public class ReportPublisher implements Startable {
   String upload(File report) {
     LOG.debug("Upload report");
     long startTime = System.currentTimeMillis();
-    PostRequest.Part filePart = new PostRequest.Part(MediaTypes.ZIP, report);
+    Part filePart = new Part(MediaTypes.ZIP, report);
     PostRequest post = new PostRequest("api/ce/submit")
       .setMediaType(MediaTypes.PROTOBUF)
       .setParam("projectKey", moduleHierarchy.root().key())
       .setParam("projectName", moduleHierarchy.root().getOriginalName())
       .setPart("report", filePart);
 
+    ciConfiguration.getDevOpsPlatformInfo().ifPresent(devOpsPlatformInfo -> {
+      post.setParam(CHARACTERISTIC, buildCharacteristicParam(DEVOPS_PLATFORM_URL ,devOpsPlatformInfo.getUrl()));
+      post.setParam(CHARACTERISTIC, buildCharacteristicParam(DEVOPS_PLATFORM_PROJECT_IDENTIFIER, devOpsPlatformInfo.getProjectIdentifier()));
+    });
     String branchName = branchConfiguration.branchName();
     if (branchName != null) {
       if (branchConfiguration.branchType() != PULL_REQUEST) {
-        post.setParam(CHARACTERISTIC, "branch=" + branchName);
-        post.setParam(CHARACTERISTIC, "branchType=" + branchConfiguration.branchType().name());
+        post.setParam(CHARACTERISTIC, buildCharacteristicParam(CeTaskCharacteristics.BRANCH, branchName));
+        post.setParam(CHARACTERISTIC, buildCharacteristicParam(BRANCH_TYPE, branchConfiguration.branchType().name()));
       } else {
-        post.setParam(CHARACTERISTIC, "pullRequest=" + branchConfiguration.pullRequestKey());
+        post.setParam(CHARACTERISTIC, buildCharacteristicParam(CeTaskCharacteristics.PULL_REQUEST, branchConfiguration.pullRequestKey()));
       }
     }
 
     WsResponse response;
     try {
-      post.setWriteTimeOutInMs(DEFAULT_WRITE_TIMEOUT);
-      response = wsClient.call(post).failIfNotSuccessful();
-    } catch (HttpException e) {
-      throw MessageException.of(String.format("Failed to upload report - %s", DefaultScannerWsClient.createErrorMessage(e)));
+      post.setWriteTimeOutInMs(properties.reportPublishTimeout() * 1000);
+      response = wsClient.call(post);
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to upload report: " + e.getMessage(), e);
     }
 
+    try {
+      response.failIfNotSuccessful();
+    } catch (HttpException e) {
+      throw MessageException.of(String.format("Server failed to process report. Please check server logs: %s", DefaultScannerWsClient.createErrorMessage(e)));
+    }
     try (InputStream protobuf = response.contentStream()) {
       return Ce.SubmitResponse.parser().parseFrom(protobuf).getTaskId();
     } catch (Exception e) {
@@ -214,6 +252,10 @@ public class ReportPublisher implements Startable {
       long stopTime = System.currentTimeMillis();
       LOG.info("Analysis report uploaded in " + (stopTime - startTime) + "ms");
     }
+  }
+
+  private static String buildCharacteristicParam(String characteristic, String value) {
+    return characteristic + "=" + value;
   }
 
   void prepareAndDumpMetadata(String taskId) {

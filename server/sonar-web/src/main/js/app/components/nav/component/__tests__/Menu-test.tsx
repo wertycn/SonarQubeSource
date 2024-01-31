@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,146 +17,173 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
-import {
-  mockBranch,
-  mockMainBranch,
-  mockPullRequest
-} from '../../../../../helpers/mocks/branch-like';
-import { mockComponent } from '../../../../../helpers/testMocks';
+import BranchesServiceMock from '../../../../../api/mocks/BranchesServiceMock';
+import { mockComponent } from '../../../../../helpers/mocks/component';
+import { renderComponent } from '../../../../../helpers/testReactTestingUtils';
+import { ComponentPropsType } from '../../../../../helpers/testUtils';
 import { ComponentQualifier } from '../../../../../types/component';
+import { Feature } from '../../../../../types/features';
 import { Menu } from '../Menu';
 
-const mainBranch = mockMainBranch();
+const handler = new BranchesServiceMock();
 
-const baseComponent = mockComponent({
+const BASE_COMPONENT = mockComponent({
   analysisDate: '2019-12-01',
   key: 'foo',
-  name: 'foo'
+  name: 'foo',
 });
 
-it('should work with extensions', () => {
-  const component = {
-    ...baseComponent,
-    configuration: { showSettings: true, extensions: [{ key: 'foo', name: 'Foo' }] },
-    extensions: [{ key: 'component-foo', name: 'ComponentFoo' }]
-  };
-  const wrapper = shallowRender({ component });
-  expect(wrapper.find('Dropdown[data-test="extensions"]')).toMatchSnapshot();
-  expect(wrapper.find('Dropdown[data-test="administration"]')).toMatchSnapshot();
-});
+beforeEach(() => handler.reset());
 
-it('should work with multiple extensions', () => {
+it('should render correctly', async () => {
+  const user = userEvent.setup();
   const component = {
-    ...baseComponent,
+    ...BASE_COMPONENT,
     configuration: {
       showSettings: true,
       extensions: [
         { key: 'foo', name: 'Foo' },
-        { key: 'bar', name: 'Bar' }
-      ]
+        { key: 'bar', name: 'Bar' },
+        { key: 'securityreport/foo', name: 'Foo' },
+      ],
     },
     extensions: [
       { key: 'component-foo', name: 'ComponentFoo' },
-      { key: 'component-bar', name: 'ComponentBar' }
-    ]
+      { key: 'component-bar', name: 'ComponentBar' },
+      { key: 'securityreport/foo', name: 'Security Report' },
+    ],
   };
-  const wrapper = shallowRender({ component });
-  expect(wrapper.find('Dropdown[data-test="extensions"]')).toMatchSnapshot();
-  expect(wrapper.find('Dropdown[data-test="administration"]')).toMatchSnapshot();
+  renderMenu({ component });
+
+  // Security Report is rendered on its own, as is not part of the dropdown menu.
+  expect(screen.getByRole('link', { name: 'layout.security_reports' })).toBeInTheDocument();
+
+  // Check the dropdown.
+  const button = screen.getByRole('button', { name: 'more' });
+  expect(button).toBeInTheDocument();
+  await user.click(button);
+  expect(screen.getByRole('menuitem', { name: 'ComponentFoo' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: 'ComponentBar' })).toBeInTheDocument();
 });
 
-it('should render correctly for security extensions', () => {
+it('should render correctly when on a Portofolio', () => {
   const component = {
-    ...baseComponent,
+    ...BASE_COMPONENT,
     configuration: {
       showSettings: true,
       extensions: [
-        { key: 'securityreport/foo', name: 'Foo' },
-        { key: 'bar', name: 'Bar' }
-      ]
+        { key: 'foo', name: 'Foo' },
+        { key: 'bar', name: 'Bar' },
+      ],
     },
+    qualifier: ComponentQualifier.Portfolio,
     extensions: [
-      { key: 'securityreport/foo', name: 'ComponentFoo' },
-      { key: 'component-bar', name: 'ComponentBar' }
-    ]
+      { key: 'governance/foo', name: 'governance foo' },
+      { key: 'governance/bar', name: 'governance bar' },
+    ],
   };
-  const wrapper = shallowRender({ component });
-  expect(wrapper.find('Dropdown[data-test="extensions"]')).toMatchSnapshot();
-  expect(wrapper.find('Dropdown[data-test="security"]')).toMatchSnapshot();
+  renderMenu({ component });
+  expect(screen.getByRole('link', { name: 'overview.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'issues.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'layout.measures' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'portfolio_breakdown.page' })).toBeInTheDocument();
 });
 
-it('should work for a branch', () => {
-  const branchLike = mockBranch({
-    name: 'release'
-  });
-  [true, false].forEach(showSettings =>
-    expect(
-      shallowRender({
-        branchLike,
-        component: {
-          ...baseComponent,
-          configuration: { showSettings },
-          extensions: [{ key: 'component-foo', name: 'ComponentFoo' }]
-        }
-      })
-    ).toMatchSnapshot()
+it('should render correctly when on a branch', async () => {
+  renderMenu(
+    {
+      component: {
+        ...BASE_COMPONENT,
+        configuration: { showSettings: true },
+        extensions: [{ key: 'component-foo', name: 'ComponentFoo' }],
+      },
+    },
+    'branch=normal-branch',
   );
+
+  expect(await screen.findByRole('link', { name: 'overview.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'issues.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'layout.measures' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'project.info.title' })).toBeInTheDocument();
 });
 
-it('should work for pull requests', () => {
-  [true, false].forEach(showSettings =>
-    expect(
-      shallowRender({
-        branchLike: mockPullRequest(),
-        component: {
-          ...baseComponent,
-          configuration: { showSettings },
-          extensions: [{ key: 'component-foo', name: 'ComponentFoo' }]
-        }
-      })
-    ).toMatchSnapshot()
+it('should render correctly when on a pull request', async () => {
+  renderMenu(
+    {
+      component: {
+        ...BASE_COMPONENT,
+        configuration: { showSettings: true },
+        extensions: [{ key: 'component-foo', name: 'ComponentFoo' }],
+      },
+    },
+    'pullRequest=01',
   );
-});
 
-it('should work for all qualifiers', () => {
-  [
-    ComponentQualifier.Project,
-    ComponentQualifier.Portfolio,
-    ComponentQualifier.SubPortfolio,
-    ComponentQualifier.Application
-  ].forEach(checkWithQualifier);
-  expect.assertions(4);
+  expect(await screen.findByRole('link', { name: 'overview.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'issues.page' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'layout.measures' })).toBeInTheDocument();
 
-  function checkWithQualifier(qualifier: string) {
-    const component = { ...baseComponent, configuration: { showSettings: true }, qualifier };
-    expect(shallowRender({ component })).toMatchSnapshot();
-  }
+  expect(
+    screen.queryByRole('link', { name: `layout.settings.${ComponentQualifier.Project}` }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'project.info.title' })).not.toBeInTheDocument();
 });
 
 it('should disable links if no analysis has been done', () => {
-  expect(
-    shallowRender({
-      component: {
-        ...baseComponent,
-        analysisDate: undefined
-      }
-    })
-  ).toMatchSnapshot();
+  renderMenu({
+    component: {
+      ...BASE_COMPONENT,
+      analysisDate: undefined,
+    },
+  });
+
+  expect(screen.queryByRole('link', { name: 'issues.page' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.queryByRole('link', { name: 'layout.measures' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.getByRole('link', { name: 'project.info.title' })).toBeInTheDocument();
 });
 
-function shallowRender(props: Partial<Menu['props']>) {
-  return shallow<Menu>(
+it('should disable links if application has inaccessible projects', () => {
+  renderMenu({
+    component: {
+      ...BASE_COMPONENT,
+      qualifier: ComponentQualifier.Application,
+      canBrowseAllChildProjects: false,
+    },
+  });
+  expect(screen.queryByRole('link', { name: 'overview.page' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.queryByRole('link', { name: 'issues.page' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.queryByRole('link', { name: 'layout.measures' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  expect(screen.queryByRole('button', { name: 'application.info.title' })).not.toBeInTheDocument();
+});
+
+function renderMenu(props: Partial<ComponentPropsType<typeof Menu>> = {}, params?: string) {
+  return renderComponent(
     <Menu
-      appState={{ branchesEnabled: true }}
-      branchLike={mainBranch}
-      branchLikes={[mainBranch]}
-      component={baseComponent}
+      hasFeature={jest.fn().mockReturnValue(false)}
+      component={BASE_COMPONENT}
       isInProgress={false}
       isPending={false}
-      onToggleProjectInfo={jest.fn()}
       {...props}
-    />
+    />,
+    params ? `/?${params}` : '/',
+    { featureList: [Feature.BranchSupport] },
   );
 }

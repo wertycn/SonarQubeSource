@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,65 +17,65 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import { DuplicationBlock, LineMeta, OutsideClickHandler, PopupPlacement } from 'design-system';
 import * as React from 'react';
-import { DropdownOverlay } from 'sonar-ui-common/components/controls/Dropdown';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import { PopupPlacement } from 'sonar-ui-common/components/ui/popups';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate } from '../../../helpers/l10n';
+import { SourceLine } from '../../../types/types';
 
 export interface LineDuplicationBlockProps {
   blocksLoaded: boolean;
   duplicated: boolean;
   index: number;
-  line: T.SourceLine;
-  onClick?: (line: T.SourceLine) => void;
+  line: SourceLine;
+  onClick?: (line: SourceLine) => void;
   renderDuplicationPopup: (index: number, line: number) => React.ReactNode;
 }
 
 export function LineDuplicationBlock(props: LineDuplicationBlockProps) {
-  const { blocksLoaded, duplicated, index, line } = props;
-  const [dropdownOpen, setDropdownOpen] = React.useState(false);
+  const { blocksLoaded, duplicated, index, line, onClick } = props;
+  const [popupOpen, setPopupOpen] = React.useState(false);
 
-  const className = classNames('source-meta', 'source-line-duplications', {
-    'source-line-duplicated': duplicated
-  });
+  const tooltip = popupOpen ? undefined : translate('source_viewer.tooltip.duplicated_block');
+
+  const handleClick = React.useCallback(() => {
+    setPopupOpen(!popupOpen);
+    if (!blocksLoaded && line.duplicated && onClick) {
+      onClick(line);
+    }
+  }, [blocksLoaded, line, onClick, popupOpen]);
+
+  const handleClose = React.useCallback(() => setPopupOpen(false), []);
 
   return duplicated ? (
-    <td className={className} data-index={index} data-line-number={line.line}>
-      <Tooltip
-        overlay={dropdownOpen ? undefined : translate('source_viewer.tooltip.duplicated_block')}
-        placement="right">
-        <div>
-          <Toggler
-            onRequestClose={() => setDropdownOpen(false)}
-            open={dropdownOpen}
-            overlay={
-              <DropdownOverlay placement={PopupPlacement.RightTop}>
-                {props.renderDuplicationPopup(index, line.line)}
-              </DropdownOverlay>
-            }>
-            <div
+    <Tooltip overlay={tooltip} placement={PopupPlacement.Right}>
+      <LineMeta
+        className="it__source-line-duplicated"
+        data-index={index}
+        data-line-number={line.line}
+      >
+        <OutsideClickHandler onClickOutside={handleClose}>
+          <Tooltip
+            placement={PopupPlacement.Right}
+            visible={popupOpen}
+            isInteractive
+            overlay={popupOpen ? props.renderDuplicationPopup(index, line.line) : undefined}
+            classNameInner="sw-max-w-abs-400"
+          >
+            <DuplicationBlock
               aria-label={translate('source_viewer.tooltip.duplicated_block')}
-              className="source-line-bar"
-              onClick={() => {
-                setDropdownOpen(true);
-                if (!blocksLoaded && line.duplicated && props.onClick) {
-                  props.onClick(line);
-                }
-              }}
+              aria-expanded={popupOpen}
+              aria-haspopup="dialog"
+              onClick={handleClick}
               role="button"
               tabIndex={0}
             />
-          </Toggler>
-        </div>
-      </Tooltip>
-    </td>
+          </Tooltip>
+        </OutsideClickHandler>
+      </LineMeta>
+    </Tooltip>
   ) : (
-    <td className={className} data-index={index} data-line-number={line.line}>
-      <div className="source-line-bar" />
-    </td>
+    <LineMeta data-index={index} data-line-number={line.line} />
   );
 }
 

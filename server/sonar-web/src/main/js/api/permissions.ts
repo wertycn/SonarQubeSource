@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,8 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON, RequestData } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON, RequestData } from '../helpers/request';
+import { Visibility } from '../types/component';
+import {
+  Paging,
+  Permission,
+  PermissionGroup,
+  PermissionTemplate,
+  PermissionUser,
+} from '../types/types';
 import { BaseSearchProjectsParameters } from './components';
 
 const PAGE_SIZE = 100;
@@ -56,9 +64,9 @@ export function revokePermissionFromGroup(data: {
 }
 
 interface GetPermissionTemplatesResponse {
-  permissionTemplates: T.PermissionTemplate[];
+  permissionTemplates: PermissionTemplate[];
   defaultTemplates: Array<{ templateId: string; qualifier: string }>;
-  permissions: Array<{ key: string; name: string; description: string }>;
+  permissions: Array<Permission>;
 }
 
 export function getPermissionTemplates(): Promise<GetPermissionTemplatesResponse> {
@@ -66,15 +74,24 @@ export function getPermissionTemplates(): Promise<GetPermissionTemplatesResponse
   return getJSON(url);
 }
 
-export function createPermissionTemplate(data: RequestData) {
+export function createPermissionTemplate(data: {
+  name: string;
+  description?: string;
+  projectKeyPattern?: string;
+}): Promise<{ permissionTemplate: Omit<PermissionTemplate, 'defaultFor'> }> {
   return postJSON('/api/permissions/create_template', data);
 }
 
-export function updatePermissionTemplate(data: RequestData): Promise<void> {
+export function updatePermissionTemplate(data: {
+  id: string;
+  description?: string;
+  name?: string;
+  projectKeyPattern?: string;
+}): Promise<void> {
   return post('/api/permissions/update_template', data);
 }
 
-export function deletePermissionTemplate(data: RequestData) {
+export function deletePermissionTemplate(data: { templateId?: string; templateName?: string }) {
   return post('/api/permissions/delete_template', data).catch(throwGlobalError);
 }
 
@@ -85,7 +102,7 @@ export function setDefaultPermissionTemplate(templateId: string, qualifier: stri
   return post('/api/permissions/set_default_template', { templateId, qualifier });
 }
 
-export function applyTemplateToProject(data: RequestData) {
+export function applyTemplateToProject(data: { projectKey: string; templateId: string }) {
   return post('/api/permissions/apply_template', data).catch(throwGlobalError);
 }
 
@@ -123,7 +140,7 @@ export function addProjectCreatorToTemplate(templateId: string, permission: stri
 
 export function removeProjectCreatorFromTemplate(
   templateId: string,
-  permission: string
+  permission: string,
 ): Promise<void> {
   return post('/api/permissions/remove_project_creator_from_template', { templateId, permission });
 }
@@ -134,7 +151,7 @@ export function getPermissionsUsersForComponent(data: {
   permission?: string;
   p?: number;
   ps?: number;
-}): Promise<{ paging: T.Paging; users: T.PermissionUser[] }> {
+}): Promise<{ paging: Paging; users: PermissionUser[] }> {
   if (!data.ps) {
     data.ps = PAGE_SIZE;
   }
@@ -147,7 +164,7 @@ export function getPermissionsGroupsForComponent(data: {
   permission?: string;
   p?: number;
   ps?: number;
-}): Promise<{ paging: T.Paging; groups: T.PermissionGroup[] }> {
+}): Promise<{ paging: Paging; groups: PermissionGroup[] }> {
   if (!data.ps) {
     data.ps = PAGE_SIZE;
   }
@@ -159,7 +176,7 @@ export function getGlobalPermissionsUsers(data: {
   permission?: string;
   p?: number;
   ps?: number;
-}): Promise<{ paging: T.Paging; users: T.PermissionUser[] }> {
+}): Promise<{ paging: Paging; users: PermissionUser[] }> {
   if (!data.ps) {
     data.ps = PAGE_SIZE;
   }
@@ -171,54 +188,42 @@ export function getGlobalPermissionsGroups(data: {
   permission?: string;
   p?: number;
   ps?: number;
-}): Promise<{ paging: T.Paging; groups: T.PermissionGroup[] }> {
+}): Promise<{ paging: Paging; groups: PermissionGroup[] }> {
   if (!data.ps) {
     data.ps = PAGE_SIZE;
   }
   return getJSON('/api/permissions/groups', data);
 }
 
-export function getPermissionTemplateUsers(
-  templateId: string,
-  query?: string,
-  permission?: string
-): Promise<any> {
-  const data: RequestData = { templateId, ps: PAGE_SIZE };
-  if (query) {
-    data.q = query;
+export function getPermissionTemplateUsers(data: {
+  templateId: string;
+  q?: string;
+  permission?: string;
+  p?: number;
+  ps?: number;
+}): Promise<{ paging: Paging; users: PermissionUser[] }> {
+  if (data.ps === undefined) {
+    data.ps = PAGE_SIZE;
   }
-  if (permission) {
-    data.permission = permission;
-  }
-  return getJSON('/api/permissions/template_users', data).then(r => r.users);
+  return getJSON('/api/permissions/template_users', data).catch(throwGlobalError);
 }
 
-export function getPermissionTemplateGroups(
-  templateId: string,
-  query?: string,
-  permission?: string
-): Promise<any> {
-  const data: RequestData = { templateId, ps: PAGE_SIZE };
-  if (query) {
-    data.q = query;
+export function getPermissionTemplateGroups(data: {
+  templateId: string;
+  q?: string;
+  permission?: string;
+  p?: number;
+  ps?: number;
+}): Promise<{ paging: Paging; groups: PermissionGroup[] }> {
+  if (data.ps === undefined) {
+    data.ps = PAGE_SIZE;
   }
-  if (permission) {
-    data.permission = permission;
-  }
-  return getJSON('/api/permissions/template_groups', data).then(r => r.groups);
+  return getJSON('/api/permissions/template_groups', data).catch(throwGlobalError);
 }
 
 export function changeProjectVisibility(
   project: string,
-  visibility: T.Visibility
+  visibility: Visibility,
 ): Promise<void | Response> {
   return post('/api/projects/update_visibility', { project, visibility }).catch(throwGlobalError);
-}
-
-export function changeProjectDefaultVisibility(
-  projectVisibility: T.Visibility
-): Promise<void | Response> {
-  return post('/api/projects/update_default_visibility', { projectVisibility }).catch(
-    throwGlobalError
-  );
 }

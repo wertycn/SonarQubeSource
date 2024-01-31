@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,7 +37,7 @@
 }
 
 #settings-page .top-bar-outer {
-  height: 80px;
+  height: 120px;
 }
 
 #settings-page .top-bar {
@@ -51,7 +51,7 @@
 #settings-page .top-bar-inner {
   max-width: 1280px;
   margin: 0 auto;
-  height: 80px;
+  height: 120px;
   box-sizing: border-box;
 }
 
@@ -73,6 +73,11 @@
   align-items: stretch;
 }
 
+.tabbed-definitions .settings-definition {
+  margin: 0 -16px;
+  padding: 10px 16px;
+}
+
 .settings-definition-changed {
   border-top: 1px solid var(--alertBorderWarning);
   border-bottom: 1px solid var(--alertBorderWarning);
@@ -85,10 +90,18 @@
   box-sizing: border-box;
 }
 
+.radio-card .settings-definition-left {
+  padding-right: 0;
+}
+
 .settings-definition-right {
   position: relative;
   width: calc(100% - 330px);
   box-sizing: border-box;
+}
+
+.radio-card .settings-definition-right input {
+  width: 100%;
 }
 
 .settings-definition-name {
@@ -100,10 +113,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings-definition-key:hover {
-  overflow: visible;
 }
 
 .settings-definition-state {
@@ -163,7 +172,9 @@
   border-right: none;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.3s ease, background-color 0.3s ease;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
 }
 
 .side-tabs-menu > li > a:hover,
@@ -175,4 +186,56 @@
 .side-tabs-menu > li > a.active {
   color: var(--baseFontColor);
   cursor: default;
+}
+
+@media (max-width: 1320px) {
+  #settings-page .layout-page-side-outer,
+  #settings-page .layout-page-side {
+    width: 180px;
+  }
+
+  #settings-page .layout-page-side-inner {
+    margin-left: 20px;
+  }
+
+  #settings-page .top-bar-inner {
+    margin: 0 20px;
+  }
+}
+
+.settings-search-results {
+  max-height: 50vh;
+  width: 500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.settings-search-results > li > a:hover {
+  background-color: unset;
+  border-left-color: unset;
+}
+
+.settings-search-results > li.active > a {
+  background-color: var(--neutral50);
+  border-left-color: var(--blacka60);
+}
+
+.fixed-footer {
+  position: sticky;
+  bottom: 0px;
+  align-items: center;
+  display: flex;
+  border: 1px solid var(--gray80);
+  background-color: white;
+  justify-content: space-between;
+  margin: 0px -16px;
+}
+
+.markdown-preview {
+  width: 450px;
+  background-color: var(--info50);
+  border: 1px solid var(--info200);
+  border-radius: 2px;
+  padding: 16px;
+  overflow-wrap: break-word;
 }

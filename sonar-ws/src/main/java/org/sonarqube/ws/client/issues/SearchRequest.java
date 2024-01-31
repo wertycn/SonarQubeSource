@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,10 +36,8 @@ public class SearchRequest {
   private String assigned;
   private List<String> assignees;
   private List<String> author;
-  private List<String> authors;
   private String branch;
   private List<String> componentKeys;
-  private List<String> componentUuids;
   private String createdAfter;
   private String createdAt;
   private String createdBefore;
@@ -51,7 +49,6 @@ public class SearchRequest {
   private List<String> fileUuids;
   private List<String> issues;
   private List<String> languages;
-  private List<String> moduleUuids;
   private String onComponentOnly;
   private List<String> owaspTop10;
   private String p;
@@ -64,7 +61,7 @@ public class SearchRequest {
   private String s;
   private List<String> sansTop25;
   private List<String> severities;
-  private String sinceLeakPeriod;
+  private String inNewCodePeriod;
   private List<String> sonarsourceSecurity;
   private List<String> statuses;
   private List<String> tags;
@@ -153,20 +150,6 @@ public class SearchRequest {
   }
 
   /**
-   * Example value: "torvalds@linux-foundation.org"
-   * @deprecated since 7.7
-   */
-  @Deprecated
-  public SearchRequest setAuthors(List<String> authors) {
-    this.authors = authors;
-    return this;
-  }
-
-  public List<String> getAuthors() {
-    return authors;
-  }
-
-  /**
    * This is part of the internal API.
    * Example value: "feature/my_branch"
    */
@@ -189,20 +172,6 @@ public class SearchRequest {
 
   public List<String> getComponentKeys() {
     return componentKeys;
-  }
-
-  /**
-   * Example value: "584a89f2-8037-4f7b-b82c-8b45d2d63fb2"
-   * @deprecated since 6.5
-   */
-  @Deprecated
-  public SearchRequest setComponentUuids(List<String> componentUuids) {
-    this.componentUuids = componentUuids;
-    return this;
-  }
-
-  public List<String> getComponentUuids() {
-    return componentUuids;
   }
 
   /**
@@ -281,24 +250,7 @@ public class SearchRequest {
   /**
    * Possible values:
    * <ul>
-   *   <li>"count"</li>
-   *   <li>"effort"</li>
-   * </ul>
-   */
-  public SearchRequest setFacetMode(String facetMode) {
-    this.facetMode = facetMode;
-    return this;
-  }
-
-  public String getFacetMode() {
-    return facetMode;
-  }
-
-  /**
-   * Possible values:
-   * <ul>
    *   <li>"projects"</li>
-   *   <li>"moduleUuids"</li>
    *   <li>"fileUuids"</li>
    *   <li>"assigned_to_me"</li>
    *   <li>"severities"</li>
@@ -365,21 +317,6 @@ public class SearchRequest {
 
   public List<String> getLanguages() {
     return languages;
-  }
-
-  /**
-   * This is part of the internal API.
-   * Example value: "7d8749e8-3070-4903-9188-bdd82933bb92"
-   * @deprecated since 7.6
-   */
-  @Deprecated
-  public SearchRequest setModuleUuids(List<String> moduleUuids) {
-    this.moduleUuids = moduleUuids;
-    return this;
-  }
-
-  public List<String> getModuleUuids() {
-    return moduleUuids;
   }
 
   /**
@@ -513,7 +450,7 @@ public class SearchRequest {
   }
 
   /**
-   * Example value: "squid:AvoidCycles"
+   * Example value: "java:AvoidCycles"
    */
   public SearchRequest setRules(List<String> rules) {
     this.rules = rules;
@@ -591,13 +528,13 @@ public class SearchRequest {
    *   <li>"no"</li>
    * </ul>
    */
-  public SearchRequest setSinceLeakPeriod(String sinceLeakPeriod) {
-    this.sinceLeakPeriod = sinceLeakPeriod;
+  public SearchRequest setInNewCodePeriod(String inNewCodePeriod) {
+    this.inNewCodePeriod = inNewCodePeriod;
     return this;
   }
 
-  public String getSinceLeakPeriod() {
-    return sinceLeakPeriod;
+  public String isInNewCodePeriod() {
+    return inNewCodePeriod;
   }
 
   /**

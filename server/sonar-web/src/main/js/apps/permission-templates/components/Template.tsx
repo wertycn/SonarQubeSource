@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,32 +17,39 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { FlagMessage, LargeCenteredLayout, PageContentFontWrapper } from 'design-system';
+import { without } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import * as api from '../../../api/permissions';
-import HoldersList from '../../permissions/shared/components/HoldersList';
-import SearchForm from '../../permissions/shared/components/SearchForm';
+import AllHoldersList from '../../../components/permissions/AllHoldersList';
+import { FilterOption } from '../../../components/permissions/SearchForm';
+import UseQuery from '../../../helpers/UseQuery';
+import { translate } from '../../../helpers/l10n';
 import {
+  PERMISSIONS_ORDER_FOR_PROJECT_TEMPLATE,
   convertToPermissionDefinitions,
-  PERMISSIONS_ORDER_FOR_PROJECT_TEMPLATE
-} from '../../permissions/utils';
+} from '../../../helpers/permissions';
+import { useGithubProvisioningEnabledQuery } from '../../../queries/identity-provider/github';
+import { Paging, PermissionGroup, PermissionTemplate, PermissionUser } from '../../../types/types';
 import TemplateDetails from './TemplateDetails';
 import TemplateHeader from './TemplateHeader';
 
 interface Props {
   refresh: () => void;
-  template: T.PermissionTemplate;
+  template: PermissionTemplate;
   topQualifiers: string[];
 }
 
 interface State {
-  filter: string;
-  groups: T.PermissionGroup[];
+  filter: FilterOption;
+  groups: PermissionGroup[];
+  groupsPaging?: Paging;
   loading: boolean;
   query: string;
   selectedPermission?: string;
-  users: T.PermissionUser[];
+  users: PermissionUser[];
+  usersPaging?: Paging;
 }
 
 export default class Template extends React.PureComponent<Props, State> {
@@ -52,7 +59,7 @@ export default class Template extends React.PureComponent<Props, State> {
     groups: [],
     loading: false,
     query: '',
-    users: []
+    users: [],
   };
 
   componentDidMount() {
@@ -64,92 +71,225 @@ export default class Template extends React.PureComponent<Props, State> {
     this.mounted = false;
   }
 
-  requestHolders = (realQuery?: string) => {
+  loadUsersAndGroups = (usersPage?: number, groupsPage?: number) => {
     this.setState({ loading: true });
 
     const { template } = this.props;
     const { query, filter, selectedPermission } = this.state;
-    const requests = [];
 
-    const finalQuery = realQuery != null ? realQuery : query;
+    const getUsers: Promise<{ paging?: Paging; users: PermissionUser[] }> =
+      filter !== 'groups'
+        ? api.getPermissionTemplateUsers({
+            templateId: template.id,
+            q: query || undefined,
+            permission: selectedPermission,
+            p: usersPage,
+          })
+        : Promise.resolve({ paging: undefined, users: [] });
 
-    if (filter !== 'groups') {
-      requests.push(api.getPermissionTemplateUsers(template.id, finalQuery, selectedPermission));
-    } else {
-      requests.push(Promise.resolve([]));
+    const getGroups: Promise<{ paging?: Paging; groups: PermissionGroup[] }> =
+      filter !== 'users'
+        ? api.getPermissionTemplateGroups({
+            templateId: template.id,
+            q: query || undefined,
+            permission: selectedPermission,
+            p: groupsPage,
+          })
+        : Promise.resolve({ paging: undefined, groups: [] });
+
+    return Promise.all([getUsers, getGroups]);
+  };
+
+  requestHolders = async () => {
+    const [{ users, paging: usersPaging }, { groups, paging: groupsPaging }] =
+      await this.loadUsersAndGroups();
+
+    if (this.mounted) {
+      this.setState({
+        groups,
+        groupsPaging,
+        loading: false,
+        users,
+        usersPaging,
+      });
     }
+  };
 
-    if (filter !== 'users') {
-      requests.push(api.getPermissionTemplateGroups(template.id, finalQuery, selectedPermission));
-    } else {
-      requests.push(Promise.resolve([]));
-    }
-    return Promise.all(requests).then(([users, groups]) => {
-      if (this.mounted) {
-        this.setState({
-          users,
-          groups,
-          loading: false
-        });
-      }
+  onLoadMore = async () => {
+    const { usersPaging, groupsPaging } = this.state;
+    this.setState({
+      loading: true,
     });
-  };
-
-  handleToggleUser = (user: T.PermissionUser, permission: string) => {
-    if (user.login === '<creator>') {
-      return this.handleToggleProjectCreator(user, permission);
+    const [usersResponse, groupsResponse] = await this.loadUsersAndGroups(
+      usersPaging ? usersPaging.pageIndex + 1 : 1,
+      groupsPaging ? groupsPaging.pageIndex + 1 : 1,
+    );
+    if (this.mounted) {
+      this.setState(({ groups, users }) => ({
+        groups: [...groups, ...groupsResponse.groups],
+        groupsPaging: groupsResponse.paging,
+        loading: false,
+        users: [...users, ...usersResponse.users],
+        usersPaging: usersResponse.paging,
+      }));
     }
-    const { template } = this.props;
-    const hasPermission = user.permissions.includes(permission);
-    const data: { templateId: string; login: string; permission: string } = {
-      templateId: template.id,
-      login: user.login,
-      permission
-    };
-
-    const request = hasPermission
-      ? api.revokeTemplatePermissionFromUser(data)
-      : api.grantTemplatePermissionToUser(data);
-    return request.then(() => this.requestHolders()).then(this.props.refresh);
   };
 
-  handleToggleProjectCreator = (user: T.PermissionUser, permission: string) => {
+  removePermissionFromEntity = <T extends { login?: string; name: string; permissions: string[] }>(
+    entities: T[],
+    entity: string,
+    permission: string,
+  ): T[] =>
+    entities.map((candidate) =>
+      candidate.name === entity || candidate.login === entity
+        ? { ...candidate, permissions: without(candidate.permissions, permission) }
+        : candidate,
+    );
+
+  addPermissionToEntity = <T extends { login?: string; name: string; permissions: string[] }>(
+    entities: T[],
+    entity: string,
+    permission: string,
+  ): T[] =>
+    entities.map((candidate) =>
+      candidate.name === entity || candidate.login === entity
+        ? { ...candidate, permissions: [...candidate.permissions, permission] }
+        : candidate,
+    );
+
+  grantPermissionToUser = (login: string, permission: string) => {
     const { template } = this.props;
-    const hasPermission = user.permissions.includes(permission);
-    const request = hasPermission
+    const isProjectCreator = login === '<creator>';
+
+    this.setState(({ users }) => ({
+      users: this.addPermissionToEntity(users, login, permission),
+      loading: true,
+    }));
+
+    const request = isProjectCreator
+      ? api.addProjectCreatorToTemplate(template.id, permission)
+      : api.grantTemplatePermissionToUser({
+          templateId: template.id,
+          login,
+          permission,
+        });
+
+    return request
+      .then(this.props.refresh)
+      .then(() => this.setState({ loading: false }))
+      .catch(() => {
+        this.setState(({ users }) => ({
+          users: this.removePermissionFromEntity(users, login, permission),
+          loading: false,
+        }));
+      });
+  };
+
+  revokePermissionFromUser = (login: string, permission: string) => {
+    const { template } = this.props;
+    const isProjectCreator = login === '<creator>';
+
+    this.setState(({ users }) => ({
+      users: this.removePermissionFromEntity(users, login, permission),
+      loading: true,
+    }));
+
+    const request = isProjectCreator
       ? api.removeProjectCreatorFromTemplate(template.id, permission)
-      : api.addProjectCreatorToTemplate(template.id, permission);
-    return request.then(() => this.requestHolders()).then(this.props.refresh);
+      : api.revokeTemplatePermissionFromUser({
+          templateId: template.id,
+          login,
+          permission,
+        });
+
+    return request
+      .then(this.props.refresh)
+      .then(() => this.setState({ loading: false }))
+      .catch(() => {
+        this.setState(({ users }) => ({
+          users: this.addPermissionToEntity(users, login, permission),
+          loading: false,
+        }));
+      });
   };
 
-  handleToggleGroup = (group: T.PermissionGroup, permission: string) => {
+  grantPermissionToGroup = (groupName: string, permission: string) => {
     const { template } = this.props;
-    const hasPermission = group.permissions.includes(permission);
-    const data = {
-      templateId: template.id,
-      groupName: group.name,
-      permission
-    };
-    const request = hasPermission
-      ? api.revokeTemplatePermissionFromGroup(data)
-      : api.grantTemplatePermissionToGroup(data);
-    return request.then(() => this.requestHolders()).then(this.props.refresh);
+
+    this.setState(({ groups }) => ({
+      groups: this.addPermissionToEntity(groups, groupName, permission),
+      loading: true,
+    }));
+
+    return api
+      .grantTemplatePermissionToGroup({
+        templateId: template.id,
+        groupName,
+        permission,
+      })
+      .then(this.props.refresh)
+      .then(() => this.setState({ loading: false }))
+      .catch(() => {
+        this.setState(({ groups }) => ({
+          groups: this.removePermissionFromEntity(groups, groupName, permission),
+          loading: false,
+        }));
+      });
+  };
+
+  revokePermissionFromGroup = (groupName: string, permission: string) => {
+    const { template } = this.props;
+
+    this.setState(({ groups }) => ({
+      groups: this.removePermissionFromEntity(groups, groupName, permission),
+      loading: true,
+    }));
+
+    return api
+      .revokeTemplatePermissionFromGroup({
+        templateId: template.id,
+        groupName,
+        permission,
+      })
+      .then(this.props.refresh)
+      .then(() => this.setState({ loading: false }))
+      .catch(() => {
+        this.setState(({ groups }) => ({
+          groups: this.addPermissionToEntity(groups, groupName, permission),
+          loading: false,
+        }));
+      });
   };
 
   handleSearch = (query: string) => {
-    this.setState({ query });
-    this.requestHolders(query);
+    this.setState({ query }, () => {
+      this.requestHolders().catch(() => {
+        /* noop */
+      });
+    });
   };
 
-  handleFilter = (filter: string) => {
-    this.setState({ filter }, this.requestHolders);
+  handleFilter = (filter: FilterOption) => {
+    this.setState({ filter }, () => {
+      this.requestHolders().catch(() => {
+        /* noop */
+      });
+    });
   };
 
   handleSelectPermission = (selectedPermission: string) => {
     if (selectedPermission === this.state.selectedPermission) {
-      this.setState({ selectedPermission: undefined }, this.requestHolders);
+      this.setState({ selectedPermission: undefined }, () => {
+        this.requestHolders().catch(() => {
+          /* noop */
+        });
+      });
     } else {
-      this.setState({ selectedPermission }, this.requestHolders);
+      this.setState({ selectedPermission }, () => {
+        this.requestHolders().catch(() => {
+          /* noop */
+        });
+      });
     }
   };
 
@@ -168,56 +308,78 @@ export default class Template extends React.PureComponent<Props, State> {
   };
 
   render() {
+    const { template, topQualifiers } = this.props;
+    const { users, loading, groups, groupsPaging, usersPaging, selectedPermission, filter, query } =
+      this.state;
     const permissions = convertToPermissionDefinitions(
       PERMISSIONS_ORDER_FOR_PROJECT_TEMPLATE,
-      'projects_role'
+      'projects_role',
     );
-    const allUsers = [...this.state.users];
+    const allUsers = [...users];
 
-    const creatorPermissions = this.props.template.permissions
-      .filter(p => p.withProjectCreator)
-      .map(p => p.key);
+    const creatorPermissions = template.permissions
+      .filter((p) => p.withProjectCreator)
+      .map((p) => p.key);
+
+    let usersPagingWithCreator = usersPaging;
 
     if (this.shouldDisplayCreator(creatorPermissions)) {
       const creator = {
         login: '<creator>',
         name: translate('permission_templates.project_creators'),
-        permissions: creatorPermissions
+        permissions: creatorPermissions,
       };
 
       allUsers.unshift(creator);
+      usersPagingWithCreator = usersPaging
+        ? { ...usersPaging, total: usersPaging.total + 1 }
+        : undefined;
     }
 
     return (
-      <div className="page page-limited">
-        <Helmet defer={false} title={this.props.template.name} />
+      <LargeCenteredLayout id="permission-template">
+        <PageContentFontWrapper className="sw-my-8 sw-body-sm">
+          <Helmet defer={false} title={template.name} />
 
-        <TemplateHeader
-          loading={this.state.loading}
-          refresh={this.props.refresh}
-          template={this.props.template}
-          topQualifiers={this.props.topQualifiers}
-        />
-
-        <TemplateDetails template={this.props.template} />
-
-        <HoldersList
-          groups={this.state.groups}
-          onSelectPermission={this.handleSelectPermission}
-          onToggleGroup={this.handleToggleGroup}
-          onToggleUser={this.handleToggleUser}
-          permissions={permissions}
-          selectedPermission={this.state.selectedPermission}
-          showPublicProjectsWarning={true}
-          users={allUsers}>
-          <SearchForm
-            filter={this.state.filter}
-            onFilter={this.handleFilter}
-            onSearch={this.handleSearch}
-            query={this.state.query}
+          <TemplateHeader
+            refresh={this.props.refresh}
+            template={template}
+            topQualifiers={topQualifiers}
           />
-        </HoldersList>
-      </div>
+          <main>
+            <TemplateDetails template={template} />
+            <UseQuery query={useGithubProvisioningEnabledQuery}>
+              {({ data: githubProvisioningStatus }) =>
+                githubProvisioningStatus ? (
+                  <FlagMessage variant="warning" className="sw-w-fit sw-mb-4">
+                    {translate('permission_templates.github_warning')}
+                  </FlagMessage>
+                ) : null
+              }
+            </UseQuery>
+
+            <AllHoldersList
+              filter={filter}
+              onGrantPermissionToGroup={this.grantPermissionToGroup}
+              onGrantPermissionToUser={this.grantPermissionToUser}
+              groups={groups}
+              groupsPaging={groupsPaging}
+              loading={loading}
+              onFilter={this.handleFilter}
+              onLoadMore={this.onLoadMore}
+              onQuery={this.handleSearch}
+              query={query}
+              onRevokePermissionFromGroup={this.revokePermissionFromGroup}
+              onRevokePermissionFromUser={this.revokePermissionFromUser}
+              users={allUsers}
+              usersPaging={usersPagingWithCreator}
+              permissions={permissions}
+              selectedPermission={selectedPermission}
+              onSelectPermission={this.handleSelectPermission}
+            />
+          </main>
+        </PageContentFontWrapper>
+      </LargeCenteredLayout>
     );
   }
 }

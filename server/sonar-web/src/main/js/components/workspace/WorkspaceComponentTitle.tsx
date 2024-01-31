@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,8 +18,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import { collapsePath } from 'sonar-ui-common/helpers/path';
+import QualifierIcon from '../../components/icons/QualifierIcon';
+import { collapsePath } from '../../helpers/path';
 import { ComponentDescriptor } from './context';
 
 interface Props {

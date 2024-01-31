@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.server.platform;
 
-import java.io.File;
 import java.util.Date;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,6 +26,7 @@ import org.sonar.api.platform.Server;
 import org.sonar.api.platform.ServerStartHandler;
 import org.sonar.api.platform.ServerStopHandler;
 
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -53,7 +53,7 @@ public class ServerLifecycleNotifierTest {
    */
   @Test
   public void doNotNotifyWithTheStartMethod() {
-    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[]{start1, start2}, new ServerStopHandler[]{stop2});
+    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[] {start1, start2}, new ServerStopHandler[] {stop2});
     notifier.start();
 
     verify(start1, never()).onServerStart(server);
@@ -63,7 +63,7 @@ public class ServerLifecycleNotifierTest {
 
   @Test
   public void notifyOnStart() {
-    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[]{start1, start2}, new ServerStopHandler[]{stop2});
+    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[] {start1, start2}, new ServerStopHandler[] {stop2});
     notifier.notifyStart();
 
     verify(start1).onServerStart(server);
@@ -71,16 +71,22 @@ public class ServerLifecycleNotifierTest {
     verify(stop1, never()).onServerStop(server);
   }
 
-
   @Test
   public void notifyOnStop() {
-    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[]{start1, start2}, new ServerStopHandler[]{stop1, stop2});
+    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, new ServerStartHandler[] {start1, start2}, new ServerStopHandler[] {stop1, stop2});
     notifier.stop();
 
     verify(start1, never()).onServerStart(server);
     verify(start2, never()).onServerStart(server);
     verify(stop1).onServerStop(server);
     verify(stop2).onServerStop(server);
+  }
+
+  @Test
+  public void null_handler_param_wont_lead_to_NPE() {
+    ServerLifecycleNotifier notifier = new ServerLifecycleNotifier(server, null, null);
+    assertThatNoException().isThrownBy(notifier::notifyStart);
+    assertThatNoException().isThrownBy(notifier::stop);
   }
 }
 
@@ -102,37 +108,12 @@ class FakeServer extends Server {
   }
 
   @Override
-  public File getRootDir() {
-    return null;
-  }
-
-  @Override
   public String getContextPath() {
     return null;
   }
 
   @Override
   public String getPublicRootUrl() {
-    return null;
-  }
-
-  @Override
-  public boolean isDev() {
-    return false;
-  }
-
-  @Override
-  public boolean isSecured() {
-    return false;
-  }
-
-  @Override
-  public String getURL() {
-    return null;
-  }
-
-  @Override
-  public String getPermanentServerId() {
     return null;
   }
 }

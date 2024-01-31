@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,24 +19,20 @@
  */
 package org.sonar.server.authentication;
 
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 import org.sonar.api.server.authentication.UnauthorizedException;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
+import org.sonar.api.web.FilterChain;
+import org.sonar.api.web.UrlPattern;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
-import org.sonar.server.authentication.exception.EmailAlreadyExistsRedirectionException;
 import org.sonar.server.user.ThreadLocalUserSession;
 
 import static java.lang.String.format;
 import static org.sonar.server.authentication.AuthenticationError.handleAuthenticationError;
 import static org.sonar.server.authentication.AuthenticationError.handleError;
-import static org.sonar.server.authentication.AuthenticationRedirection.redirectTo;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
 
 public class OAuth2CallbackFilter extends AuthenticationFilter {
@@ -61,27 +57,20 @@ public class OAuth2CallbackFilter extends AuthenticationFilter {
   }
 
   @Override
-  public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) {
-    HttpServletRequest httpRequest = (HttpServletRequest) request;
-    HttpServletResponse httpResponse = (HttpServletResponse) response;
-
-    IdentityProvider provider = resolveProviderOrHandleResponse(httpRequest, httpResponse, CALLBACK_PATH);
+  public void doFilter(HttpRequest request, HttpResponse response, FilterChain chain) {
+    IdentityProvider provider = resolveProviderOrHandleResponse(request, response, CALLBACK_PATH);
     if (provider != null) {
-      handleProvider(httpRequest, (HttpServletResponse) response, provider);
+      handleProvider(request, response, provider);
     }
   }
 
-  private void handleProvider(HttpServletRequest request, HttpServletResponse response, IdentityProvider provider) {
+  private void handleProvider(HttpRequest request, HttpResponse response, IdentityProvider provider) {
     try {
-      if (provider instanceof OAuth2IdentityProvider) {
-        handleOAuth2Provider(response, request, (OAuth2IdentityProvider) provider);
+      if (provider instanceof OAuth2IdentityProvider oAuth2IdentityProvider) {
+        handleOAuth2Provider(request, response, oAuth2IdentityProvider);
       } else {
         handleError(request, response, format("Not an OAuth2IdentityProvider: %s", provider.getClass()));
       }
-    } catch (EmailAlreadyExistsRedirectionException e) {
-      oauth2Parameters.delete(request, response);
-      e.addCookie(request, response);
-      redirectTo(response, e.getPath(request.getContextPath()));
     } catch (AuthenticationException e) {
       oauth2Parameters.delete(request, response);
       authenticationEvent.loginFailure(request, e);
@@ -92,8 +81,8 @@ public class OAuth2CallbackFilter extends AuthenticationFilter {
     }
   }
 
-  private void handleOAuth2Provider(HttpServletResponse response, HttpServletRequest httpRequest, OAuth2IdentityProvider oAuth2Provider) {
-    OAuth2IdentityProvider.CallbackContext context = oAuth2ContextFactory.newCallback(httpRequest, response, oAuth2Provider);
+  private void handleOAuth2Provider(HttpRequest request, HttpResponse response, OAuth2IdentityProvider oAuth2Provider) {
+    OAuth2IdentityProvider.CallbackContext context = oAuth2ContextFactory.newCallback(request, response, oAuth2Provider);
     try {
       oAuth2Provider.callback(context);
     } catch (UnauthorizedException e) {
@@ -104,7 +93,7 @@ public class OAuth2CallbackFilter extends AuthenticationFilter {
         .build();
     }
     if (threadLocalUserSession.hasSession()) {
-      authenticationEvent.loginSuccess(httpRequest, threadLocalUserSession.getLogin(), Source.oauth2(oAuth2Provider));
+      authenticationEvent.loginSuccess(request, threadLocalUserSession.getLogin(), Source.oauth2(oAuth2Provider));
     } else {
       throw AuthenticationException.newBuilder()
         .setSource(Source.oauth2(oAuth2Provider))
@@ -114,7 +103,7 @@ public class OAuth2CallbackFilter extends AuthenticationFilter {
   }
 
   @Override
-  public void init(FilterConfig filterConfig) {
+  public void init() {
     // Nothing to do
   }
 

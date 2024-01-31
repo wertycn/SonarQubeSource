@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,9 +21,7 @@ package org.sonar.server.authentication;
 
 import java.util.Base64;
 import java.util.Optional;
-import javax.servlet.http.HttpServletRequest;
-import org.sonar.db.DbClient;
-import org.sonar.db.DbSession;
+import org.sonar.api.server.http.HttpRequest;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
@@ -43,25 +41,20 @@ import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
  */
 public class BasicAuthentication {
 
-  private final DbClient dbClient;
   private final CredentialsAuthentication credentialsAuthentication;
   private final UserTokenAuthentication userTokenAuthentication;
-  private final AuthenticationEvent authenticationEvent;
 
-  public BasicAuthentication(DbClient dbClient, CredentialsAuthentication credentialsAuthentication,
-    UserTokenAuthentication userTokenAuthentication, AuthenticationEvent authenticationEvent) {
-    this.dbClient = dbClient;
+  public BasicAuthentication(CredentialsAuthentication credentialsAuthentication, UserTokenAuthentication userTokenAuthentication) {
     this.credentialsAuthentication = credentialsAuthentication;
     this.userTokenAuthentication = userTokenAuthentication;
-    this.authenticationEvent = authenticationEvent;
   }
 
-  public Optional<UserDto> authenticate(HttpServletRequest request) {
+  public Optional<UserDto> authenticate(HttpRequest request) {
     return extractCredentialsFromHeader(request)
-      .flatMap(credentials -> Optional.of(authenticate(credentials, request)));
+      .flatMap(credentials -> Optional.ofNullable(authenticate(credentials, request)));
   }
 
-  public static Optional<Credentials> extractCredentialsFromHeader(HttpServletRequest request) {
+  public static Optional<Credentials> extractCredentialsFromHeader(HttpRequest request) {
     String authorizationHeader = request.getHeader("Authorization");
     if (authorizationHeader == null || !startsWithIgnoreCase(authorizationHeader, "BASIC")) {
       return Optional.empty();
@@ -93,33 +86,19 @@ public class BasicAuthentication {
     }
   }
 
-  private UserDto authenticate(Credentials credentials, HttpServletRequest request) {
-    if (!credentials.getPassword().isPresent()) {
-      UserDto userDto = authenticateFromUserToken(credentials.getLogin());
-      authenticationEvent.loginSuccess(request, userDto.getLogin(), Source.local(Method.BASIC_TOKEN));
-      return userDto;
-    }
-    return credentialsAuthentication.authenticate(credentials, request, Method.BASIC);
-  }
-
-  private UserDto authenticateFromUserToken(String token) {
-    Optional<String> authenticatedUserUuid = userTokenAuthentication.authenticate(token);
-    if (!authenticatedUserUuid.isPresent()) {
-      throw AuthenticationException.newBuilder()
-        .setSource(Source.local(Method.BASIC_TOKEN))
-        .setMessage("Token doesn't exist")
-        .build();
-    }
-    try (DbSession dbSession = dbClient.openSession(false)) {
-      UserDto userDto = dbClient.userDao().selectByUuid(dbSession, authenticatedUserUuid.get());
-      if (userDto == null || !userDto.isActive()) {
+  private UserDto authenticate(Credentials credentials, HttpRequest request) {
+    if (credentials.getPassword().isEmpty()) {
+      Optional<UserAuthResult> userAuthResult = userTokenAuthentication.authenticate(request);
+      if (userAuthResult.isPresent()) {
+        return userAuthResult.get().getUserDto();
+      } else {
         throw AuthenticationException.newBuilder()
-          .setSource(Source.local(Method.BASIC_TOKEN))
+          .setSource(AuthenticationEvent.Source.local(AuthenticationEvent.Method.SONARQUBE_TOKEN))
           .setMessage("User doesn't exist")
           .build();
       }
-      return userDto;
     }
+    return credentialsAuthentication.authenticate(credentials, request, Method.BASIC);
   }
 
 }

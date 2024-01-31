@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.ce.task.projectanalysis.metric;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface MetricRepository {
@@ -50,5 +51,10 @@ public interface MetricRepository {
    * Get iterable of all {@link Metric}.
    */
   Iterable<Metric> getAll();
+
+  /**
+   * Returns all the {@link Metric}s for the specific type.
+   */
+  List<Metric> getMetricsByType(Metric.MetricType type);
 
 }

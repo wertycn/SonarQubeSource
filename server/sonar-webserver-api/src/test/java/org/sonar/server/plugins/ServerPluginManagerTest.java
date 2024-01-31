@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,37 +21,41 @@ package org.sonar.server.plugins;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.sonar.api.Plugin;
-import org.sonar.api.utils.log.LogTester;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.core.platform.ExplodedPlugin;
 import org.sonar.core.platform.PluginClassLoader;
 import org.sonar.core.platform.PluginJarExploder;
 import org.sonar.server.plugins.PluginFilesAndMd5.FileAndMd5;
+import org.sonar.updatecenter.common.Version;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.sonar.server.plugins.PluginType.EXTERNAL;
+import static org.sonar.core.plugin.PluginType.EXTERNAL;
 
 public class ServerPluginManagerTest {
 
   @Rule
-  public LogTester logs = new LogTester();
+  public LogTester logTester = new LogTester();
+  @Rule
+  public TemporaryFolder temp = new TemporaryFolder();
 
   private PluginClassLoader pluginClassLoader = mock(PluginClassLoader.class);
   private PluginJarExploder jarExploder = mock(PluginJarExploder.class);
   private PluginJarLoader jarLoader = mock(PluginJarLoader.class);
-  private PluginCompressor pluginCompressor = mock(PluginCompressor.class);
   private ServerPluginRepository pluginRepository = new ServerPluginRepository();
-  private ServerPluginManager underTest = new ServerPluginManager(pluginClassLoader, jarExploder, jarLoader, pluginCompressor, pluginRepository);
+  private ServerPluginManager underTest = new ServerPluginManager(pluginClassLoader, jarExploder, jarLoader, pluginRepository);
 
   @After
   public void tearDown() {
@@ -59,7 +63,7 @@ public class ServerPluginManagerTest {
   }
 
   @Test
-  public void load_plugins() {
+  public void load_plugins() throws IOException {
     ServerPluginInfo p1 = newPluginInfo("p1");
     ServerPluginInfo p2 = newPluginInfo("p2");
     when(jarLoader.loadPlugins()).thenReturn(Arrays.asList(p1, p2));
@@ -68,37 +72,39 @@ public class ServerPluginManagerTest {
 
     Map<String, Plugin> instances = ImmutableMap.of("p1", mock(Plugin.class), "p2", mock(Plugin.class));
     when(pluginClassLoader.load(anyList())).thenReturn(instances);
-    PluginFilesAndMd5 p1Files = newPluginFilesAndMd5("p1");
-    PluginFilesAndMd5 p2Files = newPluginFilesAndMd5("p2");
-
-    when(pluginCompressor.compress("p1", new File("p1.jar"), new File("p1Exploded.jar"))).thenReturn(p1Files);
-    when(pluginCompressor.compress("p2", new File("p2.jar"), new File("p2Exploded.jar"))).thenReturn(p2Files);
 
     underTest.start();
 
-    assertThat(pluginRepository.getPlugins())
-      .extracting(ServerPlugin::getPluginInfo, ServerPlugin::getCompressed, ServerPlugin::getJar, ServerPlugin::getInstance)
-      .containsOnly(tuple(p1, p1Files.getCompressedJar(), p1Files.getLoadedJar(), instances.get("p1")),
-        tuple(p2, p2Files.getCompressedJar(), p2Files.getLoadedJar(), instances.get("p2")));
+    assertEquals(2, pluginRepository.getPlugins().size());
+
+    assertEquals(p1, pluginRepository.getPlugin("p1").getPluginInfo());
+    assertEquals(newFileAndMd5(p1.getNonNullJarFile()).getFile(), pluginRepository.getPlugin("p1").getJar().getFile());
+    assertEquals(newFileAndMd5(p1.getNonNullJarFile()).getMd5(), pluginRepository.getPlugin("p1").getJar().getMd5());
+    assertEquals(instances.get("p1"), pluginRepository.getPlugin("p1").getInstance());
+
+    assertEquals(p2, pluginRepository.getPlugin("p2").getPluginInfo());
+    assertEquals(newFileAndMd5(p2.getNonNullJarFile()).getFile(), pluginRepository.getPlugin("p2").getJar().getFile());
+    assertEquals(newFileAndMd5(p2.getNonNullJarFile()).getMd5(), pluginRepository.getPlugin("p2").getJar().getMd5());
+    assertEquals(instances.get("p2"), pluginRepository.getPlugin("p2").getInstance());
+
+    assertThat(pluginRepository.getPlugins()).extracting(ServerPlugin::getPluginInfo)
+      .allMatch(p -> logTester.logs().contains(String.format("Deploy %s / %s / %s", p.getName(), p.getVersion(), p.getImplementationBuild())));
   }
 
-  private static ServerPluginInfo newPluginInfo(String key) {
+  private ServerPluginInfo newPluginInfo(String key) throws IOException {
     ServerPluginInfo pluginInfo = mock(ServerPluginInfo.class);
     when(pluginInfo.getKey()).thenReturn(key);
     when(pluginInfo.getType()).thenReturn(EXTERNAL);
-    when(pluginInfo.getNonNullJarFile()).thenReturn(new File(key + ".jar"));
+    when(pluginInfo.getNonNullJarFile()).thenReturn(temp.newFile(key + ".jar"));
+    when(pluginInfo.getName()).thenReturn(key + "_name");
+    Version version = mock(Version.class);
+    when(version.getName()).thenReturn(key + "_version");
+    when(pluginInfo.getVersion()).thenReturn(version);
+    when(pluginInfo.getImplementationBuild()).thenReturn(key + "_implementationBuild");
     return pluginInfo;
   }
 
-  private static PluginFilesAndMd5 newPluginFilesAndMd5(String name) {
-    FileAndMd5 jar = mock(FileAndMd5.class);
-    when(jar.getFile()).thenReturn(new File(name));
-    when(jar.getMd5()).thenReturn(name + "-md5");
-
-    FileAndMd5 compressed = mock(FileAndMd5.class);
-    when(compressed.getFile()).thenReturn(new File(name + "-compressed"));
-    when(compressed.getMd5()).thenReturn(name + "-compressed-md5");
-
-    return new PluginFilesAndMd5(jar, compressed);
+  private static FileAndMd5 newFileAndMd5(File file) {
+    return new PluginFilesAndMd5.FileAndMd5(file);
   }
 }

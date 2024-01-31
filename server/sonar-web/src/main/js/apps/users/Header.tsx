@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,49 +17,61 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, FlagMessage, Link, Title } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { FormattedMessage } from 'react-intl';
+import { useDocUrl } from '../../helpers/docs';
+import { translate } from '../../helpers/l10n';
 import UserForm from './components/UserForm';
 
 interface Props {
-  loading: boolean;
-  onUpdateUsers: () => void;
+  manageProvider?: string;
 }
 
-interface State {
-  openUserForm: boolean;
-}
+export default function Header(props: Props) {
+  const getDocUrl = useDocUrl();
+  const [openUserForm, setOpenUserForm] = React.useState(false);
 
-export default class Header extends React.PureComponent<Props, State> {
-  state: State = { openUserForm: false };
+  const { manageProvider } = props;
+  return (
+    <div>
+      <div className="sw-flex sw-justify-between">
+        <Title>{translate('users.page')}</Title>
 
-  handleOpenUserForm = () => {
-    this.setState({ openUserForm: true });
-  };
-
-  handleCloseUserForm = () => {
-    this.setState({ openUserForm: false });
-  };
-
-  render() {
-    return (
-      <header className="page-header" id="users-header">
-        <h1 className="page-title">{translate('users.page')}</h1>
-        <DeferredSpinner loading={this.props.loading} />
-
-        <div className="page-actions">
-          <Button id="users-create" onClick={this.handleOpenUserForm}>
-            {translate('users.create_user')}
-          </Button>
-        </div>
-
-        <p className="page-description">{translate('users.page.description')}</p>
-        {this.state.openUserForm && (
-          <UserForm onClose={this.handleCloseUserForm} onUpdateUsers={this.props.onUpdateUsers} />
+        <ButtonPrimary
+          id="users-create"
+          disabled={manageProvider !== undefined}
+          onClick={() => setOpenUserForm(true)}
+        >
+          {translate('users.create_user')}
+        </ButtonPrimary>
+      </div>
+      <div>
+        {manageProvider === undefined ? (
+          <span>{translate('users.page.description')}</span>
+        ) : (
+          <FlagMessage className="sw-max-w-3/4 sw-mb-4" variant="info">
+            <span>
+              <FormattedMessage
+                defaultMessage={translate('users.page.managed_description')}
+                id="users.page.managed_description"
+                values={{
+                  provider: manageProvider,
+                  link: (
+                    <Link to={getDocUrl('/instance-administration/authentication/overview/')}>
+                      {translate('documentation')}
+                    </Link>
+                  ),
+                }}
+              />
+            </span>
+          </FlagMessage>
         )}
-      </header>
-    );
-  }
+      </div>
+
+      {openUserForm && (
+        <UserForm onClose={() => setOpenUserForm(false)} isInstanceManaged={false} />
+      )}
+    </div>
+  );
 }

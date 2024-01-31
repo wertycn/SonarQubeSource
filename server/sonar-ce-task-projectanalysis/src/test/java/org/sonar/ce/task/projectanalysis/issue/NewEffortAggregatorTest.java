@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,25 +19,23 @@
  */
 package org.sonar.ce.task.projectanalysis.issue;
 
-import java.util.Date;
-import java.util.Random;
 import org.junit.Test;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
-import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
 import org.sonar.ce.task.projectanalysis.component.Component;
 import org.sonar.ce.task.projectanalysis.component.ReportComponent;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 import org.sonar.ce.task.projectanalysis.measure.MeasureRepositoryRule;
 import org.sonar.ce.task.projectanalysis.metric.MetricRepositoryRule;
-import org.sonar.ce.task.projectanalysis.period.Period;
 import org.sonar.ce.task.projectanalysis.period.PeriodHolderRule;
 import org.sonar.core.issue.DefaultIssue;
+import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.component.BranchType;
-import org.sonar.db.newcodeperiod.NewCodePeriodType;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
@@ -52,14 +50,6 @@ import static org.sonar.api.rules.RuleType.CODE_SMELL;
 import static org.sonar.api.rules.RuleType.VULNERABILITY;
 
 public class NewEffortAggregatorTest {
-
-  private static final Period PERIOD = new Period(NewCodePeriodType.PREVIOUS_VERSION.name(), null, 1_500_000_000L);
-  private static final long[] OLD_ISSUES_DATES = new long[]{
-    PERIOD.getDate(),
-    PERIOD.getDate() - 1,
-    PERIOD.getDate() - 1_200_000L,
-  };
-
   private static final Component FILE = ReportComponent.builder(Component.Type.FILE, 1).setUuid("FILE").build();
   private static final Component PROJECT = ReportComponent.builder(Component.Type.PROJECT, 2).addChildren(FILE).build();
 
@@ -72,15 +62,13 @@ public class NewEffortAggregatorTest {
     .add(NEW_SECURITY_REMEDIATION_EFFORT);
   @org.junit.Rule
   public MeasureRepositoryRule measureRepository = MeasureRepositoryRule.create();
-  @org.junit.Rule
-  public AnalysisMetadataHolderRule analysisMetadataHolder = new AnalysisMetadataHolderRule();
-
-  private final Random random = new Random();
-  private NewEffortAggregator underTest = new NewEffortAggregator(periodsHolder, analysisMetadataHolder, metricRepository, measureRepository);
+  private final NewIssueClassifier newIssueClassifier = mock(NewIssueClassifier.class);
+  private final NewEffortAggregator underTest = new NewEffortAggregator(metricRepository, measureRepository, newIssueClassifier);
 
   @Test
   public void sum_new_maintainability_effort_of_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
     DefaultIssue unresolved1 = newCodeSmellIssue(10L);
     DefaultIssue old1 = oldCodeSmellIssue(100L);
     DefaultIssue unresolved2 = newCodeSmellIssue(30L);
@@ -97,12 +85,13 @@ public class NewEffortAggregatorTest {
     underTest.onIssue(FILE, resolved);
     underTest.afterComponent(FILE);
 
-    assertVariation(FILE, NEW_TECHNICAL_DEBT_KEY, 10 + 30);
+    assertValue(FILE, NEW_TECHNICAL_DEBT_KEY, 10 + 30);
   }
 
   @Test
   public void new_maintainability_effort_is_only_computed_using_code_smell_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
     DefaultIssue codeSmellIssue = newCodeSmellIssue(10);
     DefaultIssue oldSmellIssue = oldCodeSmellIssue(100);
     // Issues of type BUG and VULNERABILITY should be ignored
@@ -121,12 +110,13 @@ public class NewEffortAggregatorTest {
     underTest.afterComponent(FILE);
 
     // Only effort of CODE SMELL issue is used
-    assertVariation(FILE, NEW_TECHNICAL_DEBT_KEY, 10);
+    assertValue(FILE, NEW_TECHNICAL_DEBT_KEY, 10);
   }
 
   @Test
   public void sum_new_reliability_effort_of_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
     DefaultIssue unresolved1 = newBugIssue(10L);
     DefaultIssue old1 = oldBugIssue(100L);
     DefaultIssue unresolved2 = newBugIssue(30L);
@@ -144,12 +134,13 @@ public class NewEffortAggregatorTest {
     underTest.onIssue(FILE, resolved);
     underTest.afterComponent(FILE);
 
-    assertVariation(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 10 + 30);
+    assertValue(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 10 + 30);
   }
 
   @Test
   public void new_reliability_effort_is_only_computed_using_bug_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
     DefaultIssue bugIssue = newBugIssue(15);
     DefaultIssue oldBugIssue = oldBugIssue(150);
     // Issues of type CODE SMELL and VULNERABILITY should be ignored
@@ -168,12 +159,12 @@ public class NewEffortAggregatorTest {
     underTest.afterComponent(FILE);
 
     // Only effort of BUG issue is used
-    assertVariation(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 15);
+    assertValue(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 15);
   }
 
   @Test
   public void sum_new_vulnerability_effort_of_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
     DefaultIssue unresolved1 = newVulnerabilityIssue(10L);
     DefaultIssue old1 = oldVulnerabilityIssue(100L);
     DefaultIssue unresolved2 = newVulnerabilityIssue(30L);
@@ -192,12 +183,13 @@ public class NewEffortAggregatorTest {
     underTest.onIssue(FILE, oldResolved);
     underTest.afterComponent(FILE);
 
-    assertVariation(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 10 + 30);
+    assertValue(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 10 + 30);
   }
 
   @Test
   public void new_security_effort_is_only_computed_using_vulnerability_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
     DefaultIssue vulnerabilityIssue = newVulnerabilityIssue(12);
     DefaultIssue oldVulnerabilityIssue = oldVulnerabilityIssue(120);
     // Issues of type CODE SMELL and BUG should be ignored
@@ -216,12 +208,13 @@ public class NewEffortAggregatorTest {
     underTest.afterComponent(FILE);
 
     // Only effort of VULNERABILITY issue is used
-    assertVariation(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 12);
+    assertValue(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 12);
   }
 
   @Test
   public void aggregate_new_characteristic_measures_of_children() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
 
     DefaultIssue codeSmellIssue = newCodeSmellIssue(10);
     DefaultIssue oldCodeSmellIssue = oldCodeSmellIssue(100);
@@ -254,16 +247,16 @@ public class NewEffortAggregatorTest {
     underTest.onIssue(PROJECT, oldVulnerabilityProjectIssue);
     underTest.afterComponent(PROJECT);
 
-    assertVariation(PROJECT, NEW_TECHNICAL_DEBT_KEY, 10 + 30);
-    assertVariation(PROJECT, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 8 + 28);
-    assertVariation(PROJECT, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 12 + 32);
+    assertValue(PROJECT, NEW_TECHNICAL_DEBT_KEY, 10 + 30);
+    assertValue(PROJECT, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 8 + 28);
+    assertValue(PROJECT, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 12 + 32);
   }
 
   @Test
   public void no_measures_if_no_periods() {
+    when(newIssueClassifier.isEnabled()).thenReturn(false);
     Branch branch = mock(Branch.class);
     when(branch.getType()).thenReturn(BranchType.BRANCH);
-    analysisMetadataHolder.setBranch(branch);
     periodsHolder.setPeriod(null);
     DefaultIssue unresolved = newCodeSmellIssue(10);
 
@@ -276,68 +269,61 @@ public class NewEffortAggregatorTest {
 
   @Test
   public void should_have_empty_measures_if_no_issues() {
-    periodsHolder.setPeriod(PERIOD);
+    when(newIssueClassifier.isEnabled()).thenReturn(true);
+    when(newIssueClassifier.isNew(any(), any())).thenReturn(true);
 
     underTest.beforeComponent(FILE);
     underTest.afterComponent(FILE);
 
-    assertVariation(FILE, NEW_TECHNICAL_DEBT_KEY, 0);
-    assertVariation(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 0);
-    assertVariation(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 0);
+    assertValue(FILE, NEW_TECHNICAL_DEBT_KEY, 0);
+    assertValue(FILE, NEW_RELIABILITY_REMEDIATION_EFFORT_KEY, 0);
+    assertValue(FILE, NEW_SECURITY_REMEDIATION_EFFORT_KEY, 0);
   }
 
-  private void assertVariation(Component component, String metricKey, int variation) {
+  private void assertValue(Component component, String metricKey, int value) {
     Measure newMeasure = measureRepository.getRawMeasure(component, metricRepository.getByKey(metricKey)).get();
-    assertThat(newMeasure.getVariation()).isEqualTo(variation);
-    assertThat(newMeasure.getValueType()).isEqualTo(Measure.ValueType.NO_VALUE);
+    assertThat(newMeasure.getLongValue()).isEqualTo(value);
   }
 
-  private static DefaultIssue newCodeSmellIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.CODE_SMELL)
-      .setCreationDate(new Date(PERIOD.getDate() + 10_000L));
+  private DefaultIssue newCodeSmellIssue(long effort) {
+    return createIssue(CODE_SMELL, effort, true);
   }
 
   private DefaultIssue oldCodeSmellIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.CODE_SMELL)
-      .setCreationDate(new Date(OLD_ISSUES_DATES[random.nextInt(OLD_ISSUES_DATES.length)]));
+    return createIssue(CODE_SMELL, effort, false);
   }
 
-  private static DefaultIssue newBugIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.BUG)
-      .setCreationDate(new Date(PERIOD.getDate() + 10_000L));
+  private DefaultIssue newBugIssue(long effort) {
+    return createIssue(BUG, effort, true);
   }
 
   private DefaultIssue oldBugIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.BUG)
-      .setCreationDate(new Date(OLD_ISSUES_DATES[random.nextInt(OLD_ISSUES_DATES.length)]));
+    return createIssue(BUG, effort, false);
   }
 
-  private static DefaultIssue newVulnerabilityIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.VULNERABILITY)
-      .setCreationDate(new Date(PERIOD.getDate() + 10_000L));
+  private DefaultIssue newVulnerabilityIssue(long effort) {
+    return createIssue(VULNERABILITY, effort, true);
   }
 
   private DefaultIssue oldVulnerabilityIssue(long effort) {
-    return newCodeSmellIssueWithoutEffort()
-      .setEffort(Duration.create(effort))
-      .setType(RuleType.VULNERABILITY)
-      .setCreationDate(new Date(OLD_ISSUES_DATES[random.nextInt(OLD_ISSUES_DATES.length)]));
+    return createIssue(VULNERABILITY, effort, false);
   }
 
-  private static DefaultIssue newCodeSmellIssueWithoutEffort() {
-    return new DefaultIssue()
-      .setType(CODE_SMELL)
-      .setCreationDate(new Date(PERIOD.getDate() + 10_000L));
+  private DefaultIssue newCodeSmellIssueWithoutEffort() {
+    DefaultIssue defaultIssue = new DefaultIssue()
+      .setKey(UuidFactoryFast.getInstance().create())
+      .setType(CODE_SMELL);
+    when(newIssueClassifier.isNew(any(), eq(defaultIssue))).thenReturn(true);
+    return defaultIssue;
+  }
+
+  private DefaultIssue createIssue(RuleType type, long effort, boolean isNew) {
+    DefaultIssue defaultIssue = new DefaultIssue()
+      .setKey(UuidFactoryFast.getInstance().create())
+      .setEffort(Duration.create(effort))
+      .setType(type);
+    when(newIssueClassifier.isNew(any(), eq(defaultIssue))).thenReturn(isNew);
+    return defaultIssue;
   }
 
   private static DefaultIssue newBugIssueWithoutEffort() {

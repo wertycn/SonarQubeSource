@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,17 +18,18 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { connect } from 'react-redux';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getLanguages, Store } from '../../../store/rootReducer';
+import withLanguagesContext from '../../../app/components/languages/withLanguagesContext';
+import { translate } from '../../../helpers/l10n';
+import { Languages } from '../../../types/languages';
+import { Component } from '../../../types/types';
 import RenderOptions from '../components/RenderOptions';
 import { BuildTools } from '../types';
 import AnalysisCommand from './commands/AnalysisCommand';
 
 export interface BranchesAnalysisStepProps {
-  languages: T.Languages;
-  component: T.Component;
-  onStepValidationChange: (isValid: boolean) => void;
+  languages: Languages;
+  component: Component;
+  onDone: (done: boolean) => void;
 }
 
 const BUILD_TOOLS_ORDERED: Array<BuildTools> = [
@@ -36,37 +37,34 @@ const BUILD_TOOLS_ORDERED: Array<BuildTools> = [
   BuildTools.Maven,
   BuildTools.Gradle,
   BuildTools.CFamily,
-  BuildTools.Other
+  BuildTools.Other,
 ];
 
 export function BranchAnalysisStepContent(props: BranchesAnalysisStepProps) {
-  const { component, onStepValidationChange, languages } = props;
+  const { component, languages } = props;
 
   const [buildTechnology, setBuildTechnology] = React.useState<BuildTools | undefined>();
   const buildToolsList = languages['c']
     ? BUILD_TOOLS_ORDERED
-    : BUILD_TOOLS_ORDERED.filter(t => t !== BuildTools.CFamily);
+    : BUILD_TOOLS_ORDERED.filter((t) => t !== BuildTools.CFamily);
   return (
     <>
       <span>{translate('onboarding.build')}</span>
       <RenderOptions
+        label={translate('onboarding.build')}
         checked={buildTechnology}
-        name="buildTechnology"
-        onCheck={value => setBuildTechnology(value as BuildTools)}
+        onCheck={(value) => setBuildTechnology(value as BuildTools)}
         optionLabelKey="onboarding.build"
         options={buildToolsList}
       />
       <AnalysisCommand
-        onStepValidationChange={onStepValidationChange}
+        onStepValidationChange={props.onDone}
         buildTool={buildTechnology}
         projectKey={component.key}
+        projectName={component.name}
       />
     </>
   );
 }
 
-const mapStateToProps = (state: Store) => ({
-  languages: getLanguages(state)
-});
-
-export default connect(mapStateToProps)(BranchAnalysisStepContent);
+export default withLanguagesContext(BranchAnalysisStepContent);

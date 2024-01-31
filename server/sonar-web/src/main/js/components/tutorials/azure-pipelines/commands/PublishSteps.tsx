@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,70 +17,73 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+import { BasicSeparator, FlagMessage, Link, NumberedListItem } from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import { Alert } from 'sonar-ui-common/components/ui/Alert';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import withAvailableFeatures, {
+  WithAvailableFeaturesProps,
+} from '../../../../app/components/available-features/withAvailableFeatures';
 import { ALM_DOCUMENTATION_PATHS } from '../../../../helpers/constants';
+import { useDocUrl } from '../../../../helpers/docs';
+import { translate } from '../../../../helpers/l10n';
 import { AlmKeys } from '../../../../types/alm-settings';
-import { withAppState } from '../../../hoc/withAppState';
+import { Feature } from '../../../../types/features';
 import SentenceWithHighlights from '../../components/SentenceWithHighlights';
 
-export interface PublishStepsProps {
-  appState: T.AppState;
-}
+export interface PublishStepsProps extends WithAvailableFeaturesProps {}
+
 export function PublishSteps(props: PublishStepsProps) {
-  const {
-    appState: { branchesEnabled }
-  } = props;
+  const branchSupportEnabled = props.hasFeature(Feature.BranchSupport);
+
+  const docUrl = useDocUrl();
 
   return (
     <>
-      <li>
+      <NumberedListItem>
         <SentenceWithHighlights
           translationKey="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.publish_qg"
           highlightKeys={['task']}
         />
-        <Alert variant="info" className="spacer-top">
+        <FlagMessage variant="info" className="sw-mt-2">
           {translate(
-            'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.publish_qg.info.sentence1'
+            'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.publish_qg.info.sentence1',
           )}
-        </Alert>
-      </li>
-      <li>
+        </FlagMessage>
+      </NumberedListItem>
+      <NumberedListItem>
         <SentenceWithHighlights
           translationKey={
-            branchesEnabled
+            branchSupportEnabled
               ? 'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.continous_integration'
               : 'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.continous_integration.no_branches'
           }
           highlightKeys={['tab', 'continuous_integration']}
         />
-      </li>
-      {branchesEnabled && (
+      </NumberedListItem>
+      {branchSupportEnabled && (
         <>
-          <hr />
-          <FormattedMessage
-            id="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection"
-            defaultMessage={translate(
-              'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection'
-            )}
-            values={{
-              link: (
-                <Link to={ALM_DOCUMENTATION_PATHS[AlmKeys.Azure]} target="_blank">
-                  {translate(
-                    'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection.link'
-                  )}
-                </Link>
-              )
-            }}
-          />
+          <BasicSeparator className="sw-my-4" />
+          <div>
+            <FormattedMessage
+              id="onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection"
+              defaultMessage={translate(
+                'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection',
+              )}
+              values={{
+                link: (
+                  <Link to={docUrl(ALM_DOCUMENTATION_PATHS[AlmKeys.Azure])}>
+                    {translate(
+                      'onboarding.tutorial.with.azure_pipelines.BranchAnalysis.branch_protection.link',
+                    )}
+                  </Link>
+                ),
+              }}
+            />
+          </div>
         </>
       )}
     </>
   );
 }
 
-export default withAppState(PublishSteps);
+export default withAvailableFeatures(PublishSteps);

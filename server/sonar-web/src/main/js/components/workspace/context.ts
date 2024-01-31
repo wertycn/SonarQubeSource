@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 import { createContext } from 'react';
 import { BranchLike } from '../../types/branch-like';
+import { Dict } from '../../types/types';
 
 export interface ComponentDescriptor {
   branchLike: BranchLike | undefined;
@@ -34,13 +35,11 @@ export interface RuleDescriptor {
 }
 
 export interface WorkspaceContextShape {
-  externalRulesRepoNames: T.Dict<string>;
+  externalRulesRepoNames: Dict<string>;
   openComponent: (component: ComponentDescriptor) => void;
-  openRule: (rule: RuleDescriptor) => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextShape>({
   externalRulesRepoNames: {},
   openComponent: () => {},
-  openRule: () => {}
 });

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,36 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { NavBarTabLink, NavBarTabs } from 'design-system';
 import * as React from 'react';
-import { IndexLink, Link } from 'react-router';
-import NavBarTabs from 'sonar-ui-common/components/ui/NavBarTabs';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 
 export default function Nav() {
   return (
-    <nav className="account-nav">
-      <NavBarTabs>
-        <li>
-          <IndexLink activeClassName="active" to="/account/">
-            {translate('my_account.profile')}
-          </IndexLink>
-        </li>
-        <li>
-          <Link activeClassName="active" to="/account/security/">
-            {translate('my_account.security')}
-          </Link>
-        </li>
-        <li>
-          <Link activeClassName="active" to="/account/notifications">
-            {translate('my_account.notifications')}
-          </Link>
-        </li>
-        <li>
-          <Link activeClassName="active" to="/account/projects/">
-            {translate('my_account.projects')}
-          </Link>
-        </li>
-      </NavBarTabs>
-    </nav>
+    <NavBarTabs className="it__account-nav">
+      <NavBarTabLink end to="/account" text={translate('my_account.profile')} />
+      <NavBarTabLink to="/account/security" text={translate('my_account.security')} />
+      <NavBarTabLink to="/account/notifications" text={translate('my_account.notifications')} />
+      <NavBarTabLink to="/account/projects" text={translate('my_account.projects')} />
+    </NavBarTabs>
   );
 }

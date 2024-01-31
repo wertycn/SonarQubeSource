@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,9 @@
  */
 package org.sonar.server.notification;
 
-import com.google.common.collect.Multimap;
 import java.util.Objects;
 import java.util.Set;
-import javax.annotation.concurrent.Immutable;
 import org.sonar.api.notifications.Notification;
-import org.sonar.api.notifications.NotificationChannel;
 import org.sonar.api.web.UserRole;
 
 import static java.util.Objects.requireNonNull;
@@ -32,7 +29,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * The notification manager receives notifications and is in charge of storing them so that they are processed by the notification service.
  * <p>
- * Pico provides an instance of this class, and plugins just need to create notifications and pass them to this manager with
+ * The ioc container provides an instance of this class, and plugins just need to create notifications and pass them to this manager with
  * the {@link NotificationManager#scheduleForSending(Notification)} method.
  * </p>
  */
@@ -45,41 +42,10 @@ public interface NotificationManager {
    */
   <T extends Notification> void scheduleForSending(T notification);
 
-  /**
-   * <p>
-   * Returns the list of users who subscribed to the given dispatcher, along with the notification channels (email, twitter, ...) that they choose
-   * for this dispatcher.
-   * </p>
-   * <p>
-   * The resource ID can be null in case of notifications that have nothing to do with a specific project (like system notifications).
-   * </p>
-   *
-   * @param dispatcher the dispatcher for which this list of users is requested
-   * @param projectKey key of the project
-   * @param subscriberPermissionsOnProject the required permission for global and project subscribers
-   *
-   * @return the list of user login along with the subscribed channels
-   */
-  Multimap<String, NotificationChannel> findSubscribedRecipientsForDispatcher(NotificationDispatcher dispatcher, String projectKey,
-    SubscriberPermissionsOnProject subscriberPermissionsOnProject);
-
-
-  @Immutable
-  final class EmailRecipient {
-    private final String login;
-    private final String email;
-
+  record EmailRecipient(String login, String email) {
     public EmailRecipient(String login, String email) {
       this.login = requireNonNull(login, "login can't be null");
       this.email = requireNonNull(email, "email can't be null");
-    }
-
-    public String getLogin() {
-      return login;
-    }
-
-    public String getEmail() {
-      return email;
     }
 
     @Override
@@ -99,10 +65,6 @@ public interface NotificationManager {
       return login.equals(that.login) && email.equals(that.email);
     }
 
-    @Override
-    public int hashCode() {
-      return Objects.hash(login, email);
-    }
   }
 
   /**

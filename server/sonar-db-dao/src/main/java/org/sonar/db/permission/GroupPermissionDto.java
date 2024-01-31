@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,9 +23,11 @@ import javax.annotation.Nullable;
 
 public class GroupPermissionDto {
   private String uuid;
-  private String groupUuid;
-  private String componentUuid;
   private String role;
+  private String groupUuid;
+  private String groupName;
+  private String entityUuid;
+  private String entityName;
 
   public String getUuid() {
     return uuid;
@@ -49,12 +51,12 @@ public class GroupPermissionDto {
   }
 
   @Nullable
-  public String getComponentUuid() {
-    return componentUuid;
+  public String getEntityUuid() {
+    return entityUuid;
   }
 
-  public GroupPermissionDto setComponentUuid(@Nullable String componentUuid) {
-    this.componentUuid = componentUuid;
+  public GroupPermissionDto setEntityUuid(@Nullable String entityUuid) {
+    this.entityUuid = entityUuid;
     return this;
   }
 
@@ -64,6 +66,26 @@ public class GroupPermissionDto {
 
   public GroupPermissionDto setRole(String role) {
     this.role = role;
+    return this;
+  }
+
+  @Nullable
+  public String getGroupName() {
+    return groupName;
+  }
+
+  public GroupPermissionDto setGroupName(@Nullable String groupName) {
+    this.groupName = groupName;
+    return this;
+  }
+
+  @Nullable
+  public String getEntityName() {
+    return entityName;
+  }
+
+  public GroupPermissionDto setEntityName(@Nullable String entityName) {
+    this.entityName = entityName;
     return this;
   }
 }

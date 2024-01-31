@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,7 @@
  */
 package org.sonar.server.platform.monitoring.cluster;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.platform.Server;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
@@ -41,8 +39,6 @@ import static org.sonar.server.platform.monitoring.SystemInfoTesting.assertThatA
 
 public class NodeSystemSectionTest {
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   private MapSettings settings = new MapSettings();
   private Server server = mock(Server.class, RETURNS_DEEP_STUBS);
@@ -78,7 +74,7 @@ public class NodeSystemSectionTest {
   public void return_nb_of_processors() {
     ProtobufSystemInfo.Section section = underTest.toProtobuf();
 
-    assertThat(attribute(section, "Processors").getLongValue()).isGreaterThan(0);
+    assertThat(attribute(section, "Processors").getLongValue()).isPositive();
   }
 
   @Test

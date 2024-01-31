@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,19 +21,19 @@ package org.sonar.server.platform.ws;
 
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
+import org.slf4j.event.Level;
+import org.sonar.api.testfixtures.log.LogTester;
 import org.sonar.server.app.ProcessCommandWrapper;
 import org.sonar.server.app.RestartFlagHolder;
 import org.sonar.server.exceptions.ForbiddenException;
-import org.sonar.server.platform.WebServer;
+import org.sonar.server.platform.NodeInformation;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.WsActionTester;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -41,49 +41,45 @@ public class RestartActionTest {
   @Rule
   public UserSessionRule userSessionRule = UserSessionRule.standalone();
   @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-  @Rule
   public LogTester logTester = new LogTester();
 
   private ProcessCommandWrapper processCommandWrapper = mock(ProcessCommandWrapper.class);
   private RestartFlagHolder restartFlagHolder = mock(RestartFlagHolder.class);
-  private WebServer webServer = mock(WebServer.class);
-  private RestartAction sut = new RestartAction(userSessionRule, processCommandWrapper, restartFlagHolder, webServer);
+  private NodeInformation nodeInformation = mock(NodeInformation.class);
+  private RestartAction sut = new RestartAction(userSessionRule, processCommandWrapper, restartFlagHolder, nodeInformation);
   private InOrder inOrder = Mockito.inOrder(restartFlagHolder, processCommandWrapper);
 
   private WsActionTester actionTester = new WsActionTester(sut);
 
   @Test
   public void request_fails_in_production_mode_with_ForbiddenException_when_user_is_not_logged_in() {
-    when(webServer.isStandalone()).thenReturn(true);
-    expectedException.expect(ForbiddenException.class);
+    when(nodeInformation.isStandalone()).thenReturn(true);
 
-    actionTester.newRequest().execute();
+    assertThatThrownBy(() -> actionTester.newRequest().execute())
+      .isInstanceOf(ForbiddenException.class);
   }
 
   @Test
   public void request_fails_in_production_mode_with_ForbiddenException_when_user_is_not_system_administrator() {
-    when(webServer.isStandalone()).thenReturn(true);
+    when(nodeInformation.isStandalone()).thenReturn(true);
     userSessionRule.logIn().setNonSystemAdministrator();
 
-    expectedException.expect(ForbiddenException.class);
-
-    actionTester.newRequest().execute();
+    assertThatThrownBy(() -> actionTester.newRequest().execute())
+      .isInstanceOf(ForbiddenException.class);
   }
 
   @Test
   public void request_fails_in_cluster_mode_with_IllegalArgumentException() {
-    when(webServer.isStandalone()).thenReturn(false);
+    when(nodeInformation.isStandalone()).thenReturn(false);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Restart not allowed for cluster nodes");
-
-    actionTester.newRequest().execute();
+    assertThatThrownBy(() -> actionTester.newRequest().execute())
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessageContaining("Restart not allowed for cluster nodes");
   }
 
   @Test
   public void calls_ProcessCommandWrapper_requestForSQRestart_in_production_mode() {
-    when(webServer.isStandalone()).thenReturn(true);
+    when(nodeInformation.isStandalone()).thenReturn(true);
     userSessionRule.logIn().setSystemAdministrator();
 
     actionTester.newRequest().execute();
@@ -94,13 +90,13 @@ public class RestartActionTest {
 
   @Test
   public void logs_login_of_authenticated_user_requesting_the_restart_in_production_mode() {
-    when(webServer.isStandalone()).thenReturn(true);
+    when(nodeInformation.isStandalone()).thenReturn(true);
     String login = "BigBother";
     userSessionRule.logIn(login).setSystemAdministrator();
 
     actionTester.newRequest().execute();
 
-    assertThat(logTester.logs(LoggerLevel.INFO))
+    assertThat(logTester.logs(Level.INFO))
       .contains("SonarQube restart requested by " + login);
   }
 

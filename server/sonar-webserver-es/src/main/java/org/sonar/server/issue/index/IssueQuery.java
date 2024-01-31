@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,20 +19,17 @@
  */
 package org.sonar.server.issue.index;
 
-import com.google.common.collect.ImmutableSet;
 import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
-import org.sonar.db.rule.RuleDefinitionDto;
-
-import static com.google.common.base.Preconditions.checkArgument;
-import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
+import org.sonar.db.rule.RuleDto;
 
 /**
  * @since 3.6
@@ -42,11 +39,6 @@ public class IssueQuery {
   public static final String SORT_BY_CREATION_DATE = "CREATION_DATE";
   public static final String SORT_BY_UPDATE_DATE = "UPDATE_DATE";
   public static final String SORT_BY_CLOSE_DATE = "CLOSE_DATE";
-  /**
-   * @deprecated since 7.2, it's no more possible to sort by assignee
-   */
-  @Deprecated
-  public static final String SORT_BY_ASSIGNEE = "ASSIGNEE";
   public static final String SORT_BY_SEVERITY = "SEVERITY";
   public static final String SORT_BY_STATUS = "STATUS";
 
@@ -59,21 +51,22 @@ public class IssueQuery {
    */
   public static final String SORT_HOTSPOTS = "HOTSPOTS";
 
-  public static final Set<String> SORTS = ImmutableSet.of(SORT_BY_CREATION_DATE, SORT_BY_UPDATE_DATE, SORT_BY_CLOSE_DATE, SORT_BY_ASSIGNEE, SORT_BY_SEVERITY,
+  public static final Set<String> SORTS = Set.of(SORT_BY_CREATION_DATE, SORT_BY_UPDATE_DATE, SORT_BY_CLOSE_DATE, SORT_BY_SEVERITY,
     SORT_BY_STATUS, SORT_BY_FILE_LINE, SORT_HOTSPOTS);
 
   private final Collection<String> issueKeys;
   private final Collection<String> severities;
+  private final Collection<String> impactSeverities;
+  private final Collection<String> impactSoftwareQualities;
   private final Collection<String> statuses;
+  private final Collection<String> issueStatuses;
   private final Collection<String> resolutions;
   private final Collection<String> components;
-  private final Collection<String> modules;
-  private final Collection<String> moduleRoots;
   private final Collection<String> projects;
   private final Collection<String> directories;
   private final Collection<String> files;
   private final Collection<String> views;
-  private final Collection<RuleDefinitionDto> rules;
+  private final Collection<RuleDto> rules;
   private final Collection<String> ruleUuids;
   private final Collection<String> assignees;
   private final Collection<String> authors;
@@ -82,6 +75,11 @@ public class IssueQuery {
   private final Collection<String> tags;
   private final Collection<String> types;
   private final Collection<String> owaspTop10;
+  private final Collection<String> pciDss32;
+  private final Collection<String> pciDss40;
+  private final Collection<String> owaspAsvs40;
+  private final Integer owaspAsvsLevel;
+  private final Collection<String> owaspTop10For2021;
   private final Collection<String> sansTop25;
   private final Collection<String> cwe;
   private final Collection<String> sonarsourceSecurity;
@@ -96,17 +94,22 @@ public class IssueQuery {
   private final Boolean asc;
   private final String facetMode;
   private final String branchUuid;
-  private final boolean mainBranch;
+  private final Boolean mainBranch;
   private final ZoneId timeZone;
+  private final Boolean newCodeOnReference;
+  private final Collection<String> newCodeOnReferenceByProjectUuids;
+  private final Collection<String> codeVariants;
+  private final Collection<String> cleanCodeAttributesCategories;
 
   private IssueQuery(Builder builder) {
-    this.issueKeys = defaultCollection(builder.issueKeys);
+    this.issueKeys = nullableDefaultCollection(builder.issueKeys);
     this.severities = defaultCollection(builder.severities);
+    this.impactSeverities = defaultCollection(builder.impactSeverities);
+    this.impactSoftwareQualities = defaultCollection(builder.impactSoftwareQualities);
     this.statuses = defaultCollection(builder.statuses);
     this.resolutions = defaultCollection(builder.resolutions);
+    this.issueStatuses = defaultCollection(builder.issueStatuses);
     this.components = defaultCollection(builder.components);
-    this.modules = defaultCollection(builder.modules);
-    this.moduleRoots = defaultCollection(builder.moduleRoots);
     this.projects = defaultCollection(builder.projects);
     this.directories = defaultCollection(builder.directories);
     this.files = defaultCollection(builder.files);
@@ -119,7 +122,12 @@ public class IssueQuery {
     this.languages = defaultCollection(builder.languages);
     this.tags = defaultCollection(builder.tags);
     this.types = defaultCollection(builder.types);
+    this.pciDss32 = defaultCollection(builder.pciDss32);
+    this.pciDss40 = defaultCollection(builder.pciDss40);
+    this.owaspAsvs40 = defaultCollection(builder.owaspAsvs40);
+    this.owaspAsvsLevel = builder.owaspAsvsLevel;
     this.owaspTop10 = defaultCollection(builder.owaspTop10);
+    this.owaspTop10For2021 = defaultCollection(builder.owaspTop10For2021);
     this.sansTop25 = defaultCollection(builder.sansTop25);
     this.cwe = defaultCollection(builder.cwe);
     this.sonarsourceSecurity = defaultCollection(builder.sonarsourceSecurity);
@@ -136,6 +144,10 @@ public class IssueQuery {
     this.branchUuid = builder.branchUuid;
     this.mainBranch = builder.mainBranch;
     this.timeZone = builder.timeZone;
+    this.newCodeOnReference = builder.newCodeOnReference;
+    this.newCodeOnReferenceByProjectUuids = defaultCollection(builder.newCodeOnReferenceByProjectUuids);
+    this.codeVariants = defaultCollection(builder.codeVariants);
+    this.cleanCodeAttributesCategories = defaultCollection(builder.cleanCodeAttributesCategories);
   }
 
   public Collection<String> issueKeys() {
@@ -146,8 +158,20 @@ public class IssueQuery {
     return severities;
   }
 
+  public Collection<String> impactSeverities() {
+    return impactSeverities;
+  }
+
+  public Collection<String> impactSoftwareQualities() {
+    return impactSoftwareQualities;
+  }
+
   public Collection<String> statuses() {
     return statuses;
+  }
+
+  public Collection<String> issueStatuses() {
+    return issueStatuses;
   }
 
   public Collection<String> resolutions() {
@@ -156,14 +180,6 @@ public class IssueQuery {
 
   public Collection<String> componentUuids() {
     return components;
-  }
-
-  public Collection<String> moduleUuids() {
-    return modules;
-  }
-
-  public Collection<String> moduleRootUuids() {
-    return moduleRoots;
   }
 
   public Collection<String> projectUuids() {
@@ -178,11 +194,15 @@ public class IssueQuery {
     return files;
   }
 
+  /**
+   * Restrict issues belonging to projects that were analyzed under a view.
+   * The view UUIDs should be portfolios, sub portfolios or application branches.
+   */
   public Collection<String> viewUuids() {
     return views;
   }
 
-  public Collection<RuleDefinitionDto> rules() {
+  public Collection<RuleDto> rules() {
     return rules;
   }
 
@@ -214,8 +234,28 @@ public class IssueQuery {
     return types;
   }
 
+  public Collection<String> pciDss32() {
+    return pciDss32;
+  }
+
+  public Collection<String> pciDss40() {
+    return pciDss40;
+  }
+
+  public Collection<String> owaspAsvs40() {
+    return owaspAsvs40;
+  }
+
+  public Optional<Integer> getOwaspAsvsLevel() {
+    return Optional.ofNullable(owaspAsvsLevel);
+  }
+
   public Collection<String> owaspTop10() {
     return owaspTop10;
+  }
+
+  public Collection<String> owaspTop10For2021() {
+    return owaspTop10For2021;
   }
 
   public Collection<String> sansTop25() {
@@ -279,7 +319,7 @@ public class IssueQuery {
     return branchUuid;
   }
 
-  public boolean isMainBranch() {
+  public Boolean isMainBranch() {
     return mainBranch;
   }
 
@@ -301,19 +341,37 @@ public class IssueQuery {
     return timeZone;
   }
 
+  @CheckForNull
+  public Boolean newCodeOnReference() {
+    return newCodeOnReference;
+  }
+
+  public Collection<String> newCodeOnReferenceByProjectUuids() {
+    return newCodeOnReferenceByProjectUuids;
+  }
+
+  public Collection<String> codeVariants() {
+    return codeVariants;
+  }
+
+  public Collection<String> cleanCodeAttributesCategories() {
+    return cleanCodeAttributesCategories;
+  }
+
   public static class Builder {
     private Collection<String> issueKeys;
     private Collection<String> severities;
+    private Collection<String> impactSeverities;
+    private Collection<String> impactSoftwareQualities;
     private Collection<String> statuses;
     private Collection<String> resolutions;
+    private Collection<String> issueStatuses;
     private Collection<String> components;
-    private Collection<String> modules;
-    private Collection<String> moduleRoots;
     private Collection<String> projects;
     private Collection<String> directories;
     private Collection<String> files;
     private Collection<String> views;
-    private Collection<RuleDefinitionDto> rules;
+    private Collection<RuleDto> rules;
     private Collection<String> ruleUuids;
     private Collection<String> assigneeUuids;
     private Collection<String> authors;
@@ -321,7 +379,12 @@ public class IssueQuery {
     private Collection<String> languages;
     private Collection<String> tags;
     private Collection<String> types;
+    private Collection<String> pciDss32;
+    private Collection<String> pciDss40;
+    private Collection<String> owaspAsvs40;
+    private Integer owaspAsvsLevel;
     private Collection<String> owaspTop10;
+    private Collection<String> owaspTop10For2021;
     private Collection<String> sansTop25;
     private Collection<String> cwe;
     private Collection<String> sonarsourceSecurity;
@@ -336,8 +399,12 @@ public class IssueQuery {
     private Boolean asc = false;
     private String facetMode;
     private String branchUuid;
-    private boolean mainBranch = true;
+    private Boolean mainBranch = true;
     private ZoneId timeZone;
+    private Boolean newCodeOnReference = null;
+    private Collection<String> newCodeOnReferenceByProjectUuids;
+    private Collection<String> codeVariants;
+    private Collection<String> cleanCodeAttributesCategories;
 
     private Builder() {
 
@@ -363,18 +430,13 @@ public class IssueQuery {
       return this;
     }
 
+    public Builder issueStatuses(@Nullable Collection<String> l) {
+      this.issueStatuses = l;
+      return this;
+    }
+
     public Builder componentUuids(@Nullable Collection<String> l) {
       this.components = l;
-      return this;
-    }
-
-    public Builder moduleUuids(@Nullable Collection<String> l) {
-      this.modules = l;
-      return this;
-    }
-
-    public Builder moduleRootUuids(@Nullable Collection<String> l) {
-      this.moduleRoots = l;
       return this;
     }
 
@@ -388,17 +450,31 @@ public class IssueQuery {
       return this;
     }
 
+    public Builder impactSeverities(@Nullable Collection<String> l) {
+      this.impactSeverities = l;
+      return this;
+    }
+
+    public Builder impactSoftwareQualities(@Nullable Collection<String> l) {
+      this.impactSoftwareQualities = l;
+      return this;
+    }
+
     public Builder files(@Nullable Collection<String> l) {
       this.files = l;
       return this;
     }
 
+    /**
+     * Restrict issues belonging to projects that were analyzed under a view.
+     * The view UUIDs should be portfolios, sub portfolios or application branches.
+     */
     public Builder viewUuids(@Nullable Collection<String> l) {
       this.views = l;
       return this;
     }
 
-    public Builder rules(@Nullable Collection<RuleDefinitionDto> rules) {
+    public Builder rules(@Nullable Collection<RuleDto> rules) {
       this.rules = rules;
       return this;
     }
@@ -438,8 +514,33 @@ public class IssueQuery {
       return this;
     }
 
+    public Builder pciDss32(@Nullable Collection<String> o) {
+      this.pciDss32 = o;
+      return this;
+    }
+
+    public Builder pciDss40(@Nullable Collection<String> o) {
+      this.pciDss40 = o;
+      return this;
+    }
+
+    public Builder owaspAsvs40(@Nullable Collection<String> o) {
+      this.owaspAsvs40 = o;
+      return this;
+    }
+
+    public Builder owaspAsvsLevel(@Nullable Integer level) {
+      this.owaspAsvsLevel = level;
+      return this;
+    }
+
     public Builder owaspTop10(@Nullable Collection<String> o) {
       this.owaspTop10 = o;
+      return this;
+    }
+
+    public Builder owaspTop10For2021(@Nullable Collection<String> o) {
+      this.owaspTop10For2021 = o;
       return this;
     }
 
@@ -524,9 +625,6 @@ public class IssueQuery {
     }
 
     public IssueQuery build() {
-      if (issueKeys != null) {
-        checkArgument(issueKeys.size() <= MAX_PAGE_SIZE, "Number of issue keys must be less than " + MAX_PAGE_SIZE + " (got " + issueKeys.size() + ")");
-      }
       return new IssueQuery(this);
     }
 
@@ -540,7 +638,7 @@ public class IssueQuery {
       return this;
     }
 
-    public Builder mainBranch(boolean mainBranch) {
+    public Builder mainBranch(@Nullable Boolean mainBranch) {
       this.mainBranch = mainBranch;
       return this;
     }
@@ -549,10 +647,34 @@ public class IssueQuery {
       this.timeZone = timeZone;
       return this;
     }
+
+    public Builder newCodeOnReference(@Nullable Boolean newCodeOnReference) {
+      this.newCodeOnReference = newCodeOnReference;
+      return this;
+    }
+
+    public Builder newCodeOnReferenceByProjectUuids(@Nullable Collection<String> newCodeOnReferenceByProjectUuids) {
+      this.newCodeOnReferenceByProjectUuids = newCodeOnReferenceByProjectUuids;
+      return this;
+    }
+
+    public Builder codeVariants(@Nullable Collection<String> codeVariants) {
+      this.codeVariants = codeVariants;
+      return this;
+    }
+
+    public Builder cleanCodeAttributesCategories(@Nullable Collection<String> cleanCodeAttributesCategories) {
+      this.cleanCodeAttributesCategories = cleanCodeAttributesCategories;
+      return this;
+    }
   }
 
   private static <T> Collection<T> defaultCollection(@Nullable Collection<T> c) {
     return c == null ? Collections.emptyList() : Collections.unmodifiableCollection(c);
+  }
+
+  private static <T> Collection<T> nullableDefaultCollection(@Nullable Collection<T> c) {
+    return c == null ? null : Collections.unmodifiableCollection(c);
   }
 
   private static <K, V> Map<K, V> defaultMap(@Nullable Map<K, V> map) {

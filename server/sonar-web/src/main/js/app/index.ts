@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,95 +17,55 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import SonarUiCommonInitializer from 'sonar-ui-common/helpers/init';
-import { parseJSON, request } from 'sonar-ui-common/helpers/request';
+/* NOTE: esbuild will transpile the _syntax_ down to what the TARGET_BROWSERS (in config/utils) */
+/* understand. It will _not_, however, polyfill missing API methods, such as                    */
+/* String.prototype.replaceAll. This is why we also import core-js.                             */
+import 'core-js/stable';
+/*                                                                                              */
+import axios from 'axios';
+import 'react-day-picker/dist/style.css';
+import { getAvailableFeatures } from '../api/features';
+import { getGlobalNavigation } from '../api/navigation';
+import { getCurrentUser } from '../api/users';
 import { installExtensionsHandler, installWebAnalyticsHandler } from '../helpers/extensionsHandler';
-import { loadL10nBundle } from '../helpers/l10n';
-import { getBaseUrl, getSystemStatus } from '../helpers/system';
-import './styles/sonar.css';
-
-SonarUiCommonInitializer.setUrlContext(getBaseUrl());
+import { addGlobalErrorMessage } from '../helpers/globalMessages';
+import { loadL10nBundle } from '../helpers/l10nBundle';
+import { axiosToCatch, parseErrorResponse } from '../helpers/request';
+import { getBaseUrl, getSystemStatus, initAppVariables } from '../helpers/system';
+import './styles/sonar.ts';
 
 installWebAnalyticsHandler();
+installExtensionsHandler();
+initAppVariables();
+initApplication();
 
-if (isMainApp()) {
-  installExtensionsHandler();
-
-  Promise.all([loadL10nBundle(), loadUser(), loadAppState(), loadApp()]).then(
-    ([l10nBundle, user, appState, startReactApp]) => {
-      startReactApp(l10nBundle.locale, user, appState);
+async function initApplication() {
+  axiosToCatch.interceptors.response.use((response) => response.data);
+  axiosToCatch.defaults.baseURL = getBaseUrl();
+  axiosToCatch.defaults.headers.patch['Content-Type'] = 'application/merge-patch+json';
+  axios.defaults.headers.patch['Content-Type'] = 'application/merge-patch+json';
+  axios.defaults.baseURL = getBaseUrl();
+  axios.interceptors.response.use(
+    (response) => response.data,
+    (error) => {
+      const { response } = error;
+      addGlobalErrorMessage(parseErrorResponse(response));
+      return Promise.reject(response);
     },
-    error => {
-      if (isResponse(error) && error.status === 401) {
-        redirectToLogin();
-      } else {
-        logError(error);
-      }
-    }
   );
-} else {
-  // login, maintenance or setup pages
-
-  const appStatePromise: Promise<T.AppState | undefined> = new Promise(resolve => {
-    loadAppState()
-      .then(data => {
-        resolve(data);
-      })
-      .catch(() => {
-        resolve(undefined);
-      });
+  const [l10nBundle, currentUser, appState, availableFeatures] = await Promise.all([
+    loadL10nBundle(),
+    isMainApp() ? getCurrentUser() : undefined,
+    isMainApp() ? getGlobalNavigation() : undefined,
+    isMainApp() ? getAvailableFeatures() : undefined,
+  ]).catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error('Application failed to start', error);
+    throw error;
   });
 
-  Promise.all([loadL10nBundle(), appStatePromise, loadApp()]).then(
-    ([l10nBundle, appState, startReactApp]) => {
-      startReactApp(l10nBundle.locale, undefined, appState);
-    },
-    error => {
-      logError(error);
-    }
-  );
-}
-
-function loadUser() {
-  return request('/api/users/current')
-    .submit()
-    .then(checkStatus)
-    .then(parseJSON);
-}
-
-function loadAppState() {
-  return request('/api/navigation/global')
-    .submit()
-    .then(checkStatus)
-    .then(parseJSON);
-}
-
-function loadApp() {
-  return import(/* webpackChunkName: 'app' */ './utils/startReactApp').then(i => i.default);
-}
-
-function checkStatus(response: Response) {
-  return new Promise((resolve, reject) => {
-    if (response.status >= 200 && response.status < 300) {
-      resolve(response);
-    } else {
-      reject(response);
-    }
-  });
-}
-
-function isResponse(error: any): error is Response {
-  return typeof error.status === 'number';
-}
-
-function redirectToLogin() {
-  const returnTo = window.location.pathname + window.location.search + window.location.hash;
-  window.location.href = `${getBaseUrl()}/sessions/new?return_to=${encodeURIComponent(returnTo)}`;
-}
-
-function logError(error: any) {
-  // eslint-disable-next-line no-console
-  console.error('Application failed to start!', error);
+  const startReactApp = await import('./utils/startReactApp').then((i) => i.default);
+  startReactApp(l10nBundle, currentUser, appState, availableFeatures);
 }
 
 function isMainApp() {

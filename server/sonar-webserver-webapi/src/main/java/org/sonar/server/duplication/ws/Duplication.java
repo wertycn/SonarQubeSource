@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@ public class Duplication {
   }
 
   static Duplication newComponent(ComponentDto componentDto, Integer from, Integer size) {
-    return new Duplication(componentDto, componentDto.getDbKey(), from, size, false);
+    return new Duplication(componentDto, componentDto.getKey(), from, size, false);
   }
 
   String componentDbKey() {

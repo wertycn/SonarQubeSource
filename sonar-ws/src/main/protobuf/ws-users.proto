@@ -44,6 +44,8 @@ message SearchWsResponse {
     optional string externalProvider = 10;
     optional string avatar = 11;
     optional string lastConnectionDate = 12;
+    optional bool managed = 13;
+    optional string sonarLintLastConnectionDate = 14;
   }
 
   message Groups {
@@ -107,10 +109,13 @@ message CurrentWsResponse {
   repeated string scmAccounts = 8;
   repeated string groups = 9;
   optional Permissions permissions = 10;
-  optional bool showOnboardingTutorial = 11;
+  reserved 11; // showOnboardingTutorial removed
   optional string avatar = 12;
   optional Homepage homepage = 13;
-  repeated Setting settings = 15;
+  reserved 15; // settings removed
+  optional bool usingSonarLintConnectedMode = 16;
+  reserved 17; // sonarLintAdSeen removed
+  map<string,bool> dismissedNotices = 18;
 
   message Permissions {
     repeated string global = 1;

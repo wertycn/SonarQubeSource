@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,34 +18,19 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import CodeSmellIcon from 'sonar-ui-common/components/icons/CodeSmellIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { RawQuery } from '../../../types/types';
 import { Facet } from '../types';
-import IssuesFilter from './IssuesFilter';
+import RatingFacet from './RatingFacet';
 
 interface Props {
   className?: string;
   facet?: Facet;
   headerDetail?: React.ReactNode;
   maxFacetValue?: number;
-  onQueryChange: (change: T.RawQuery) => void;
+  onQueryChange: (change: RawQuery) => void;
   value?: any;
 }
 
 export default function MaintainabilityFilter(props: Props) {
-  return (
-    <IssuesFilter
-      {...props}
-      headerDetail={
-        <span className="note little-spacer-left">
-          {'( '}
-          <CodeSmellIcon className="little-spacer-right" />
-          {translate('metric.code_smells.name')}
-          {' )'}
-        </span>
-      }
-      name="Maintainability"
-      property="maintainability"
-    />
-  );
+  return <RatingFacet {...props} name="Maintainability" property="maintainability" />;
 }

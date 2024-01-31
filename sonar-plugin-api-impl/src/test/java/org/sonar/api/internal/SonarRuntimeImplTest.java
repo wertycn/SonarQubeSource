@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,9 @@
  */
 package org.sonar.api.internal;
 
-import org.sonar.api.SonarEdition;
 import org.assertj.core.api.Assertions;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarProduct;
 import org.sonar.api.SonarQubeSide;
 import org.sonar.api.SonarRuntime;
@@ -35,8 +33,6 @@ public class SonarRuntimeImplTest {
 
   private static final Version A_VERSION = Version.parse("6.0");
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void sonarQube_environment() {

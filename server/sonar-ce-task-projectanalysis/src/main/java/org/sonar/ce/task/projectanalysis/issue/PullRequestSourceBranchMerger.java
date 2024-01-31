@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,8 +32,7 @@ public class PullRequestSourceBranchMerger {
   private final IssueLifecycle issueLifecycle;
   private final TrackerSourceBranchInputFactory sourceBranchInputFactory;
 
-  public PullRequestSourceBranchMerger(Tracker<DefaultIssue, DefaultIssue> tracker, IssueLifecycle issueLifecycle,
-    TrackerSourceBranchInputFactory sourceBranchInputFactory) {
+  public PullRequestSourceBranchMerger(Tracker<DefaultIssue, DefaultIssue> tracker, IssueLifecycle issueLifecycle, TrackerSourceBranchInputFactory sourceBranchInputFactory) {
     this.tracker = tracker;
     this.issueLifecycle = issueLifecycle;
     this.sourceBranchInputFactory = sourceBranchInputFactory;

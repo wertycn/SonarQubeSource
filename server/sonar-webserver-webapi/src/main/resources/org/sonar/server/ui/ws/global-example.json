@@ -25,8 +25,8 @@
   ],
   "version": "6.2",
   "productionDatabase": true,
-  "branchesEnabled": false,
   "canAdmin": false,
   "standalone": true,
-  "edition": "community"
+  "edition": "community",
+  "documentationUrl": "http://docs.example.com/10.0"
 }

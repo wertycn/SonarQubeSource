@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,31 +19,22 @@
  */
 package org.sonar.duplications.token;
 
+import org.assertj.core.api.Assertions;
 import org.junit.Test;
-
-import static org.junit.Assert.assertThat;
-
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 
 public class TokenTest {
 
   @Test
-  public void shouldBeEqual() {
-    Token firstToken = new Token("MyValue", 1, 3);
-    Token secondToken = new Token("MyValue", 1, 3);
+  public void test_equals() {
+    Token token = new Token("value_1", 1, 2);
 
-    assertThat(firstToken, is(secondToken));
+    Assertions.assertThat(token)
+      .isEqualTo(token)
+      .isNotEqualTo(null)
+      .isNotEqualTo(new Object())
+      .isNotEqualTo(new Token("value_1", 1, 0))
+      .isNotEqualTo(new Token("value_1", 0, 2))
+      .isNotEqualTo(new Token("value_2", 1, 2))
+      .isEqualTo(new Token("value_1", 1, 2));
   }
-
-  @Test
-  public void shouldNotBeEqual() {
-    Token firstToken = new Token("MyValue", 1, 3);
-    Token secondToken = new Token("MySecondValue", 1, 3);
-    Token thirdToken = new Token("MyValue", 3, 3);
-    
-    assertThat(firstToken, not(is(secondToken)));
-    assertThat(firstToken, not(is(thirdToken)));
-  }
-
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,36 +20,32 @@
 package org.sonar.ce;
 
 import java.util.Properties;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.sonar.ce.container.ComputeEngineStatus;
 import org.sonar.ce.container.ComputeEngineContainer;
+import org.sonar.ce.container.ComputeEngineStatus;
 import org.sonar.process.Props;
 
-public class ComputeEngineImplTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-  private ComputeEngineContainer computeEngineContainer = new NoOpComputeEngineContainer();
-  private ComputeEngine underTest = new ComputeEngineImpl(new Props(new Properties()), computeEngineContainer);
+public class ComputeEngineImplTest {
+
+  private final ComputeEngineContainer computeEngineContainer = new NoOpComputeEngineContainer();
+  private final ComputeEngine underTest = new ComputeEngineImpl(new Props(new Properties()), computeEngineContainer);
 
   @Test
   public void startup_throws_ISE_when_called_twice() {
     underTest.startup();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("startup() can not be called multiple times");
-
-    underTest.startup();
+    assertThatThrownBy(underTest::startup)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("startup() can not be called multiple times");
   }
 
   @Test
   public void stopProcessing_throws_ISE_if_startup_was_not_called_before() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("stopProcessing() must not be called before startup()");
-
-    underTest.stopProcessing();
+    assertThatThrownBy(underTest::stopProcessing)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("stopProcessing() must not be called before startup()");
   }
 
   @Test
@@ -57,10 +53,9 @@ public class ComputeEngineImplTest {
     underTest.startup();
     underTest.shutdown();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("stopProcessing() can not be called after shutdown()");
-
-    underTest.stopProcessing();
+    assertThatThrownBy(underTest::stopProcessing)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("stopProcessing() can not be called after shutdown()");
   }
 
   @Test
@@ -68,18 +63,16 @@ public class ComputeEngineImplTest {
     underTest.startup();
     underTest.stopProcessing();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("stopProcessing() can not be called multiple times");
-
-    underTest.stopProcessing();
+    assertThatThrownBy(underTest::stopProcessing)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("stopProcessing() can not be called multiple times");
   }
 
   @Test
   public void shutdown_throws_ISE_if_startup_was_not_called_before() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("shutdown() must not be called before startup()");
-
-    underTest.shutdown();
+    assertThatThrownBy(underTest::shutdown)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("shutdown() must not be called before startup()");
   }
 
   @Test
@@ -87,10 +80,9 @@ public class ComputeEngineImplTest {
     underTest.startup();
     underTest.shutdown();
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("shutdown() can not be called multiple times");
-
-    underTest.shutdown();
+    assertThatThrownBy(underTest::shutdown)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("shutdown() can not be called multiple times");
   }
 
   private static class NoOpComputeEngineContainer implements ComputeEngineContainer {

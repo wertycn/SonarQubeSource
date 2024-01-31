@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,66 +19,74 @@
  */
 package org.sonar.server.telemetry;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import javax.annotation.Nullable;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.EditionProvider.Edition;
-import org.sonar.server.measure.index.ProjectMeasuresStatistics;
+import org.sonar.db.project.CreationMethod;
+import org.sonar.db.user.UserTelemetryDto;
+import org.sonar.server.qualitygate.Condition;
 
-import static java.util.Collections.emptyList;
-import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
+import static org.sonar.db.newcodeperiod.NewCodePeriodType.PREVIOUS_VERSION;
 
 public class TelemetryData {
   private final String serverId;
   private final String version;
+  private final Long messageSequenceNumber;
   private final Map<String, String> plugins;
-  private final long ncloc;
-  private final long userCount;
-  private final long projectCount;
-  private final boolean usingBranches;
   private final Database database;
-  private final Map<String, Long> projectCountByLanguage;
-  private final Map<String, Long> almIntegrationCountByAlm;
-  private final Map<String, Long> nclocByLanguage;
-  private final List<String> externalAuthenticationProviders;
-  private final Map<String, Long> projectCountByScm;
-  private final Map<String, Long> projectCountByCi;
   private final EditionProvider.Edition edition;
-  private final String licenseType;
+  private final String defaultQualityGate;
+  private final String sonarWayQualityGate;
   private final Long installationDate;
   private final String installationVersion;
-  private final boolean inDocker;
+  private final boolean inContainer;
+  private final ManagedInstanceInformation managedInstanceInformation;
+  private final CloudUsage cloudUsage;
+  private final List<UserTelemetryDto> users;
+  private final List<Project> projects;
+  private final List<ProjectStatistics> projectStatistics;
+  private final List<Branch> branches;
+  private final List<QualityGate> qualityGates;
+  private final List<QualityProfile> qualityProfiles;
+  private final Collection<NewCodeDefinition> newCodeDefinitions;
   private final Boolean hasUnanalyzedC;
   private final Boolean hasUnanalyzedCpp;
-  private final List<String> customSecurityConfigs;
-  private final long sonarlintWeeklyUsers;
+  private final int ncdId;
+  private final Set<String> customSecurityConfigs;
 
   private TelemetryData(Builder builder) {
     serverId = builder.serverId;
     version = builder.version;
+    messageSequenceNumber = builder.messageSequenceNumber;
     plugins = builder.plugins;
-    ncloc = builder.ncloc;
-    userCount = builder.userCount;
-    projectCount = builder.projectMeasuresStatistics.getProjectCount();
-    usingBranches = builder.usingBranches;
     database = builder.database;
-    sonarlintWeeklyUsers = builder.sonarlintWeeklyUsers;
-    projectCountByLanguage = builder.projectMeasuresStatistics.getProjectCountByLanguage();
-    almIntegrationCountByAlm = builder.almIntegrationCountByAlm;
-    nclocByLanguage = builder.projectMeasuresStatistics.getNclocByLanguage();
     edition = builder.edition;
-    licenseType = builder.licenseType;
+    defaultQualityGate = builder.defaultQualityGate;
+    sonarWayQualityGate = builder.sonarWayQualityGate;
     installationDate = builder.installationDate;
     installationVersion = builder.installationVersion;
-    inDocker = builder.inDocker;
+    inContainer = builder.inContainer;
+    users = builder.users;
+    projects = builder.projects;
+    projectStatistics = builder.projectStatistics;
+    qualityGates = builder.qualityGates;
+    qualityProfiles = builder.qualityProfiles;
     hasUnanalyzedC = builder.hasUnanalyzedC;
     hasUnanalyzedCpp = builder.hasUnanalyzedCpp;
-    customSecurityConfigs = builder.customSecurityConfigs == null ? emptyList() : builder.customSecurityConfigs;
-    externalAuthenticationProviders = builder.externalAuthenticationProviders;
-    projectCountByScm = builder.projectCountByScm;
-    projectCountByCi = builder.projectCountByCi;
+    customSecurityConfigs = requireNonNullElse(builder.customSecurityConfigs, Set.of());
+    managedInstanceInformation = builder.managedInstanceInformation;
+    cloudUsage = builder.cloudUsage;
+    ncdId = builder.ncdId;
+    branches = builder.branches;
+    newCodeDefinitions = builder.newCodeDefinitions;
   }
 
   public String getServerId() {
@@ -89,52 +97,28 @@ public class TelemetryData {
     return version;
   }
 
+  public Long getMessageSequenceNumber() {
+    return messageSequenceNumber;
+  }
+
   public Map<String, String> getPlugins() {
     return plugins;
-  }
-
-  public long getNcloc() {
-    return ncloc;
-  }
-
-  public long sonarlintWeeklyUsers() {
-    return sonarlintWeeklyUsers;
-  }
-
-  public long getUserCount() {
-    return userCount;
-  }
-
-  public long getProjectCount() {
-    return projectCount;
-  }
-
-  public boolean isUsingBranches() {
-    return usingBranches;
   }
 
   public Database getDatabase() {
     return database;
   }
 
-  public Map<String, Long> getProjectCountByLanguage() {
-    return projectCountByLanguage;
-  }
-
-  public Map<String, Long> getAlmIntegrationCountByAlm() {
-    return almIntegrationCountByAlm;
-  }
-
-  public Map<String, Long> getNclocByLanguage() {
-    return nclocByLanguage;
-  }
-
   public Optional<EditionProvider.Edition> getEdition() {
     return Optional.ofNullable(edition);
   }
 
-  public Optional<String> getLicenseType() {
-    return Optional.ofNullable(licenseType);
+  public String getDefaultQualityGate() {
+    return defaultQualityGate;
+  }
+
+  public String getSonarWayQualityGate() {
+    return sonarWayQualityGate;
   }
 
   public Long getInstallationDate() {
@@ -145,8 +129,16 @@ public class TelemetryData {
     return installationVersion;
   }
 
-  public boolean isInDocker() {
-    return inDocker;
+  public boolean isInContainer() {
+    return inContainer;
+  }
+
+  public ManagedInstanceInformation getManagedInstanceInformation() {
+    return managedInstanceInformation;
+  }
+
+  public CloudUsage getCloudUsage() {
+    return cloudUsage;
   }
 
   public Optional<Boolean> hasUnanalyzedC() {
@@ -157,71 +149,75 @@ public class TelemetryData {
     return Optional.ofNullable(hasUnanalyzedCpp);
   }
 
-  public List<String> getCustomSecurityConfigs() {
+  public Set<String> getCustomSecurityConfigs() {
     return customSecurityConfigs;
   }
 
-  public List<String> getExternalAuthenticationProviders() {
-    return externalAuthenticationProviders;
+  public List<UserTelemetryDto> getUserTelemetries() {
+    return users;
   }
 
-  public Map<String, Long> getProjectCountByScm() {
-    return projectCountByScm;
+  public List<Project> getProjects() {
+    return projects;
   }
 
-  public Map<String, Long> getProjectCountByCi() {
-    return projectCountByCi;
+  public List<ProjectStatistics> getProjectStatistics() {
+    return projectStatistics;
+  }
+
+  public List<QualityGate> getQualityGates() {
+    return qualityGates;
+  }
+
+  public List<QualityProfile> getQualityProfiles() {
+    return qualityProfiles;
   }
 
   static Builder builder() {
     return new Builder();
   }
 
+  public int getNcdId() {
+    return ncdId;
+  }
+
+  public List<Branch> getBranches() {
+    return branches;
+  }
+
+  public Collection<NewCodeDefinition> getNewCodeDefinitions() {
+    return newCodeDefinitions;
+  }
+
   static class Builder {
     private String serverId;
     private String version;
-    private long userCount;
-    private long sonarlintWeeklyUsers;
+    private Long messageSequenceNumber;
     private Map<String, String> plugins;
     private Database database;
-    private ProjectMeasuresStatistics projectMeasuresStatistics;
-    private Map<String, Long> almIntegrationCountByAlm;
-    private Long ncloc;
-    private Boolean usingBranches;
     private Edition edition;
-    private String licenseType;
+    private String defaultQualityGate;
+
+    private String sonarWayQualityGate;
     private Long installationDate;
     private String installationVersion;
-    private boolean inDocker = false;
+    private boolean inContainer = false;
+    private ManagedInstanceInformation managedInstanceInformation;
+    private CloudUsage cloudUsage;
     private Boolean hasUnanalyzedC;
     private Boolean hasUnanalyzedCpp;
-    private List<String> customSecurityConfigs;
-    private List<String> externalAuthenticationProviders;
-    private Map<String, Long> projectCountByScm;
-    private Map<String, Long> projectCountByCi;
+    private Set<String> customSecurityConfigs;
+    private List<UserTelemetryDto> users;
+    private List<Project> projects;
+    private List<ProjectStatistics> projectStatistics;
+    private List<Branch> branches;
+    private Collection<NewCodeDefinition> newCodeDefinitions;
+    private List<QualityGate> qualityGates;
+    private List<QualityProfile> qualityProfiles;
+    private int ncdId;
 
     private Builder() {
       // enforce static factory method
-    }
-
-    Builder setExternalAuthenticationProviders(List<String> providers) {
-      this.externalAuthenticationProviders = providers;
-      return this;
-    }
-
-    Builder setProjectCountByScm(Map<String, Long> projectCountByScm) {
-      this.projectCountByScm = projectCountByScm;
-      return this;
-    }
-
-    Builder setSonarlintWeeklyUsers(long sonarlintWeeklyUsers) {
-      this.sonarlintWeeklyUsers = sonarlintWeeklyUsers;
-      return this;
-    }
-
-    Builder setProjectCountByCi(Map<String, Long> projectCountByCi) {
-      this.projectCountByCi = projectCountByCi;
-      return this;
     }
 
     Builder setServerId(String serverId) {
@@ -234,8 +230,8 @@ public class TelemetryData {
       return this;
     }
 
-    Builder setUserCount(long userCount) {
-      this.userCount = userCount;
+    Builder setMessageSequenceNumber(@Nullable Long messageSequenceNumber) {
+      this.messageSequenceNumber = messageSequenceNumber;
       return this;
     }
 
@@ -244,28 +240,8 @@ public class TelemetryData {
       return this;
     }
 
-    Builder setAlmIntegrationCountByAlm(Map<String, Long> almIntegrationCountByAlm) {
-      this.almIntegrationCountByAlm = almIntegrationCountByAlm;
-      return this;
-    }
-
-    Builder setProjectMeasuresStatistics(ProjectMeasuresStatistics projectMeasuresStatistics) {
-      this.projectMeasuresStatistics = projectMeasuresStatistics;
-      return this;
-    }
-
-    Builder setNcloc(long ncloc) {
-      this.ncloc = ncloc;
-      return this;
-    }
-
     Builder setDatabase(Database database) {
       this.database = database;
-      return this;
-    }
-
-    Builder setUsingBranches(boolean usingBranches) {
-      this.usingBranches = usingBranches;
       return this;
     }
 
@@ -274,8 +250,13 @@ public class TelemetryData {
       return this;
     }
 
-    Builder setLicenseType(@Nullable String licenseType) {
-      this.licenseType = licenseType;
+    Builder setDefaultQualityGate(String defaultQualityGate) {
+      this.defaultQualityGate = defaultQualityGate;
+      return this;
+    }
+
+    Builder setSonarWayQualityGate(String sonarWayQualityGate) {
+      this.sonarWayQualityGate = sonarWayQualityGate;
       return this;
     }
 
@@ -289,8 +270,8 @@ public class TelemetryData {
       return this;
     }
 
-    Builder setInDocker(boolean inDocker) {
-      this.inDocker = inDocker;
+    Builder setInContainer(boolean inContainer) {
+      this.inContainer = inContainer;
       return this;
     }
 
@@ -304,43 +285,304 @@ public class TelemetryData {
       return this;
     }
 
-    Builder setCustomSecurityConfigs(List<String> customSecurityConfigs) {
+    Builder setCustomSecurityConfigs(Set<String> customSecurityConfigs) {
       this.customSecurityConfigs = customSecurityConfigs;
       return this;
     }
 
-    TelemetryData build() {
-      requireNonNull(serverId);
-      requireNonNull(version);
-      requireNonNull(plugins);
-      requireNonNull(projectMeasuresStatistics);
-      requireNonNull(almIntegrationCountByAlm);
-      requireNonNull(ncloc);
-      requireNonNull(database);
-      requireNonNull(usingBranches);
-      requireNonNull(externalAuthenticationProviders);
-      requireNonNull(projectCountByScm);
-      requireNonNull(projectCountByCi);
+    Builder setUsers(List<UserTelemetryDto> users) {
+      this.users = users;
+      return this;
+    }
 
+    Builder setProjects(List<Project> projects) {
+      this.projects = projects;
+      return this;
+    }
+
+    Builder setManagedInstanceInformation(ManagedInstanceInformation managedInstanceInformation) {
+      this.managedInstanceInformation = managedInstanceInformation;
+      return this;
+    }
+
+    Builder setCloudUsage(CloudUsage cloudUsage) {
+      this.cloudUsage = cloudUsage;
+      return this;
+    }
+
+    TelemetryData build() {
+      requireNonNullValues(serverId, version, plugins, database, messageSequenceNumber);
       return new TelemetryData(this);
+    }
+
+    Builder setProjectStatistics(List<ProjectStatistics> projectStatistics) {
+      this.projectStatistics = projectStatistics;
+      return this;
+    }
+
+    Builder setQualityGates(List<QualityGate> qualityGates) {
+      this.qualityGates = qualityGates;
+      return this;
+    }
+
+
+    Builder setQualityProfiles(List<QualityProfile> qualityProfiles) {
+      this.qualityProfiles = qualityProfiles;
+      return this;
+    }
+
+    Builder setNcdId(int ncdId) {
+      this.ncdId = ncdId;
+      return this;
+    }
+
+    private static void requireNonNullValues(Object... values) {
+      Arrays.stream(values).forEach(Objects::requireNonNull);
+    }
+
+    Builder setBranches(List<Branch> branches) {
+      this.branches = branches;
+      return this;
+    }
+
+    Builder setNewCodeDefinitions(Collection<NewCodeDefinition> newCodeDefinitions) {
+      this.newCodeDefinitions = newCodeDefinitions;
+      return this;
     }
   }
 
-  static class Database {
-    private final String name;
-    private final String version;
+  record Database(String name, String version) {
+  }
 
-    Database(String name, String version) {
-      this.name = name;
-      this.version = version;
+  record NewCodeDefinition(String type, @Nullable String value, String scope) {
+
+    private static final NewCodeDefinition instanceDefault = new NewCodeDefinition(PREVIOUS_VERSION.name(), "", "instance");
+
+    public static NewCodeDefinition getInstanceDefault() {
+      return instanceDefault;
     }
 
-    public String getName() {
-      return name;
+    @Override
+    public String value() {
+      return value == null ? "" : value;
+    }
+  }
+
+  record Branch(String projectUuid, String branchUuid, int ncdId, int greenQualityGateCount, int analysisCount, boolean excludeFromPurge) {
+  }
+
+  record Project(String projectUuid, Long lastAnalysis, String language, String qualityProfile, Long loc) {
+  }
+
+  record QualityGate(String uuid, String caycStatus, List<Condition> conditions) {
+  }
+
+  public record QualityProfile(String uuid, @Nullable String parentUuid, String language, boolean isDefault,
+                               boolean isBuiltIn,
+                        @Nullable Boolean builtInParent, @Nullable Integer rulesOverriddenCount,
+                        @Nullable Integer rulesActivatedCount, @Nullable Integer rulesDeactivatedCount
+  ) {
+  }
+
+  record ManagedInstanceInformation(boolean isManaged, @Nullable String provider) {
+  }
+
+  record CloudUsage(boolean kubernetes, @Nullable String kubernetesVersion, @Nullable String kubernetesPlatform,
+                    @Nullable String kubernetesProvider,
+                    @Nullable String officialHelmChart, @Nullable String containerRuntime, boolean officialImage) {
+  }
+
+  public static class ProjectStatistics {
+    private final String projectUuid;
+    private final Long branchCount;
+    private final Long pullRequestCount;
+    private final String qualityGate;
+    private final String scm;
+    private final String ci;
+    private final String devopsPlatform;
+    private final Long bugs;
+    private final Long vulnerabilities;
+    private final Long securityHotspots;
+    private final Long technicalDebt;
+    private final Long developmentCost;
+    private final int ncdId;
+    private final Long externalSecurityReportExportedAt;
+
+    private final CreationMethod creationMethod;
+
+    ProjectStatistics(Builder builder) {
+      this.projectUuid = builder.projectUuid;
+      this.branchCount = builder.branchCount;
+      this.pullRequestCount = builder.pullRequestCount;
+      this.qualityGate = builder.qualityGate;
+      this.scm = builder.scm;
+      this.ci = builder.ci;
+      this.devopsPlatform = builder.devopsPlatform;
+      this.bugs = builder.bugs;
+      this.vulnerabilities = builder.vulnerabilities;
+      this.securityHotspots = builder.securityHotspots;
+      this.technicalDebt = builder.technicalDebt;
+      this.developmentCost = builder.developmentCost;
+      this.ncdId = builder.ncdId;
+      this.externalSecurityReportExportedAt = builder.externalSecurityReportExportedAt;
+      this.creationMethod = builder.creationMethod;
     }
 
-    public String getVersion() {
-      return version;
+    public int getNcdId() {
+      return ncdId;
+    }
+
+    public String getProjectUuid() {
+      return projectUuid;
+    }
+
+    public Long getBranchCount() {
+      return branchCount;
+    }
+
+    public Long getPullRequestCount() {
+      return pullRequestCount;
+    }
+
+    public String getQualityGate() {
+      return qualityGate;
+    }
+
+    public String getScm() {
+      return scm;
+    }
+
+    public String getCi() {
+      return ci;
+    }
+
+    public String getDevopsPlatform() {
+      return devopsPlatform;
+    }
+
+    public Optional<Long> getBugs() {
+      return Optional.ofNullable(bugs);
+    }
+
+    public Optional<Long> getVulnerabilities() {
+      return Optional.ofNullable(vulnerabilities);
+    }
+
+    public Optional<Long> getSecurityHotspots() {
+      return Optional.ofNullable(securityHotspots);
+    }
+
+    public Optional<Long> getTechnicalDebt() {
+      return Optional.ofNullable(technicalDebt);
+    }
+
+    public Optional<Long> getDevelopmentCost() {
+      return Optional.ofNullable(developmentCost);
+    }
+
+    public Optional<Long> getExternalSecurityReportExportedAt() {
+      return Optional.ofNullable(externalSecurityReportExportedAt);
+    }
+
+    public CreationMethod getCreationMethod() {
+      return creationMethod;
+    }
+
+    static class Builder {
+      private String projectUuid;
+      private Long branchCount;
+      private Long pullRequestCount;
+      private String qualityGate;
+      private String scm;
+      private String ci;
+      private String devopsPlatform;
+      private Long bugs;
+      private Long vulnerabilities;
+      private Long securityHotspots;
+      private Long technicalDebt;
+      private Long developmentCost;
+      private int ncdId;
+      private Long externalSecurityReportExportedAt;
+      private CreationMethod creationMethod;
+
+      public Builder setProjectUuid(String projectUuid) {
+        this.projectUuid = projectUuid;
+        return this;
+      }
+
+      public Builder setNcdId(int ncdId) {
+        this.ncdId = ncdId;
+        return this;
+      }
+
+      public Builder setBranchCount(Long branchCount) {
+        this.branchCount = branchCount;
+        return this;
+      }
+
+      public Builder setPRCount(Long pullRequestCount) {
+        this.pullRequestCount = pullRequestCount;
+        return this;
+      }
+
+      public Builder setQG(String qualityGate) {
+        this.qualityGate = qualityGate;
+        return this;
+      }
+
+      public Builder setScm(String scm) {
+        this.scm = scm;
+        return this;
+      }
+
+      public Builder setCi(String ci) {
+        this.ci = ci;
+        return this;
+      }
+
+      public Builder setDevops(String devopsPlatform) {
+        this.devopsPlatform = devopsPlatform;
+        return this;
+      }
+
+      public Builder setBugs(@Nullable Number bugs) {
+        this.bugs = bugs != null ? bugs.longValue() : null;
+        return this;
+      }
+
+      public Builder setVulnerabilities(@Nullable Number vulnerabilities) {
+        this.vulnerabilities = vulnerabilities != null ? vulnerabilities.longValue() : null;
+        return this;
+      }
+
+      public Builder setSecurityHotspots(@Nullable Number securityHotspots) {
+        this.securityHotspots = securityHotspots != null ? securityHotspots.longValue() : null;
+        return this;
+      }
+
+      public Builder setTechnicalDebt(@Nullable Number technicalDebt) {
+        this.technicalDebt = technicalDebt != null ? technicalDebt.longValue() : null;
+        return this;
+      }
+
+      public Builder setDevelopmentCost(@Nullable Number developmentCost) {
+        this.developmentCost = developmentCost != null ? developmentCost.longValue() : null;
+        return this;
+      }
+
+      public Builder setExternalSecurityReportExportedAt(@Nullable Number externalSecurityReportExportedAt) {
+        this.externalSecurityReportExportedAt = externalSecurityReportExportedAt != null ? externalSecurityReportExportedAt.longValue() : null;
+        return this;
+      }
+
+      public Builder setCreationMethod(CreationMethod creationMethod) {
+        this.creationMethod = creationMethod;
+        return this;
+      }
+
+      public ProjectStatistics build() {
+        return new ProjectStatistics(this);
+      }
     }
   }
 }

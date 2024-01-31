@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,18 +19,18 @@
  */
 package org.sonar.scm.git;
 
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
-import java.util.concurrent.ForkJoinWorkerThread;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class GitThreadFactory implements ForkJoinWorkerThreadFactory {
+public class GitThreadFactory implements ThreadFactory {
   private static final String NAME_PREFIX = "git-scm-";
-  private int i = 0;
+  private final AtomicInteger count = new AtomicInteger(0);
 
   @Override
-  public ForkJoinWorkerThread newThread(ForkJoinPool pool) {
-    ForkJoinWorkerThread thread = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
-    thread.setName(NAME_PREFIX + i++);
-    return thread;
+  public Thread newThread(Runnable r) {
+    Thread t = new Thread(r);
+    t.setName(NAME_PREFIX + count.getAndIncrement());
+    t.setDaemon(true);
+    return t;
   }
 }

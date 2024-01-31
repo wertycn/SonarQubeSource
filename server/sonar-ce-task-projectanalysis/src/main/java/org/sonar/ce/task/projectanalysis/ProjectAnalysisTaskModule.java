@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,6 +21,7 @@ package org.sonar.ce.task.projectanalysis;
 
 import org.sonar.ce.task.projectanalysis.container.ContainerFactoryImpl;
 import org.sonar.ce.task.projectanalysis.taskprocessor.ReportTaskProcessor;
+import org.sonar.ce.task.projectexport.taskprocessor.ProjectExportTaskProcessor;
 import org.sonar.ce.task.step.ComputationStepExecutor;
 import org.sonar.core.platform.Module;
 
@@ -31,6 +32,7 @@ public class ProjectAnalysisTaskModule extends Module {
       // task
       ContainerFactoryImpl.class,
       ComputationStepExecutor.class,
-      ReportTaskProcessor.class);
+      ReportTaskProcessor.class,
+      ProjectExportTaskProcessor.class);
   }
 }

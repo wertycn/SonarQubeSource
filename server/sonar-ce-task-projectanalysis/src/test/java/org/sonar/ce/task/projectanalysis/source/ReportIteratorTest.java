@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,6 +32,7 @@ import org.sonar.scanner.protocol.output.ScannerReportWriter;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class ReportIteratorTest {
 
@@ -44,7 +45,8 @@ public class ReportIteratorTest {
   @Before
   public void setUp() throws Exception {
     File dir = temp.newFolder();
-    ScannerReportWriter writer = new ScannerReportWriter(dir);
+    FileStructure fileStructure = new FileStructure(dir);
+    ScannerReportWriter writer = new ScannerReportWriter(fileStructure);
 
     writer.writeComponentCoverage(1, newArrayList(
       ScannerReport.LineCoverage.newBuilder()
@@ -64,26 +66,29 @@ public class ReportIteratorTest {
   @Test
   public void read_report() {
     underTest = new ReportIterator<>(file, ScannerReport.LineCoverage.parser());
-    assertThat(underTest.next().getLine()).isEqualTo(1);
+    assertThat(underTest.next().getLine()).isOne();
   }
 
   @Test
   public void do_not_fail_when_calling_has_next_with_iterator_already_closed() {
     underTest = new ReportIterator<>(file, ScannerReport.LineCoverage.parser());
-    assertThat(underTest.next().getLine()).isEqualTo(1);
+    assertThat(underTest.next().getLine()).isOne();
     assertThat(underTest.hasNext()).isFalse();
 
     underTest.close();
     assertThat(underTest.hasNext()).isFalse();
   }
 
-  @Test(expected = NoSuchElementException.class)
+  @Test
   public void test_error() {
     underTest = new ReportIterator<>(file, ScannerReport.LineCoverage.parser());
     underTest.next();
 
-    // fail !
-    underTest.next();
+    assertThatThrownBy(() -> {
+      // fail !
+      underTest.next();
+    })
+      .isInstanceOf(NoSuchElementException.class);
   }
 
 }

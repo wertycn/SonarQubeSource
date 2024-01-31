@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,46 +17,47 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { State } from './components/ProjectActivityAppContainer';
+import { AnalysisEvent } from '../../types/project-activity';
+import { State } from './components/ProjectActivityApp';
 
-export function addCustomEvent(analysis: string, event: T.AnalysisEvent) {
+export function addCustomEvent(analysis: string, event: AnalysisEvent) {
   return (state: State) => ({
-    analyses: state.analyses.map(item => {
+    analyses: state.analyses.map((item) => {
       if (item.key !== analysis) {
         return item;
       }
       return { ...item, events: [...item.events, event] };
-    })
+    }),
   });
 }
 
 export function deleteEvent(analysis: string, event: string) {
   return (state: State) => ({
-    analyses: state.analyses.map(item => {
+    analyses: state.analyses.map((item) => {
       if (item.key !== analysis) {
         return item;
       }
-      return { ...item, events: item.events.filter(eventItem => eventItem.key !== event) };
-    })
+      return { ...item, events: item.events.filter((eventItem) => eventItem.key !== event) };
+    }),
   });
 }
 
-export function changeEvent(analysis: string, event: T.AnalysisEvent) {
+export function changeEvent(analysis: string, event: AnalysisEvent) {
   return (state: State) => ({
-    analyses: state.analyses.map(item => {
+    analyses: state.analyses.map((item) => {
       if (item.key !== analysis) {
         return item;
       }
       return {
         ...item,
-        events: item.events.map(eventItem =>
-          eventItem.key === event.key ? { ...eventItem, ...event } : eventItem
-        )
+        events: item.events.map((eventItem) =>
+          eventItem.key === event.key ? { ...eventItem, ...event } : eventItem,
+        ),
       };
-    })
+    }),
   });
 }
 
 export function deleteAnalysis(analysis: string) {
-  return (state: State) => ({ analyses: state.analyses.filter(item => item.key !== analysis) });
+  return (state: State) => ({ analyses: state.analyses.filter((item) => item.key !== analysis) });
 }

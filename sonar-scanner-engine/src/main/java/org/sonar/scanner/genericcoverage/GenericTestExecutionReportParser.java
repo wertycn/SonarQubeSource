@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,12 +31,12 @@ import org.codehaus.staxmate.in.SMHierarchicCursor;
 import org.codehaus.staxmate.in.SMInputCursor;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.sensor.SensorContext;
-import org.sonar.api.test.MutableTestCase;
-import org.sonar.api.test.MutableTestPlan;
-import org.sonar.api.test.TestCase;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sonar.scanner.deprecated.test.DefaultTestCase;
+import org.sonar.scanner.deprecated.test.DefaultTestCase.Status;
+import org.sonar.scanner.deprecated.test.DefaultTestPlan;
 import org.sonar.scanner.deprecated.test.TestPlanBuilder;
 
 import static org.sonar.api.utils.Preconditions.checkState;
@@ -50,12 +50,11 @@ public class GenericTestExecutionReportParser {
 
   private static final String OLD_ROOT_ELEMENT = "unitTest";
 
-  private static final Logger LOG = Loggers.get(GenericTestExecutionReportParser.class);
+  private static final Logger LOG = LoggerFactory.getLogger(GenericTestExecutionReportParser.class);
 
   private static final String NAME_ATTR = "name";
   private static final String DURATION_ATTR = "duration";
-  private static final String MESSAGE_ATTR = "message";
-  public static final String OK = "ok";
+
   public static final String ERROR = "error";
   public static final String FAILURE = "failure";
   public static final String SKIPPED = "skipped";
@@ -109,18 +108,16 @@ public class GenericTestExecutionReportParser {
       checkElementName(fileCursor, "file");
       String filePath = mandatoryAttribute(fileCursor, "path");
       InputFile inputFile = context.fileSystem().inputFile(context.fileSystem().predicates().hasPath(filePath));
-      if (inputFile == null) {
+      if (inputFile == null || inputFile.language() == null) {
         numberOfUnknownFiles++;
         if (numberOfUnknownFiles <= MAX_STORED_UNKNOWN_FILE_PATHS) {
           firstUnknownFiles.add(filePath);
         }
+        if (inputFile != null) {
+          LOG.debug("Skipping file '{}' in the generic test execution report because it doesn't have a known language", filePath);
+        }
         continue;
       }
-      checkState(
-        inputFile.language() != null,
-        "Line %s of report refers to a file with an unknown language: %s",
-        fileCursor.getCursorLocation().getLineNumber(),
-        filePath);
       checkState(
         inputFile.type() != InputFile.Type.MAIN,
         "Line %s of report refers to a file which is not configured as a test file: %s",
@@ -128,7 +125,7 @@ public class GenericTestExecutionReportParser {
         filePath);
       matchedFileKeys.add(inputFile.absolutePath());
 
-      MutableTestPlan testPlan = testPlanBuilder.loadPerspective(MutableTestPlan.class, inputFile);
+      DefaultTestPlan testPlan = testPlanBuilder.getTestPlan(inputFile);
       SMInputCursor testCaseCursor = fileCursor.childElementCursor();
       while (testCaseCursor.getNext() != null) {
         parseTestCase(testCaseCursor, testPlan);
@@ -136,25 +133,21 @@ public class GenericTestExecutionReportParser {
     }
   }
 
-  private void parseTestCase(SMInputCursor cursor, MutableTestPlan testPlan) throws XMLStreamException {
+  private static void parseTestCase(SMInputCursor cursor, DefaultTestPlan testPlan) throws XMLStreamException {
     checkElementName(cursor, "testCase");
-    MutableTestCase testCase = testPlan.addTestCase(mandatoryAttribute(cursor, NAME_ATTR));
-    TestCase.Status status = TestCase.Status.OK;
+    DefaultTestCase testCase = testPlan.addTestCase(mandatoryAttribute(cursor, NAME_ATTR));
+    Status status = Status.OK;
     testCase.setDurationInMs(longValue(mandatoryAttribute(cursor, DURATION_ATTR), cursor, DURATION_ATTR, 0));
 
     SMInputCursor child = cursor.descendantElementCursor();
     if (child.getNext() != null) {
       String elementName = child.getLocalName();
       if (SKIPPED.equals(elementName)) {
-        status = TestCase.Status.SKIPPED;
+        status = Status.SKIPPED;
       } else if (FAILURE.equals(elementName)) {
-        status = TestCase.Status.FAILURE;
+        status = Status.FAILURE;
       } else if (ERROR.equals(elementName)) {
-        status = TestCase.Status.ERROR;
-      }
-      if (TestCase.Status.OK != status) {
-        testCase.setMessage(mandatoryAttribute(child, MESSAGE_ATTR));
-        testCase.setStackTrace(child.collectDescendantText());
+        status = Status.ERROR;
       }
     }
     testCase.setStatus(status);

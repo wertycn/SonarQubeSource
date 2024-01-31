@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,40 +23,32 @@ import com.google.common.annotations.VisibleForTesting;
 import java.time.Clock;
 import java.util.List;
 import javax.annotation.CheckForNull;
+import org.slf4j.LoggerFactory;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarQubeSide;
-import org.sonar.api.SonarQubeVersion;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.internal.MetadataLoader;
 import org.sonar.api.internal.SonarRuntimeImpl;
-import org.sonar.api.profiles.AnnotationProfileParser;
-import org.sonar.api.profiles.XMLProfileParser;
-import org.sonar.api.profiles.XMLProfileSerializer;
-import org.sonar.api.resources.Languages;
 import org.sonar.api.resources.ResourceTypes;
-import org.sonar.api.rules.AnnotationRuleParser;
-import org.sonar.api.rules.XMLRuleParser;
 import org.sonar.api.server.profile.BuiltInQualityProfileAnnotationLoader;
 import org.sonar.api.server.rule.RulesDefinitionXmlLoader;
 import org.sonar.api.utils.Durations;
 import org.sonar.api.utils.System2;
 import org.sonar.api.utils.UriReader;
 import org.sonar.api.utils.Version;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.ce.CeConfigurationModule;
 import org.sonar.ce.CeDistributedInformationImpl;
 import org.sonar.ce.CeHttpModule;
 import org.sonar.ce.CeQueueModule;
 import org.sonar.ce.CeTaskCommonsModule;
 import org.sonar.ce.StandaloneCeDistributedInformation;
+import org.sonar.ce.analysis.cache.cleaning.AnalysisCacheCleaningModule;
 import org.sonar.ce.async.SynchronousAsyncExecution;
 import org.sonar.ce.cleaning.CeCleaningModule;
-import org.sonar.ce.cleaning.NoopCeCleaningSchedulerImpl;
 import org.sonar.ce.db.ReadOnlyPropertiesDao;
 import org.sonar.ce.issue.index.NoAsyncIssueIndexing;
 import org.sonar.ce.logging.CeProcessLogging;
 import org.sonar.ce.monitoring.CEQueueStatusImpl;
-import org.sonar.ce.monitoring.DistributedCEQueueStatusImpl;
 import org.sonar.ce.platform.CECoreExtensionsInstaller;
 import org.sonar.ce.platform.ComputeEngineExtensionInstaller;
 import org.sonar.ce.platform.DatabaseCompatibility;
@@ -65,33 +57,39 @@ import org.sonar.ce.task.projectanalysis.ProjectAnalysisTaskModule;
 import org.sonar.ce.task.projectanalysis.analysis.ProjectConfigurationFactory;
 import org.sonar.ce.task.projectanalysis.issue.AdHocRuleCreator;
 import org.sonar.ce.task.projectanalysis.notification.ReportAnalysisFailureNotificationModule;
+import org.sonar.ce.task.projectanalysis.taskprocessor.AuditPurgeTaskModule;
 import org.sonar.ce.task.projectanalysis.taskprocessor.IssueSyncTaskModule;
 import org.sonar.ce.taskprocessor.CeProcessingScheduler;
 import org.sonar.ce.taskprocessor.CeTaskProcessorModule;
 import org.sonar.core.component.DefaultResourceTypes;
 import org.sonar.core.config.CorePropertyDefinitions;
+import org.sonar.core.documentation.DefaultDocumentationLinkGenerator;
 import org.sonar.core.extension.CoreExtensionRepositoryImpl;
 import org.sonar.core.extension.CoreExtensionsLoader;
-import org.sonar.core.platform.ComponentContainer;
+import org.sonar.core.language.LanguagesProvider;
+import org.sonar.core.platform.Container;
 import org.sonar.core.platform.EditionProvider;
-import org.sonar.core.platform.Module;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.core.platform.PluginClassLoader;
 import org.sonar.core.platform.PluginClassloaderFactory;
+import org.sonar.core.platform.SonarQubeVersion;
+import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.core.util.UuidFactoryImpl;
 import org.sonar.db.DBSessionsImpl;
 import org.sonar.db.DaoModule;
 import org.sonar.db.DbClient;
 import org.sonar.db.DefaultDatabase;
 import org.sonar.db.MyBatis;
+import org.sonar.db.StartMyBatis;
+import org.sonar.db.audit.NoOpAuditPersister;
 import org.sonar.db.purge.PurgeProfiler;
 import org.sonar.process.NetworkUtilsImpl;
 import org.sonar.process.Props;
 import org.sonar.process.logging.LogbackHelper;
-import org.sonar.server.component.index.ComponentIndexer;
+import org.sonar.server.component.index.EntityDefinitionIndexer;
 import org.sonar.server.config.ConfigurationProvider;
 import org.sonar.server.es.EsModule;
-import org.sonar.server.es.ProjectIndexersImpl;
+import org.sonar.server.es.IndexersImpl;
 import org.sonar.server.extension.CoreExtensionBootstraper;
 import org.sonar.server.extension.CoreExtensionStopper;
 import org.sonar.server.favorite.FavoriteUpdater;
@@ -109,12 +107,12 @@ import org.sonar.server.issue.workflow.IssueWorkflow;
 import org.sonar.server.l18n.ServerI18n;
 import org.sonar.server.log.ServerLogging;
 import org.sonar.server.measure.index.ProjectMeasuresIndexer;
-import org.sonar.server.metric.CoreCustomMetrics;
-import org.sonar.server.metric.DefaultMetricFinder;
 import org.sonar.server.metric.UnanalyzedLanguageMetrics;
 import org.sonar.server.notification.DefaultNotificationManager;
 import org.sonar.server.notification.NotificationService;
 import org.sonar.server.notification.email.EmailNotificationChannel;
+import org.sonar.server.permission.index.PermissionIndexer;
+import org.sonar.server.platform.DefaultNodeInformation;
 import org.sonar.server.platform.OfficialDistribution;
 import org.sonar.server.platform.ServerFileSystemImpl;
 import org.sonar.server.platform.ServerImpl;
@@ -122,7 +120,6 @@ import org.sonar.server.platform.ServerLifecycleNotifier;
 import org.sonar.server.platform.StartupMetadataProvider;
 import org.sonar.server.platform.TempFolderProvider;
 import org.sonar.server.platform.UrlSettings;
-import org.sonar.server.platform.WebServerImpl;
 import org.sonar.server.platform.db.migration.MigrationConfigurationModule;
 import org.sonar.server.platform.db.migration.version.DatabaseVersion;
 import org.sonar.server.platform.monitoring.DbSection;
@@ -131,6 +128,8 @@ import org.sonar.server.platform.serverid.JdbcUrlSanitizer;
 import org.sonar.server.platform.serverid.ServerIdChecksum;
 import org.sonar.server.plugins.InstalledPluginReferentialFactory;
 import org.sonar.server.plugins.ServerExtensionInstaller;
+import org.sonar.server.project.DefaultBranchNameResolver;
+import org.sonar.server.project.VisibilityService;
 import org.sonar.server.property.InternalPropertiesImpl;
 import org.sonar.server.qualitygate.QualityGateEvaluatorImpl;
 import org.sonar.server.qualitygate.QualityGateFinder;
@@ -138,13 +137,12 @@ import org.sonar.server.qualitygate.notification.QGChangeEmailTemplate;
 import org.sonar.server.qualitygate.notification.QGChangeNotificationHandler;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.index.RuleIndex;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.setting.DatabaseSettingLoader;
 import org.sonar.server.setting.DatabaseSettingsEnabler;
 import org.sonar.server.setting.ThreadLocalSettings;
-import org.sonar.server.user.index.UserIndex;
-import org.sonar.server.user.index.UserIndexer;
 import org.sonar.server.util.OkHttpClientProvider;
 import org.sonar.server.util.Paths2Impl;
 import org.sonar.server.view.index.ViewIndex;
@@ -157,15 +155,14 @@ import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideF
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel;
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel4OrNone;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
-import static org.sonar.process.ProcessProperties.Property.SONARCLOUD_ENABLED;
 
 public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
-  private ComputeEngineStatus computeEngineStatus;
+  private ComputeEngineStatus computeEngineStatus = null;
   @CheckForNull
-  private ComponentContainer level1;
+  private SpringComponentContainer level1 = null;
   @CheckForNull
-  private ComponentContainer level4;
+  private SpringComponentContainer level4 = null;
 
   @Override
   public void setComputeEngineStatus(ComputeEngineStatus computeEngineStatus) {
@@ -174,24 +171,20 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
   @Override
   public ComputeEngineContainer start(Props props) {
-    this.level1 = new ComponentContainer();
+    this.level1 = new SpringComponentContainer();
     populateLevel1(this.level1, props, requireNonNull(computeEngineStatus));
-    configureFromModules(this.level1);
     startLevel1(this.level1);
 
-    ComponentContainer level2 = this.level1.createChild();
+    SpringComponentContainer level2 = this.level1.createChild();
     populateLevel2(level2);
-    configureFromModules(level2);
     startLevel2(level2);
 
-    ComponentContainer level3 = level2.createChild();
+    SpringComponentContainer level3 = level2.createChild();
     populateLevel3(level3);
-    configureFromModules(level3);
     startLevel3(level3);
 
     this.level4 = level3.createChild();
     populateLevel4(this.level4, props);
-    configureFromModules(this.level4);
     startLevel4(this.level4);
 
     startupTasks();
@@ -199,44 +192,43 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
     return this;
   }
 
-  private static void startLevel1(ComponentContainer level1) {
+  private static void startLevel1(SpringComponentContainer level1) {
+    level1.startComponents();
     level1.getComponentByType(CoreExtensionsLoader.class)
       .load();
     level1.getComponentByType(CECoreExtensionsInstaller.class)
       .install(level1, hasPlatformLevel(1), noAdditionalSideFilter());
-
-    level1.startComponents();
   }
 
-  private static void startLevel2(ComponentContainer level2) {
-    level2.getComponentByType(CECoreExtensionsInstaller.class)
+  private static void startLevel2(SpringComponentContainer level2) {
+    level2.getParent().getComponentByType(CECoreExtensionsInstaller.class)
       .install(level2, hasPlatformLevel(2), noAdditionalSideFilter());
 
     level2.startComponents();
   }
 
-  private static void startLevel3(ComponentContainer level3) {
-    level3.getComponentByType(CECoreExtensionsInstaller.class)
+  private static void startLevel3(SpringComponentContainer level3) {
+    level3.getParent().getComponentByType(CECoreExtensionsInstaller.class)
       .install(level3, hasPlatformLevel(3), noAdditionalSideFilter());
 
     level3.startComponents();
   }
 
-  private static void startLevel4(ComponentContainer level4) {
-    level4.getComponentByType(CECoreExtensionsInstaller.class)
+  private static void startLevel4(SpringComponentContainer level4) {
+    level4.getParent().getComponentByType(CECoreExtensionsInstaller.class)
       .install(level4, hasPlatformLevel4OrNone(), noAdditionalSideFilter());
-    level4.getComponentByType(ServerExtensionInstaller.class)
+    level4.getParent().getComponentByType(ServerExtensionInstaller.class)
       .installExtensions(level4);
 
     level4.startComponents();
 
     PlatformEditionProvider editionProvider = level4.getComponentByType(PlatformEditionProvider.class);
-    Loggers.get(ComputeEngineContainerImpl.class)
+    LoggerFactory.getLogger(ComputeEngineContainerImpl.class)
       .info("Running {} edition", editionProvider.get().map(EditionProvider.Edition::getLabel).orElse(""));
   }
 
   private void startupTasks() {
-    ComponentContainer startupLevel = this.level4.createChild();
+    SpringComponentContainer startupLevel = this.level4.createChild();
     startupLevel.add(startupComponents());
     startupLevel.startComponents();
     // done in PlatformLevelStartup
@@ -269,26 +261,28 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
   }
 
   @VisibleForTesting
-  protected ComponentContainer getComponentContainer() {
+  protected SpringComponentContainer getComponentContainer() {
     return level4;
   }
 
-  private static void populateLevel1(ComponentContainer container, Props props, ComputeEngineStatus computeEngineStatus) {
-    Version apiVersion = MetadataLoader.loadVersion(System2.INSTANCE);
+  private static void populateLevel1(Container container, Props props, ComputeEngineStatus computeEngineStatus) {
+    Version apiVersion = MetadataLoader.loadApiVersion(System2.INSTANCE);
+    Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
     container.add(
       props.rawProperties(),
       ThreadLocalSettings.class,
       new ConfigurationProvider(),
-      new SonarQubeVersion(apiVersion),
+      new SonarQubeVersion(sqVersion),
       SonarRuntimeImpl.forSonarQube(apiVersion, SonarQubeSide.COMPUTE_ENGINE, edition),
       CeProcessLogging.class,
       UuidFactoryImpl.INSTANCE,
       NetworkUtilsImpl.INSTANCE,
-      WebServerImpl.class,
+      DefaultNodeInformation.class,
       LogbackHelper.class,
       DefaultDatabase.class,
       MyBatis.class,
+      StartMyBatis.class,
       PurgeProfiler.class,
       ServerFileSystemImpl.class,
       new TempFolderProvider(),
@@ -297,19 +291,20 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       Clock.systemDefaultZone(),
 
       // DB
-      DaoModule.class,
+      new DaoModule(),
       ReadOnlyPropertiesDao.class,
       DBSessionsImpl.class,
       DbClient.class,
 
       // Elasticsearch
-      EsModule.class,
+      new EsModule(),
 
       // rules/qprofiles
       RuleIndex.class,
 
       new OkHttpClientProvider(),
       computeEngineStatus,
+      NoOpAuditPersister.class,
 
       CoreExtensionRepositoryImpl.class,
       CoreExtensionsLoader.class,
@@ -317,9 +312,9 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
     container.add(toArray(CorePropertyDefinitions.all()));
   }
 
-  private static void populateLevel2(ComponentContainer container) {
+  private static void populateLevel2(Container container) {
     container.add(
-      MigrationConfigurationModule.class,
+      new MigrationConfigurationModule(),
       DatabaseVersion.class,
       DatabaseCompatibility.class,
 
@@ -344,7 +339,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
     );
   }
 
-  private static void populateLevel3(ComponentContainer container) {
+  private static void populateLevel3(Container container) {
     container.add(
       new StartupMetadataProvider(),
       JdbcUrlSanitizer.class,
@@ -354,45 +349,38 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       SynchronousAsyncExecution.class);
   }
 
-  private static void populateLevel4(ComponentContainer container, Props props) {
+  private static void populateLevel4(Container container, Props props) {
     container.add(
+      RuleDescriptionFormatter.class,
       ResourceTypes.class,
       DefaultResourceTypes.get(),
 
       // quality profile
       ActiveRuleIndexer.class,
-      XMLProfileParser.class,
-      XMLProfileSerializer.class,
-      AnnotationProfileParser.class,
       BuiltInQualityProfileAnnotationLoader.class,
       Rules.QProfiles.class,
 
       // rule
-      AnnotationRuleParser.class,
-      XMLRuleParser.class,
       DefaultRuleFinder.class,
       RulesDefinitionXmlLoader.class,
       AdHocRuleCreator.class,
       RuleIndexer.class,
 
       // languages
-      Languages.class, // used by CommonRuleDefinitionsImpl
+      // used by CommonRuleDefinitionsImpl
+      LanguagesProvider.class,
 
       // measure
-      CoreCustomMetrics.class,
-      DefaultMetricFinder.class,
       UnanalyzedLanguageMetrics.class,
-
-      UserIndexer.class,
-      UserIndex.class,
 
       // components,
       FavoriteUpdater.class,
-      ProjectIndexersImpl.class,
+      IndexersImpl.class,
       QGChangeNotificationHandler.class,
       QGChangeNotificationHandler.newMetadata(),
       ProjectMeasuresIndexer.class,
-      ComponentIndexer.class,
+      EntityDefinitionIndexer.class,
+      PermissionIndexer.class,
 
       // views
       ViewIndexer.class,
@@ -412,7 +400,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       NewIssuesNotificationHandler.newMetadata(),
       MyNewIssuesNotificationHandler.class,
       MyNewIssuesNotificationHandler.newMetadata(),
-      IssuesChangesNotificationModule.class,
+      new IssuesChangesNotificationModule(),
 
       // Notifications
       QGChangeEmailTemplate.class,
@@ -420,10 +408,11 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       NotificationService.class,
       DefaultNotificationManager.class,
       EmailNotificationChannel.class,
-      ReportAnalysisFailureNotificationModule.class,
+      new ReportAnalysisFailureNotificationModule(),
 
       // System
       ServerLogging.class,
+      CEQueueStatusImpl.class,
 
       // SonarSource editions
       PlatformEditionProvider.class,
@@ -433,49 +422,47 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
       CoreExtensionStopper.class,
 
       // Compute engine (must be after Views and Developer Cockpit)
-      CeConfigurationModule.class,
-      CeQueueModule.class,
-      CeHttpModule.class,
-      CeTaskCommonsModule.class,
-      ProjectAnalysisTaskModule.class,
-      IssueSyncTaskModule.class,
-      CeTaskProcessorModule.class,
+      new CeConfigurationModule(),
+      new CeQueueModule(),
+      new CeHttpModule(),
+      new CeTaskCommonsModule(),
+      new ProjectAnalysisTaskModule(),
+      new IssueSyncTaskModule(),
+      new AuditPurgeTaskModule(),
+      new CeTaskProcessorModule(),
       OfficialDistribution.class,
 
       InternalPropertiesImpl.class,
       ProjectConfigurationFactory.class,
 
+      DefaultBranchNameResolver.class,
+      VisibilityService.class,
       // webhooks
-      WebhookModule.class,
+      new WebhookModule(),
 
       QualityGateFinder.class,
-      QualityGateEvaluatorImpl.class
+      QualityGateEvaluatorImpl.class,
+
+      new AnalysisCacheCleaningModule(),
+
+      DefaultDocumentationLinkGenerator.class
 
     );
 
-    if (props.valueAsBoolean(SONARCLOUD_ENABLED.getKey())) {
-      // no cleaning job on sonarcloud and no distributed information
+    if (props.valueAsBoolean(CLUSTER_ENABLED.getKey())) {
       container.add(
-        NoopCeCleaningSchedulerImpl.class,
-        StandaloneCeDistributedInformation.class,
-        CEQueueStatusImpl.class);
-    } else if (props.valueAsBoolean(CLUSTER_ENABLED.getKey())) {
-      container.add(
-        CeCleaningModule.class,
+        new CeCleaningModule(),
 
         // system health
         CeDistributedInformationImpl.class,
 
         // system info
         DbSection.class,
-        ProcessInfoProvider.class,
-
-        DistributedCEQueueStatusImpl.class);
+        ProcessInfoProvider.class);
     } else {
       container.add(
-        CeCleaningModule.class,
-        StandaloneCeDistributedInformation.class,
-        CEQueueStatusImpl.class);
+        new CeCleaningModule(),
+        StandaloneCeDistributedInformation.class);
     }
   }
 
@@ -488,12 +475,5 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
   private static Object[] toArray(List<?> list) {
     return list.toArray(new Object[list.size()]);
-  }
-
-  private static void configureFromModules(ComponentContainer container) {
-    List<Module> modules = container.getComponentsByType(Module.class);
-    for (Module module : modules) {
-      module.configure(container);
-    }
   }
 }

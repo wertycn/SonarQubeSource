@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,40 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Application, ApplicationPeriod, ApplicationProject } from '../../types/application';
-import { Visibility } from '../../types/component';
-import { mockBranch } from './branch-like';
-
-export function mockApplication(overrides: Partial<Application> = {}): Application {
-  return {
-    branches: [mockBranch()],
-    key: 'foo',
-    name: 'Foo',
-    projects: [mockApplicationProject()],
-    visibility: Visibility.Private,
-    ...overrides
-  };
-}
+import { ApplicationPeriod } from '../../types/application';
 
 export function mockApplicationPeriod(
-  overrides: Partial<ApplicationPeriod> = {}
+  overrides: Partial<ApplicationPeriod> = {},
 ): ApplicationPeriod {
   return {
     date: '2017-10-01',
     project: 'foo',
     projectName: 'Foo',
-    ...overrides
-  };
-}
-
-export function mockApplicationProject(
-  overrides: Partial<ApplicationProject> = {}
-): ApplicationProject {
-  return {
-    branch: 'master',
-    isMain: true,
-    key: 'bar',
-    name: 'Bar',
-    ...overrides
+    ...overrides,
   };
 }

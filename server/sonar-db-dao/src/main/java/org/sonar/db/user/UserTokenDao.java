@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,32 +19,48 @@
  */
 package org.sonar.db.user;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
+import org.sonar.db.audit.AuditPersister;
+import org.sonar.db.audit.model.UserTokenNewValue;
 
-import static org.sonar.core.util.stream.MoreCollectors.toList;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 
 public class UserTokenDao implements Dao {
+  private final UuidFactory uuidFactory;
+  private final AuditPersister auditPersister;
 
-  private UuidFactory uuidFactory;
-
-  public UserTokenDao(UuidFactory uuidFactory) {
+  public UserTokenDao(UuidFactory uuidFactory, AuditPersister auditPersister) {
     this.uuidFactory = uuidFactory;
+    this.auditPersister = auditPersister;
   }
 
-  public void insert(DbSession dbSession, UserTokenDto userTokenDto) {
+  public void insert(DbSession dbSession, UserTokenDto userTokenDto, String userLogin) {
     userTokenDto.setUuid(uuidFactory.create());
     mapper(dbSession).insert(userTokenDto);
+    auditPersister.addUserToken(dbSession, new UserTokenNewValue(userTokenDto, userLogin));
   }
 
-  public void update(DbSession dbSession, UserTokenDto userTokenDto) {
+  public void update(DbSession dbSession, UserTokenDto userTokenDto, @Nullable String userLogin) {
+    mapper(dbSession).update(userTokenDto);
+    auditPersister.updateUserToken(dbSession, new UserTokenNewValue(userTokenDto, userLogin));
+  }
+
+  public List<UserTokenDto> selectTokensExpiredInDays(DbSession dbSession, long days){
+    long timestamp = LocalDate.now().plusDays(days).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+    return mapper(dbSession).selectTokensExpiredOnDate(timestamp);
+  }
+
+  public void updateWithoutAudit(DbSession dbSession, UserTokenDto userTokenDto) {
     mapper(dbSession).update(userTokenDto);
   }
 
@@ -65,7 +81,7 @@ public class UserTokenDao implements Dao {
   public Map<String, Integer> countTokensByUsers(DbSession dbSession, Collection<UserDto> users) {
     Map<String, Integer> result = new HashMap<>(users.size());
     executeLargeInputs(
-      users.stream().map(UserDto::getUuid).collect(toList()),
+      users.stream().map(UserDto::getUuid).toList(),
       input -> {
         List<UserTokenCount> userTokenCounts = mapper(dbSession).countTokensByUserUuids(input);
         for (UserTokenCount userTokenCount : userTokenCounts) {
@@ -78,11 +94,27 @@ public class UserTokenDao implements Dao {
   }
 
   public void deleteByUser(DbSession dbSession, UserDto user) {
-    mapper(dbSession).deleteByUserUuid(user.getUuid());
+    int deletedRows = mapper(dbSession).deleteByUserUuid(user.getUuid());
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserToken(dbSession, new UserTokenNewValue(user));
+    }
   }
 
   public void deleteByUserAndName(DbSession dbSession, UserDto user, String name) {
-    mapper(dbSession).deleteByUserUuidAndName(user.getUuid(), name);
+    int deletedRows = mapper(dbSession).deleteByUserUuidAndName(user.getUuid(), name);
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserToken(dbSession, new UserTokenNewValue(user, name));
+    }
+  }
+
+  public void deleteByProjectUuid(DbSession dbSession, String projectKey, String projectUuid) {
+    int deletedRows = mapper(dbSession).deleteByProjectUuid(projectUuid);
+
+    if (deletedRows > 0) {
+      auditPersister.deleteUserToken(dbSession, new UserTokenNewValue(projectKey));
+    }
   }
 
   private static UserTokenMapper mapper(DbSession dbSession) {

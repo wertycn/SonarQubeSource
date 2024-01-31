@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,15 +39,6 @@ th.hide-overflow {
   visibility: hidden !important;
 }
 
-.a11y-hidden {
-  position: absolute;
-  left: -10000px;
-  top: auto;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-
 .invisible {
   visibility: hidden;
 }
@@ -67,6 +58,10 @@ th.hide-overflow {
 
 .null-spacer-top {
   margin-top: 0 !important;
+}
+
+.null-spacer-bottom {
+  margin-bottom: 0 !important;
 }
 
 .spacer {
@@ -150,7 +145,11 @@ th.hide-overflow {
 }
 
 .padded {
-  padding: var(--gridSize);
+  padding: var(--gridSize) !important;
+}
+
+.little-padded {
+  padding: calc(var(--gridSize) / 2) !important;
 }
 
 .big-padded {
@@ -206,6 +205,10 @@ th.hide-overflow {
 
 .huge-padded-top {
   padding-top: 40px;
+}
+
+.huge-padded-bottom {
+  padding-bottom: 40px;
 }
 
 td.little-spacer-left {
@@ -298,6 +301,14 @@ th.huge-spacer-right {
   max-width: 100% !important;
 }
 
+.max-width-80 {
+  max-width: 80% !important;
+}
+
+.max-width-60 {
+  max-width: 60% !important;
+}
+
 .width-100 {
   width: 100% !important;
 }
@@ -342,9 +353,14 @@ th.huge-spacer-right {
   width: 10% !important;
 }
 
+.abs-width-100 {
+  width: 100px !important;
+}
+
 .abs-width-150 {
   width: 150px !important;
 }
+
 .abs-width-240 {
   width: 240px !important;
 }
@@ -473,6 +489,11 @@ th.huge-spacer-right {
   align-items: baseline;
 }
 
+.display-inline-flex-start {
+  display: inline-flex !important;
+  align-items: flex-start;
+}
+
 .display-inline-flex-center {
   display: inline-flex !important;
   align-items: center;
@@ -589,8 +610,8 @@ th.huge-spacer-right {
 }
 
 .bg-warning {
-  background-color: var(--orange);
-  color: #fff;
+  background-color: var(--alertBackgroundWarning);
+  color: var(--alertTextWarning);
 }
 
 .bg-info {
@@ -606,6 +627,10 @@ th.huge-spacer-right {
 .bg-muted {
   background-color: var(--barBackgroundColor);
   color: inherit;
+}
+
+.muted {
+  color: var(--neutral600);
 }
 
 .leak-box {

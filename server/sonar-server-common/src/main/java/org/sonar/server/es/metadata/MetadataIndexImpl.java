@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -68,12 +68,10 @@ public class MetadataIndexImpl implements MetadataIndex {
   }
 
   private static String initializedId(IndexType indexType) {
-    if (indexType instanceof IndexMainType) {
-      IndexMainType mainType = (IndexMainType) indexType;
+    if (indexType instanceof IndexMainType mainType) {
       return mainType.getIndex().getName() + "." + mainType.getType() + ".initialized";
     }
-    if (indexType instanceof IndexRelationType) {
-      IndexRelationType relationType = (IndexRelationType) indexType;
+    if (indexType instanceof IndexRelationType relationType) {
       IndexMainType mainType = relationType.getMainType();
       return mainType.getIndex().getName() + "." + mainType.getType() + "." + relationType.getName() + ".initialized";
     }
@@ -91,7 +89,8 @@ public class MetadataIndexImpl implements MetadataIndex {
   }
 
   private Optional<String> getMetadata(String id) {
-    GetResponse response = esClient.get(new GetRequest(TYPE_METADATA.getIndex().getName(), TYPE_METADATA.getType(), id)
+    GetResponse response = esClient.get(new GetRequest(TYPE_METADATA.getIndex().getName())
+      .id(id)
       .storedFields(MetadataIndexDefinition.FIELD_VALUE));
     if (response.isExists()) {
       DocumentField field = response.getField(MetadataIndexDefinition.FIELD_VALUE);
@@ -101,7 +100,8 @@ public class MetadataIndexImpl implements MetadataIndex {
   }
 
   private void setMetadata(String id, String value) {
-    esClient.index(new IndexRequest(TYPE_METADATA.getIndex().getName(), TYPE_METADATA.getType(), id)
+    esClient.index(new IndexRequest(TYPE_METADATA.getIndex().getName())
+        .id(id)
       .source(MetadataIndexDefinition.FIELD_VALUE, value)
       .setRefreshPolicy(REFRESH_IMMEDIATE));
   }

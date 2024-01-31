@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,182 +17,187 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
+import styled from '@emotion/styled';
+import classNames from 'classnames';
+import {
+  Badge,
+  Card,
+  LightLabel,
+  LightPrimary,
+  Note,
+  QualityGateIndicator,
+  SeparatorCircleIcon,
+  StandoutLink,
+  SubnavigationFlowSeparator,
+  Tags,
+  themeBorder,
+  themeColor,
+} from 'design-system';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import QualifierIcon from 'sonar-ui-common/components/icons/QualifierIcon';
-import DateFromNow from 'sonar-ui-common/components/intl/DateFromNow';
-import DateTimeFormatter from 'sonar-ui-common/components/intl/DateTimeFormatter';
-import SizeRating from 'sonar-ui-common/components/ui/SizeRating';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import PrivacyBadgeContainer from '../../../../components/common/PrivacyBadgeContainer';
 import Favorite from '../../../../components/controls/Favorite';
+import Tooltip from '../../../../components/controls/Tooltip';
+import DateFromNow from '../../../../components/intl/DateFromNow';
+import DateTimeFormatter from '../../../../components/intl/DateTimeFormatter';
 import Measure from '../../../../components/measure/Measure';
-import TagsList from '../../../../components/tags/TagsList';
+import { translate, translateWithParameters } from '../../../../helpers/l10n';
+import { formatMeasure } from '../../../../helpers/measures';
 import { getProjectUrl } from '../../../../helpers/urls';
-import { isLoggedIn } from '../../../../helpers/users';
 import { ComponentQualifier } from '../../../../types/component';
-import { MetricKey } from '../../../../types/metrics';
+import { MetricKey, MetricType } from '../../../../types/metrics';
+import { Status } from '../../../../types/types';
+import { CurrentUser, isLoggedIn } from '../../../../types/users';
 import { Project } from '../../types';
-import './ProjectCard.css';
-import ProjectCardLanguagesContainer from './ProjectCardLanguagesContainer';
-import ProjectCardMeasure from './ProjectCardMeasure';
+import ProjectCardLanguages from './ProjectCardLanguages';
 import ProjectCardMeasures from './ProjectCardMeasures';
-import ProjectCardQualityGate from './ProjectCardQualityGate';
 
 interface Props {
-  currentUser: T.CurrentUser;
+  currentUser: CurrentUser;
   handleFavorite: (component: string, isFavorite: boolean) => void;
-  height: number;
   project: Project;
   type?: string;
 }
 
-function renderFirstLine(project: Props['project'], handleFavorite: Props['handleFavorite']) {
-  const {
-    analysisDate,
-    tags,
-    qualifier,
-    isFavorite,
-    key,
-    name,
-    measures,
-    needIssueSync,
-    visibility
-  } = project;
-
+function renderFirstLine(
+  project: Props['project'],
+  handleFavorite: Props['handleFavorite'],
+  isNewCode: boolean,
+) {
+  const { analysisDate, isFavorite, key, measures, name, qualifier, tags, visibility } = project;
+  const formatted = formatMeasure(measures[MetricKey.alert_status], MetricType.Level);
+  const qualityGateLabel = translateWithParameters('overview.quality_gate_x', formatted);
   return (
-    <div className="display-flex-center">
-      <div className="project-card-main big-padded padded-bottom display-flex-center">
-        {isFavorite !== undefined && (
-          <Favorite
-            className="spacer-right"
-            component={key}
-            favorite={isFavorite}
-            handleFavorite={handleFavorite}
-            qualifier={qualifier}
-          />
-        )}
-        {qualifier === ComponentQualifier.Application && (
-          <Tooltip
-            placement="top"
-            overlay={
+    <>
+      <div className="sw-flex sw-justify-between sw-items-center ">
+        <div className="sw-flex sw-items-center ">
+          {isFavorite !== undefined && (
+            <Favorite
+              className="sw-mr-2"
+              component={key}
+              componentName={name}
+              favorite={isFavorite}
+              handleFavorite={handleFavorite}
+              qualifier={qualifier}
+            />
+          )}
+
+          <h1 className="it__project-card-name" title={name}>
+            <StandoutLink to={getProjectUrl(key)}>{name}</StandoutLink>
+          </h1>
+
+          {qualifier === ComponentQualifier.Application && (
+            <Tooltip
+              overlay={
+                <span>
+                  {translate('qualifier.APP')}
+                  {measures.projects && (
+                    <span>
+                      {' ‒ '}
+                      {translateWithParameters('x_projects_', measures.projects)}
+                    </span>
+                  )}
+                </span>
+              }
+            >
               <span>
-                {translate('qualifier.APP')}
-                {measures.projects && (
-                  <span>
-                    {' ‒ '}
-                    {translateWithParameters('x_projects_', measures.projects)}
-                  </span>
-                )}
+                <Badge className="sw-ml-2">{translate('qualifier.APP')}</Badge>
               </span>
-            }>
-            <span className="spacer-right">
-              <QualifierIcon qualifier={qualifier} />
+            </Tooltip>
+          )}
+
+          <Tooltip overlay={translate('visibility', visibility, 'description', qualifier)}>
+            <span>
+              <Badge className="sw-ml-2">{translate('visibility', visibility)}</Badge>
+            </span>
+          </Tooltip>
+        </div>
+        {analysisDate && (
+          <Tooltip overlay={qualityGateLabel}>
+            <span className="sw-flex sw-items-center">
+              <QualityGateIndicator
+                status={(measures[MetricKey.alert_status] as Status) ?? 'NONE'}
+                ariaLabel={qualityGateLabel}
+              />
+              <LightPrimary className="sw-ml-2 sw-body-sm-highlight">{formatted}</LightPrimary>
             </span>
           </Tooltip>
         )}
-        <h3 className="h2 project-card-name text-ellipsis" title={name}>
-          {needIssueSync ? name : <Link to={getProjectUrl(key)}>{name}</Link>}
-        </h3>
-
+      </div>
+      <LightLabel as="div" className="sw-flex sw-items-center sw-mt-3">
         {analysisDate && (
-          <>
-            <ProjectCardQualityGate status={measures[MetricKey.alert_status]} />
-            <span className="flex-grow" />
-            <DateTimeFormatter date={analysisDate}>
-              {formattedAnalysisDate => (
-                <span className="note big-spacer-left text-ellipsis" title={formattedAnalysisDate}>
-                  <FormattedMessage
-                    id="projects.last_analysis_on_x"
-                    defaultMessage={translate('projects.last_analysis_on_x')}
-                    values={{
-                      date: <DateFromNow date={analysisDate} />
-                    }}
-                  />
+          <DateTimeFormatter date={analysisDate}>
+            {(formattedAnalysisDate) => (
+              <span className="sw-body-sm-highlight" title={formattedAnalysisDate}>
+                <FormattedMessage
+                  id="projects.last_analysis_on_x"
+                  defaultMessage={translate('projects.last_analysis_on_x')}
+                  values={{
+                    date: <DateFromNow className="sw-body-sm" date={analysisDate} />,
+                  }}
+                />
+              </span>
+            )}
+          </DateTimeFormatter>
+        )}
+        {isNewCode
+          ? measures[MetricKey.new_lines] != null && (
+              <>
+                <SeparatorCircleIcon className="sw-mx-1" />
+                <div>
+                  <span className="sw-body-sm-highlight sw-mr-1" data-key={MetricKey.new_lines}>
+                    <Measure
+                      metricKey={MetricKey.new_lines}
+                      metricType={MetricType.ShortInteger}
+                      value={measures.new_lines}
+                    />
+                  </span>
+                  <span className="sw-body-sm">{translate('metric.new_lines.name')}</span>
+                </div>
+              </>
+            )
+          : measures[MetricKey.ncloc] != null && (
+              <>
+                <SeparatorCircleIcon className="sw-mx-1" />
+                <div>
+                  <span className="sw-body-sm-highlight sw-mr-1" data-key={MetricKey.ncloc}>
+                    <Measure
+                      metricKey={MetricKey.ncloc}
+                      metricType={MetricType.ShortInteger}
+                      value={measures.ncloc}
+                    />
+                  </span>
+                  <span className="sw-body-sm">{translate('metric.ncloc.name')}</span>
+                </div>
+                <SeparatorCircleIcon className="sw-mx-1" />
+                <span className="sw-body-sm" data-key={MetricKey.ncloc_language_distribution}>
+                  <ProjectCardLanguages distribution={measures.ncloc_language_distribution} />
                 </span>
-              )}
-            </DateTimeFormatter>
+              </>
+            )}
+        {tags.length > 0 && (
+          <>
+            <SeparatorCircleIcon className="sw-mx-1" />
+            <Tags
+              className="sw-body-sm"
+              emptyText={translate('issue.no_tag')}
+              ariaTagsListLabel={translate('issue.tags')}
+              tooltip={Tooltip}
+              tags={tags}
+              tagsToDisplay={2}
+            />
           </>
         )}
-      </div>
-      <div className="project-card-meta big-padded padded-bottom display-flex-center">
-        <div className="display-flex-center overflow-hidden">
-          <PrivacyBadgeContainer
-            className="spacer-right"
-            qualifier={qualifier}
-            visibility={visibility}
-          />
-          {tags.length > 0 && <TagsList className="text-ellipsis" tags={tags} />}
-        </div>
-      </div>
-    </div>
+      </LightLabel>
+    </>
   );
 }
 
 function renderSecondLine(
   currentUser: Props['currentUser'],
   project: Props['project'],
-  isNewCode: boolean
+  isNewCode: boolean,
 ) {
-  const { measures } = project;
-
-  return (
-    <div
-      className={classNames('display-flex-end flex-grow', {
-        'project-card-leak': isNewCode
-      })}>
-      <div className="project-card-main big-padded-left big-padded-right big-padded-bottom">
-        {renderMeasures(currentUser, project, isNewCode)}
-      </div>
-      <div className="project-card-meta display-flex-end big-padded-left big-padded-right big-padded-bottom">
-        {isNewCode
-          ? measures[MetricKey.new_lines] != null && (
-              <ProjectCardMeasure
-                metricKey={MetricKey.new_lines}
-                label={translate('metric.lines.name')}>
-                <Measure
-                  className="big"
-                  metricKey={MetricKey.new_lines}
-                  metricType="SHORT_INT"
-                  value={measures[MetricKey.new_lines]}
-                />
-              </ProjectCardMeasure>
-            )
-          : measures[MetricKey.ncloc] != null && (
-              <ProjectCardMeasure
-                metricKey={MetricKey.ncloc}
-                label={translate('metric.lines.name')}>
-                <div className="display-flex-center">
-                  <Measure
-                    className="big"
-                    metricKey={MetricKey.ncloc}
-                    metricType="SHORT_INT"
-                    value={measures[MetricKey.ncloc]}
-                  />
-                  <span className="spacer-left">
-                    <SizeRating value={Number(measures[MetricKey.ncloc])} />
-                  </span>
-                  <ProjectCardLanguagesContainer
-                    className="small spacer-left text-ellipsis"
-                    distribution={measures[MetricKey.ncloc_language_distribution]}
-                  />
-                </div>
-              </ProjectCardMeasure>
-            )}
-      </div>
-    </div>
-  );
-}
-
-function renderMeasures(
-  currentUser: Props['currentUser'],
-  project: Props['project'],
-  isNewCode: boolean
-) {
-  const { measures, needIssueSync, analysisDate, leakPeriodDate, qualifier, key } = project;
+  const { analysisDate, key, leakPeriodDate, measures, qualifier, isScannable } = project;
 
   if (analysisDate && (!isNewCode || leakPeriodDate)) {
     return (
@@ -200,43 +205,51 @@ function renderMeasures(
         measures={measures}
         componentQualifier={qualifier}
         isNewCode={isNewCode}
-        newCodeStartingDate={leakPeriodDate}
       />
     );
   }
 
   return (
-    <div className="spacer-top spacer-bottom">
-      <span className="note">
+    <div className="sw-flex sw-items-center">
+      <Note className="sw-py-4">
         {isNewCode && analysisDate
           ? translate('projects.no_new_code_period', qualifier)
           : translate('projects.not_analyzed', qualifier)}
-      </span>
+      </Note>
       {qualifier !== ComponentQualifier.Application &&
         !analysisDate &&
         isLoggedIn(currentUser) &&
-        !needIssueSync && (
-          <Link className="button spacer-left" to={getProjectUrl(key)}>
+        isScannable && (
+          <StandoutLink className="sw-ml-2 sw-body-sm-highlight" to={getProjectUrl(key)}>
             {translate('projects.configure_analysis')}
-          </Link>
+          </StandoutLink>
         )}
     </div>
   );
 }
 
 export default function ProjectCard(props: Props) {
-  const { currentUser, height, type, project } = props;
+  const { currentUser, type, project } = props;
   const isNewCode = type === 'leak';
 
   return (
-    <div
-      className={classNames('display-flex-column boxed-group it_project_card', {
-        'project-card-disabled': project.needIssueSync
-      })}
+    <ProjectCardWrapper
+      className={classNames(
+        'it_project_card sw-relative sw-box-border sw-rounded-1 sw-mb-page sw-h-full',
+      )}
       data-key={project.key}
-      style={{ height }}>
-      {renderFirstLine(project, props.handleFavorite)}
+    >
+      {renderFirstLine(project, props.handleFavorite, isNewCode)}
+      <SubnavigationFlowSeparator className="sw-my-3" />
       {renderSecondLine(currentUser, project, isNewCode)}
-    </div>
+    </ProjectCardWrapper>
   );
 }
+
+const ProjectCardWrapper = styled(Card)`
+  background-color: ${themeColor('projectCardBackground')};
+  border: ${themeBorder('default', 'projectCardBorder')};
+  &.project-card-disabled *:not(g):not(path) {
+    color: ${themeColor('projectCardDisabled')} !important;
+  }
+`;

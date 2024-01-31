@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON } from '../helpers/request';
+import { NewUserToken, UserToken } from '../types/token';
 
 /** List tokens for given user login */
-export function getTokens(login: string): Promise<T.UserToken[]> {
-  return getJSON('/api/user_tokens/search', { login }).then(r => r.userTokens, throwGlobalError);
+export function getTokens(login: string): Promise<UserToken[]> {
+  return getJSON('/api/user_tokens/search', { login }).then((r) => r.userTokens, throwGlobalError);
 }
 
-export function generateToken(data: { name: string; login?: string }): Promise<T.NewUserToken> {
+export function generateToken(data: {
+  name: string;
+  projectKey?: string;
+  type?: string;
+  login?: string;
+  expirationDate?: string;
+}): Promise<NewUserToken> {
   return postJSON('/api/user_tokens/generate', data).catch(throwGlobalError);
 }
 

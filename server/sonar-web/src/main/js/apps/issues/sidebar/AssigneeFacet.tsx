@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,14 @@
  */
 import { omit, sortBy, without } from 'lodash';
 import * as React from 'react';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { highlightTerm } from 'sonar-ui-common/helpers/search';
-import ListStyleFacet from '../../../components/facet/ListStyleFacet';
 import Avatar from '../../../components/ui/Avatar';
-import { isUserActive } from '../../../helpers/users';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { highlightTerm } from '../../../helpers/search';
 import { Facet } from '../../../types/issues';
+import { Dict } from '../../../types/types';
+import { UserBase, isUserActive } from '../../../types/users';
 import { Query, searchAssignees } from '../utils';
+import { ListStyleFacet } from './ListStyleFacet';
 
 interface Props {
   assigned: boolean;
@@ -36,29 +37,31 @@ interface Props {
   onToggle: (property: string) => void;
   open: boolean;
   query: Query;
-  stats: T.Dict<number> | undefined;
-  referencedUsers: T.Dict<T.UserBase>;
+  stats: Dict<number> | undefined;
+  referencedUsers: Dict<UserBase>;
 }
 
-export default class AssigneeFacet extends React.PureComponent<Props> {
+export class AssigneeFacet extends React.PureComponent<Props> {
   handleSearch = (query: string, page?: number) => {
     return searchAssignees(query, page);
   };
 
   handleItemClick = (itemValue: string, multiple: boolean) => {
     const { assignees } = this.props;
+
     if (itemValue === '') {
       // unassigned
       this.props.onChange({ assigned: !this.props.assigned, assignees: [] });
     } else if (multiple) {
       const newValue = sortBy(
-        assignees.includes(itemValue) ? without(assignees, itemValue) : [...assignees, itemValue]
+        assignees.includes(itemValue) ? without(assignees, itemValue) : [...assignees, itemValue],
       );
+
       this.props.onChange({ assigned: true, assignees: newValue });
     } else {
       this.props.onChange({
         assigned: true,
-        assignees: assignees.includes(itemValue) && assignees.length < 2 ? [] : [itemValue]
+        assignees: assignees.includes(itemValue) && assignees.length < 2 ? [] : [itemValue],
       });
     }
   };
@@ -70,30 +73,33 @@ export default class AssigneeFacet extends React.PureComponent<Props> {
   getAssigneeName = (assignee: string) => {
     if (assignee === '') {
       return translate('unassigned');
-    } else {
-      const user = this.props.referencedUsers[assignee];
-      if (!user) {
-        return assignee;
-      }
-      return isUserActive(user) ? user.name : translateWithParameters('user.x_deleted', user.login);
     }
+
+    const user = this.props.referencedUsers[assignee];
+
+    if (!user) {
+      return assignee;
+    }
+
+    return isUserActive(user) ? user.name : translateWithParameters('user.x_deleted', user.login);
   };
 
-  loadSearchResultCount = (assignees: T.UserBase[]) => {
+  loadSearchResultCount = (assignees: UserBase[]) => {
     return this.props.loadSearchResultCount('assignees', {
       assigned: undefined,
-      assignees: assignees.map(assignee => assignee.login)
+      assignees: assignees.map((assignee) => assignee.login),
     });
   };
 
   getSortedItems = () => {
     const { stats = {} } = this.props;
+
     return sortBy(
       Object.keys(stats),
       // put "not assigned" first
-      key => (key === '' ? 0 : 1),
+      (key) => (key === '' ? 0 : 1),
       // the sort by number
-      key => -stats[key]
+      (key) => -stats[key],
     );
   };
 
@@ -108,28 +114,30 @@ export default class AssigneeFacet extends React.PureComponent<Props> {
       return assignee;
     }
 
-    const userName = user.name || user.login;
+    const userName = user.name ?? user.login;
 
     return (
       <>
-        <Avatar className="little-spacer-right" hash={user.avatar} name={userName} size={16} />
+        <Avatar className="sw-mr-1" hash={user.avatar} name={userName} size="xs" />
         {isUserActive(user) ? userName : translateWithParameters('user.x_deleted', userName)}
       </>
     );
   };
 
-  renderSearchResult = (result: T.UserBase, query: string) => {
+  renderSearchResult = (result: UserBase, query: string) => {
     const displayName = isUserActive(result)
       ? result.name
       : translateWithParameters('user.x_deleted', result.login);
+
     return (
       <>
         <Avatar
-          className="little-spacer-right"
+          className="sw-mr-1"
           hash={result.avatar}
-          name={result.name || result.login}
-          size={16}
+          name={result.name ?? result.login}
+          size="xs"
         />
+
         {highlightTerm(displayName, query)}
       </>
     );
@@ -137,17 +145,18 @@ export default class AssigneeFacet extends React.PureComponent<Props> {
 
   render() {
     const values = [...this.props.assignees];
+
     if (!this.props.assigned) {
       values.push('');
     }
 
     return (
-      <ListStyleFacet<T.UserBase>
+      <ListStyleFacet<UserBase>
         facetHeader={translate('issues.facet.assignees')}
         fetching={this.props.fetching}
         getFacetItemText={this.getAssigneeName}
-        getSearchResultKey={user => user.login}
-        getSearchResultText={user => user.name || user.login}
+        getSearchResultKey={(user) => user.login}
+        getSearchResultText={(user) => user.name ?? user.login}
         // put "not assigned" item first
         getSortedItems={this.getSortedItems}
         loadSearchResultCount={this.loadSearchResultCount}

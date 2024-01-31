@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,9 +21,8 @@ package org.sonar.db.user;
 
 import java.util.List;
 import javax.annotation.CheckForNull;
-import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.session.RowBounds;
+import org.sonar.db.Pagination;
 
 public interface GroupMapper {
 
@@ -38,11 +37,11 @@ public interface GroupMapper {
 
   void update(GroupDto item);
 
-  List<GroupDto> selectByQuery(@Nullable @Param("query") String query, RowBounds rowBounds);
+  List<GroupDto> selectByQuery(@Param("query") GroupQuery query, @Param("pagination") Pagination pagination);
 
-  int countByQuery(@Nullable @Param("query") String query);
+  int countByQuery(@Param("query") GroupQuery query);
 
-  void deleteByUuid(String groupUuid);
+  int deleteByUuid(String groupUuid);
 
   @CheckForNull
   GroupDto selectByName(@Param("name") String name);

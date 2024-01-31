@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,8 +27,6 @@ import org.sonar.server.platform.monitoring.cluster.AppNodesInfoLoader;
 import org.sonar.server.platform.monitoring.cluster.GlobalInfoLoader;
 import org.sonar.server.platform.monitoring.cluster.NodeInfo;
 import org.sonar.server.platform.monitoring.cluster.SearchNodesInfoLoader;
-import org.sonar.server.telemetry.TelemetryDataJsonWriter;
-import org.sonar.server.telemetry.TelemetryDataLoader;
 
 public class ClusterSystemInfoWriter extends AbstractSystemInfoWriter {
   private final GlobalInfoLoader globalInfoLoader;
@@ -37,8 +35,7 @@ public class ClusterSystemInfoWriter extends AbstractSystemInfoWriter {
   private final HealthChecker healthChecker;
 
   public ClusterSystemInfoWriter(GlobalInfoLoader globalInfoLoader, AppNodesInfoLoader appNodesInfoLoader, SearchNodesInfoLoader searchNodesInfoLoader,
-    HealthChecker healthChecker, TelemetryDataLoader telemetry, TelemetryDataJsonWriter dataJsonWriter) {
-    super(telemetry, dataJsonWriter);
+    HealthChecker healthChecker) {
     this.globalInfoLoader = globalInfoLoader;
     this.appNodesInfoLoader = appNodesInfoLoader;
     this.searchNodesInfoLoader = searchNodesInfoLoader;
@@ -52,7 +49,6 @@ public class ClusterSystemInfoWriter extends AbstractSystemInfoWriter {
     writeGlobalSections(json);
     writeApplicationNodes(json, clusterHealth);
     writeSearchNodes(json, clusterHealth);
-    writeTelemetry(json);
   }
 
   private void writeGlobalSections(JsonWriter json) {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { ComponentQualifier } from '../../types/component';
-import { VISUALIZATIONS } from './utils';
+import { Dict, RawQuery } from '../../types/types';
 
 type Level = 'ERROR' | 'WARN' | 'OK';
 
@@ -44,11 +44,10 @@ export interface Query {
   search?: string;
   sort?: string;
   view?: string;
-  visualization?: string;
   [x: string]: string | number | string[] | undefined;
 }
 
-export function parseUrlQuery(urlQuery: T.RawQuery): Query {
+export function parseUrlQuery(urlQuery: RawQuery): Query {
   return {
     gate: getAsLevel(urlQuery['gate']),
     reliability: getAsNumericRating(urlQuery['reliability']),
@@ -71,7 +70,6 @@ export function parseUrlQuery(urlQuery: T.RawQuery): Query {
     search: getAsString(urlQuery['search']),
     sort: getAsString(urlQuery['sort']),
     view: getView(urlQuery['view']),
-    visualization: getVisualization(urlQuery['visualization'])
   };
 }
 
@@ -86,16 +84,16 @@ export function convertToFilter(query: Query, isFavorite: boolean): string {
     conditions.push(mapPropertyToMetric('gate') + ' = ' + query['gate']);
   }
 
-  ['coverage', 'new_coverage'].forEach(property =>
-    pushMetricToArray(query, property, conditions, convertCoverage)
+  ['coverage', 'new_coverage'].forEach((property) =>
+    pushMetricToArray(query, property, conditions, convertCoverage),
   );
 
-  ['duplications', 'new_duplications'].forEach(property =>
-    pushMetricToArray(query, property, conditions, convertDuplications)
+  ['duplications', 'new_duplications'].forEach((property) =>
+    pushMetricToArray(query, property, conditions, convertDuplications),
   );
 
-  ['size', 'new_lines'].forEach(property =>
-    pushMetricToArray(query, property, conditions, convertSize)
+  ['size', 'new_lines'].forEach((property) =>
+    pushMetricToArray(query, property, conditions, convertSize),
   );
 
   [
@@ -106,11 +104,11 @@ export function convertToFilter(query: Query, isFavorite: boolean): string {
     'new_reliability',
     'new_security',
     'new_security_review_rating',
-    'new_maintainability'
-  ].forEach(property => pushMetricToArray(query, property, conditions, convertIssuesRating));
+    'new_maintainability',
+  ].forEach((property) => pushMetricToArray(query, property, conditions, convertIssuesRating));
 
-  ['languages', 'tags', 'qualifier'].forEach(property =>
-    pushMetricToArray(query, property, conditions, convertArrayMetric)
+  ['languages', 'tags', 'qualifier'].forEach((property) =>
+    pushMetricToArray(query, property, conditions, convertArrayMetric),
   );
 
   if (query['search'] != null) {
@@ -120,18 +118,18 @@ export function convertToFilter(query: Query, isFavorite: boolean): string {
   return conditions.join(' and ');
 }
 
-const visualizationParams = ['sort', 'view', 'visualization'];
+const viewParems = ['sort', 'view'];
 
 export function hasFilterParams(query: Query) {
   return Object.keys(query)
-    .filter(key => !visualizationParams.includes(key))
-    .some(key => query[key] !== undefined);
+    .filter((key) => !viewParems.includes(key))
+    .some((key) => query[key] !== undefined);
 }
 
-export function hasVisualizationParams(query: Query) {
+export function hasViewParams(query: Query) {
   return Object.keys(query)
-    .filter(key => visualizationParams.includes(key))
-    .some(key => query[key] !== undefined);
+    .filter((key) => viewParems.includes(key))
+    .some((key) => query[key] !== undefined);
 }
 
 function getAsNumericRating(value: any): number | undefined {
@@ -150,14 +148,14 @@ function getAsLevel(value: any): Level | undefined {
 }
 
 function getAsString(value: any): string | undefined {
-  if (typeof value !== 'string' || !value) {
+  if (typeof value !== 'string' || value === '') {
     return undefined;
   }
   return value;
 }
 
 function getAsStringArray(value: any): string[] | undefined {
-  if (typeof value !== 'string' || !value) {
+  if (typeof value !== 'string' || value === '') {
     return undefined;
   }
   return value.split(',');
@@ -171,16 +169,12 @@ function getView(value: any): string | undefined {
   return typeof value !== 'string' || value === 'overall' ? undefined : value;
 }
 
-function getVisualization(value: string): string | undefined {
-  return VISUALIZATIONS.includes(value) ? value : undefined;
-}
-
 function convertIssuesRating(metric: string, rating: number): string {
   if (rating > 1 && rating < 5) {
     return `${metric} >= ${rating}`;
-  } else {
-    return `${metric} = ${rating}`;
   }
+
+  return `${metric} = ${rating}`;
 }
 
 function convertCoverage(metric: string, coverage: number): string {
@@ -239,7 +233,7 @@ function convertSize(metric: string, size: number): string {
 }
 
 function mapPropertyToMetric(property?: string): string | undefined {
-  const map: T.Dict<string> = {
+  const map: Dict<string> = {
     analysis_date: 'analysisDate',
     reliability: 'reliability_rating',
     new_reliability: 'new_reliability_rating',
@@ -259,7 +253,7 @@ function mapPropertyToMetric(property?: string): string | undefined {
     languages: 'languages',
     tags: 'tags',
     search: 'query',
-    qualifier: 'qualifier'
+    qualifier: 'qualifier',
   };
   return property && map[property];
 }
@@ -268,10 +262,10 @@ function pushMetricToArray(
   query: Query,
   property: string,
   conditionsArray: string[],
-  convertFunction: (metric: string, value: any) => string
+  convertFunction: (metric: string, value: Query[string]) => string,
 ): void {
   const metric = mapPropertyToMetric(property);
-  if (query[property] != null && metric) {
+  if (query[property] !== undefined && metric !== undefined) {
     conditionsArray.push(convertFunction(metric, query[property]));
   }
 }

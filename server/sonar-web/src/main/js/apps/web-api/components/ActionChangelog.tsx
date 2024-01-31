@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,9 +18,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { WebApi } from '../../../types/types';
 
 interface Props {
-  changelog: T.WebApi.Changelog[];
+  changelog: WebApi.Changelog[];
 }
 
 export default function ActionChangelog({ changelog }: Props) {

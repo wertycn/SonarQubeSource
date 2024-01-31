@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.scanner.issue.ignore;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,15 +31,15 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.scan.issue.filter.FilterableIssue;
 import org.sonar.api.scan.issue.filter.IssueFilter;
 import org.sonar.api.scan.issue.filter.IssueFilterChain;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.issue.DefaultFilterableIssue;
 import org.sonar.scanner.issue.ignore.pattern.IssueInclusionPatternInitializer;
 import org.sonar.scanner.issue.ignore.pattern.IssuePattern;
 
 @ThreadSafe
 public class EnforceIssuesFilter implements IssueFilter {
-  private static final Logger LOG = Loggers.get(EnforceIssuesFilter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EnforceIssuesFilter.class);
 
   private final List<IssuePattern> multicriteriaPatterns;
   private final AnalysisWarnings analysisWarnings;
@@ -51,7 +49,7 @@ public class EnforceIssuesFilter implements IssueFilter {
   private boolean warnDeprecatedIssuePatternAlreadyLogged;
 
   public EnforceIssuesFilter(IssueInclusionPatternInitializer patternInitializer, AnalysisWarnings analysisWarnings, DefaultActiveRules activeRules) {
-    this.multicriteriaPatterns = Collections.unmodifiableList(new ArrayList<>(patternInitializer.getMulticriteriaPatterns()));
+    this.multicriteriaPatterns = List.copyOf(patternInitializer.getMulticriteriaPatterns());
     this.analysisWarnings = analysisWarnings;
     this.activeRules = activeRules;
   }

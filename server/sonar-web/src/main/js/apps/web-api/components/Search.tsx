@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,10 +18,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import Checkbox from 'sonar-ui-common/components/controls/Checkbox';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import SearchBox from 'sonar-ui-common/components/controls/SearchBox';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import Checkbox from '../../../components/controls/Checkbox';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import SearchBox from '../../../components/controls/SearchBox';
+import { translate } from '../../../helpers/l10n';
 import { Query } from '../utils';
 
 interface Props {

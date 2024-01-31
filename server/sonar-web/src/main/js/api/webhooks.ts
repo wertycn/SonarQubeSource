@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { getJSON, post, postJSON } from 'sonar-ui-common/helpers/request';
-import throwGlobalError from '../app/utils/throwGlobalError';
+import { throwGlobalError } from '../helpers/error';
+import { getJSON, post, postJSON } from '../helpers/request';
+import { Paging } from '../types/types';
+import {
+  WebhookCreatePayload,
+  WebhookDelivery,
+  WebhookResponse,
+  WebhookSearchDeliveriesPayload,
+  WebhookUpdatePayload,
+} from '../types/webhook';
 
-export function createWebhook(data: {
-  name: string;
-  project?: string;
-  secret?: string;
-  url: string;
-}): Promise<{ webhook: T.Webhook }> {
+export function createWebhook(data: WebhookCreatePayload): Promise<{ webhook: WebhookResponse }> {
   return postJSON('/api/webhooks/create', data).catch(throwGlobalError);
 }
 
@@ -33,34 +36,25 @@ export function deleteWebhook(data: { webhook: string }): Promise<void | Respons
   return post('/api/webhooks/delete', data).catch(throwGlobalError);
 }
 
-export function searchWebhooks(data: { project?: string }): Promise<{ webhooks: T.Webhook[] }> {
+export function searchWebhooks(data: {
+  project?: string;
+}): Promise<{ webhooks: WebhookResponse[] }> {
   return getJSON('/api/webhooks/list', data).catch(throwGlobalError);
 }
 
-export function updateWebhook(data: {
-  webhook: string;
-  name: string;
-  secret?: string;
-  url: string;
-}): Promise<void | Response> {
+export function updateWebhook(data: WebhookUpdatePayload): Promise<void | Response> {
   return post('/api/webhooks/update', data).catch(throwGlobalError);
 }
 
-export function searchDeliveries(data: {
-  ceTaskId?: string;
-  componentKey?: string;
-  webhook?: string;
-  p?: number;
-  ps?: number;
-}): Promise<{
-  deliveries: T.WebhookDelivery[];
-  paging: T.Paging;
+export function searchDeliveries(data: WebhookSearchDeliveriesPayload): Promise<{
+  deliveries: WebhookDelivery[];
+  paging: Paging;
 }> {
   return getJSON('/api/webhooks/deliveries', data).catch(throwGlobalError);
 }
 
 export function getDelivery(data: {
   deliveryId: string;
-}): Promise<{ delivery: T.WebhookDelivery & { payload: string } }> {
+}): Promise<{ delivery: WebhookDelivery & { payload: string } }> {
   return getJSON('/api/webhooks/delivery', data).catch(throwGlobalError);
 }

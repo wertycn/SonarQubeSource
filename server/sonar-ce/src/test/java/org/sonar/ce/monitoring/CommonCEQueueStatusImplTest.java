@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,13 +21,12 @@ package org.sonar.ce.monitoring;
 
 import java.util.Optional;
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.db.DbClient;
 import org.sonar.server.property.InternalProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -35,10 +34,6 @@ import static org.mockito.Mockito.when;
 public abstract class CommonCEQueueStatusImplTest {
   private static final int SOME_RANDOM_MAX = 96535;
   private static final int SOME_PROCESSING_TIME = 8723;
-
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   private DbClient dbClient;
 
   protected CommonCEQueueStatusImplTest(DbClient dbClient) {
@@ -63,7 +58,7 @@ public abstract class CommonCEQueueStatusImplTest {
   public void addInProgress_increases_InProgress() {
     getUnderTest().addInProgress();
 
-    assertThat(getUnderTest().getInProgressCount()).isEqualTo(1);
+    assertThat(getUnderTest().getInProgressCount()).isOne();
     assertThat(getUnderTest().getErrorCount()).isZero();
     assertThat(getUnderTest().getSuccessCount()).isZero();
     assertThat(getUnderTest().getProcessingTime()).isZero();
@@ -82,10 +77,9 @@ public abstract class CommonCEQueueStatusImplTest {
 
   @Test
   public void addError_throws_IAE_if_time_is_less_than_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Processing time can not be < 0");
-
-    getUnderTest().addError(-1);
+    assertThatThrownBy(() -> getUnderTest().addError(-1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Processing time can not be < 0");
   }
 
   @Test
@@ -93,7 +87,7 @@ public abstract class CommonCEQueueStatusImplTest {
     getUnderTest().addError(SOME_PROCESSING_TIME);
 
     assertThat(getUnderTest().getInProgressCount()).isEqualTo(-1);
-    assertThat(getUnderTest().getErrorCount()).isEqualTo(1);
+    assertThat(getUnderTest().getErrorCount()).isOne();
     assertThat(getUnderTest().getSuccessCount()).isZero();
     assertThat(getUnderTest().getProcessingTime()).isEqualTo(SOME_PROCESSING_TIME);
   }
@@ -112,10 +106,9 @@ public abstract class CommonCEQueueStatusImplTest {
 
   @Test
   public void addSuccess_throws_IAE_if_time_is_less_than_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("Processing time can not be < 0");
-
-    getUnderTest().addSuccess(-1);
+    assertThatThrownBy(() -> getUnderTest().addSuccess(-1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("Processing time can not be < 0");
   }
 
   @Test
@@ -124,7 +117,7 @@ public abstract class CommonCEQueueStatusImplTest {
 
     assertThat(getUnderTest().getInProgressCount()).isEqualTo(-1);
     assertThat(getUnderTest().getErrorCount()).isZero();
-    assertThat(getUnderTest().getSuccessCount()).isEqualTo(1);
+    assertThat(getUnderTest().getSuccessCount()).isOne();
     assertThat(getUnderTest().getProcessingTime()).isEqualTo(SOME_PROCESSING_TIME);
   }
 

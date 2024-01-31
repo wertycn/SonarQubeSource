@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.db.component;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
@@ -53,11 +54,6 @@ public class ApplicationProjectsDao implements Dao {
     return getMapper(dbSession).selectProjects(applicationUuid);
   }
 
-  public void remove(DbSession dbSession, String applicationUuid) {
-    getMapper(dbSession).removeApplicationBranchProjectBranchesByApplication(applicationUuid);
-    getMapper(dbSession).removeApplicationProjectsByApplication(applicationUuid);
-  }
-
   public void addProjectBranchToAppBranch(DbSession dbSession, BranchDto applicationBranch, BranchDto projectBranch) {
     getMapper(dbSession).addProjectBranchToAppBranch(
       uuidFactory.create(),
@@ -82,8 +78,12 @@ public class ApplicationProjectsDao implements Dao {
     getMapper(dbSession).removeProjectBranchFromAppBranch(applicationBranchUuid, projectBranchUuid);
   }
 
-  public Set<BranchDto> selectProjectBranchesFromAppBranch(DbSession dbSession, String applicationBranchUuid) {
-    return getMapper(dbSession).selectProjectBranchesFromAppBranch(applicationBranchUuid);
+  public Set<BranchDto> selectProjectBranchesFromAppBranchUuid(DbSession dbSession, String applicationBranchUuid) {
+    return getMapper(dbSession).selectProjectBranchesFromAppBranchUuid(applicationBranchUuid);
+  }
+
+  public Set<BranchDto> selectProjectBranchesFromAppBranchKey(DbSession dbSession, String applicationUuid, String applicationBranchKey) {
+    return getMapper(dbSession).selectProjectBranchesFromAppBranchKey(applicationUuid, applicationBranchKey);
   }
 
   public Set<ProjectDto> selectApplicationsFromProjectBranch(DbSession dbSession, String projectUuid, String branchKey) {
@@ -94,15 +94,11 @@ public class ApplicationProjectsDao implements Dao {
     return getMapper(dbSession).selectApplicationsFromProjects(projectUuids);
   }
 
+  public List<BranchDto> selectProjectsMainBranchesOfApplication(DbSession dbSession, String applicationUuid) {
+    return getMapper(dbSession).selectProjectsMainBranchesOfApplication(applicationUuid);
+  }
+
   private static ApplicationProjectsMapper getMapper(DbSession session) {
     return session.getMapper(ApplicationProjectsMapper.class);
-  }
-
-  public void updateApplicationBranchName(DbSession dbSession, String applicationBranchUuid, String newName) {
-    getMapper(dbSession).updateApplicationBranchName(applicationBranchUuid, newName);
-  }
-
-  public void removeAllProjectBranchesOfAppBranch(DbSession dbSession, String applicationBranchUuid) {
-    getMapper(dbSession).removeAllProjectBranchesOfAppBranch(applicationBranchUuid);
   }
 }

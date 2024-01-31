@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,12 +21,12 @@ package org.sonar.server.qualityprofile.ws;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.api.resources.Language;
 import org.sonar.api.resources.Languages;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.WebService;
-import org.sonar.core.util.stream.MoreCollectors;
 
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
@@ -141,6 +141,6 @@ public class QProfileReference {
     action.createParam(PARAM_LANGUAGE)
       .setDescription("Quality profile language.")
       .setRequired(true)
-      .setPossibleValues(Arrays.stream(languages.all()).map(Language::getKey).collect(MoreCollectors.toSet()));
+      .setPossibleValues(Arrays.stream(languages.all()).map(Language::getKey).collect(Collectors.toSet()));
   }
 }

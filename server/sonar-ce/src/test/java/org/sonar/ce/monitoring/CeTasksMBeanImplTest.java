@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,21 +33,23 @@ import javax.management.InstanceNotFoundException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import org.apache.commons.lang.RandomStringUtils;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.sonar.ce.configuration.CeConfiguration;
 import org.sonar.ce.taskprocessor.CeWorker;
 import org.sonar.ce.taskprocessor.CeWorkerController;
 import org.sonar.ce.taskprocessor.CeWorkerFactory;
-import org.sonar.core.util.stream.MoreCollectors;
+import org.sonar.process.Jmx;
 import org.sonar.process.systeminfo.protobuf.ProtobufSystemInfo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sonar.ce.monitoring.CeTasksMBean.OBJECT_NAME;
 
 public class CeTasksMBeanImplTest {
   private static final long PENDING_COUNT = 2;
-  private static final Optional<Long> PENDING_TIME = Optional.of(10_000L);
+  private static final long PENDING_TIME = 10_000L;
   private static final long IN_PROGRESS_COUNT = 5;
   private static final long ERROR_COUNT = 10;
   private static final long SUCCESS_COUNT = 13;
@@ -61,10 +63,16 @@ public class CeTasksMBeanImplTest {
       when(res.getUUID()).thenReturn(uuid);
       return res;
     })
-    .collect(MoreCollectors.toSet());
+    .collect(Collectors.toSet());
 
-  private CeWorkerController ceWorkerController = mock(CeWorkerController.class);
-  private CeTasksMBeanImpl underTest = new CeTasksMBeanImpl(new DumbCEQueueStatus(), new DumbCeConfiguration(), new DumbCeWorkerFactory(), ceWorkerController);
+  private final CeWorkerController ceWorkerController = mock(CeWorkerController.class);
+  private final CeTasksMBeanImpl underTest = new CeTasksMBeanImpl(new DumbCEQueueStatus(), new DumbCeConfiguration(), new DumbCeWorkerFactory(), ceWorkerController);
+
+  @BeforeClass
+  public static void beforeClass() {
+    // if any other class starts a container where CeTasksMBeanImpl is added, it will have been registered
+    Jmx.unregister(OBJECT_NAME);
+  }
 
   @Test
   public void register_and_unregister() throws Exception {
@@ -84,7 +92,7 @@ public class CeTasksMBeanImplTest {
   @CheckForNull
   private ObjectInstance getMBean() throws Exception {
     try {
-      return ManagementFactory.getPlatformMBeanServer().getObjectInstance(new ObjectName(CeTasksMBean.OBJECT_NAME));
+      return ManagementFactory.getPlatformMBeanServer().getObjectInstance(new ObjectName(OBJECT_NAME));
     } catch (InstanceNotFoundException e) {
       return null;
     }
@@ -114,9 +122,10 @@ public class CeTasksMBeanImplTest {
   public void getWorkerUuids_returns_ordered_list_of_uuids_of_worker_from_CeWorkerFactory_instance() {
     List<String> workerUuids = underTest.getWorkerUuids();
 
-    assertThat(workerUuids).isEqualTo(WORKERS.stream().map(CeWorker::getUUID).sorted().collect(Collectors.toList()));
-    // ImmutableSet can not be serialized
-    assertThat(workerUuids).isNotInstanceOf(ImmutableSet.class);
+    assertThat(workerUuids).
+      isEqualTo(WORKERS.stream().map(CeWorker::getUUID).sorted().toList())
+      // ImmutableSet can not be serialized
+      .isNotInstanceOf(ImmutableSet.class);
   }
 
   @Test
@@ -136,9 +145,10 @@ public class CeTasksMBeanImplTest {
 
     List<String> enabledWorkerUuids = underTest.getEnabledWorkerUuids();
 
-    assertThat(enabledWorkerUuids).isEqualTo(Stream.of(enabledWorkers).map(CeWorker::getUUID).sorted().collect(Collectors.toList()));
-    // ImmutableSet can not be serialized
-    assertThat(enabledWorkerUuids).isNotInstanceOf(ImmutableSet.class);
+    assertThat(enabledWorkerUuids)
+      .isEqualTo(Stream.of(enabledWorkers).map(CeWorker::getUUID).sorted().toList())
+      // ImmutableSet can not be serialized
+      .isNotInstanceOf(ImmutableSet.class);
   }
 
   @Test
@@ -157,7 +167,7 @@ public class CeTasksMBeanImplTest {
 
     @Override
     public Optional<Long> getLongestTimePending() {
-      return PENDING_TIME;
+      return Optional.of(PENDING_TIME);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { PopupZLevel, SearchSelectDropdown, SubHeading } from 'design-system';
 import * as React from 'react';
-import { connect } from 'react-redux';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { Options } from 'react-select';
 import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
-import { getSettingsAppAllCategories, Store } from '../../../store/rootReducer';
+import { translate } from '../../../helpers/l10n';
+import { CATEGORY_OVERRIDES, LANGUAGES_CATEGORY } from '../constants';
 import { getCategoryName } from '../utils';
 import { AdditionalCategoryComponentProps } from './AdditionalCategories';
-import { LANGUAGES_CATEGORY } from './AdditionalCategoryKeys';
 import CategoryDefinitionsList from './CategoryDefinitionsList';
-import CATEGORY_OVERRIDES from './CategoryOverrides';
 
 export interface LanguagesProps extends AdditionalCategoryComponentProps {
-  categories: string[];
   location: Location;
   router: Router;
 }
@@ -41,33 +38,56 @@ interface SelectOption {
   value: string;
 }
 
-export function Languages(props: LanguagesProps) {
-  const { categories, component, location, router, selectedCategory } = props;
+export function Languages(props: Readonly<LanguagesProps>) {
+  const { categories, component, definitions, location, router, selectedCategory } = props;
   const { availableLanguages, selectedLanguage } = getLanguages(categories, selectedCategory);
 
   const handleOnChange = (newOption: SelectOption) => {
     router.push({
       ...location,
-      query: { ...location.query, category: newOption.originalValue }
+      query: { ...location.query, category: newOption.originalValue },
     });
   };
 
+  const handleLanguagesSearch = React.useCallback(
+    (query: string, cb: (options: Options<SelectOption>) => void) => {
+      const normalizedQuery = query.toLowerCase();
+
+      cb(
+        availableLanguages.filter(
+          (lang) =>
+            lang.label.toLowerCase().includes(normalizedQuery) ||
+            lang.value.includes(normalizedQuery),
+        ),
+      );
+    },
+    [availableLanguages],
+  );
+
   return (
     <>
-      <h2 className="settings-sub-category-name">{translate('property.category.languages')}</h2>
+      <SubHeading id="languages-category-title">
+        {translate('property.category.languages')}
+      </SubHeading>
       <div data-test="language-select">
-        <Select
-          className="input-large"
+        <SearchSelectDropdown
+          defaultOptions={availableLanguages}
+          controlAriaLabel={translate('property.category.languages')}
+          className="input-large select-settings-language"
           onChange={handleOnChange}
-          options={availableLanguages}
+          loadOptions={handleLanguagesSearch}
           placeholder={translate('settings.languages.select_a_language_placeholder')}
-          value={selectedLanguage}
+          size="large"
+          zLevel={PopupZLevel.Content}
+          value={availableLanguages.find((language) => language.value === selectedLanguage)}
         />
       </div>
       {selectedLanguage && (
-        <div className="settings-sub-category">
-          <CategoryDefinitionsList category={selectedLanguage} component={component} />
-        </div>
+        <CategoryDefinitionsList
+          category={selectedLanguage}
+          component={component}
+          definitions={definitions}
+        />
       )}
     </>
   );
@@ -78,30 +98,26 @@ function getLanguages(categories: string[], selectedCategory: string) {
   const lowerCasedSelectedCategory = selectedCategory.toLowerCase();
 
   const availableLanguages = categories
-    .filter(c => CATEGORY_OVERRIDES[c.toLowerCase()] === lowerCasedLanguagesCategory)
-    .map(c => ({
+    .filter((c) => CATEGORY_OVERRIDES[c.toLowerCase()] === lowerCasedLanguagesCategory)
+    .map((c) => ({
       label: getCategoryName(c),
       value: c.toLowerCase(),
-      originalValue: c
+      originalValue: c,
     }));
 
   let selectedLanguage = undefined;
 
   if (
     lowerCasedSelectedCategory !== lowerCasedLanguagesCategory &&
-    availableLanguages.find(c => c.value === lowerCasedSelectedCategory)
+    availableLanguages.find((c) => c.value === lowerCasedSelectedCategory)
   ) {
     selectedLanguage = lowerCasedSelectedCategory;
   }
 
   return {
     availableLanguages,
-    selectedLanguage
+    selectedLanguage,
   };
 }
 
-export default withRouter(
-  connect((state: Store) => ({
-    categories: getSettingsAppAllCategories(state)
-  }))(Languages)
-);
+export default withRouter(Languages);

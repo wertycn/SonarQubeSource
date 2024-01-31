@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,178 +17,304 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
+import {
+  ButtonPrimary,
+  ContentCell,
+  GreySeparator,
+  InputField,
+  InputSelect,
+  Spinner,
+  SubHeading,
+  Table,
+  TableRow,
+} from 'design-system';
+import { isEmpty } from 'lodash';
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { generateToken, getTokens } from '../../../api/user-tokens';
+import { getScannableProjects } from '../../../api/components';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
+import { LabelValueSelectOption } from '../../../components/controls/Select';
+import { translate } from '../../../helpers/l10n';
+import {
+  EXPIRATION_OPTIONS,
+  computeTokenExpirationDate,
+  getAvailableExpirationOptions,
+} from '../../../helpers/tokens';
+import { hasGlobalPermission } from '../../../helpers/users';
+import { useGenerateTokenMutation, useUserTokensQuery } from '../../../queries/users';
+import { Permissions } from '../../../types/permissions';
+import { TokenExpiration, TokenType } from '../../../types/token';
+import { CurrentUser } from '../../../types/users';
 import TokensFormItem, { TokenDeleteConfirmation } from './TokensFormItem';
 import TokensFormNewToken from './TokensFormNewToken';
 
 interface Props {
+  currentUser: CurrentUser;
   deleteConfirmation: TokenDeleteConfirmation;
+  displayTokenTypeInput: boolean;
   login: string;
-  updateTokensCount?: (login: string, tokensCount: number) => void;
 }
 
-interface State {
-  generating: boolean;
-  loading: boolean;
-  newToken?: { name: string; token: string };
-  newTokenName: string;
-  tokens: T.UserToken[];
-}
+const COLUMN_WIDTHS = ['auto', 'auto', 'auto', 'auto', 'auto', 'auto', '5%'];
 
-export default class TokensForm extends React.PureComponent<Props, State> {
-  mounted = false;
-  state: State = {
-    generating: false,
-    loading: true,
-    newTokenName: '',
-    tokens: []
-  };
+export function TokensForm(props: Readonly<Props>) {
+  const { currentUser, deleteConfirmation, displayTokenTypeInput, login } = props;
+  const { data: tokens, isLoading: loading } = useUserTokensQuery(login);
+  const [newToken, setNewToken] = React.useState<{ name: string; token: string }>();
+  const [newTokenName, setNewTokenName] = React.useState('');
+  const [newTokenType, setNewTokenType] = React.useState<TokenType>();
+  const [projects, setProjects] = React.useState<LabelValueSelectOption[]>([]);
+  const [selectedProject, setSelectedProject] = React.useState<LabelValueSelectOption>();
 
-  componentDidMount() {
-    this.mounted = true;
-    this.fetchTokens();
-  }
+  const [newTokenExpiration, setNewTokenExpiration] = React.useState<TokenExpiration>(
+    TokenExpiration.OneMonth,
+  );
 
-  componentWillUnmount() {
-    this.mounted = false;
-  }
+  const [tokenExpirationOptions, setTokenExpirationOptions] =
+    React.useState<{ value: TokenExpiration; label: string }[]>(EXPIRATION_OPTIONS);
 
-  fetchTokens = () => {
-    this.setState({ loading: true });
-    getTokens(this.props.login).then(
-      tokens => {
-        if (this.mounted) {
-          this.setState({ loading: false, tokens });
-        }
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-      }
-    );
-  };
+  const { mutateAsync: generate, isLoading: generating } = useGenerateTokenMutation();
 
-  updateTokensCount = () => {
-    if (this.props.updateTokensCount) {
-      this.props.updateTokensCount(this.props.login, this.state.tokens.length);
+  const tokenTypeOptions = React.useMemo(() => {
+    const value = [{ label: translate('users.tokens', TokenType.User), value: TokenType.User }];
+
+    if (hasGlobalPermission(currentUser, Permissions.Scan)) {
+      value.unshift({
+        label: translate('users.tokens', TokenType.Global),
+        value: TokenType.Global,
+      });
     }
-  };
 
-  handleGenerateToken = (evt: React.SyntheticEvent<HTMLFormElement>) => {
-    evt.preventDefault();
-    if (this.state.newTokenName.length > 0) {
-      this.setState({ generating: true });
-      generateToken({ name: this.state.newTokenName, login: this.props.login }).then(
-        newToken => {
-          if (this.mounted) {
-            this.setState(state => {
-              const tokens = [
-                ...state.tokens,
-                { name: newToken.name, createdAt: newToken.createdAt }
-              ];
-              return { generating: false, newToken, newTokenName: '', tokens };
-            }, this.updateTokensCount);
-          }
-        },
-        () => {
-          if (this.mounted) {
-            this.setState({ generating: false });
-          }
-        }
-      );
+    if (!isEmpty(projects)) {
+      value.unshift({
+        label: translate('users.tokens', TokenType.Project),
+        value: TokenType.Project,
+      });
     }
-  };
 
-  handleRevokeToken = (revokedToken: T.UserToken) => {
-    this.setState(
-      state => ({
-        tokens: state.tokens.filter(token => token.name !== revokedToken.name)
+    return value;
+  }, [projects, currentUser]);
+
+  React.useEffect(() => {
+    if (tokenTypeOptions.length === 1) {
+      setNewTokenType(tokenTypeOptions[0].value);
+    }
+  }, [tokenTypeOptions]);
+
+  React.useEffect(() => {
+    getAvailableExpirationOptions()
+      .then((options) => {
+        setTokenExpirationOptions(options);
+      })
+      .catch(() => {});
+
+    if (displayTokenTypeInput) {
+      getScannableProjects()
+        .then(({ projects: projectArray }) => {
+          const projects = projectArray.map((project) => ({
+            label: project.name,
+            value: project.key,
+          }));
+
+          setProjects(projects);
+
+          setSelectedProject(projects.length === 1 ? projects[0] : undefined);
+        })
+        .catch(() => {});
+    }
+  }, [displayTokenTypeInput, currentUser]);
+
+  const handleGenerateToken = (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    generate({
+      login,
+      name: newTokenName,
+      type: newTokenType,
+      ...(newTokenType === TokenType.Project &&
+        selectedProject !== undefined && {
+          projectKey: selectedProject.value,
+          projectName: selectedProject.label,
+        }),
+      ...(newTokenExpiration !== TokenExpiration.NoExpiration && {
+        expirationDate: computeTokenExpirationDate(newTokenExpiration),
       }),
-      this.updateTokensCount
-    );
+    })
+      .then((newToken) => {
+        setNewToken(newToken);
+        setNewTokenName('');
+        setSelectedProject(undefined);
+        setNewTokenType(tokenTypeOptions.length === 1 ? tokenTypeOptions[0].value : undefined);
+        setNewTokenExpiration(TokenExpiration.OneMonth);
+      })
+      .catch(() => {});
   };
 
-  handleNewTokenChange = (evt: React.SyntheticEvent<HTMLInputElement>) =>
-    this.setState({ newTokenName: evt.currentTarget.value });
-
-  renderItems() {
-    const { tokens } = this.state;
-    if (tokens.length <= 0) {
-      return (
-        <tr>
-          <td className="note" colSpan={3}>
-            {translate('users.no_tokens')}
-          </td>
-        </tr>
-      );
+  const isSubmitButtonDisabled = () => {
+    if (!displayTokenTypeInput) {
+      return generating || newTokenName.length <= 0;
     }
-    return tokens.map(token => (
-      <TokensFormItem
-        deleteConfirmation={this.props.deleteConfirmation}
-        key={token.name}
-        login={this.props.login}
-        onRevokeToken={this.handleRevokeToken}
-        token={token}
-      />
-    ));
-  }
 
-  render() {
-    const { generating, loading, newToken, newTokenName, tokens } = this.state;
-    const customSpinner = (
-      <tr>
-        <td>
-          <i className="spinner" />
-        </td>
-      </tr>
-    );
-    return (
-      <>
-        <h3 className="spacer-bottom">{translate('users.generate_tokens')}</h3>
-        <form
-          autoComplete="off"
-          className="display-flex-center"
-          id="generate-token-form"
-          onSubmit={this.handleGenerateToken}>
-          <input
-            className="input-large spacer-right"
+    if (generating || newTokenName.length <= 0) {
+      return true;
+    }
+
+    if (newTokenType === TokenType.Project) {
+      return !selectedProject?.value;
+    }
+
+    return !newTokenType;
+  };
+
+  const handleNewTokenChange = (evt: React.SyntheticEvent<HTMLInputElement>) => {
+    setNewTokenName(evt.currentTarget.value);
+  };
+
+  const handleNewTokenTypeChange = (newTokenType: { value: unknown } | null) => {
+    setNewTokenType(newTokenType?.value as TokenType);
+  };
+
+  const handleProjectChange = (selectedProject: LabelValueSelectOption) => {
+    setSelectedProject(selectedProject);
+  };
+
+  const handleNewTokenExpirationChange = (newTokenExpiration: { value: unknown } | null) => {
+    setNewTokenExpiration(newTokenExpiration?.value as TokenExpiration);
+  };
+
+  const tableHeader = (
+    <TableRow>
+      <ContentCell>{translate('name')}</ContentCell>
+      <ContentCell>{translate('my_account.token_type')}</ContentCell>
+      <ContentCell>{translate('my_account.project_name')}</ContentCell>
+      <ContentCell>{translate('my_account.tokens_last_usage')}</ContentCell>
+      <ContentCell>{translate('created')}</ContentCell>
+      <ContentCell>{translate('my_account.tokens.expiration')}</ContentCell>
+    </TableRow>
+  );
+
+  return (
+    <>
+      <GreySeparator className="sw-mb-4 sw-mt-6" />
+
+      <SubHeading as="h2">{translate('users.tokens.generate')}</SubHeading>
+
+      <form autoComplete="off" className="sw-flex sw-items-center" onSubmit={handleGenerateToken}>
+        <div className="sw-flex sw-flex-col sw-mr-2">
+          <label htmlFor="token-name" className="sw-font-bold">
+            {translate('users.tokens.name')}
+          </label>
+
+          <InputField
+            className="sw-mt-2 sw-w-auto it__token-name"
+            id="token-name"
             maxLength={100}
-            onChange={this.handleNewTokenChange}
-            placeholder={translate('users.enter_token_name')}
-            required={true}
+            onChange={handleNewTokenChange}
+            placeholder={translate('users.tokens.enter_name')}
+            required
             type="text"
             value={newTokenName}
           />
-          <SubmitButton
-            className="js-generate-token"
-            disabled={generating || newTokenName.length <= 0}>
-            {translate('users.generate')}
-          </SubmitButton>
-        </form>
+        </div>
 
-        {newToken && <TokensFormNewToken token={newToken} />}
+        {displayTokenTypeInput && (
+          <>
+            <div className="sw-flex sw-flex-col sw-mr-2">
+              <label htmlFor="token-select-type" className="sw-font-bold">
+                {translate('users.tokens.type')}
+              </label>
 
-        <table className="data zebra big-spacer-top">
-          <thead>
-            <tr>
-              <th>{translate('name')}</th>
-              <th>{translate('my_account.tokens_last_usage')}</th>
-              <th className="text-right">{translate('created')}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            <DeferredSpinner customSpinner={customSpinner} loading={loading && tokens.length <= 0}>
-              {this.renderItems()}
-            </DeferredSpinner>
-          </tbody>
-        </table>
-      </>
-    );
-  }
+              <InputSelect
+                className="sw-mt-2 it__token-type"
+                inputId="token-select-type"
+                isSearchable={false}
+                onChange={handleNewTokenTypeChange}
+                options={tokenTypeOptions}
+                placeholder={translate('users.tokens.select_type')}
+                value={
+                  newTokenType
+                    ? tokenTypeOptions.find((option) => option.value === newTokenType)
+                    : null
+                }
+              />
+            </div>
+
+            {newTokenType === TokenType.Project && (
+              <div className="sw-flex sw-flex-col sw-mr-2">
+                <label htmlFor="token-select-project" className="sw-font-bold">
+                  {translate('users.tokens.project')}
+                </label>
+
+                <InputSelect
+                  className="sw-mt-2 it__project"
+                  inputId="token-select-project"
+                  onChange={handleProjectChange}
+                  options={projects}
+                  placeholder={translate('users.tokens.select_project')}
+                  value={selectedProject}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="sw-flex sw-flex-col sw-mr-2">
+          <label htmlFor="token-select-expiration" className="sw-font-bold">
+            {translate('users.tokens.expires_in')}
+          </label>
+
+          <InputSelect
+            className="sw-mt-2"
+            inputId="token-select-expiration"
+            isSearchable={false}
+            onChange={handleNewTokenExpirationChange}
+            options={tokenExpirationOptions}
+            value={tokenExpirationOptions.find((option) => option.value === newTokenExpiration)}
+          />
+        </div>
+
+        <ButtonPrimary
+          className="it__generate-token"
+          disabled={isSubmitButtonDisabled()}
+          style={{ marginTop: 'auto' }}
+          type="submit"
+        >
+          {translate('users.generate')}
+        </ButtonPrimary>
+      </form>
+
+      {newToken && <TokensFormNewToken token={newToken} />}
+
+      <GreySeparator className="sw-mb-4 sw-mt-6" />
+
+      <Spinner loading={loading}>
+        <Table
+          className="sw-min-h-40 sw-w-full"
+          columnCount={COLUMN_WIDTHS.length}
+          columnWidths={COLUMN_WIDTHS}
+          header={tableHeader}
+          noHeaderTopBorder
+        >
+          {tokens && tokens.length <= 0 ? (
+            <TableRow>
+              <ContentCell className="sw-body-lg" colSpan={7}>
+                {translate('users.no_tokens')}
+              </ContentCell>
+            </TableRow>
+          ) : (
+            tokens?.map((token) => (
+              <TokensFormItem
+                deleteConfirmation={deleteConfirmation}
+                key={token.name}
+                login={login}
+                token={token}
+              />
+            ))
+          )}
+        </Table>
+      </Spinner>
+    </>
+  );
 }
+
+export default withCurrentUserContext(TokensForm);

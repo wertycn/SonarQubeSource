@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,24 +25,29 @@ public class QualityGateWsModule extends Module {
   @Override
   protected void configureModule() {
     add(
-      QualityGatesWsSupport.class,
-      QualityGatesWs.class,
-      ListAction.class,
-      SearchAction.class,
-      ShowAction.class,
-      CreateAction.class,
-      RenameAction.class,
+      AddGroupAction.class,
+      AddUserAction.class,
       CopyAction.class,
-      DestroyAction.class,
-      SetAsDefaultAction.class,
-      SelectAction.class,
-      DeselectAction.class,
+      CreateAction.class,
       CreateConditionAction.class,
       DeleteConditionAction.class,
-      UpdateConditionAction.class,
+      DeselectAction.class,
+      DestroyAction.class,
+      GetByProjectAction.class,
+      ListAction.class,
       ProjectStatusAction.class,
-      GetByProjectAction.class
-
+      QualityGatesWs.class,
+      QualityGatesWsSupport.class,
+      RemoveGroupAction.class,
+      RemoveUserAction.class,
+      RenameAction.class,
+      SearchAction.class,
+      SearchGroupsAction.class,
+      SearchUsersAction.class,
+      SelectAction.class,
+      SetAsDefaultAction.class,
+      ShowAction.class,
+      UpdateConditionAction.class
     );
   }
 }

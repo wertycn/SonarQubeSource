@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
-import { sanitize } from 'dompurify';
+import styled from '@emotion/styled';
+import {
+  DangerButtonPrimary,
+  DestructiveIcon,
+  HtmlFormatter,
+  InteractiveIcon,
+  LightLabel,
+  Modal,
+  PencilIcon,
+  TrashIcon,
+  themeBorder,
+} from 'design-system';
 import * as React from 'react';
-import { Button, DeleteButton, EditButton } from 'sonar-ui-common/components/controls/buttons';
-import Dropdown, { DropdownOverlay } from 'sonar-ui-common/components/controls/Dropdown';
-import Toggler from 'sonar-ui-common/components/controls/Toggler';
-import DateTimeFormatter from 'sonar-ui-common/components/intl/DateTimeFormatter';
-import { PopupPlacement } from 'sonar-ui-common/components/ui/popups';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
+import DateTimeFormatter from '../../../components/intl/DateTimeFormatter';
 import IssueChangelogDiff from '../../../components/issue/components/IssueChangelogDiff';
-import Avatar from '../../../components/ui/Avatar';
+import LegacyAvatar from '../../../components/ui/LegacyAvatar';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import { sanitizeUserInput } from '../../../helpers/sanitize';
 import { Hotspot, ReviewHistoryType } from '../../../types/security-hotspots';
 import { getHotspotReviewHistory } from '../utils';
-import HotspotCommentPopup from './HotspotCommentPopup';
+import HotspotCommentModal from './HotspotCommentModal';
 
 export interface HotspotReviewHistoryProps {
   hotspot: Hotspot;
@@ -40,47 +47,37 @@ export interface HotspotReviewHistoryProps {
 
 export default function HotspotReviewHistory(props: HotspotReviewHistoryProps) {
   const { hotspot } = props;
-  const reviewHistory = getHotspotReviewHistory(hotspot);
-  const [editedCommentKey, setEditedCommentKey] = React.useState('');
+  const history = getHotspotReviewHistory(hotspot);
+  const [editCommentKey, setEditCommentKey] = React.useState('');
+  const [deleteCommentKey, setDeleteCommentKey] = React.useState('');
 
   return (
-    <>
-      {reviewHistory.map((historyElt, historyIndex) => {
+    <ul>
+      {history.map((historyElt, historyIndex) => {
         const { user, type, diffs, date, html, key, updatable, markdown } = historyElt;
         return (
-          <div
-            className={classNames('padded', { 'bordered-top': historyIndex > 0 })}
-            key={historyIndex}>
-            <div className="display-flex-center">
-              {user.name && (
-                <>
-                  <Avatar
-                    className="little-spacer-right"
-                    hash={user.avatar}
-                    name={user.name}
-                    size={20}
-                  />
-                  <strong>
-                    {user.active ? user.name : translateWithParameters('user.x_deleted', user.name)}
-                  </strong>
-                  {type === ReviewHistoryType.Creation && (
-                    <span className="little-spacer-left">
-                      {translate('hotspots.review_history.created')}
-                    </span>
-                  )}
-                  {type === ReviewHistoryType.Comment && (
-                    <span className="little-spacer-left">
-                      {translate('hotspots.review_history.comment_added')}
-                    </span>
-                  )}
-                  <span className="little-spacer-left little-spacer-right">-</span>
-                </>
-              )}
+          <li className="sw-p-2 sw-body-sm" key={historyIndex}>
+            <div className="sw-body-sm-highlight sw-mb-1">
               <DateTimeFormatter date={date} />
             </div>
+            <LightLabel as="div" className="sw-flex sw-gap-2">
+              {user.name && (
+                <div className="sw-flex sw-items-center sw-gap-1">
+                  <LegacyAvatar hash={user.avatar} name={user.name} size={20} />
+                  <span className="sw-body-sm-highlight">
+                    {user.active ? user.name : translateWithParameters('user.x_deleted', user.name)}
+                  </span>
+                </div>
+              )}
+
+              {type === ReviewHistoryType.Creation && translate('hotspots.review_history.created')}
+
+              {type === ReviewHistoryType.Comment &&
+                translate('hotspots.review_history.comment_added')}
+            </LightLabel>
 
             {type === ReviewHistoryType.Diff && diffs && (
-              <div className="spacer-top">
+              <div className="sw-mt-2">
                 {diffs.map((diff, diffIndex) => (
                   <IssueChangelogDiff diff={diff} key={diffIndex} />
                 ))}
@@ -88,56 +85,70 @@ export default function HotspotReviewHistory(props: HotspotReviewHistoryProps) {
             )}
 
             {type === ReviewHistoryType.Comment && key && html && markdown && (
-              <div className="spacer-top display-flex-space-between">
-                <div className="markdown" dangerouslySetInnerHTML={{ __html: sanitize(html) }} />
+              <div className="sw-mt-2 sw-flex sw-justify-between">
+                <CommentBox
+                  className="sw-pl-2 sw-ml-2 sw-body-sm"
+                  // eslint-disable-next-line react/no-danger
+                  dangerouslySetInnerHTML={{ __html: sanitizeUserInput(html) }}
+                />
+
                 {updatable && (
-                  <div>
-                    <div className="dropdown">
-                      <Toggler
-                        onRequestClose={() => {
-                          setEditedCommentKey('');
-                        }}
-                        open={key === editedCommentKey}
-                        overlay={
-                          <DropdownOverlay placement={PopupPlacement.BottomRight}>
-                            <HotspotCommentPopup
-                              markdownComment={markdown}
-                              onCancelEdit={() => setEditedCommentKey('')}
-                              onCommentEditSubmit={comment => {
-                                setEditedCommentKey('');
-                                props.onEditComment(key, comment);
-                              }}
-                            />
-                          </DropdownOverlay>
-                        }>
-                        <EditButton
-                          className="button-small"
-                          onClick={() => setEditedCommentKey(key)}
-                        />
-                      </Toggler>
-                    </div>
-                    <Dropdown
-                      onOpen={() => setEditedCommentKey('')}
-                      overlay={
-                        <div className="padded abs-width-150">
-                          <p>{translate('issue.comment.delete_confirm_message')}</p>
-                          <Button
-                            className="button-red big-spacer-top pull-right"
-                            onClick={() => props.onDeleteComment(key)}>
-                            {translate('delete')}
-                          </Button>
-                        </div>
-                      }
-                      overlayPlacement={PopupPlacement.BottomRight}>
-                      <DeleteButton className="button-small" />
-                    </Dropdown>
+                  <div className="sw-flex sw-gap-6">
+                    <InteractiveIcon
+                      Icon={PencilIcon}
+                      aria-label={translate('issue.comment.edit')}
+                      onClick={() => setEditCommentKey(key)}
+                      size="small"
+                      stopPropagation={false}
+                    />
+                    <DestructiveIcon
+                      Icon={TrashIcon}
+                      aria-label={translate('issue.comment.delete')}
+                      onClick={() => setDeleteCommentKey(key)}
+                      size="small"
+                      stopPropagation={false}
+                    />
                   </div>
+                )}
+
+                {editCommentKey === key && (
+                  <HotspotCommentModal
+                    value={markdown}
+                    onCancel={() => setEditCommentKey('')}
+                    onSubmit={(comment) => {
+                      setEditCommentKey('');
+                      props.onEditComment(key, comment);
+                    }}
+                  />
+                )}
+
+                {deleteCommentKey === key && (
+                  <Modal
+                    headerTitle={translate('issue.comment.delete')}
+                    onClose={() => setDeleteCommentKey('')}
+                    body={<p>{translate('issue.comment.delete_confirm_message')}</p>}
+                    primaryButton={
+                      <DangerButtonPrimary
+                        onClick={() => {
+                          setDeleteCommentKey('');
+                          props.onDeleteComment(key);
+                        }}
+                      >
+                        {translate('delete')}
+                      </DangerButtonPrimary>
+                    }
+                    secondaryButtonLabel={translate('cancel')}
+                  />
                 )}
               </div>
             )}
-          </div>
+          </li>
         );
       })}
-    </>
+    </ul>
   );
 }
+
+const CommentBox = styled(HtmlFormatter)`
+  border-left: ${themeBorder('default', 'activityCommentPipe')};
+`;

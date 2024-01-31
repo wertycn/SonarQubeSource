@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,7 +23,7 @@ import java.util.List;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.property.PropertyDto;
 import org.sonar.db.property.PropertyQuery;
 
@@ -38,28 +38,29 @@ public class FavoriteDbTester {
     this.dbSession = db.getSession();
   }
 
-  public void add(ComponentDto componentDto, String userUuid) {
+  public void add(EntityDto entity, String userUuid, String userLogin) {
     dbClient.propertiesDao().saveProperty(dbSession, new PropertyDto()
-      .setKey(PROP_FAVORITE_KEY)
-      .setUserUuid(userUuid)
-      .setComponentUuid(componentDto.uuid()));
+        .setKey(PROP_FAVORITE_KEY)
+        .setUserUuid(userUuid)
+        .setEntityUuid(entity.getUuid()),
+      userLogin, entity.getKey(), entity.getName(), entity.getQualifier());
     dbSession.commit();
   }
 
-  public boolean hasFavorite(ComponentDto componentDto, String userUuid) {
+  public boolean hasFavorite(EntityDto entity, String userUuid) {
     List<PropertyDto> result = dbClient.propertiesDao().selectByQuery(PropertyQuery.builder()
       .setKey(PROP_FAVORITE_KEY)
-      .setComponentUuid(componentDto.uuid())
+      .setEntityUuid(entity.getUuid())
       .setUserUuid(userUuid)
       .build(), dbSession);
 
     return !result.isEmpty();
   }
 
-  public boolean hasNoFavorite(ComponentDto componentDto) {
+  public boolean hasNoFavorite(EntityDto entity) {
     List<PropertyDto> result = dbClient.propertiesDao().selectByQuery(PropertyQuery.builder()
       .setKey(PROP_FAVORITE_KEY)
-      .setComponentUuid(componentDto.uuid())
+      .setEntityUuid(entity.getUuid())
       .build(), dbSession);
     return result.isEmpty();
   }

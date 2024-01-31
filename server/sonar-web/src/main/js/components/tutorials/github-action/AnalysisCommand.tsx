@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,41 +18,70 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { withAppState } from '../../hoc/withAppState';
+import withAvailableFeatures, {
+  WithAvailableFeaturesProps,
+} from '../../../app/components/available-features/withAvailableFeatures';
+import { Feature } from '../../../types/features';
+import { Component } from '../../../types/types';
 import { BuildTools } from '../types';
+import CFamily from './commands/CFamily';
 import DotNet from './commands/DotNet';
 import Gradle from './commands/Gradle';
 import JavaMaven from './commands/JavaMaven';
 import Others from './commands/Others';
 
-export interface AnalysisCommandProps {
-  appState: T.AppState;
-  buildTool?: BuildTools;
-  component: T.Component;
+export interface AnalysisCommandProps extends WithAvailableFeaturesProps {
+  buildTool: BuildTools;
+  mainBranchName: string;
+  component: Component;
 }
 
 export function AnalysisCommand(props: AnalysisCommandProps) {
-  const {
-    buildTool,
-    component,
-    appState: { branchesEnabled }
-  } = props;
-
-  if (!buildTool) {
-    return null;
-  }
+  const { buildTool, component, mainBranchName } = props;
+  const branchSupportEnabled = props.hasFeature(Feature.BranchSupport);
 
   switch (buildTool) {
     case BuildTools.Maven:
-      return <JavaMaven branchesEnabled={branchesEnabled} component={component} />;
+      return (
+        <JavaMaven
+          branchesEnabled={branchSupportEnabled}
+          mainBranchName={mainBranchName}
+          component={component}
+        />
+      );
     case BuildTools.Gradle:
-      return <Gradle branchesEnabled={branchesEnabled} component={component} />;
+      return (
+        <Gradle
+          branchesEnabled={branchSupportEnabled}
+          mainBranchName={mainBranchName}
+          component={component}
+        />
+      );
     case BuildTools.DotNet:
-      return <DotNet branchesEnabled={branchesEnabled} component={component} />;
+      return (
+        <DotNet
+          branchesEnabled={branchSupportEnabled}
+          mainBranchName={mainBranchName}
+          component={component}
+        />
+      );
+    case BuildTools.CFamily:
+      return (
+        <CFamily
+          branchesEnabled={branchSupportEnabled}
+          mainBranchName={mainBranchName}
+          component={component}
+        />
+      );
     case BuildTools.Other:
-      return <Others branchesEnabled={branchesEnabled} component={component} />;
+      return (
+        <Others
+          branchesEnabled={branchSupportEnabled}
+          mainBranchName={mainBranchName}
+          component={component}
+        />
+      );
   }
-  return null;
 }
 
-export default withAppState(AnalysisCommand);
+export default withAvailableFeatures(AnalysisCommand);

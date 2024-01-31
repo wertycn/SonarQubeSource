@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -58,6 +58,7 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
   private final DefaultIndexedFile indexedFile;
   private final String contents;
   private final Consumer<DefaultInputFile> metadataGenerator;
+  private final Consumer<DefaultInputFile> scmStatusGenerator;
 
   private boolean published;
   private boolean excludedForCoverage;
@@ -70,17 +71,22 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
   private Metadata metadata;
   private Collection<int[]> ignoreIssuesOnlineRanges;
   private BitSet executableLines;
+  private boolean markedAsUnchanged;
 
-  public DefaultInputFile(DefaultIndexedFile indexedFile, Consumer<DefaultInputFile> metadataGenerator) {
-    this(indexedFile, metadataGenerator, null);
+
+  public DefaultInputFile(DefaultIndexedFile indexedFile, Consumer<DefaultInputFile> metadataGenerator, Consumer<DefaultInputFile> scmStatusGenerator) {
+    this(indexedFile, metadataGenerator, null, scmStatusGenerator);
   }
 
   // For testing
-  public DefaultInputFile(DefaultIndexedFile indexedFile, Consumer<DefaultInputFile> metadataGenerator, @Nullable String contents) {
+  public DefaultInputFile(DefaultIndexedFile indexedFile, Consumer<DefaultInputFile> metadataGenerator, @Nullable String contents,
+    Consumer<DefaultInputFile> scmStatusGenerator) {
     super(indexedFile.scannerId());
     this.indexedFile = indexedFile;
     this.metadataGenerator = metadataGenerator;
+    this.scmStatusGenerator = scmStatusGenerator;
     this.metadata = null;
+    this.markedAsUnchanged = false;
     this.published = false;
     this.excludedForCoverage = false;
     this.contents = contents;
@@ -92,11 +98,26 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
     }
   }
 
+  private void checkScmStatus() {
+    if(status == null) {
+      scmStatusGenerator.accept(this);
+    }
+  }
+
   @Override
   public InputStream inputStream() throws IOException {
     return contents != null ? new ByteArrayInputStream(contents.getBytes(charset()))
       : new BOMInputStream(Files.newInputStream(path()),
       ByteOrderMark.UTF_8, ByteOrderMark.UTF_16LE, ByteOrderMark.UTF_16BE, ByteOrderMark.UTF_32LE, ByteOrderMark.UTF_32BE);
+  }
+
+  public boolean isMarkedAsUnchanged() {
+    return markedAsUnchanged;
+  }
+
+  public DefaultInputComponent setMarkedAsUnchanged(boolean markedAsUnchanged) {
+    this.markedAsUnchanged = markedAsUnchanged;
+    return this;
   }
 
   @Override
@@ -165,6 +186,11 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
     return indexedFile.absolutePath();
   }
 
+  @CheckForNull
+  public String oldRelativePath() {
+    return indexedFile.oldRelativePath();
+  }
+
   @Override
   public File file() {
     return indexedFile.file();
@@ -209,8 +235,16 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
    */
   @Override
   public Status status() {
-    checkMetadata();
+    checkScmStatus();
+    if(status == null) {
+      // scm might not be available, fallback to using hashes in the metadata
+      checkMetadata();
+    }
     return status;
+  }
+
+  public boolean isStatusSet() {
+    return status != null;
   }
 
   @Override
@@ -239,7 +273,8 @@ public class DefaultInputFile extends DefaultInputComponent implements InputFile
   /**
    * Digest hash of the file.
    */
-  public String hash() {
+  @Override
+  public String md5Hash() {
     checkMetadata();
     return metadata.hash();
   }

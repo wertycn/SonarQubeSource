@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,11 +29,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.join.ScoreMode;
+import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
@@ -51,11 +55,9 @@ import org.elasticsearch.search.aggregations.metrics.Sum;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.NestedSortBuilder;
-import org.sonar.api.measures.Metric;
 import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.utils.System2;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.server.es.EsClient;
 import org.sonar.server.es.SearchIdResult;
 import org.sonar.server.es.SearchOptions;
@@ -74,6 +76,7 @@ import org.sonar.server.permission.index.WebAuthorizationTypeSupport;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Collections.emptyList;
+import static java.util.Optional.ofNullable;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.nestedQuery;
 import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
@@ -100,11 +103,10 @@ import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_REVIEWED_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_RATING_KEY;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_REVIEW_RATING_KEY;
 import static org.sonar.api.measures.CoreMetrics.SQALE_RATING_KEY;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
-import static org.sonar.core.util.stream.MoreCollectors.uniqueIndex;
 import static org.sonar.server.es.EsUtils.escapeSpecialRegexChars;
 import static org.sonar.server.es.EsUtils.termsToMap;
 import static org.sonar.server.es.IndexType.FIELD_INDEX_TYPE;
+import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
 import static org.sonar.server.es.searchrequest.TopAggregationDefinition.STICKY;
 import static org.sonar.server.es.searchrequest.TopAggregationHelper.NO_EXTRA_FILTER;
 import static org.sonar.server.measure.index.ProjectMeasuresDoc.QUALITY_GATE_STATUS;
@@ -112,6 +114,7 @@ import static org.sonar.server.measure.index.ProjectMeasuresIndex.Facet.ALERT_ST
 import static org.sonar.server.measure.index.ProjectMeasuresIndex.Facet.LANGUAGES;
 import static org.sonar.server.measure.index.ProjectMeasuresIndex.Facet.TAGS;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_ANALYSED_AT;
+import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_CREATED_AT;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_KEY;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_LANGUAGES;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_MEASURES;
@@ -126,12 +129,12 @@ import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIEL
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.FIELD_TAGS;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.SUB_FIELD_MEASURES_KEY;
 import static org.sonar.server.measure.index.ProjectMeasuresIndexDefinition.TYPE_PROJECT_MEASURES;
+import static org.sonar.server.measure.index.ProjectMeasuresQuery.SORT_BY_CREATION_DATE;
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.SORT_BY_LAST_ANALYSIS_DATE;
 import static org.sonar.server.measure.index.ProjectMeasuresQuery.SORT_BY_NAME;
 import static org.sonarqube.ws.client.project.ProjectsWsParameters.FILTER_LANGUAGES;
 import static org.sonarqube.ws.client.project.ProjectsWsParameters.FILTER_QUALIFIER;
 import static org.sonarqube.ws.client.project.ProjectsWsParameters.FILTER_TAGS;
-import static org.sonarqube.ws.client.project.ProjectsWsParameters.MAX_PAGE_SIZE;
 
 @ServerSide
 public class ProjectMeasuresIndex {
@@ -141,6 +144,8 @@ public class ProjectMeasuresIndex {
   private static final double[] COVERAGE_THRESHOLDS = {30D, 50D, 70D, 80D};
   private static final double[] SECURITY_REVIEW_RATING_THRESHOLDS = {30D, 50D, 70D, 80D};
   private static final double[] DUPLICATIONS_THRESHOLDS = {3D, 5D, 10D, 20D};
+  private static final int SCROLL_SIZE = 5000;
+  private static final TimeValue KEEP_ALIVE_SCROLL_DURATION = TimeValue.timeValueMinutes(1L);
 
   public enum Facet {
     NCLOC(new RangeMeasureFacet(NCLOC_KEY, LINES_THRESHOLDS)),
@@ -198,7 +203,7 @@ public class ProjectMeasuresIndex {
   }
 
   private static final Map<String, Facet> FACETS_BY_NAME = Arrays.stream(Facet.values())
-    .collect(uniqueIndex(Facet::getName));
+    .collect(Collectors.toMap(Facet::getName, Function.identity()));
 
   private final EsClient client;
   private final WebAuthorizationTypeSupport authorizationTypeSupport;
@@ -235,11 +240,17 @@ public class ProjectMeasuresIndex {
       .map(FACETS_BY_NAME::get)
       .filter(Objects::nonNull)
       .map(Facet::getTopAggregationDef)
-      .collect(toSet(facetNames.size()));
+      .collect(Collectors.toSet());
     return new RequestFiltersComputer(allFilters, facets);
   }
 
-  public ProjectMeasuresStatistics searchTelemetryStatistics() {
+  public ProjectMeasuresStatistics searchSupportStatistics() {
+    SearchRequest projectMeasuresSearchRequest = buildProjectMeasureSearchRequest();
+    SearchResponse projectMeasures = client.search(projectMeasuresSearchRequest);
+    return buildProjectMeasuresStatistics(projectMeasures);
+  }
+
+  private static SearchRequest buildProjectMeasureSearchRequest() {
     SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
       .fetchSource(false)
       .size(0);
@@ -260,26 +271,31 @@ public class ProjectMeasuresIndex {
         .minDocCount(1)
         .order(BucketOrder.count(false))
         .subAggregation(sum(FIELD_NCLOC_DISTRIBUTION_NCLOC).field(FIELD_NCLOC_DISTRIBUTION_NCLOC))));
-
     searchSourceBuilder.aggregation(AggregationBuilders.nested(NCLOC_KEY, FIELD_MEASURES)
       .subAggregation(AggregationBuilders.filter(NCLOC_KEY + "_filter", termQuery(FIELD_MEASURES_MEASURE_KEY, NCLOC_KEY))
         .subAggregation(sum(NCLOC_KEY + "_filter_sum").field(FIELD_MEASURES_MEASURE_VALUE))));
+    searchSourceBuilder.size(SCROLL_SIZE);
 
+    return EsClient.prepareSearch(TYPE_PROJECT_MEASURES.getMainType()).source(searchSourceBuilder).scroll(KEEP_ALIVE_SCROLL_DURATION);
+  }
+
+  private static ProjectMeasuresStatistics buildProjectMeasuresStatistics(SearchResponse response) {
     ProjectMeasuresStatistics.Builder statistics = ProjectMeasuresStatistics.builder();
-
-    SearchResponse response = client.search(EsClient.prepareSearch(TYPE_PROJECT_MEASURES.getMainType())
-      .source(searchSourceBuilder));
-
-    statistics.setProjectCount(response.getHits().getTotalHits().value);
+    statistics.setProjectCount(getTotalHits(response.getHits().getTotalHits()).value);
     statistics.setProjectCountByLanguage(termsToMap(response.getAggregations().get(FIELD_LANGUAGES)));
+
     Function<Terms.Bucket, Long> bucketToNcloc = bucket -> Math.round(((Sum) bucket.getAggregations().get(FIELD_NCLOC_DISTRIBUTION_NCLOC)).getValue());
     Map<String, Long> nclocByLanguage = Stream.of((Nested) response.getAggregations().get(FIELD_NCLOC_DISTRIBUTION))
       .map(nested -> (Terms) nested.getAggregations().get(nested.getName() + "_terms"))
       .flatMap(terms -> terms.getBuckets().stream())
-      .collect(MoreCollectors.uniqueIndex(Bucket::getKeyAsString, bucketToNcloc));
+      .collect(Collectors.toMap(Bucket::getKeyAsString, bucketToNcloc));
     statistics.setNclocByLanguage(nclocByLanguage);
 
     return statistics.build();
+  }
+
+  private static TotalHits getTotalHits(@Nullable TotalHits totalHits) {
+    return ofNullable(totalHits).orElseThrow(() -> new IllegalStateException("Could not get total hits of search results"));
   }
 
   private static void addSort(ProjectMeasuresQuery query, SearchSourceBuilder requestBuilder) {
@@ -288,6 +304,8 @@ public class ProjectMeasuresIndex {
       requestBuilder.sort(DefaultIndexSettingsElement.SORTABLE_ANALYZER.subField(FIELD_NAME), query.isAsc() ? ASC : DESC);
     } else if (SORT_BY_LAST_ANALYSIS_DATE.equals(sort)) {
       requestBuilder.sort(FIELD_ANALYSED_AT, query.isAsc() ? ASC : DESC);
+    } else if (SORT_BY_CREATION_DATE.equals(sort)) {
+      requestBuilder.sort(FIELD_CREATED_AT, query.isAsc() ? ASC : DESC);
     } else if (ALERT_STATUS_KEY.equals(sort)) {
       requestBuilder.sort(FIELD_QUALITY_GATE_STATUS, query.isAsc() ? ASC : DESC);
       requestBuilder.sort(DefaultIndexSettingsElement.SORTABLE_ANALYZER.subField(FIELD_NAME), ASC);
@@ -339,13 +357,12 @@ public class ProjectMeasuresIndex {
           .subAggregation(rangeAgg));
   }
 
-  private static AbstractAggregationBuilder<?> createQualityGateFacet(ProjectMeasuresQuery projectMeasuresQuery) {
+  private static AbstractAggregationBuilder<?> createQualityGateFacet() {
     return filters(
       ALERT_STATUS_KEY,
       QUALITY_GATE_STATUS
         .entrySet()
         .stream()
-        .filter(qgs -> !(projectMeasuresQuery.isIgnoreWarning() && qgs.getKey().equals(Metric.Level.WARN.name())))
         .map(entry -> new KeyedFilter(entry.getKey(), termQuery(FIELD_QUALITY_GATE_STATUS, entry.getValue())))
         .toArray(KeyedFilter[]::new));
   }
@@ -435,16 +452,19 @@ public class ProjectMeasuresIndex {
     }
   }
 
-  public List<String> searchTags(@Nullable String textQuery, int size) {
-    int maxPageSize = 500;
+  public List<String> searchTags(@Nullable String textQuery, int page, int size) {
+    int maxPageSize = 100;
+    int maxPage = 20;
     checkArgument(size <= maxPageSize, "Page size must be lower than or equals to " + maxPageSize);
+    checkArgument(page > 0 && page <= maxPage, "Page must be between 0 and " + maxPage);
+
     if (size <= 0) {
       return emptyList();
     }
 
     TermsAggregationBuilder tagFacet = AggregationBuilders.terms(FIELD_TAGS)
       .field(FIELD_TAGS)
-      .size(size)
+      .size(size * page)
       .minDocCount(1)
       .order(BucketOrder.key(true));
     if (textQuery != null) {
@@ -454,7 +474,6 @@ public class ProjectMeasuresIndex {
     SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
       .query(authorizationTypeSupport.createQueryFilter())
       .fetchSource(false)
-      .size(0)
       .aggregation(tagFacet);
 
     SearchResponse response = client.search(EsClient.prepareSearch(TYPE_PROJECT_MEASURES.getMainType())
@@ -463,8 +482,9 @@ public class ProjectMeasuresIndex {
     Terms aggregation = response.getAggregations().get(FIELD_TAGS);
 
     return aggregation.getBuckets().stream()
+      .skip((page - 1) * size)
       .map(Bucket::getKeyAsString)
-      .collect(MoreCollectors.toList());
+      .toList();
   }
 
   private interface FacetBuilder {
@@ -593,7 +613,7 @@ public class ProjectMeasuresIndex {
     return topAggregationHelper.buildTopAggregation(
       facet.getName(), facet.getTopAggregationDef(),
       NO_EXTRA_FILTER,
-      t -> t.subAggregation(createQualityGateFacet(query)));
+      t -> t.subAggregation(createQualityGateFacet()));
   }
 
   private static FilterAggregationBuilder buildTagsFacet(Facet facet, ProjectMeasuresQuery query, TopAggregationHelper topAggregationHelper) {

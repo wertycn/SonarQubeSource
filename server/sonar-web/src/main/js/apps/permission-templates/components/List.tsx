@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,28 +17,31 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Table } from 'design-system';
 import * as React from 'react';
+import { Permission, PermissionTemplate } from '../../../types/types';
 import ListHeader from './ListHeader';
 import ListItem from './ListItem';
 
 interface Props {
-  permissionTemplates: T.PermissionTemplate[];
-  permissions: T.Permission[];
+  permissionTemplates: PermissionTemplate[];
+  permissions: Permission[];
   refresh: () => Promise<void>;
   topQualifiers: string[];
 }
 
 export default function List(props: Props) {
-  const permissionTemplates = props.permissionTemplates.map(p => (
+  const permissionTemplates = props.permissionTemplates.map((p) => (
     <ListItem key={p.id} refresh={props.refresh} template={p} topQualifiers={props.topQualifiers} />
   ));
 
   return (
-    <div className="boxed-group boxed-group-inner">
-      <table className="data zebra permissions-table" id="permission-templates">
-        <ListHeader permissions={props.permissions} />
-        <tbody>{permissionTemplates}</tbody>
-      </table>
-    </div>
+    <Table
+      columnCount={8}
+      header={<ListHeader permissions={props.permissions} />}
+      id="permission-templates"
+    >
+      {permissionTemplates}
+    </Table>
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ import java.util.Set;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.sonar.alm.client.gitlab.GitlabHttpClient;
+import org.sonar.alm.client.gitlab.GitlabApplicationClient;
 import org.sonar.alm.client.gitlab.Project;
 import org.sonar.alm.client.gitlab.ProjectList;
 import org.sonar.api.server.ws.Request;
@@ -45,7 +45,6 @@ import org.sonarqube.ws.AlmIntegrations.GitlabRepository;
 import org.sonarqube.ws.Common.Paging;
 
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.sonar.db.permission.GlobalPermission.PROVISION_PROJECTS;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
@@ -59,12 +58,12 @@ public class SearchGitlabReposAction implements AlmIntegrationsWsAction {
 
   private final DbClient dbClient;
   private final UserSession userSession;
-  private final GitlabHttpClient gitlabHttpClient;
+  private final GitlabApplicationClient gitlabApplicationClient;
 
-  public SearchGitlabReposAction(DbClient dbClient, UserSession userSession, GitlabHttpClient gitlabHttpClient) {
+  public SearchGitlabReposAction(DbClient dbClient, UserSession userSession, GitlabApplicationClient gitlabApplicationClient) {
     this.dbClient = dbClient;
     this.userSession = userSession;
-    this.gitlabHttpClient = gitlabHttpClient;
+    this.gitlabApplicationClient = gitlabApplicationClient;
   }
 
   @Override
@@ -79,7 +78,7 @@ public class SearchGitlabReposAction implements AlmIntegrationsWsAction {
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
     action.createParam(PARAM_PROJECT_NAME)
       .setRequired(false)
       .setMaximumLength(200)
@@ -108,28 +107,31 @@ public class SearchGitlabReposAction implements AlmIntegrationsWsAction {
 
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID cannot be null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
       Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
 
       String personalAccessToken = almPatDto.map(AlmPatDto::getPersonalAccessToken).orElseThrow(() -> new IllegalArgumentException("No personal access token found"));
-      String gitlabUrl = requireNonNull(almSettingDto.getUrl(), "ALM url cannot be null");
+      String gitlabUrl = requireNonNull(almSettingDto.getUrl(), "DevOps Platform url cannot be null");
 
-      ProjectList gitlabProjectList = gitlabHttpClient
+      ProjectList gitlabProjectList = gitlabApplicationClient
         .searchProjects(gitlabUrl, personalAccessToken, projectName, pageNumber, pageSize);
 
       Map<String, ProjectKeyName> sqProjectsKeyByGitlabProjectId = getSqProjectsKeyByGitlabProjectId(dbSession, almSettingDto, gitlabProjectList);
 
       List<GitlabRepository> gitlabRepositories = gitlabProjectList.getProjects().stream()
         .map(project -> toGitlabRepository(project, sqProjectsKeyByGitlabProjectId))
-        .collect(toList());
+        .toList();
 
+      Paging.Builder pagingBuilder = Paging.newBuilder()
+        .setPageIndex(gitlabProjectList.getPageNumber())
+        .setPageSize(gitlabProjectList.getPageSize());
+      Integer gitlabProjectListTotal = gitlabProjectList.getTotal();
+      if (gitlabProjectListTotal != null) {
+        pagingBuilder.setTotal(gitlabProjectListTotal);
+      }
       return AlmIntegrations.SearchGitlabReposWsResponse.newBuilder()
         .addAllRepositories(gitlabRepositories)
-        .setPaging(Paging.newBuilder()
-          .setPageIndex(gitlabProjectList.getPageNumber())
-          .setPageSize(gitlabProjectList.getPageSize())
-          .setTotal(gitlabProjectList.getTotal())
-          .build())
+        .setPaging(pagingBuilder.build())
         .build();
     }
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,38 +17,126 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen, waitFor } from '@testing-library/react';
 import * as React from 'react';
-import { isSonarCloud } from '../../../../helpers/system';
-import BranchOverview from '../../branches/BranchOverview';
+import BranchesServiceMock from '../../../../api/mocks/BranchesServiceMock';
+import ComputeEngineServiceMock from '../../../../api/mocks/ComputeEngineServiceMock';
+import CurrentUserContextProvider from '../../../../app/components/current-user/CurrentUserContextProvider';
+import { mockBranch } from '../../../../helpers/mocks/branch-like';
+import { mockComponent } from '../../../../helpers/mocks/component';
+import { mockTask } from '../../../../helpers/mocks/tasks';
+import { mockCurrentUser } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { ComponentQualifier } from '../../../../types/component';
+import { TaskStatuses, TaskTypes } from '../../../../types/tasks';
 import { App } from '../App';
 
-jest.mock('../../../../helpers/system', () => ({ isSonarCloud: jest.fn() }));
-
-const component = {
-  key: 'foo',
-  analysisDate: '2016-01-01',
-  breadcrumbs: [],
-  name: 'Foo',
-  qualifier: 'TRK',
-  version: '0.0.1'
-};
+const handlerBranches = new BranchesServiceMock();
+const handlerCe = new ComputeEngineServiceMock();
 
 beforeEach(() => {
-  (isSonarCloud as jest.Mock<any>).mockClear();
-  (isSonarCloud as jest.Mock<any>).mockReturnValue(false);
+  handlerBranches.reset();
+  handlerCe.reset();
 });
 
-it('should render BranchOverview', () => {
+it('should render Empty Overview for Application with no analysis', async () => {
+  renderApp({ component: mockComponent({ qualifier: ComponentQualifier.Application }) });
+
+  await appLoaded();
+
+  expect(await screen.findByText('provisioning.no_analysis.application')).toBeInTheDocument();
+});
+
+it('should render Empty Overview on main branch with no analysis', async () => {
+  renderApp({}, mockCurrentUser());
+
+  await appLoaded();
+
   expect(
-    getWrapper()
-      .find(BranchOverview)
-      .exists()
-  ).toBe(true);
+    await screen.findByText('provisioning.no_analysis_on_main_branch.main'),
+  ).toBeInTheDocument();
 });
 
-function getWrapper(props = {}) {
-  return shallow(
-    <App branchLikes={[]} component={component} router={{ replace: jest.fn() }} {...props} />
+it('should render Empty Overview on main branch with multiple branches with bad configuration', async () => {
+  renderApp({ branchLikes: [mockBranch(), mockBranch()] });
+
+  await appLoaded();
+
+  expect(
+    await screen.findByText(
+      'provisioning.no_analysis_on_main_branch.bad_configuration.main.branches.main_branch',
+    ),
+  ).toBeInTheDocument();
+});
+
+it('should not render for portfolios and subportfolios', () => {
+  const rtl = renderApp({
+    component: mockComponent({ qualifier: ComponentQualifier.Portfolio }),
+  });
+  expect(rtl.container).toBeEmptyDOMElement();
+
+  rtl.unmount();
+
+  renderApp({
+    component: mockComponent({ qualifier: ComponentQualifier.Portfolio }),
+  });
+  expect(rtl.container).toBeEmptyDOMElement();
+});
+
+describe('Permission provisioning', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+  it('should render warning when permission is sync', async () => {
+    handlerCe.addTask(
+      mockTask({
+        componentKey: 'my-project',
+        type: TaskTypes.GithubProjectPermissionsProvisioning,
+        status: TaskStatuses.InProgress,
+      }),
+    );
+
+    renderApp();
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(
+      await screen.findByText('provisioning.permission_synch_in_progress'),
+    ).toBeInTheDocument();
+
+    handlerCe.clearTasks();
+    handlerCe.addTask(
+      mockTask({
+        componentKey: 'my-project',
+        type: TaskTypes.GithubProjectPermissionsProvisioning,
+        status: TaskStatuses.Success,
+      }),
+    );
+
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(screen.queryByText('provisioning.permission_synch_in_progress')).not.toBeInTheDocument();
+  });
+});
+
+const appLoaded = async () => {
+  await waitFor(() => {
+    expect(screen.getByText('loading')).toBeInTheDocument();
+  });
+
+  await waitFor(() => {
+    expect(screen.queryByText('loading')).not.toBeInTheDocument();
+  });
+};
+
+function renderApp(props = {}, userProps = {}) {
+  return renderComponent(
+    <CurrentUserContextProvider currentUser={mockCurrentUser({ isLoggedIn: true, ...userProps })}>
+      <App hasFeature={jest.fn().mockReturnValue(false)} component={mockComponent()} {...props} />
+    </CurrentUserContextProvider>,
+    '/?id=my-project',
   );
 }

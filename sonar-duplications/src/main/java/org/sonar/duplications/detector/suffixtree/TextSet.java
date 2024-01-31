@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,6 @@ package org.sonar.duplications.detector.suffixtree;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.sonar.duplications.block.Block;
 
 
@@ -29,10 +28,15 @@ import org.sonar.duplications.block.Block;
  * Simplifies construction of <a href="http://en.wikipedia.org/wiki/Generalised_suffix_tree">generalised suffix-tree</a>.
  */
 public final class TextSet extends AbstractText {
+  private final int lengthOfOrigin;
 
+  private TextSet(List<Object> symbols, int lengthOfOrigin) {
+    super(symbols);
+    this.lengthOfOrigin = lengthOfOrigin;
+  }
   public static final class Builder {
 
-    private List<Object> symbols = new ArrayList<>();
+    private final List<Object> symbols = new ArrayList<>();
     private Integer lengthOfOrigin;
     private int count;
 
@@ -58,13 +62,6 @@ public final class TextSet extends AbstractText {
     return new Builder();
   }
 
-  private final int lengthOfOrigin;
-
-  private TextSet(List<Object> symbols, int lengthOfOrigin) {
-    super(symbols);
-    this.lengthOfOrigin = lengthOfOrigin;
-  }
-
   public boolean isInsideOrigin(int pos) {
     return pos < lengthOfOrigin;
   }
@@ -72,8 +69,8 @@ public final class TextSet extends AbstractText {
   @Override
   public Object symbolAt(int index) {
     Object obj = super.symbolAt(index);
-    if (obj instanceof Block) {
-      return ((Block) obj).getBlockHash();
+    if (obj instanceof Block block) {
+      return block.getBlockHash();
     }
     return obj;
   }
@@ -92,7 +89,7 @@ public final class TextSet extends AbstractText {
 
     @Override
     public boolean equals(Object obj) {
-      return (obj instanceof Terminator) && (((Terminator) obj).stringNumber == stringNumber);
+      return obj != null && getClass() == obj.getClass() && ((Terminator) obj).stringNumber == stringNumber;
     }
 
     @Override
@@ -100,15 +97,9 @@ public final class TextSet extends AbstractText {
       return stringNumber;
     }
 
-    public int getStringNumber() {
-      return stringNumber;
-    }
-
     @Override
     public String toString() {
       return "$" + stringNumber;
     }
-
   }
-
 }

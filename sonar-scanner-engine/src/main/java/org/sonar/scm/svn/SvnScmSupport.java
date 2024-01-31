@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -55,8 +55,7 @@ public class SvnScmSupport {
   public static List<Object> getObjects() {
     return Arrays.asList(SvnScmProvider.class,
       SvnBlameCommand.class,
-      SvnConfiguration.class,
-      FindFork.class
+      SvnConfiguration.class
     );
   }
 }

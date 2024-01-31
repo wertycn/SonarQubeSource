@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -65,5 +65,20 @@ public class ProjectDumpService extends BaseService {
         .setParam("key", request.getKey())
         .setMediaType(MediaTypes.JSON)
       ).content();
+  }
+
+  /**
+   *
+   * This is part of the internal API.
+   * This is a POST request.
+   * @see <a href="https://next.sonarqube.com/sonarqube/web_api/api/project_dump/import">Further information about this action online (including a response example)</a>
+   * @since 1.0
+   */
+  public String Import(ImportRequest request) {
+    return call(
+      new PostRequest(path("import"))
+        .setParam("key", request.getKey())
+        .setMediaType(MediaTypes.JSON)
+    ).content();
   }
 }

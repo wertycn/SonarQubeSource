@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.db.issue;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
@@ -28,31 +27,41 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
+import org.jetbrains.annotations.NotNull;
+import org.sonar.api.issue.IssueStatus;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
+import org.sonar.api.rules.CleanCodeAttribute;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
-import org.sonar.api.utils.KeyValueFormat;
 import org.sonar.core.issue.DefaultIssue;
+import org.sonar.core.util.Uuids;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.protobuf.DbIssues;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.lang.String.format;
+import static java.util.stream.Collectors.toUnmodifiableMap;
 import static org.sonar.api.utils.DateUtils.dateToLong;
 import static org.sonar.api.utils.DateUtils.longToDate;
 
 public final class IssueDto implements Serializable {
 
   public static final int AUTHOR_MAX_SIZE = 255;
-  private static final char TAGS_SEPARATOR = ',';
-  private static final Joiner TAGS_JOINER = Joiner.on(TAGS_SEPARATOR).skipNulls();
-  private static final Splitter TAGS_SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
+  private static final char STRING_LIST_SEPARATOR = ',';
+  private static final Joiner STRING_LIST_JOINER = Joiner.on(STRING_LIST_SEPARATOR).skipNulls();
+  private static final Splitter STRING_LIST_SPLITTER = Splitter.on(STRING_LIST_SEPARATOR).trimResults().omitEmptyStrings();
 
   private int type;
   private String kee;
@@ -62,6 +71,7 @@ public final class IssueDto implements Serializable {
   private String severity;
   private boolean manualSeverity;
   private String message;
+  private byte[] messageFormattings;
   private Integer line;
   private Double gap;
   private Long effort;
@@ -69,11 +79,15 @@ public final class IssueDto implements Serializable {
   private String resolution;
   private String checksum;
   private String assigneeUuid;
+  private String assigneeLogin;
   private String authorLogin;
-  private String issueAttributes;
+  private String securityStandards;
   private byte[] locations;
   private long createdAt;
   private long updatedAt;
+  private boolean quickFixAvailable;
+  private boolean isNewCodeReferenceIssue;
+  private String ruleDescriptionContextKey;
 
   // functional dates stored as Long
   private Long issueCreationDate;
@@ -91,13 +105,19 @@ public final class IssueDto implements Serializable {
   private boolean isExternal;
   private String language;
   private String componentKey;
-  private String moduleUuid;
-  private String moduleUuidPath;
   private String projectKey;
   private String filePath;
   private String tags;
+  private String codeVariants;
   // populate only when retrieving closed issue for issue tracking
   private String closedChangeData;
+
+  private Set<ImpactDto> impacts = new HashSet<>();
+
+  //non-persisted fields
+  private Set<ImpactDto> ruleDefaultImpacts = new HashSet<>();
+  private CleanCodeAttribute cleanCodeAttribute;
+  private CleanCodeAttribute ruleCleanCodeAttribute;
 
   public IssueDto() {
     // nothing to do
@@ -113,6 +133,7 @@ public final class IssueDto implements Serializable {
       .setLine(issue.line())
       .setLocations((DbIssues.Locations) issue.getLocations())
       .setMessage(issue.message())
+      .setMessageFormattings((DbIssues.MessageFormattings) issue.getMessageFormattings())
       .setGap(issue.gap())
       .setEffort(issue.effortInMinutes())
       .setResolution(issue.resolution())
@@ -125,22 +146,33 @@ public final class IssueDto implements Serializable {
       .setRuleKey(issue.ruleKey().repository(), issue.ruleKey().rule())
       .setExternal(issue.isFromExternalRuleEngine())
       .setTags(issue.tags())
+      .setRuleDescriptionContextKey(issue.getRuleDescriptionContextKey().orElse(null))
       .setComponentUuid(issue.componentUuid())
       .setComponentKey(issue.componentKey())
-      .setModuleUuid(issue.moduleUuid())
-      .setModuleUuidPath(issue.moduleUuidPath())
       .setProjectUuid(issue.projectUuid())
       .setProjectKey(issue.projectKey())
-      .setIssueAttributes(KeyValueFormat.format(issue.attributes()))
       .setAuthorLogin(issue.authorLogin())
       .setIssueCreationDate(issue.creationDate())
       .setIssueCloseDate(issue.closeDate())
       .setIssueUpdateDate(issue.updateDate())
       .setSelectedAt(issue.selectedAt())
-
+      .setQuickFixAvailable(issue.isQuickFixAvailable())
+      .setIsNewCodeReferenceIssue(issue.isNewCodeReferenceIssue())
+      .setCodeVariants(issue.codeVariants())
+      .replaceAllImpacts(mapToImpactDto(issue.impacts()))
+      .setCleanCodeAttribute(issue.getCleanCodeAttribute())
       // technical dates
       .setCreatedAt(now)
       .setUpdatedAt(now);
+  }
+
+  @NotNull
+  private static Set<ImpactDto> mapToImpactDto(Map<SoftwareQuality, Severity> impacts) {
+    return impacts.entrySet().stream().map(e -> new ImpactDto()
+        .setUuid(Uuids.create())
+        .setSoftwareQuality(e.getKey())
+        .setSeverity(e.getValue()))
+      .collect(Collectors.toSet());
   }
 
   /**
@@ -160,6 +192,7 @@ public final class IssueDto implements Serializable {
       .setLine(issue.line())
       .setLocations((DbIssues.Locations) issue.getLocations())
       .setMessage(issue.message())
+      .setMessageFormattings((DbIssues.MessageFormattings) issue.getMessageFormattings())
       .setGap(issue.gap())
       .setEffort(issue.effortInMinutes())
       .setResolution(issue.resolution())
@@ -168,22 +201,24 @@ public final class IssueDto implements Serializable {
       .setChecksum(issue.checksum())
       .setManualSeverity(issue.manualSeverity())
       .setAssigneeUuid(issue.assignee())
-      .setIssueAttributes(KeyValueFormat.format(issue.attributes()))
       .setAuthorLogin(issue.authorLogin())
       .setRuleKey(issue.ruleKey().repository(), issue.ruleKey().rule())
       .setExternal(issue.isFromExternalRuleEngine())
       .setTags(issue.tags())
+      .setRuleDescriptionContextKey(issue.getRuleDescriptionContextKey().orElse(null))
       .setComponentUuid(issue.componentUuid())
       .setComponentKey(issue.componentKey())
-      .setModuleUuid(issue.moduleUuid())
-      .setModuleUuidPath(issue.moduleUuidPath())
       .setProjectUuid(issue.projectUuid())
       .setProjectKey(issue.projectKey())
       .setIssueCreationDate(issue.creationDate())
       .setIssueCloseDate(issue.closeDate())
       .setIssueUpdateDate(issue.updateDate())
       .setSelectedAt(issue.selectedAt())
-
+      .setQuickFixAvailable(issue.isQuickFixAvailable())
+      .setIsNewCodeReferenceIssue(issue.isNewCodeReferenceIssue())
+      .setCodeVariants(issue.codeVariants())
+      .replaceAllImpacts(mapToImpactDto(issue.impacts()))
+      .setCleanCodeAttribute(issue.getCleanCodeAttribute())
       // technical date
       .setUpdatedAt(now);
   }
@@ -202,17 +237,19 @@ public final class IssueDto implements Serializable {
   }
 
   public IssueDto setComponent(ComponentDto component) {
-    this.componentKey = component.getDbKey();
+    this.componentKey = component.getKey();
     this.componentUuid = component.uuid();
-    this.moduleUuid = component.moduleUuid();
-    this.moduleUuidPath = component.moduleUuidPath();
     this.filePath = component.path();
     return this;
   }
 
-  public IssueDto setProject(ComponentDto project) {
-    this.projectKey = project.getDbKey();
-    this.projectUuid = project.uuid();
+  /**
+   * The project branch where the issue is located.
+   * Note that the name is misleading - it should be branch.
+   */
+  public IssueDto setProject(ComponentDto branch) {
+    this.projectKey = branch.getKey();
+    this.projectUuid = branch.uuid();
     return this;
   }
 
@@ -259,6 +296,36 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
+  public byte[] getMessageFormattings() {
+    return messageFormattings;
+  }
+
+  public IssueDto setMessageFormattings(byte[] messageFormattings) {
+    this.messageFormattings = messageFormattings;
+    return this;
+  }
+
+  public IssueDto setMessageFormattings(@Nullable DbIssues.MessageFormattings messageFormattings) {
+    if (messageFormattings == null) {
+      this.messageFormattings = null;
+    } else {
+      this.messageFormattings = messageFormattings.toByteArray();
+    }
+    return this;
+  }
+
+  @CheckForNull
+  public DbIssues.MessageFormattings parseMessageFormattings() {
+    if (messageFormattings != null) {
+      try {
+        return DbIssues.MessageFormattings.parseFrom(messageFormattings);
+      } catch (InvalidProtocolBufferException e) {
+        throw new IllegalStateException(format("Fail to read ISSUES.MESSAGE_FORMATTINGS [KEE=%s]", kee), e);
+      }
+    }
+    return null;
+  }
+
   @CheckForNull
   public Integer getLine() {
     return line;
@@ -294,6 +361,11 @@ public final class IssueDto implements Serializable {
 
   public String getStatus() {
     return status;
+  }
+
+  @Nullable
+  public IssueStatus getIssueStatus() {
+    return IssueStatus.of(status, resolution);
   }
 
   public IssueDto setStatus(@Nullable String s) {
@@ -336,6 +408,16 @@ public final class IssueDto implements Serializable {
   }
 
   @CheckForNull
+  public String getAssigneeLogin() {
+    return assigneeLogin;
+  }
+
+  public IssueDto setAssigneeLogin(@Nullable String s) {
+    this.assigneeLogin = s;
+    return this;
+  }
+
+  @CheckForNull
   public String getAuthorLogin() {
     return authorLogin;
   }
@@ -346,15 +428,13 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
-  @CheckForNull
-  public String getIssueAttributes() {
-    return issueAttributes;
+  public IssueDto setSecurityStandards(@Nullable String s) {
+    this.securityStandards = s;
+    return this;
   }
 
-  public IssueDto setIssueAttributes(@Nullable String s) {
-    checkArgument(s == null || s.length() <= 4000, "Value is too long for issue attributes: %s", s);
-    this.issueAttributes = s;
-    return this;
+  public Set<String> getSecurityStandards() {
+    return RuleDto.deserializeSecurityStandardsString(securityStandards);
   }
 
   /**
@@ -439,13 +519,14 @@ public final class IssueDto implements Serializable {
     return ruleKey;
   }
 
-  public IssueDto setRule(RuleDefinitionDto rule) {
+  public IssueDto setRule(RuleDto rule) {
     Preconditions.checkNotNull(rule.getUuid(), "Rule must be persisted.");
     this.ruleUuid = rule.getUuid();
     this.ruleKey = rule.getRuleKey();
     this.ruleRepo = rule.getRepositoryKey();
     this.language = rule.getLanguage();
     this.isExternal = rule.isExternal();
+    this.cleanCodeAttribute = rule.getCleanCodeAttribute();
     return this;
   }
 
@@ -464,7 +545,7 @@ public final class IssueDto implements Serializable {
   /**
    * Should only be used to persist in E/S
    * <p/>
-   * Please use {@link #setRule(RuleDefinitionDto)} instead
+   * Please use {@link #setRule(RuleDto)} instead
    */
   public IssueDto setLanguage(String language) {
     this.language = language;
@@ -513,36 +594,6 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
-  @CheckForNull
-  public String getModuleUuid() {
-    return moduleUuid;
-  }
-
-  /**
-   * Should only be used to persist in E/S
-   * <p/>
-   * Please use {@link #setComponent(ComponentDto)} instead
-   */
-  public IssueDto setModuleUuid(@Nullable String moduleUuid) {
-    this.moduleUuid = moduleUuid;
-    return this;
-  }
-
-  @CheckForNull
-  public String getModuleUuidPath() {
-    return moduleUuidPath;
-  }
-
-  /**
-   * Should only be used to persist in E/S
-   * <p/>
-   * Please use {@link #setComponent(ComponentDto)} instead
-   */
-  public IssueDto setModuleUuidPath(@Nullable String moduleUuidPath) {
-    this.moduleUuidPath = moduleUuidPath;
-    return this;
-  }
-
   /**
    * Used by the issue tracking mechanism, but it should used the component uuid instead
    */
@@ -560,13 +611,16 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
+  /**
+   * The project branch where the issue is located.
+   * Note that the name is misleading - it should be 'branchUuid'.
+   */
   public String getProjectUuid() {
     return projectUuid;
   }
 
   /**
-   * Should only be used to persist in E/S
-   * <p/>
+   * This is branch uuid, not a project uuid. The naming is wrong, the javadoc is right.
    * Please use {@link #setProject(ComponentDto)} instead
    */
   public IssueDto setProjectUuid(String s) {
@@ -588,7 +642,7 @@ public final class IssueDto implements Serializable {
   /**
    * Should only be used to persist in E/S
    * <p/>
-   * Please use {@link #setRule(RuleDefinitionDto)} instead
+   * Please use {@link #setRule(RuleDto)} instead
    */
   public IssueDto setRuleKey(String repo, String rule) {
     this.ruleRepo = repo;
@@ -616,14 +670,14 @@ public final class IssueDto implements Serializable {
   }
 
   public Set<String> getTags() {
-    return ImmutableSet.copyOf(TAGS_SPLITTER.split(tags == null ? "" : tags));
+    return ImmutableSet.copyOf(STRING_LIST_SPLITTER.split(tags == null ? "" : tags));
   }
 
   public IssueDto setTags(@Nullable Collection<String> tags) {
     if (tags == null || tags.isEmpty()) {
       setTagsString(null);
     } else {
-      setTagsString(TAGS_JOINER.join(tags));
+      setTagsString(STRING_LIST_JOINER.join(tags));
     }
     return this;
   }
@@ -638,6 +692,30 @@ public final class IssueDto implements Serializable {
     return tags;
   }
 
+  public Set<String> getCodeVariants() {
+    return ImmutableSet.copyOf(STRING_LIST_SPLITTER.split(codeVariants == null ? "" : codeVariants));
+  }
+
+  public String getCodeVariantsString() {
+    return codeVariants;
+  }
+
+  public IssueDto setCodeVariants(@Nullable Collection<String> codeVariants) {
+    if (codeVariants == null || codeVariants.isEmpty()) {
+      setCodeVariantsString(null);
+    } else {
+      setCodeVariantsString(STRING_LIST_JOINER.join(codeVariants));
+    }
+    return this;
+  }
+
+  public IssueDto setCodeVariantsString(@Nullable String codeVariants) {
+    checkArgument(codeVariants == null || codeVariants.length() <= 4000,
+      "Value is too long for column ISSUES.CODE_VARIANTS: %codeVariants", codeVariants);
+    this.codeVariants = codeVariants;
+    return this;
+  }
+
   @CheckForNull
   public byte[] getLocations() {
     return locations;
@@ -649,7 +727,7 @@ public final class IssueDto implements Serializable {
       try {
         return DbIssues.Locations.parseFrom(locations);
       } catch (InvalidProtocolBufferException e) {
-        throw new IllegalStateException(String.format("Fail to read ISSUES.LOCATIONS [KEE=%s]", kee), e);
+        throw new IllegalStateException(format("Fail to read ISSUES.LOCATIONS [KEE=%s]", kee), e);
       }
     }
     return null;
@@ -669,6 +747,24 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
+  public boolean isQuickFixAvailable() {
+    return quickFixAvailable;
+  }
+
+  public IssueDto setQuickFixAvailable(boolean quickFixAvailable) {
+    this.quickFixAvailable = quickFixAvailable;
+    return this;
+  }
+
+  public boolean isNewCodeReferenceIssue() {
+    return isNewCodeReferenceIssue;
+  }
+
+  public IssueDto setIsNewCodeReferenceIssue(boolean isNewCodeReferenceIssue) {
+    this.isNewCodeReferenceIssue = isNewCodeReferenceIssue;
+    return this;
+  }
+
   public int getType() {
     return type;
   }
@@ -683,8 +779,89 @@ public final class IssueDto implements Serializable {
     return this;
   }
 
+  @CheckForNull
+  public CleanCodeAttribute getEffectiveCleanCodeAttribute() {
+    if (cleanCodeAttribute != null) {
+      return cleanCodeAttribute;
+    }
+    return ruleCleanCodeAttribute;
+  }
+
+  public IssueDto setCleanCodeAttribute(CleanCodeAttribute cleanCodeAttribute) {
+    this.cleanCodeAttribute = cleanCodeAttribute;
+    return this;
+  }
+
+  public IssueDto setRuleCleanCodeAttribute(CleanCodeAttribute ruleCleanCodeAttribute) {
+    this.ruleCleanCodeAttribute = ruleCleanCodeAttribute;
+    return this;
+  }
+
   public Optional<String> getClosedChangeData() {
     return Optional.ofNullable(closedChangeData);
+  }
+
+  public Optional<String> getOptionalRuleDescriptionContextKey() {
+    return Optional.ofNullable(ruleDescriptionContextKey);
+  }
+
+  public IssueDto setRuleDescriptionContextKey(@Nullable String ruleDescriptionContextKey) {
+    this.ruleDescriptionContextKey = ruleDescriptionContextKey;
+    return this;
+  }
+
+  /**
+   * Return impacts defined on this issue.
+   *
+   * @return Collection of impacts
+   */
+  public Set<ImpactDto> getImpacts() {
+    return impacts;
+  }
+
+  public IssueDto addImpact(ImpactDto impact) {
+    impacts.stream().filter(impactDto -> impactDto.getSoftwareQuality() == impact.getSoftwareQuality()).findFirst()
+      .ifPresent(impactDto -> {
+        throw new IllegalStateException(format("Impact already defined on issue for Software Quality [%s]", impact.getSoftwareQuality()));
+      });
+
+    impacts.add(impact);
+    return this;
+  }
+
+
+  public IssueDto setRuleDefaultImpacts(Set<ImpactDto> ruleDefaultImpacts) {
+    this.ruleDefaultImpacts = new HashSet<>(ruleDefaultImpacts);
+    return this;
+  }
+
+
+  public IssueDto replaceAllImpacts(Collection<ImpactDto> newImpacts) {
+    Set<SoftwareQuality> newSoftwareQuality = newImpacts.stream().map(ImpactDto::getSoftwareQuality).collect(Collectors.toSet());
+    if (newSoftwareQuality.size() != newImpacts.size()) {
+      throw new IllegalStateException("Impacts must have unique Software Quality values");
+    }
+    impacts.clear();
+    impacts.addAll(newImpacts);
+    return this;
+  }
+
+  Set<ImpactDto> getRuleDefaultImpacts() {
+    return ruleDefaultImpacts;
+  }
+
+  /**
+   * Returns effective impacts defined on this issue along with default ones.
+   *
+   * @return Unmodifiable Map of impacts
+   */
+  public Map<SoftwareQuality, Severity> getEffectiveImpacts() {
+    return impacts.isEmpty() ? toImpactMap(ruleDefaultImpacts) : toImpactMap(impacts);
+  }
+
+  private static Map<SoftwareQuality, Severity> toImpactMap(Collection<ImpactDto> impacts) {
+    return impacts.stream()
+      .collect(toUnmodifiableMap(ImpactDto::getSoftwareQuality, ImpactDto::getSeverity));
   }
 
   @Override
@@ -699,22 +876,22 @@ public final class IssueDto implements Serializable {
     issue.setStatus(status);
     issue.setResolution(resolution);
     issue.setMessage(message);
+    issue.setMessageFormattings(parseMessageFormattings());
     issue.setGap(gap);
     issue.setEffort(effort != null ? Duration.create(effort) : null);
     issue.setLine(line);
     issue.setChecksum(checksum);
     issue.setSeverity(severity);
     issue.setAssigneeUuid(assigneeUuid);
-    issue.setAttributes(KeyValueFormat.parse(MoreObjects.firstNonNull(issueAttributes, "")));
+    issue.setAssigneeLogin(assigneeLogin);
     issue.setComponentKey(componentKey);
     issue.setComponentUuid(componentUuid);
-    issue.setModuleUuid(moduleUuid);
-    issue.setModuleUuidPath(moduleUuidPath);
     issue.setProjectUuid(projectUuid);
     issue.setProjectKey(projectKey);
     issue.setManualSeverity(manualSeverity);
     issue.setRuleKey(getRuleKey());
     issue.setTags(getTags());
+    issue.setRuleDescriptionContextKey(ruleDescriptionContextKey);
     issue.setLanguage(language);
     issue.setAuthorLogin(authorLogin);
     issue.setNew(false);
@@ -724,6 +901,11 @@ public final class IssueDto implements Serializable {
     issue.setSelectedAt(selectedAt);
     issue.setLocations(parseLocations());
     issue.setIsFromExternalRuleEngine(isExternal);
+    issue.setQuickFixAvailable(quickFixAvailable);
+    issue.setIsNewCodeReferenceIssue(isNewCodeReferenceIssue);
+    issue.setCodeVariants(getCodeVariants());
+    issue.setCleanCodeAttribute(cleanCodeAttribute);
+    impacts.forEach(i -> issue.addImpact(i.getSoftwareQuality(), i.getSeverity()));
     return issue;
   }
 }

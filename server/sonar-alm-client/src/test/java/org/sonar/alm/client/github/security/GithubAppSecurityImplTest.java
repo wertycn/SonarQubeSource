@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,17 +20,15 @@
 package org.sonar.alm.client.github.security;
 
 import com.tngtech.java.junit.dataprovider.DataProviderRunner;
-
 import java.io.IOException;
 import java.security.spec.InvalidKeySpecException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Random;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.sonar.alm.client.github.config.GithubAppConfiguration;
+import org.sonar.auth.github.GithubAppConfiguration;
 
 import static org.apache.commons.lang.RandomStringUtils.randomAlphabetic;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;

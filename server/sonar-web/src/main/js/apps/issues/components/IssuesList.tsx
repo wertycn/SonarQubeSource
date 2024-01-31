@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,23 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { groupBy } from 'lodash';
 import * as React from 'react';
+import IssueItem from '../../../components/issue/Issue';
 import { BranchLike } from '../../../types/branch-like';
-import { Query, scrollToIssue } from '../utils';
-import ListItem from './ListItem';
+import { Component, Issue } from '../../../types/types';
+
+import ComponentBreadcrumbs from './ComponentBreadcrumbs';
 
 interface Props {
   branchLike: BranchLike | undefined;
   checked: string[];
-  component: T.Component | undefined;
-  issues: T.Issue[];
-  onFilterChange: (changes: Partial<Query>) => void;
-  onIssueChange: (issue: T.Issue) => void;
+  component: Component | undefined;
+  issues: Issue[];
+  onIssueChange: (issue: Issue) => void;
   onIssueCheck: ((issueKey: string) => void) | undefined;
-  onIssueClick: (issueKey: string) => void;
+  onIssueSelect: (issueKey: string) => void;
   onPopupToggle: (issue: string, popupName: string, open?: boolean) => void;
   openPopup: { issue: string; name: string } | undefined;
-  selectedIssue: T.Issue | undefined;
+  selectedIssue: Issue | undefined;
 }
 
 interface State {
@@ -42,23 +44,50 @@ interface State {
 
 export default class IssuesList extends React.PureComponent<Props, State> {
   state: State = {
-    prerender: true
+    prerender: true,
   };
 
   componentDidMount() {
-    // ! \\ This prerender state variable is to enable the page to be displayed
-    //      immediately, displaying a loader before attempting to render the
-    //      list of issues. See https://jira.sonarsource.com/browse/SONAR-11681
-    setTimeout(() => {
+    if (this.props.issues.length > 0) {
       this.setState({ prerender: false });
-      if (this.props.selectedIssue) {
-        scrollToIssue(this.props.selectedIssue.key, false);
-      }
-    }, 42);
+    }
   }
 
+  componentDidUpdate() {
+    if (this.props.issues.length > 0) {
+      this.setState({ prerender: false });
+    }
+  }
+
+  renderIssueComponentList = (issues: Issue[], index: number) => {
+    const { branchLike, checked, component, openPopup, selectedIssue } = this.props;
+    return (
+      <React.Fragment key={index}>
+        <li>
+          <ComponentBreadcrumbs component={component} issue={issues[0]} />
+        </li>
+        <ul>
+          {issues.map((issue) => (
+            <IssueItem
+              branchLike={branchLike}
+              checked={checked.includes(issue.key)}
+              issue={issue}
+              key={issue.key}
+              onChange={this.props.onIssueChange}
+              onCheck={this.props.onIssueCheck}
+              onSelect={this.props.onIssueSelect}
+              onPopupToggle={this.props.onPopupToggle}
+              openPopup={openPopup && openPopup.issue === issue.key ? openPopup.name : undefined}
+              selected={selectedIssue != null && selectedIssue.key === issue.key}
+            />
+          ))}
+        </ul>
+      </React.Fragment>
+    );
+  };
+
   render() {
-    const { branchLike, checked, component, issues, openPopup, selectedIssue } = this.props;
+    const { issues } = this.props;
     const { prerender } = this.state;
 
     if (prerender) {
@@ -69,26 +98,8 @@ export default class IssuesList extends React.PureComponent<Props, State> {
       );
     }
 
-    return (
-      <ul>
-        {issues.map((issue, index) => (
-          <ListItem
-            branchLike={branchLike}
-            checked={checked.includes(issue.key)}
-            component={component}
-            issue={issue}
-            key={issue.key}
-            onChange={this.props.onIssueChange}
-            onCheck={this.props.onIssueCheck}
-            onClick={this.props.onIssueClick}
-            onFilterChange={this.props.onFilterChange}
-            onPopupToggle={this.props.onPopupToggle}
-            openPopup={openPopup && openPopup.issue === issue.key ? openPopup.name : undefined}
-            previousIssue={index > 0 ? issues[index - 1] : undefined}
-            selected={selectedIssue != null && selectedIssue.key === issue.key}
-          />
-        ))}
-      </ul>
-    );
+    const issuesByComponent = groupBy(issues, (issue) => `(${issue.component} : ${issue.branch})`);
+
+    return <ul>{Object.values(issuesByComponent).map(this.renderIssueComponentList)}</ul>;
   }
 }

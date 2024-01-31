@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,14 +23,12 @@ import com.google.common.base.Joiner;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.db.protobuf.DbFileSources;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class FileSourceDtoTest {
   private static final String LOREM_IPSUM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam ac magna libero. " +
@@ -39,8 +37,6 @@ public class FileSourceDtoTest {
     "Curabitur sit amet dignissim magna, at efficitur dolor. Ut non felis aliquam justo euismod gravida. Morbi eleifend vitae ante eu pulvinar. " +
     "Aliquam rhoncus magna quis lorem posuere semper.";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void getSourceData_throws_ISE_with_id_fileUuid_and_projectUuid_in_message_when_data_cant_be_read() {
@@ -53,10 +49,9 @@ public class FileSourceDtoTest {
       .setFileUuid(fileUuid)
       .setProjectUuid(projectUuid);
 
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Fail to decompress and deserialize source data [uuid=" + uuid + ",fileUuid=" + fileUuid + ",projectUuid=" + projectUuid + "]");
-
-    underTest.getSourceData();
+    assertThatThrownBy(underTest::getSourceData)
+      .isInstanceOf(IllegalStateException.class)
+      .hasMessage("Fail to decompress and deserialize source data [uuid=" + uuid + ",fileUuid=" + fileUuid + ",projectUuid=" + projectUuid + "]");
   }
 
   @Test
@@ -104,7 +99,7 @@ public class FileSourceDtoTest {
     FileSourceDto underTest = new FileSourceDto();
     underTest.setLineHashes(Collections.emptyList());
 
-    assertThat(underTest.getLineCount()).isEqualTo(1);
+    assertThat(underTest.getLineCount()).isOne();
     assertThat(underTest.getLineHashes()).isEmpty();
     assertThat(underTest.getRawLineHashes()).isNull();
   }
@@ -113,7 +108,7 @@ public class FileSourceDtoTest {
   public void setLineHashes_sets_lineCount_to_size_of_list_and_rawLineHashes_to_join_by_line_return() {
     FileSourceDto underTest = new FileSourceDto();
     int expected = 1 + new Random().nextInt(96);
-    List<String> lineHashes = IntStream.range(0, expected).mapToObj(String::valueOf).collect(Collectors.toList());
+    List<String> lineHashes = IntStream.range(0, expected).mapToObj(String::valueOf).toList();
     underTest.setLineHashes(lineHashes);
 
     assertThat(underTest.getLineCount()).isEqualTo(expected);

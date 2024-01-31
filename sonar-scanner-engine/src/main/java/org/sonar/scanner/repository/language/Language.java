@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ package org.sonar.scanner.repository.language;
 
 import java.util.Arrays;
 import java.util.Collection;
-
+import java.util.Objects;
 import javax.annotation.concurrent.Immutable;
 
 @Immutable
@@ -29,12 +29,17 @@ public final class Language {
 
   private final String key;
   private final String name;
+  private final boolean publishAllFiles;
   private final String[] fileSuffixes;
+  private final String[] filenamePatterns;
 
-  public Language(String key, String name, String... fileSuffixes) {
-    this.key = key;
-    this.name = name;
-    this.fileSuffixes = fileSuffixes;
+
+  public Language(org.sonar.api.resources.Language language) {
+    this.key = language.getKey();
+    this.name = language.getName();
+    this.publishAllFiles = language.publishAllFiles();
+    this.fileSuffixes = language.getFileSuffixes();
+    this.filenamePatterns = language.filenamePatterns();
   }
 
   /**
@@ -58,9 +63,33 @@ public final class Language {
     return Arrays.asList(fileSuffixes);
   }
 
+  public Collection<String> filenamePatterns() {
+    return Arrays.asList(filenamePatterns);
+  }
+
+  public boolean isPublishAllFiles() {
+    return publishAllFiles;
+  }
+
   @Override
   public String toString() {
     return name;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    Language language = (Language) o;
+    return Objects.equals(key, language.key);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key);
+  }
 }

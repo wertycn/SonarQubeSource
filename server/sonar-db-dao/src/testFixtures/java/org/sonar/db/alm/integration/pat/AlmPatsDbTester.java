@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -41,7 +41,7 @@ public class AlmPatsDbTester {
 
   private AlmPatDto insert(AlmPatDto dto, Consumer<AlmPatDto>[] populators) {
     stream(populators).forEach(p -> p.accept(dto));
-    db.getDbClient().almPatDao().insert(db.getSession(), dto);
+    db.getDbClient().almPatDao().insert(db.getSession(), dto, null, null);
     db.commit();
     return dto;
   }

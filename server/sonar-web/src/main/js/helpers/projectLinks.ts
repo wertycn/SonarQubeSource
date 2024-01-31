@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,20 +18,21 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { partition, sortBy } from 'lodash';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../helpers/l10n';
+import { ProjectLink } from '../types/types';
 
 const PROVIDED_TYPES = ['homepage', 'ci', 'issue', 'scm', 'scm_dev'];
-type NameAndType = Pick<T.ProjectLink, 'name' | 'type'>;
+type NameAndType = Pick<ProjectLink, 'name' | 'type'>;
 
-export function isProvided(link: Pick<T.ProjectLink, 'type'>) {
+export function isProvided(link: Pick<ProjectLink, 'type'>) {
   return PROVIDED_TYPES.includes(link.type);
 }
 
 export function orderLinks<T extends NameAndType>(links: T[]) {
   const [provided, unknown] = partition<T>(links, isProvided);
   return [
-    ...sortBy(provided, link => PROVIDED_TYPES.indexOf(link.type)),
-    ...sortBy(unknown, link => link.name && link.name.toLowerCase())
+    ...sortBy(provided, (link) => PROVIDED_TYPES.indexOf(link.type)),
+    ...sortBy(unknown, (link) => link.name?.toLowerCase()),
   ];
 }
 

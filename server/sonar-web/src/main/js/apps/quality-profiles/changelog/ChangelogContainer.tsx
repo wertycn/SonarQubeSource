@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary, Spinner } from 'design-system';
 import * as React from 'react';
-import { WithRouterProps } from 'react-router';
-import { parseDate, toShortNotSoISOString } from 'sonar-ui-common/helpers/dates';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getProfileChangelog } from '../../../api/quality-profiles';
-import { withRouter } from '../../../components/hoc/withRouter';
+import { ChangelogResponse, getProfileChangelog } from '../../../api/quality-profiles';
+import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
+import { parseDate, toISO8601WithOffsetString } from '../../../helpers/dates';
+import { translate } from '../../../helpers/l10n';
+import { withQualityProfilesContext } from '../qualityProfilesContext';
 import { Profile, ProfileChangelogEvent } from '../types';
 import { getProfileChangelogPath } from '../utils';
 import Changelog from './Changelog';
 import ChangelogEmpty from './ChangelogEmpty';
 import ChangelogSearch from './ChangelogSearch';
 
-interface Props extends Pick<WithRouterProps, 'router' | 'location'> {
+interface Props {
   profile: Profile;
+  location: Location;
+  router: Router;
 }
 
 interface State {
@@ -40,7 +43,7 @@ interface State {
   total?: number;
 }
 
-export class ChangelogContainer extends React.PureComponent<Props, State> {
+class ChangelogContainer extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = { loading: true };
 
@@ -69,17 +72,17 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
     this.setState({ loading: true });
     const {
       location: { query },
-      profile
+      profile,
     } = this.props;
 
     getProfileChangelog(query.since, query.to, profile)
-      .then((r: any) => {
+      .then((r: ChangelogResponse) => {
         if (this.mounted) {
           this.setState({
             events: r.events,
-            total: r.total,
-            page: r.p,
-            loading: false
+            total: r.paging.total,
+            page: r.paging.pageIndex,
+            loading: false,
           });
         }
       })
@@ -94,17 +97,17 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
       this.setState({ loading: true });
       const {
         location: { query },
-        profile
+        profile,
       } = this.props;
 
       getProfileChangelog(query.since, query.to, profile, this.state.page + 1)
-        .then((r: any) => {
+        .then((r: ChangelogResponse) => {
           if (this.mounted && this.state.events) {
             this.setState(({ events = [] }) => ({
               events: [...events, ...r.events],
-              total: r.total,
-              page: r.p,
-              loading: false
+              total: r.paging.total,
+              page: r.paging.pageIndex,
+              loading: false,
             }));
           }
         })
@@ -114,8 +117,8 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
 
   handleDateRangeChange = ({ from, to }: { from?: Date; to?: Date }) => {
     const path = getProfileChangelogPath(this.props.profile.name, this.props.profile.language, {
-      since: from && toShortNotSoISOString(from),
-      to: to && toShortNotSoISOString(to)
+      since: from && toISO8601WithOffsetString(from),
+      to: to && toISO8601WithOffsetString(to),
     });
     this.props.router.push(path);
   };
@@ -134,19 +137,18 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
       this.state.events.length < this.state.total;
 
     return (
-      <div className="boxed-group boxed-group-inner js-profile-changelog">
-        <header className="spacer-bottom">
+      <div className="sw-mt-4">
+        <div className="sw-mb-2 sw-flex sw-gap-4 sw-items-center">
           <ChangelogSearch
             dateRange={{
               from: query.since ? parseDate(query.since) : undefined,
-              to: query.to ? parseDate(query.to) : undefined
+              to: query.to ? parseDate(query.to) : undefined,
             }}
             onDateRangeChange={this.handleDateRangeChange}
             onReset={this.handleReset}
           />
-
-          {this.state.loading && <i className="spinner spacer-left" />}
-        </header>
+          <Spinner loading={this.state.loading} />
+        </div>
 
         {this.state.events != null && this.state.events.length === 0 && <ChangelogEmpty />}
 
@@ -155,10 +157,10 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
         )}
 
         {shouldDisplayFooter && (
-          <footer className="text-center spacer-top small">
-            <a href="#" onClick={this.loadMore.bind(this)}>
+          <footer className="sw-text-center sw-mt-2">
+            <ButtonSecondary onClick={this.loadMore.bind(this)}>
               {translate('show_more')}
-            </a>
+            </ButtonSecondary>
           </footer>
         )}
       </div>
@@ -166,4 +168,4 @@ export class ChangelogContainer extends React.PureComponent<Props, State> {
   }
 }
 
-export default withRouter(ChangelogContainer);
+export default withQualityProfilesContext(withRouter(ChangelogContainer));

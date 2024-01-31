@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,36 +19,31 @@
  */
 package org.sonar.server.authentication;
 
-import javax.servlet.FilterChain;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.event.Level;
 import org.sonar.api.server.authentication.BaseIdentityProvider;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.IdentityProvider;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 import org.sonar.api.server.authentication.UnauthorizedException;
-import org.sonar.api.server.authentication.UserIdentity;
-import org.sonar.api.utils.log.LogTester;
-import org.sonar.api.utils.log.LoggerLevel;
-import org.sonar.db.user.UserDto;
+import org.sonar.api.server.http.Cookie;
+import org.sonar.api.server.http.HttpRequest;
+import org.sonar.api.server.http.HttpResponse;
+import org.sonar.api.testfixtures.log.LogTester;
+import org.sonar.api.web.FilterChain;
 import org.sonar.server.authentication.event.AuthenticationEvent;
 import org.sonar.server.authentication.event.AuthenticationException;
-import org.sonar.server.authentication.exception.EmailAlreadyExistsRedirectionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.sonar.db.user.UserTesting.newUserDto;
 
 public class InitFilterTest {
 
@@ -59,15 +54,13 @@ public class InitFilterTest {
   public LogTester logTester = new LogTester();
 
   @Rule
-  public ExpectedException thrown = ExpectedException.none();
-  @Rule
   public IdentityProviderRepositoryRule identityProviderRepository = new IdentityProviderRepositoryRule();
 
   private BaseContextFactory baseContextFactory = mock(BaseContextFactory.class);
   private OAuth2ContextFactory oAuth2ContextFactory = mock(OAuth2ContextFactory.class);
 
-  private HttpServletRequest request = mock(HttpServletRequest.class);
-  private HttpServletResponse response = mock(HttpServletResponse.class);
+  private HttpRequest request = mock(HttpRequest.class);
+  private HttpResponse response = mock(HttpResponse.class);
   private FilterChain chain = mock(FilterChain.class);
 
   private FakeOAuth2IdentityProvider oAuth2IdentityProvider = new FakeOAuth2IdentityProvider(OAUTH2_PROVIDER_KEY, true);
@@ -104,7 +97,7 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertOAuth2InitCalled();
-    verifyZeroInteractions(authenticationEvent);
+    verifyNoInteractions(authenticationEvent);
   }
 
   @Test
@@ -115,7 +108,7 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertOAuth2InitCalled();
-    verifyZeroInteractions(authenticationEvent);
+    verifyNoInteractions(authenticationEvent);
   }
 
   @Test
@@ -126,7 +119,7 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertBasicInitCalled();
-    verifyZeroInteractions(authenticationEvent);
+    verifyNoInteractions(authenticationEvent);
   }
 
   @Test
@@ -137,7 +130,7 @@ public class InitFilterTest {
 
     underTest.doFilter(request, response, chain);
 
-    verify(auth2AuthenticationParameters).init(eq(request), eq(response));
+    verify(auth2AuthenticationParameters).init(request, response);
   }
 
   @Test
@@ -147,7 +140,7 @@ public class InitFilterTest {
 
     underTest.doFilter(request, response, chain);
 
-    verify(auth2AuthenticationParameters, never()).init(eq(request), eq(response));
+    verify(auth2AuthenticationParameters, never()).init(request, response);
   }
 
   @Test
@@ -157,8 +150,8 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertError("No provider key found in URI");
-    verifyZeroInteractions(authenticationEvent);
-    verifyZeroInteractions(auth2AuthenticationParameters);
+    verifyNoInteractions(authenticationEvent);
+    verifyNoInteractions(auth2AuthenticationParameters);
   }
 
   @Test
@@ -168,8 +161,8 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertError("No provider key found in URI");
-    verifyZeroInteractions(authenticationEvent);
-    verifyZeroInteractions(auth2AuthenticationParameters);
+    verifyNoInteractions(authenticationEvent);
+    verifyNoInteractions(auth2AuthenticationParameters);
   }
 
   @Test
@@ -182,8 +175,8 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     assertError("Unsupported IdentityProvider class: class org.sonar.server.authentication.InitFilterTest$UnsupportedIdentityProvider");
-    verifyZeroInteractions(authenticationEvent);
-    verifyZeroInteractions(auth2AuthenticationParameters);
+    verifyNoInteractions(authenticationEvent);
+    verifyNoInteractions(auth2AuthenticationParameters);
   }
 
   @Test
@@ -210,7 +203,7 @@ public class InitFilterTest {
     assertThat(cookie.getPath()).isEqualTo("/");
     assertThat(cookie.isHttpOnly()).isFalse();
     assertThat(cookie.getMaxAge()).isEqualTo(300);
-    assertThat(cookie.getSecure()).isFalse();
+    assertThat(cookie.isSecure()).isFalse();
   }
 
   @Test
@@ -226,27 +219,6 @@ public class InitFilterTest {
   }
 
   @Test
-  public void redirect_contains_cookie_when_failing_because_of_EmailAlreadyExistException() throws Exception {
-    UserDto existingUser = newUserDto().setEmail("john@email.com").setExternalLogin("john.bitbucket").setExternalIdentityProvider("bitbucket");
-    FailWithEmailAlreadyExistException identityProvider = new FailWithEmailAlreadyExistException("failing", existingUser);
-    when(request.getRequestURI()).thenReturn("/sessions/init/" + identityProvider.getKey());
-    identityProviderRepository.addIdentityProvider(identityProvider);
-
-    underTest.doFilter(request, response, chain);
-
-    verify(response).sendRedirect("/sessions/email_already_exists");
-    verify(auth2AuthenticationParameters).delete(eq(request), eq(response));
-    verify(response).addCookie(cookieArgumentCaptor.capture());
-    Cookie cookie = cookieArgumentCaptor.getValue();
-    assertThat(cookie.getName()).isEqualTo("AUTHENTICATION-ERROR");
-    assertThat(cookie.getValue()).contains("john%40email.com");
-    assertThat(cookie.getPath()).isEqualTo("/");
-    assertThat(cookie.isHttpOnly()).isFalse();
-    assertThat(cookie.getMaxAge()).isEqualTo(300);
-    assertThat(cookie.getSecure()).isFalse();
-  }
-
-  @Test
   public void redirect_when_failing_because_of_Exception() throws Exception {
     IdentityProvider identityProvider = new FailWithIllegalStateException("failing");
     when(request.getRequestURI()).thenReturn("/sessions/init/" + identityProvider.getKey());
@@ -255,7 +227,7 @@ public class InitFilterTest {
     underTest.doFilter(request, response, chain);
 
     verify(response).sendRedirect("/sessions/unauthorized");
-    assertThat(logTester.logs(LoggerLevel.WARN)).containsExactlyInAnyOrder("Fail to initialize authentication with provider 'failing'");
+    assertThat(logTester.logs(Level.WARN)).containsExactlyInAnyOrder("Fail to initialize authentication with provider 'failing'");
     verifyDeleteAuthCookie();
   }
 
@@ -272,23 +244,23 @@ public class InitFilterTest {
   }
 
   private void assertOAuth2InitCalled() {
-    assertThat(logTester.logs(LoggerLevel.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
     assertThat(oAuth2IdentityProvider.isInitCalled()).isTrue();
   }
 
   private void assertBasicInitCalled() {
-    assertThat(logTester.logs(LoggerLevel.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR)).isEmpty();
     assertThat(baseIdentityProvider.isInitCalled()).isTrue();
   }
 
   private void assertError(String expectedError) throws Exception {
-    assertThat(logTester.logs(LoggerLevel.WARN)).contains(expectedError);
+    assertThat(logTester.logs(Level.WARN)).contains(expectedError);
     verify(response).sendRedirect("/sessions/unauthorized");
     assertThat(oAuth2IdentityProvider.isInitCalled()).isFalse();
   }
 
   private void verifyDeleteAuthCookie() {
-    verify(auth2AuthenticationParameters).delete(eq(request), eq(response));
+    verify(auth2AuthenticationParameters).delete(request, response);
   }
 
   private static class FailWithUnauthorizedExceptionIdProvider extends FakeBasicIdentityProvider {
@@ -312,25 +284,6 @@ public class InitFilterTest {
     @Override
     public void init(Context context) {
       throw new IllegalStateException("Failure !");
-    }
-  }
-
-  private static class FailWithEmailAlreadyExistException extends FakeBasicIdentityProvider {
-
-    private final UserDto existingUser;
-
-    public FailWithEmailAlreadyExistException(String key, UserDto existingUser) {
-      super(key, true);
-      this.existingUser = existingUser;
-    }
-
-    @Override
-    public void init(Context context) {
-      throw new EmailAlreadyExistsRedirectionException(existingUser.getEmail(), existingUser, UserIdentity.builder()
-        .setProviderLogin("john.github")
-        .setName(existingUser.getName())
-        .setEmail(existingUser.getEmail())
-        .build(), this);
     }
   }
 

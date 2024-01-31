@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,36 +20,33 @@
 package org.sonar.scanner.scan;
 
 import java.util.Locale;
-import org.picocontainer.injectors.ProviderAdapter;
 import org.sonar.api.batch.bootstrap.ProjectReactor;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
 import org.sonar.api.batch.fs.internal.DefaultInputProject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.scan.filesystem.ScannerComponentIdGenerator;
+import org.springframework.context.annotation.Bean;
 
-public class InputProjectProvider extends ProviderAdapter {
+public class InputProjectProvider {
+  private static final Logger LOG = LoggerFactory.getLogger(InputProjectProvider.class);
 
-  private static final Logger LOG = Loggers.get(InputProjectProvider.class);
-
-  private DefaultInputProject project = null;
-
+  @Bean("DefaultInputProject")
   public DefaultInputProject provide(ProjectBuildersExecutor projectBuildersExecutor, ProjectReactorValidator validator,
-    ProjectReactor projectReactor, ScannerComponentIdGenerator scannerComponentIdGenerator) {
-    if (project == null) {
-      // 1 Apply project builders
-      projectBuildersExecutor.execute(projectReactor);
+    ProjectReactor projectReactor, ScannerComponentIdGenerator scannerComponentIdGenerator, WorkDirectoriesInitializer workDirectoriesInit) {
+    // 1 Apply project builders
+    projectBuildersExecutor.execute(projectReactor);
 
-      // 2 Validate final reactor
-      validator.validate(projectReactor);
+    // 2 Validate final reactor
+    validator.validate(projectReactor);
 
-      // 3 Create project
-      project = new DefaultInputProject(projectReactor.getRoot(), scannerComponentIdGenerator.getAsInt());
+    // 3 Create project
+    DefaultInputProject project = new DefaultInputProject(projectReactor.getRoot(), scannerComponentIdGenerator.getAsInt());
+    workDirectoriesInit.execute(project);
 
-      LOG.info("Project key: {}", project.key());
-      LOG.info("Base dir: {}", project.getBaseDir().toAbsolutePath().toString());
-      LOG.info("Working dir: {}", project.getWorkDir().toAbsolutePath().toString());
-      LOG.debug("Project global encoding: {}, default locale: {}", project.getEncoding().displayName(), Locale.getDefault());
-    }
+    LOG.info("Project key: {}", project.key());
+    LOG.info("Base dir: {}", project.getBaseDir().toAbsolutePath().toString());
+    LOG.info("Working dir: {}", project.getWorkDir().toAbsolutePath().toString());
+    LOG.debug("Project global encoding: {}, default locale: {}", project.getEncoding().displayName(), Locale.getDefault());
     return project;
   }
 }

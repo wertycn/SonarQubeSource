@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -49,7 +49,7 @@ public class AddedFileRepositoryImpl implements MutableAddedFileRepository {
   public void register(Component component) {
     checkComponent(component);
     checkArgument(component.getType() == Component.Type.FILE, "component must be a file");
-    checkState(!analysisMetadataHolder.isFirstAnalysis(), "No file can be registered on first analysis");
+    checkState(analysisMetadataHolder.isPullRequest() || !analysisMetadataHolder.isFirstAnalysis(), "No file can be registered on first branch analysis");
 
     addedComponents.add(component);
   }

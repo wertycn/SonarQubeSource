@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,23 +20,19 @@
 package org.sonar.db;
 
 import java.util.Random;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.db.Pagination.forPage;
 
-
 public class PaginationTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void all_is_page_1_with_MAX_INTEGER_page_size() {
     Pagination pagination = Pagination.all();
 
-    assertThat(pagination.getPage()).isEqualTo(1);
+    assertThat(pagination.getPage()).isOne();
     assertThat(pagination.getPageSize()).isEqualTo(Integer.MAX_VALUE);
   }
 
@@ -47,38 +43,34 @@ public class PaginationTest {
 
   @Test
   public void forPage_fails_with_IAE_if_page_is_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("page index must be >= 1");
-
-    forPage(0);
+    assertThatThrownBy(() -> forPage(0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("page index must be >= 1");
   }
 
   @Test
   public void forPage_fails_with_IAE_if_page_is_less_than_0() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("page index must be >= 1");
-
-    forPage(-Math.abs(new Random().nextInt()) - 1);
+    assertThatThrownBy(() -> forPage(-Math.abs(new Random().nextInt()) - 1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("page index must be >= 1");
   }
 
   @Test
   public void andSize_fails_with_IAE_if_size_is_0() {
     Pagination.Builder builder = forPage(1);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("page size must be >= 1");
-
-    builder.andSize(0);
+    assertThatThrownBy(() -> builder.andSize(0))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("page size must be >= 1");
   }
 
   @Test
   public void andSize_fails_with_IAE_if_size_is_less_than_0() {
     Pagination.Builder builder = forPage(1);
 
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("page size must be >= 1");
-
-    builder.andSize(-Math.abs(new Random().nextInt()) - 1);
+    assertThatThrownBy(() -> builder.andSize(-Math.abs(new Random().nextInt()) - 1))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("page size must be >= 1");
   }
 
   @Test
@@ -86,13 +78,6 @@ public class PaginationTest {
     assertThat(forPage(2).andSize(3).getOffset()).isEqualTo(3);
     assertThat(forPage(5).andSize(3).getOffset()).isEqualTo(12);
     assertThat(forPage(5).andSize(1).getOffset()).isEqualTo(4);
-  }
-
-  @Test
-  public void startRowNumber_is_computed_from_page_and_size() {
-    assertThat(forPage(2).andSize(3).getStartRowNumber()).isEqualTo(4);
-    assertThat(forPage(5).andSize(3).getStartRowNumber()).isEqualTo(13);
-    assertThat(forPage(5).andSize(1).getStartRowNumber()).isEqualTo(5);
   }
 
   @Test

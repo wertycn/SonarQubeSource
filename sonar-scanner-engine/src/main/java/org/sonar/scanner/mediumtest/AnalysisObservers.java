@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,20 +19,16 @@
  */
 package org.sonar.scanner.mediumtest;
 
-import org.sonar.scanner.scan.ProjectScanContainer;
+import org.sonar.scanner.scan.SpringProjectScanContainer;
 
 public class AnalysisObservers {
 
-  private AnalysisObserver[] observers;
-  private ProjectScanContainer projectScanContainer;
+  private final AnalysisObserver[] observers;
+  private final SpringProjectScanContainer projectScanContainer;
 
-  public AnalysisObservers(ProjectScanContainer projectScanContainer, AnalysisObserver... observers) {
+  public AnalysisObservers(SpringProjectScanContainer projectScanContainer, AnalysisObserver... observers) {
     this.projectScanContainer = projectScanContainer;
     this.observers = observers;
-  }
-
-  public AnalysisObservers(ProjectScanContainer projectScanContainer) {
-    this(projectScanContainer, new AnalysisObserver[0]);
   }
 
   public void notifyEndOfScanTask() {

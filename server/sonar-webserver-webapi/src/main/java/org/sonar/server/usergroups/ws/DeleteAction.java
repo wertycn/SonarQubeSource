@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,7 @@
  */
 package org.sonar.server.usergroups.ws;
 
+import java.util.Set;
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -28,11 +29,13 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.user.GroupDto;
+import org.sonar.server.common.group.service.GroupService;
+import org.sonar.server.exceptions.BadRequestException;
+import org.sonar.server.exceptions.NotFoundException;
+import org.sonar.server.management.ManagedInstanceService;
 import org.sonar.server.user.UserSession;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.String.format;
-import static org.sonar.server.usergroups.ws.GroupWsSupport.PARAM_GROUP_ID;
 import static org.sonar.server.usergroups.ws.GroupWsSupport.PARAM_GROUP_NAME;
 import static org.sonar.server.usergroups.ws.GroupWsSupport.defineGroupWsParameters;
 
@@ -40,25 +43,29 @@ public class DeleteAction implements UserGroupsWsAction {
 
   private final DbClient dbClient;
   private final UserSession userSession;
-  private final GroupWsSupport support;
+  private final GroupService groupService;
+  private final ManagedInstanceService managedInstanceService;
 
-  public DeleteAction(DbClient dbClient, UserSession userSession, GroupWsSupport support) {
+  public DeleteAction(DbClient dbClient, UserSession userSession, GroupService groupService, ManagedInstanceService managedInstanceService) {
     this.dbClient = dbClient;
     this.userSession = userSession;
-    this.support = support;
+    this.groupService = groupService;
+    this.managedInstanceService = managedInstanceService;
   }
 
   @Override
   public void define(NewController context) {
     WebService.NewAction action = context.createAction("delete")
       .setDescription(format("Delete a group. The default groups cannot be deleted.<br/>" +
-          "'%s' or '%s' must be provided.<br />" +
-          "Requires the following permission: 'Administer System'.",
-        PARAM_GROUP_ID, PARAM_GROUP_NAME))
+        "'%s' must be provided.<br />" +
+        "Requires the following permission: 'Administer System'.", PARAM_GROUP_NAME))
       .setHandler(this)
       .setSince("5.2")
+      .setDeprecatedSince("10.4")
       .setPost(true)
       .setChangelog(
+        new Change("10.4", "Deprecated. Use DELETE /api/v2/authorizations/groups instead"),
+        new Change("10.0", "Parameter 'id' is removed. Use 'name' instead."),
         new Change("8.4", "Parameter 'id' is deprecated. Format changes from integer to string. Use 'name' instead."));
 
     defineGroupWsParameters(action);
@@ -67,38 +74,26 @@ public class DeleteAction implements UserGroupsWsAction {
   @Override
   public void handle(Request request, Response response) throws Exception {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      GroupDto group = support.findGroupDto(dbSession, request);
       userSession.checkPermission(GlobalPermission.ADMINISTER);
-
-      support.checkGroupIsNotDefault(dbSession, group);
-      checkNotTryingToDeleteLastAdminGroup(dbSession, group);
-      removeGroupPermissions(dbSession, group);
-      removeFromPermissionTemplates(dbSession, group);
-      removeGroupMembers(dbSession, group);
-      dbClient.qProfileEditGroupsDao().deleteByGroup(dbSession, group);
-      dbClient.groupDao().deleteByUuid(dbSession, group.getUuid());
+      GroupDto group = findGroupOrThrow(request, dbSession);
+      checkIfInstanceAndGroupAreManaged(dbSession, group);
+      groupService.delete(dbSession, group);
 
       dbSession.commit();
       response.noContent();
     }
   }
 
-  private void checkNotTryingToDeleteLastAdminGroup(DbSession dbSession, GroupDto group) {
-    int remaining = dbClient.authorizationDao().countUsersWithGlobalPermissionExcludingGroup(dbSession,
-      GlobalPermission.ADMINISTER.getKey(), group.getUuid());
-
-    checkArgument(remaining > 0, "The last system admin group cannot be deleted");
+  private void checkIfInstanceAndGroupAreManaged(DbSession dbSession, GroupDto group) {
+    boolean isGroupManaged = managedInstanceService.getGroupUuidToManaged(dbSession, Set.of(group.getUuid())).getOrDefault(group.getUuid(), false);
+    if (isGroupManaged) {
+      throw BadRequestException.create("Deleting managed groups is not allowed.");
+    }
   }
 
-  private void removeGroupPermissions(DbSession dbSession, GroupDto group) {
-    dbClient.roleDao().deleteGroupRolesByGroupUuid(dbSession, group.getUuid());
-  }
-
-  private void removeFromPermissionTemplates(DbSession dbSession, GroupDto group) {
-    dbClient.permissionTemplateDao().deleteByGroup(dbSession, group.getUuid());
-  }
-
-  private void removeGroupMembers(DbSession dbSession, GroupDto group) {
-    dbClient.userGroupDao().deleteByGroupUuid(dbSession, group.getUuid());
+  private GroupDto findGroupOrThrow(Request request, DbSession dbSession) {
+    String groupName = request.mandatoryParam(PARAM_GROUP_NAME);
+    return groupService.findGroup(dbSession, groupName)
+      .orElseThrow(() -> new NotFoundException(format("No group with name '%s'", groupName)));
   }
 }

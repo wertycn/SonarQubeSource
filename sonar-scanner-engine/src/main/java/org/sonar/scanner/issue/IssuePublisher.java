@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,19 +19,28 @@
  */
 package org.sonar.scanner.issue;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 import org.apache.commons.lang.StringUtils;
 import org.sonar.api.batch.fs.TextRange;
+import org.sonar.api.batch.fs.internal.DefaultInputComponent;
+import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.batch.rule.ActiveRule;
 import org.sonar.api.batch.rule.ActiveRules;
 import org.sonar.api.batch.sensor.issue.ExternalIssue;
 import org.sonar.api.batch.sensor.issue.Issue;
 import org.sonar.api.batch.sensor.issue.Issue.Flow;
-import org.sonar.api.batch.fs.internal.DefaultInputComponent;
-import org.sonar.api.batch.fs.internal.DefaultInputFile;
+import org.sonar.api.batch.sensor.issue.MessageFormatting;
+import org.sonar.api.batch.sensor.issue.NewIssue.FlowType;
+import org.sonar.api.batch.sensor.issue.internal.DefaultIssueFlow;
+import org.sonar.api.issue.impact.SoftwareQuality;
+import org.sonar.api.rules.CleanCodeAttribute;
+import org.sonar.api.rules.RuleType;
 import org.sonar.scanner.protocol.Constants.Severity;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.scanner.protocol.output.ScannerReport.IssueLocation;
@@ -79,9 +88,9 @@ public class IssuePublisher {
   private static boolean noSonar(DefaultInputComponent inputComponent, Issue issue) {
     TextRange textRange = issue.primaryLocation().textRange();
     return inputComponent.isFile()
-      && textRange != null
-      && ((DefaultInputFile) inputComponent).hasNoSonarAt(textRange.start().line())
-      && !StringUtils.containsIgnoreCase(issue.ruleKey().rule(), "nosonar");
+           && textRange != null
+           && ((DefaultInputFile) inputComponent).hasNoSonarAt(textRange.start().line())
+           && !StringUtils.containsIgnoreCase(issue.ruleKey().rule(), "nosonar");
   }
 
   public void initAndAddExternalIssue(ExternalIssue issue) {
@@ -110,7 +119,10 @@ public class IssuePublisher {
     builder.setRuleRepository(issue.ruleKey().repository());
     builder.setRuleKey(issue.ruleKey().rule());
     builder.setMsg(primaryMessage);
+    builder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
+    builder.addAllOverridenImpacts(toProtobufImpacts(issue.overridenImpacts()));
     locationBuilder.setMsg(primaryMessage);
+    locationBuilder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
 
     locationBuilder.setComponentRef(componentRef);
     TextRange primaryTextRange = issue.primaryLocation().textRange();
@@ -122,28 +134,61 @@ public class IssuePublisher {
       builder.setGap(gap);
     }
     applyFlows(builder::addFlow, locationBuilder, textRangeBuilder, issue.flows());
+    builder.setQuickFixAvailable(issue.isQuickFixAvailable());
+    issue.ruleDescriptionContextKey().ifPresent(builder::setRuleDescriptionContextKey);
+    List<String> codeVariants = issue.codeVariants();
+    if (codeVariants != null) {
+      builder.addAllCodeVariants(codeVariants);
+    }
     return builder.build();
+  }
+
+  private static List<ScannerReport.Impact> toProtobufImpacts(Map<SoftwareQuality, org.sonar.api.issue.impact.Severity> softwareQualitySeverityMap) {
+    List<ScannerReport.Impact> impacts = new ArrayList<>();
+    softwareQualitySeverityMap.forEach((q, s) -> impacts.add(ScannerReport.Impact.newBuilder().setSoftwareQuality(q.name()).setSeverity(s.name()).build()));
+    return impacts;
+  }
+
+  private static List<ScannerReport.MessageFormatting> toProtobufMessageFormattings(List<MessageFormatting> messageFormattings) {
+    return messageFormattings.stream()
+      .map(m -> ScannerReport.MessageFormatting.newBuilder()
+        .setStart(m.start())
+        .setEnd(m.end())
+        .setType(ScannerReport.MessageFormattingType.valueOf(m.type().name()))
+        .build())
+      .toList();
   }
 
   private static ScannerReport.ExternalIssue createReportExternalIssue(ExternalIssue issue, int componentRef) {
     // primary location of an external issue must have a message
     String primaryMessage = issue.primaryLocation().message();
-    Severity severity = Severity.valueOf(issue.severity().name());
-    IssueType issueType = IssueType.valueOf(issue.type().name());
-
     ScannerReport.ExternalIssue.Builder builder = ScannerReport.ExternalIssue.newBuilder();
     ScannerReport.IssueLocation.Builder locationBuilder = IssueLocation.newBuilder();
     ScannerReport.TextRange.Builder textRangeBuilder = ScannerReport.TextRange.newBuilder();
+
     // non-null fields
-    builder.setSeverity(severity);
-    builder.setType(issueType);
     builder.setEngineId(issue.engineId());
     builder.setRuleId(issue.ruleId());
     builder.setMsg(primaryMessage);
+    builder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
     locationBuilder.setMsg(primaryMessage);
-
+    locationBuilder.addAllMsgFormatting(toProtobufMessageFormattings(issue.primaryLocation().messageFormattings()));
     locationBuilder.setComponentRef(componentRef);
     TextRange primaryTextRange = issue.primaryLocation().textRange();
+
+    //nullable fields
+    CleanCodeAttribute cleanCodeAttribute = issue.cleanCodeAttribute();
+    if (cleanCodeAttribute != null) {
+      builder.setCleanCodeAttribute(cleanCodeAttribute.name());
+    }
+    org.sonar.api.batch.rule.Severity severity = issue.severity();
+    if (severity != null) {
+      builder.setSeverity(Severity.valueOf(severity.name()));
+    }
+    RuleType issueType = issue.type();
+    if (issueType != null) {
+      builder.setType(IssueType.valueOf(issueType.name()));
+    }
     if (primaryTextRange != null) {
       builder.setTextRange(toProtobufTextRange(textRangeBuilder, primaryTextRange));
     }
@@ -152,13 +197,15 @@ public class IssuePublisher {
       builder.setEffort(effort);
     }
     applyFlows(builder::addFlow, locationBuilder, textRangeBuilder, issue.flows());
+    builder.addAllImpacts(toProtobufImpacts(issue.impacts()));
     return builder.build();
   }
 
   private static void applyFlows(Consumer<ScannerReport.Flow> consumer, ScannerReport.IssueLocation.Builder locationBuilder,
     ScannerReport.TextRange.Builder textRangeBuilder, Collection<Flow> flows) {
     ScannerReport.Flow.Builder flowBuilder = ScannerReport.Flow.newBuilder();
-    for (Flow flow : flows) {
+    for (Flow f : flows) {
+      DefaultIssueFlow flow = (DefaultIssueFlow) f;
       if (flow.locations().isEmpty()) {
         return;
       }
@@ -170,6 +217,7 @@ public class IssuePublisher {
         String message = location.message();
         if (message != null) {
           locationBuilder.setMsg(message);
+          locationBuilder.addAllMsgFormatting(toProtobufMessageFormattings(location.messageFormattings()));
         }
         TextRange textRange = location.textRange();
         if (textRange != null) {
@@ -177,7 +225,24 @@ public class IssuePublisher {
         }
         flowBuilder.addLocation(locationBuilder.build());
       }
+      if (flow.description() != null) {
+        flowBuilder.setDescription(flow.description());
+      }
+      flowBuilder.setType(toProtobufFlowType(flow.type()));
       consumer.accept(flowBuilder.build());
+    }
+  }
+
+  private static ScannerReport.FlowType toProtobufFlowType(FlowType flowType) {
+    switch (flowType) {
+      case EXECUTION:
+        return ScannerReport.FlowType.EXECUTION;
+      case DATA:
+        return ScannerReport.FlowType.DATA;
+      case UNDEFINED:
+        return ScannerReport.FlowType.UNDEFINED;
+      default:
+        throw new IllegalArgumentException("Unrecognized flow type: " + flowType);
     }
   }
 

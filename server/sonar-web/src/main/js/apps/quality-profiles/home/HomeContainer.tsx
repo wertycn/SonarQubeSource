@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,33 +18,31 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Actions } from '../../../api/quality-profiles';
-import { Location } from '../../../components/hoc/withRouter';
-import { Profile } from '../types';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { QualityProfilesContextProps } from '../qualityProfilesContext';
 import Evolution from './Evolution';
+import LanguageSelect from './LanguageSelect';
 import PageHeader from './PageHeader';
 import ProfilesList from './ProfilesList';
 
-interface Props {
-  actions: Actions;
-  languages: Array<{ key: string; name: string }>;
-  location: Location;
-  profiles: Profile[];
-  updateProfiles: () => Promise<void>;
-}
+export default function HomeContainer() {
+  const context = useOutletContext<QualityProfilesContextProps>();
+  const [searchParams] = useSearchParams();
 
-export default function HomeContainer(props: Props) {
+  const selectedLanguage = searchParams.get('language') ?? undefined;
+
   return (
     <div>
-      <PageHeader {...props} />
+      <PageHeader {...context} />
 
-      <div className="page-with-sidebar">
-        <div className="page-main">
-          <ProfilesList {...props} />
-        </div>
-        <div className="page-sidebar">
-          <Evolution {...props} />
-        </div>
+      <div className="sw-grid sw-grid-cols-3 sw-gap-12 sw-mt-12">
+        <main className="sw-col-span-2">
+          <LanguageSelect currentFilter={selectedLanguage} languages={context.languages} />
+          <ProfilesList {...context} language={selectedLanguage} />
+        </main>
+        <aside>
+          <Evolution {...context} />
+        </aside>
       </div>
     </div>
   );

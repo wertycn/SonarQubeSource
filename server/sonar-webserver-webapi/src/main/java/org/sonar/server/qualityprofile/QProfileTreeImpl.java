@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -24,13 +24,15 @@ import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
 import org.sonar.api.utils.System2;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.OrgActiveRuleDto;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.exceptions.BadRequestException;
+import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventService;
+import org.sonar.server.qualityprofile.builtin.RuleActivationContext;
+import org.sonar.server.qualityprofile.builtin.RuleActivator;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 
 import static org.sonar.server.exceptions.BadRequestException.checkRequest;
@@ -41,12 +43,15 @@ public class QProfileTreeImpl implements QProfileTree {
   private final RuleActivator ruleActivator;
   private final System2 system2;
   private final ActiveRuleIndexer activeRuleIndexer;
+  private final QualityProfileChangeEventService qualityProfileChangeEventService;
 
-  public QProfileTreeImpl(DbClient db, RuleActivator ruleActivator, System2 system2, ActiveRuleIndexer activeRuleIndexer) {
+  public QProfileTreeImpl(DbClient db, RuleActivator ruleActivator, System2 system2, ActiveRuleIndexer activeRuleIndexer,
+    QualityProfileChangeEventService qualityProfileChangeEventService) {
     this.db = db;
     this.ruleActivator = ruleActivator;
     this.system2 = system2;
     this.activeRuleIndexer = activeRuleIndexer;
+    this.qualityProfileChangeEventService = qualityProfileChangeEventService;
   }
 
   @Override
@@ -73,15 +78,18 @@ public class QProfileTreeImpl implements QProfileTree {
     }
 
     checkRequest(!isDescendant(dbSession, profile, parent), "Descendant profile '%s' can not be selected as parent of '%s'", parent.getKee(), profile.getKee());
-    changes.addAll(removeParent(dbSession, profile));
 
     // set new parent
     profile.setParentKee(parent.getKee());
     db.qualityProfileDao().update(dbSession, profile);
 
+    List<OrgActiveRuleDto> activeRules = db.activeRuleDao().selectByProfile(dbSession, profile);
     List<OrgActiveRuleDto> parentActiveRules = db.activeRuleDao().selectByProfile(dbSession, parent);
-    Collection<String> ruleUuids = parentActiveRules.stream().map(ActiveRuleDto::getRuleUuid).collect(MoreCollectors.toArrayList());
-    RuleActivationContext context = ruleActivator.createContextForUserProfile(dbSession, profile, ruleUuids);
+
+    changes = getChangesFromRulesToBeRemoved(dbSession, profile, getRulesDifference(activeRules, parentActiveRules));
+
+    Collection<String> parentRuleUuids = parentActiveRules.stream().map(ActiveRuleDto::getRuleUuid).toList();
+    RuleActivationContext context = ruleActivator.createContextForUserProfile(dbSession, profile, parentRuleUuids);
 
     for (ActiveRuleDto parentActiveRule : parentActiveRules) {
       try {
@@ -92,7 +100,18 @@ public class QProfileTreeImpl implements QProfileTree {
         // TODO return errors
       }
     }
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), changes, profile.getLanguage());
     return changes;
+  }
+
+  private static List<OrgActiveRuleDto> getRulesDifference(Collection<OrgActiveRuleDto> rulesCollection1, Collection<OrgActiveRuleDto> rulesCollection2) {
+    Collection<String> rulesCollection2Uuids = rulesCollection2.stream()
+      .map(ActiveRuleDto::getRuleUuid)
+      .toList();
+
+    return rulesCollection1.stream()
+      .filter(rule -> !rulesCollection2Uuids.contains(rule.getRuleUuid()))
+      .toList();
   }
 
   private List<ActiveRuleChange> removeParent(DbSession dbSession, QProfileDto profile) {
@@ -105,10 +124,19 @@ public class QProfileTreeImpl implements QProfileTree {
     db.qualityProfileDao().update(dbSession, profile);
 
     List<OrgActiveRuleDto> activeRules = db.activeRuleDao().selectByProfile(dbSession, profile);
-    Collection<String> ruleUuids = activeRules.stream().map(ActiveRuleDto::getRuleUuid).collect(MoreCollectors.toArrayList());
+    changes = getChangesFromRulesToBeRemoved(dbSession, profile, activeRules);
+
+    qualityProfileChangeEventService.distributeRuleChangeEvent(List.of(profile), changes, profile.getLanguage());
+    return changes;
+  }
+
+  private List<ActiveRuleChange> getChangesFromRulesToBeRemoved(DbSession dbSession, QProfileDto profile, List<OrgActiveRuleDto> rules) {
+    List<ActiveRuleChange> changes = new ArrayList<>();
+
+    Collection<String> ruleUuids = rules.stream().map(ActiveRuleDto::getRuleUuid).toList();
     RuleActivationContext context = ruleActivator.createContextForUserProfile(dbSession, profile, ruleUuids);
 
-    for (OrgActiveRuleDto activeRule : activeRules) {
+    for (OrgActiveRuleDto activeRule : rules) {
       if (ActiveRuleDto.INHERITED.equals(activeRule.getInheritance())) {
         changes.addAll(ruleActivator.deactivate(dbSession, context, activeRule.getRuleUuid(), true));
 
@@ -120,6 +148,7 @@ public class QProfileTreeImpl implements QProfileTree {
         changes.add(new ActiveRuleChange(ActiveRuleChange.Type.UPDATED, activeRule, context.getRule().get()).setInheritance(null));
       }
     }
+
     return changes;
   }
 

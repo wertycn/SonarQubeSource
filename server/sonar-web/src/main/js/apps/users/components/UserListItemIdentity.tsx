@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,59 +17,66 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+
+import { Badge, Note, getTextColor } from 'design-system';
 import * as React from 'react';
-import { getTextColor } from 'sonar-ui-common/helpers/colors';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
 import { colors } from '../../../app/theme';
+import { translate } from '../../../helpers/l10n';
+import { getBaseUrl } from '../../../helpers/system';
+import { IdentityProvider, Provider } from '../../../types/types';
+import { RestUserDetailed } from '../../../types/users';
 
 export interface Props {
-  identityProvider?: T.IdentityProvider;
-  user: T.User;
+  identityProvider?: IdentityProvider;
+  user: RestUserDetailed;
+  manageProvider: Provider | undefined;
 }
 
-export default function UserListItemIdentity({ identityProvider, user }: Props) {
+export default function UserListItemIdentity({ identityProvider, user, manageProvider }: Props) {
   return (
-    <td className="text-middle">
-      <div>
-        <strong className="js-user-name">{user.name}</strong>
-        <span className="js-user-login note little-spacer-left">{user.login}</span>
+    <div>
+      <div className="sw-flex sw-flex-col">
+        <strong className="it__user-name sw-body-sm-highlight">{user.name}</strong>
+        <Note className="it__user-login">{user.login}</Note>
       </div>
-      {user.email && <div className="js-user-email little-spacer-top">{user.email}</div>}
+      {user.email && <div className="it__user-email sw-mt-1">{user.email}</div>}
       {!user.local && user.externalProvider !== 'sonarqube' && (
         <ExternalProvider identityProvider={identityProvider} user={user} />
       )}
-    </td>
+      {!user.managed && manageProvider !== undefined && <Badge>{translate('local')}</Badge>}
+    </div>
   );
 }
 
-export function ExternalProvider({ identityProvider, user }: Props) {
+export function ExternalProvider({ identityProvider, user }: Omit<Props, 'manageProvider'>) {
   if (!identityProvider) {
     return (
-      <div className="js-user-identity-provider little-spacer-top">
+      <div className="it__user-identity-provider sw-mt-1">
         <span>
-          {user.externalProvider}: {user.externalIdentity}
+          {user.externalProvider}: {user.externalLogin}
         </span>
       </div>
     );
   }
 
   return (
-    <div className="js-user-identity-provider little-spacer-top">
-      <div
-        className="identity-provider"
+    <div className="it__user-identity-provider sw-mt-1">
+      <span
+        className="sw-inline-flex sw-items-center sw-px-1"
         style={{
           backgroundColor: identityProvider.backgroundColor,
-          color: getTextColor(identityProvider.backgroundColor, colors.secondFontColor)
-        }}>
+          color: getTextColor(identityProvider.backgroundColor, colors.secondFontColor),
+        }}
+      >
         <img
           alt={identityProvider.name}
-          className="little-spacer-right"
+          className="sw-mr-1"
           height="14"
           src={getBaseUrl() + identityProvider.iconPath}
           width="14"
         />
-        {user.externalIdentity}
-      </div>
+        {user.externalLogin}
+      </span>
     </div>
   );
 }

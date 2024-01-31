@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -66,6 +66,12 @@ public class ComponentsPublisher implements ReportPublisherStep {
       fileBuilder.setIsTest(file.type() == InputFile.Type.TEST);
       fileBuilder.setLines(file.lines());
       fileBuilder.setStatus(convert(file.status()));
+      fileBuilder.setMarkedAsUnchanged(file.isMarkedAsUnchanged());
+
+      String oldRelativePath = file.oldRelativePath();
+      if (oldRelativePath != null) {
+        fileBuilder.setOldRelativeFilePath(oldRelativePath);
+      }
 
       String lang = getLanguageKey(file);
       if (lang != null) {

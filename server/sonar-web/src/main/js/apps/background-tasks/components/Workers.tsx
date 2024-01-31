@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  FlagWarningIcon,
+  HelperHintIcon,
+  InteractiveIcon,
+  PencilIcon,
+  Spinner,
+} from 'design-system';
 import * as React from 'react';
-import { EditButton } from 'sonar-ui-common/components/controls/buttons';
-import HelpTooltip from 'sonar-ui-common/components/controls/HelpTooltip';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import AlertWarnIcon from 'sonar-ui-common/components/icons/AlertWarnIcon';
-import PlusCircleIcon from 'sonar-ui-common/components/icons/PlusCircleIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getWorkers } from '../../../api/ce';
-import { colors } from '../../../app/theme';
+import HelpTooltip from '../../../components/controls/HelpTooltip';
+import Tooltip from '../../../components/controls/Tooltip';
+import { translate } from '../../../helpers/l10n';
 import NoWorkersSupportPopup from './NoWorkersSupportPopup';
 import WorkersForm from './WorkersForm';
 
@@ -33,7 +36,6 @@ interface State {
   canSetWorkerCount: boolean;
   formOpen: boolean;
   loading: boolean;
-  noSupportPopup: boolean;
   workerCount: number;
 }
 
@@ -43,8 +45,7 @@ export default class Workers extends React.PureComponent<{}, State> {
     canSetWorkerCount: false,
     formOpen: false,
     loading: true,
-    noSupportPopup: false,
-    workerCount: 1
+    workerCount: 1,
   };
 
   componentDidMount() {
@@ -64,7 +65,7 @@ export default class Workers extends React.PureComponent<{}, State> {
           this.setState({
             canSetWorkerCount,
             loading: false,
-            workerCount: value
+            workerCount: value,
           });
         }
       },
@@ -72,7 +73,7 @@ export default class Workers extends React.PureComponent<{}, State> {
         if (this.mounted) {
           this.setState({ loading: false });
         }
-      }
+      },
     );
   };
 
@@ -85,55 +86,41 @@ export default class Workers extends React.PureComponent<{}, State> {
     this.setState({ formOpen: true });
   };
 
-  handleHelpClick = (event: React.SyntheticEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    this.toggleNoSupportPopup();
-  };
-
-  toggleNoSupportPopup = (show?: boolean) => {
-    if (show !== undefined) {
-      this.setState({ noSupportPopup: show });
-    } else {
-      this.setState(state => ({ noSupportPopup: !state.noSupportPopup }));
-    }
-  };
-
   render() {
     const { canSetWorkerCount, formOpen, loading, workerCount } = this.state;
 
     return (
-      <div className="display-flex-center">
+      <div className="sw-flex sw-items-center">
         {!loading && workerCount > 1 && (
           <Tooltip overlay={translate('background_tasks.number_of_workers.warning')}>
-            <span className="display-inline-flex-center little-spacer-right">
-              <AlertWarnIcon fill="#d3d3d3" />
-            </span>
+            <div className="sw-py-1/2 sw-mr-1">
+              <FlagWarningIcon />
+            </div>
           </Tooltip>
         )}
 
-        <span className="text-middle">
-          {translate('background_tasks.number_of_workers')}
+        <span id="ww">{translate('background_tasks.number_of_workers')}</span>
 
-          {loading ? (
-            <i className="spinner little-spacer-left" />
-          ) : (
-            <strong className="little-spacer-left">{workerCount}</strong>
-          )}
-        </span>
+        <Spinner className="sw-ml-1" loading={loading}>
+          <strong aria-labelledby="ww" className="sw-ml-1">
+            {workerCount}
+          </strong>
+        </Spinner>
 
         {!loading && canSetWorkerCount && (
           <Tooltip overlay={translate('background_tasks.change_number_of_workers')}>
-            <EditButton
-              className="js-edit button-small spacer-left"
+            <InteractiveIcon
+              Icon={PencilIcon}
+              aria-label={translate('background_tasks.change_number_of_workers')}
+              className="js-edit sw-ml-2"
               onClick={this.handleChangeClick}
             />
           </Tooltip>
         )}
 
         {!loading && !canSetWorkerCount && (
-          <HelpTooltip className="spacer-left" overlay={<NoWorkersSupportPopup />}>
-            <PlusCircleIcon fill={colors.blue} size={12} />
+          <HelpTooltip className="sw-ml-2" overlay={<NoWorkersSupportPopup />}>
+            <HelperHintIcon />
           </HelpTooltip>
         )}
 

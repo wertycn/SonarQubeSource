@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,15 +28,15 @@ import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService.NewController;
 import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.project.ProjectDto;
+import org.sonar.db.property.PropertyQuery;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.issue.AvatarResolver;
+import org.sonar.server.common.avatar.AvatarResolver;
 import org.sonar.server.permission.PermissionService;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Users.CurrentWsResponse;
@@ -47,9 +47,9 @@ import static java.util.Collections.singletonList;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.Optional.ofNullable;
-import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang.StringUtils.EMPTY;
 import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.server.user.ws.DismissNoticeAction.AVAILABLE_NOTICE_KEYS;
 import static org.sonar.server.ws.WsUtils.writeProtobuf;
 import static org.sonarqube.ws.Users.CurrentWsResponse.Permissions;
 import static org.sonarqube.ws.Users.CurrentWsResponse.newBuilder;
@@ -86,7 +86,11 @@ public class CurrentAction implements UsersWsAction {
       .setResponseExample(getClass().getResource("current-example.json"))
       .setChangelog(
         new Change("6.5", "showOnboardingTutorial is now returned in the response"),
-        new Change("7.1", "'parameter' is replaced by 'component' and 'organization' in the response"));
+        new Change("7.1", "'parameter' is replaced by 'component' and 'organization' in the response"),
+        new Change("9.2", "boolean 'usingSonarLintConnectedMode' and 'sonarLintAdSeen' fields are now returned in the response"),
+        new Change("9.5", "showOnboardingTutorial is not returned anymore in the response"),
+        new Change("9.6", "'sonarLintAdSeen' is removed and replaced by a 'dismissedNotices' map that support multiple values")
+      );
   }
 
   @Override
@@ -97,9 +101,9 @@ public class CurrentAction implements UsersWsAction {
       }
     } else {
       writeProtobuf(newBuilder()
-        .setIsLoggedIn(false)
-        .setPermissions(Permissions.newBuilder().addAllGlobal(getGlobalPermissions()).build())
-        .build(),
+          .setIsLoggedIn(false)
+          .setPermissions(Permissions.newBuilder().addAllGlobal(getGlobalPermissions()).build())
+          .build(),
         request, response);
     }
   }
@@ -115,11 +119,13 @@ public class CurrentAction implements UsersWsAction {
       .setName(user.getName())
       .setLocal(user.isLocal())
       .addAllGroups(groups)
-      .addAllScmAccounts(user.getScmAccountsAsList())
+      .addAllScmAccounts(user.getSortedScmAccounts())
       .setPermissions(Permissions.newBuilder().addAllGlobal(getGlobalPermissions()).build())
       .setHomepage(buildHomepage(dbSession, user))
-      .setShowOnboardingTutorial(!user.isOnboarded())
-      .addAllSettings(loadUserSettings(dbSession, user));
+      .setUsingSonarLintConnectedMode(user.getLastSonarlintConnectionDate() != null);
+
+    AVAILABLE_NOTICE_KEYS.forEach(key -> builder.putDismissedNotices(key, isNoticeDismissed(user, key)));
+    
     ofNullable(emptyToNull(user.getEmail())).ifPresent(builder::setEmail);
     ofNullable(emptyToNull(user.getEmail())).ifPresent(u -> builder.setAvatar(avatarResolver.create(user)));
     ofNullable(user.getExternalLogin()).ifPresent(builder::setExternalIdentity);
@@ -131,7 +137,19 @@ public class CurrentAction implements UsersWsAction {
     return permissionService.getGlobalPermissions().stream()
       .filter(userSession::hasPermission)
       .map(GlobalPermission::getKey)
-      .collect(toList());
+      .toList();
+  }
+
+  private boolean isNoticeDismissed(UserDto user, String noticeName) {
+    String paramKey = DismissNoticeAction.USER_DISMISS_CONSTANT + noticeName;
+    PropertyQuery query = new PropertyQuery.Builder()
+      .setUserUuid(user.getUuid())
+      .setKey(paramKey)
+      .build();
+
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return !dbClient.propertiesDao().selectByQuery(query, dbSession).isEmpty();
+    }
   }
 
   private CurrentWsResponse.Homepage buildHomepage(DbSession dbSession, UserDto user) {
@@ -176,7 +194,7 @@ public class CurrentAction implements UsersWsAction {
   }
 
   private boolean shouldCleanProjectHomepage(Optional<ProjectDto> projectOptional, Optional<BranchDto> branchOptional) {
-    return !projectOptional.isPresent() || !branchOptional.isPresent() || !userSession.hasProjectPermission(USER, projectOptional.get());
+    return !projectOptional.isPresent() || !branchOptional.isPresent() || !userSession.hasEntityPermission(USER, projectOptional.get());
   }
 
   private Optional<CurrentWsResponse.Homepage> applicationAndPortfolioHomepage(DbSession dbSession, UserDto user) {
@@ -202,13 +220,10 @@ public class CurrentAction implements UsersWsAction {
     if (!edition.isPresent()) {
       return false;
     }
-    switch (edition.get()) {
-      case ENTERPRISE:
-      case DATACENTER:
-        return true;
-      default:
-        return false;
-    }
+    return switch (edition.get()) {
+      case ENTERPRISE, DATACENTER -> true;
+      default -> false;
+    };
   }
 
   private void cleanUserHomepageInDb(DbSession dbSession, UserDto user) {
@@ -219,16 +234,6 @@ public class CurrentAction implements UsersWsAction {
     return CurrentWsResponse.Homepage.newBuilder()
       .setType(CurrentWsResponse.HomepageType.valueOf(homepageTypes.getDefaultType().name()))
       .build();
-  }
-
-  private List<CurrentWsResponse.Setting> loadUserSettings(DbSession dbSession, UserDto user) {
-    return dbClient.userPropertiesDao().selectByUser(dbSession, user)
-      .stream()
-      .map(dto -> CurrentWsResponse.Setting.newBuilder()
-        .setKey(dto.getKey())
-        .setValue(dto.getValue())
-        .build())
-      .collect(MoreCollectors.toList());
   }
 
   private static boolean noHomepageSet(UserDto user) {

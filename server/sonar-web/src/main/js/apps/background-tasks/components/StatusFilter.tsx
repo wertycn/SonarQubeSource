@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,45 +17,50 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { InputSelect, LabelValueSelectOption } from 'design-system';
 import * as React from 'react';
-import Select from 'sonar-ui-common/components/controls/Select';
-import { translate } from 'sonar-ui-common/helpers/l10n';
+import { translate } from '../../../helpers/l10n';
 import { TaskStatuses } from '../../../types/tasks';
 import { STATUSES } from '../constants';
 
-interface Props {
+interface StatusFilterProps {
   value?: string;
+  id: string;
   onChange: (value?: string) => void;
 }
 
-export default class StatusFilter extends React.PureComponent<Props> {
-  handleChange = ({ value }: { value: string }) => {
-    this.props.onChange(value);
-  };
+export default function StatusFilter(props: Readonly<StatusFilterProps>) {
+  const { id, value, onChange } = props;
 
-  render() {
-    const options = [
-      { value: STATUSES.ALL, label: translate('background_task.status.ALL') },
-      {
-        value: STATUSES.ALL_EXCEPT_PENDING,
-        label: translate('background_task.status.ALL_EXCEPT_PENDING')
-      },
-      { value: TaskStatuses.Pending, label: translate('background_task.status.PENDING') },
-      { value: TaskStatuses.InProgress, label: translate('background_task.status.IN_PROGRESS') },
-      { value: TaskStatuses.Success, label: translate('background_task.status.SUCCESS') },
-      { value: TaskStatuses.Failed, label: translate('background_task.status.FAILED') },
-      { value: TaskStatuses.Canceled, label: translate('background_task.status.CANCELED') }
-    ];
+  const options: LabelValueSelectOption<string>[] = [
+    { value: STATUSES.ALL, label: translate('background_task.status.ALL') },
+    {
+      value: STATUSES.ALL_EXCEPT_PENDING,
+      label: translate('background_task.status.ALL_EXCEPT_PENDING'),
+    },
+    { value: TaskStatuses.Pending, label: translate('background_task.status.PENDING') },
+    { value: TaskStatuses.InProgress, label: translate('background_task.status.IN_PROGRESS') },
+    { value: TaskStatuses.Success, label: translate('background_task.status.SUCCESS') },
+    { value: TaskStatuses.Failed, label: translate('background_task.status.FAILED') },
+    { value: TaskStatuses.Canceled, label: translate('background_task.status.CANCELED') },
+  ];
 
-    return (
-      <Select
-        className="input-medium"
-        clearable={false}
-        onChange={this.handleChange}
-        options={options}
-        searchable={false}
-        value={this.props.value}
-      />
-    );
-  }
+  const handleChange = React.useCallback(
+    ({ value }: LabelValueSelectOption<string>) => {
+      onChange(value);
+    },
+    [onChange],
+  );
+
+  return (
+    <InputSelect
+      aria-labelledby="background-task-status-filter-label"
+      className="sw-w-abs-200"
+      id={id}
+      onChange={handleChange}
+      options={options}
+      size="medium"
+      value={options.find((o) => o.value === value)}
+    />
+  );
 }

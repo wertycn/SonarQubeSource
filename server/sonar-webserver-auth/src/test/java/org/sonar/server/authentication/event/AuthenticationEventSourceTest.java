@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,12 +20,11 @@
 package org.sonar.server.authentication.event;
 
 import java.io.Serializable;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.server.authentication.BaseIdentityProvider;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -34,48 +33,42 @@ import static org.sonar.server.authentication.event.AuthenticationEvent.Provider
 import static org.sonar.server.authentication.event.AuthenticationEvent.Source;
 
 public class AuthenticationEventSourceTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Test
   public void local_fails_with_NPE_if_method_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("method can't be null");
-
-    Source.local(null);
+    assertThatThrownBy(() -> Source.local(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("method can't be null");
   }
 
   @Test
   public void local_creates_source_instance_with_specified_method_and_hardcoded_provider_and_provider_name() {
-    Source underTest = Source.local(Method.BASIC_TOKEN);
+    Source underTest = Source.local(Method.SONARQUBE_TOKEN);
 
-    assertThat(underTest.getMethod()).isEqualTo(Method.BASIC_TOKEN);
+    assertThat(underTest.getMethod()).isEqualTo(Method.SONARQUBE_TOKEN);
     assertThat(underTest.getProvider()).isEqualTo(Provider.LOCAL);
     assertThat(underTest.getProviderName()).isEqualTo("local");
   }
 
   @Test
   public void oauth2_fails_with_NPE_if_provider_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("identityProvider can't be null");
-
-    Source.oauth2(null);
+    assertThatThrownBy(() ->  Source.oauth2(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("identityProvider can't be null");
   }
 
   @Test
   public void oauth2_fails_with_NPE_if_providerName_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("provider name can't be null");
-
-    Source.oauth2(newOauth2IdentityProvider(null));
+    assertThatThrownBy(() -> Source.oauth2(newOauth2IdentityProvider(null)))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("provider name can't be null");
   }
 
   @Test
   public void oauth2_fails_with_IAE_if_providerName_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("provider name can't be empty");
-
-    Source.oauth2(newOauth2IdentityProvider(""));
+    assertThatThrownBy(() -> Source.oauth2(newOauth2IdentityProvider("")))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("provider name can't be empty");
   }
 
   @Test
@@ -89,26 +82,23 @@ public class AuthenticationEventSourceTest {
 
   @Test
   public void realm_fails_with_NPE_if_method_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("method can't be null");
-
-    Source.realm(null, "name");
+    assertThatThrownBy(() -> Source.realm(null, "name"))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("method can't be null");
   }
 
   @Test
   public void realm_fails_with_NPE_if_providerName_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("provider name can't be null");
-
-    Source.realm(Method.BASIC, null);
+    assertThatThrownBy(() -> Source.realm(Method.BASIC, null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("provider name can't be null");
   }
 
   @Test
   public void realm_fails_with_IAE_if_providerName_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("provider name can't be empty");
-
-    Source.realm(Method.BASIC, "");
+    assertThatThrownBy(() -> Source.realm(Method.BASIC, ""))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("provider name can't be empty");
   }
 
   @Test
@@ -144,26 +134,23 @@ public class AuthenticationEventSourceTest {
 
   @Test
   public void external_fails_with_NPE_if_provider_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("identityProvider can't be null");
-
-    Source.external(null);
+    assertThatThrownBy(() -> Source.external(null))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("identityProvider can't be null");
   }
 
   @Test
   public void external_fails_with_NPE_if_providerName_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("provider name can't be null");
-
-    Source.external(newBasicIdentityProvider(null));
+    assertThatThrownBy(() -> Source.external(newBasicIdentityProvider(null)))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("provider name can't be null");
   }
 
   @Test
   public void external_fails_with_IAE_if_providerName_is_empty() {
-    expectedException.expect(IllegalArgumentException.class);
-    expectedException.expectMessage("provider name can't be empty");
-
-    Source.external(newBasicIdentityProvider(""));
+    assertThatThrownBy(() -> Source.external(newBasicIdentityProvider("")))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("provider name can't be empty");
   }
 
   @Test
@@ -194,7 +181,7 @@ public class AuthenticationEventSourceTest {
     assertThat(Source.sso()).isNotEqualTo(Source.jwt());
     assertThat(Source.jwt()).isEqualTo(Source.jwt());
     assertThat(Source.local(Method.BASIC)).isEqualTo(Source.local(Method.BASIC));
-    assertThat(Source.local(Method.BASIC)).isNotEqualTo(Source.local(Method.BASIC_TOKEN));
+    assertThat(Source.local(Method.BASIC)).isNotEqualTo(Source.local(Method.SONARQUBE_TOKEN));
     assertThat(Source.local(Method.BASIC)).isNotEqualTo(Source.sso());
     assertThat(Source.local(Method.BASIC)).isNotEqualTo(Source.jwt());
     assertThat(Source.local(Method.BASIC)).isNotEqualTo(Source.oauth2(newOauth2IdentityProvider("voo")));

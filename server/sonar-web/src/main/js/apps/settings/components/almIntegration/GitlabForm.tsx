@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Link } from 'design-system';
 import * as React from 'react';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { GitlabBindingDefinition } from '../../../../types/alm-settings';
+import { FormattedMessage } from 'react-intl';
+import { ALM_DOCUMENTATION_PATHS } from '../../../../helpers/constants';
+import { useDocUrl } from '../../../../helpers/docs';
+import { translate } from '../../../../helpers/l10n';
+import { AlmKeys, GitlabBindingDefinition } from '../../../../types/alm-settings';
 import { AlmBindingDefinitionFormField } from './AlmBindingDefinitionFormField';
 
 export interface GitlabFormProps {
@@ -29,16 +33,17 @@ export interface GitlabFormProps {
 
 export default function GitlabForm(props: GitlabFormProps) {
   const { formData, onFieldChange } = props;
-
+  const toStatic = useDocUrl(ALM_DOCUMENTATION_PATHS[AlmKeys.GitLab]);
   return (
     <>
       <AlmBindingDefinitionFormField
-        autoFocus={true}
+        autoFocus
         help={translate('settings.almintegration.form.name.gitlab.help')}
         id="name.gitlab"
         onFieldChange={onFieldChange}
         propKey="key"
         value={formData.key}
+        maxLength={200}
       />
       <AlmBindingDefinitionFormField
         help={
@@ -55,13 +60,35 @@ export default function GitlabForm(props: GitlabFormProps) {
         value={formData.url || ''}
       />
       <AlmBindingDefinitionFormField
-        help={translate('settings.almintegration.form.personal_access_token.gitlab.help')}
+        help={
+          <FormattedMessage
+            defaultMessage={translate(
+              `settings.almintegration.form.personal_access_token.gitlab.help`,
+            )}
+            id="settings.almintegration.form.personal_access_token.gitlab.help"
+            values={{
+              pat: (
+                <Link
+                  to="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+                  target="_blank"
+                >
+                  {translate('settings.almintegration.form.personal_access_token.gitlab.help.url')}
+                </Link>
+              ),
+              permission: <strong>Reporter</strong>,
+              scope: <strong>api</strong>,
+              doc_link: <Link to={toStatic}>{translate('learn_more')}</Link>,
+            }}
+          />
+        }
         id="personal_access_token"
-        isTextArea={true}
+        isTextArea
         onFieldChange={onFieldChange}
         overwriteOnly={Boolean(formData.key)}
         propKey="personalAccessToken"
         value={formData.personalAccessToken}
+        maxLength={2000}
+        isSecret
       />
     </>
   );

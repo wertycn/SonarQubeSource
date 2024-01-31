@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,14 @@
  */
 package org.sonar.server.almsettings.ws;
 
+import java.util.regex.Pattern;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.alm.setting.ALM;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.server.almsettings.MultipleAlmFeatureProvider;
+import org.sonar.server.almsettings.MultipleAlmFeature;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.exceptions.NotFoundException;
@@ -38,48 +39,58 @@ import static org.sonar.api.web.UserRole.ADMIN;
 @ServerSide
 public class AlmSettingsSupport {
 
+  private static final Pattern WORKSPACE_ID_PATTERN = Pattern.compile("^[a-z0-9\\-_]+$");
+
   private final DbClient dbClient;
   private final UserSession userSession;
   private final ComponentFinder componentFinder;
-  private final MultipleAlmFeatureProvider multipleAlmFeatureProvider;
+  private final MultipleAlmFeature multipleAlmFeature;
 
   public AlmSettingsSupport(DbClient dbClient, UserSession userSession, ComponentFinder componentFinder,
-    MultipleAlmFeatureProvider multipleAlmFeatureProvider) {
+    MultipleAlmFeature multipleAlmFeature) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.componentFinder = componentFinder;
-    this.multipleAlmFeatureProvider = multipleAlmFeatureProvider;
-  }
-
-  public MultipleAlmFeatureProvider getMultipleAlmFeatureProvider() {
-    return multipleAlmFeatureProvider;
+    this.multipleAlmFeature = multipleAlmFeature;
   }
 
   public void checkAlmSettingDoesNotAlreadyExist(DbSession dbSession, String almSetting) {
     dbClient.almSettingDao().selectByKey(dbSession, almSetting)
       .ifPresent(a -> {
-        throw new IllegalArgumentException(format("An ALM setting with key '%s' already exists", a.getKey()));
+        throw new IllegalArgumentException(format("An DevOps Platform setting with key '%s' already exists", a.getKey()));
       });
   }
 
   public void checkAlmMultipleFeatureEnabled(ALM alm) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      if (!multipleAlmFeatureProvider.enabled() && !dbClient.almSettingDao().selectByAlm(dbSession, alm).isEmpty()) {
+      if (!multipleAlmFeature.isAvailable() && !dbClient.almSettingDao().selectByAlm(dbSession, alm).isEmpty()) {
         throw BadRequestException.create("A " + alm + " setting is already defined");
       }
-
     }
   }
 
-  public ProjectDto getProject(DbSession dbSession, String projectKey) {
+  public void checkBitbucketCloudWorkspaceIDFormat(String workspaceId) {
+    if (!WORKSPACE_ID_PATTERN.matcher(workspaceId).matches()) {
+      throw BadRequestException.create(String.format(
+        "Workspace ID '%s' has an incorrect format. Should only contain lowercase letters, numbers, dashes, and underscores.",
+        workspaceId
+      ));
+    }
+  }
+
+  public ProjectDto getProjectAsAdmin(DbSession dbSession, String projectKey) {
+    return getProject(dbSession, projectKey, ADMIN);
+  }
+
+  public ProjectDto getProject(DbSession dbSession, String projectKey, String projectPermission) {
     ProjectDto project = componentFinder.getProjectByKey(dbSession, projectKey);
-    userSession.checkProjectPermission(ADMIN, project);
+    userSession.checkEntityPermission(projectPermission, project);
     return project;
   }
 
   public AlmSettingDto getAlmSetting(DbSession dbSession, String almSetting) {
     return dbClient.almSettingDao().selectByKey(dbSession, almSetting)
-      .orElseThrow(() -> new NotFoundException(format("ALM setting with key '%s' cannot be found", almSetting)));
+      .orElseThrow(() -> new NotFoundException(format("DevOps Platform setting with key '%s' cannot be found", almSetting)));
   }
 
   public static AlmSettings.Alm toAlmWs(ALM alm) {
@@ -95,7 +106,7 @@ public class AlmSettingsSupport {
       case GITLAB:
         return AlmSettings.Alm.gitlab;
       default:
-        throw new IllegalStateException(format("Unknown ALM '%s'", alm.name()));
+        throw new IllegalStateException(format("Unknown DevOps Platform '%s'", alm.name()));
     }
   }
 }

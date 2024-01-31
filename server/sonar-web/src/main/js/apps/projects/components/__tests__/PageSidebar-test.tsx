@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,72 +17,83 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { shallow } from 'enzyme';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import * as React from 'react';
+import { CurrentUserContext } from '../../../../app/components/current-user/CurrentUserContext';
+import { mockCurrentUser } from '../../../../helpers/testMocks';
+import { renderComponent } from '../../../../helpers/testReactTestingUtils';
+import { CurrentUser } from '../../../../types/users';
 import PageSidebar, { PageSidebarProps } from '../PageSidebar';
 
-it('should render correctly', () => {
-  const sidebar = shallowRender({
+it('should render the right facets for overview', () => {
+  renderPageSidebar({
     query: { size: '3' },
-    view: 'overall',
-    visualization: 'risk'
   });
 
-  expect(sidebar).toMatchSnapshot();
+  expect(screen.getByText('metric_domain.Size')).toBeInTheDocument();
+
+  expect(screen.getByText('projects.facets.qualifier')).toBeInTheDocument();
+
+  expect(screen.queryByText('projects.facets.new_lines')).not.toBeInTheDocument();
 });
 
-it('should render correctly with no applications', () => {
-  const sidebar = shallowRender({
+it('should not show the qualifier facet with no applications', () => {
+  renderPageSidebar({
     applicationsEnabled: false,
     query: { size: '3' },
-    view: 'overall',
-    visualization: 'risk'
   });
 
-  expect(sidebar).toMatchSnapshot();
+  expect(screen.queryByText('projects.facets.qualifier')).not.toBeInTheDocument();
 });
 
-it('should render `leak` view correctly', () => {
-  const sidebar = shallowRender({
+it('should show "new lines" instead of "size" when in `leak` view', () => {
+  renderPageSidebar({
     query: { view: 'leak' },
     view: 'leak',
-    visualization: 'risk'
   });
-  expect(sidebar).toMatchSnapshot();
+
+  expect(screen.queryByText('metric_domain.Size')).not.toBeInTheDocument();
+  expect(screen.getByText('projects.facets.new_lines')).toBeInTheDocument();
 });
 
-it('should render `leak` view correctly with no applications', () => {
-  const sidebar = shallowRender({
+it('should allow to clear all filters', async () => {
+  const user = userEvent.setup();
+  const onClearAll = jest.fn();
+  renderPageSidebar({
+    onClearAll,
     applicationsEnabled: false,
-    query: { view: 'leak' },
-    view: 'leak',
-    visualization: 'risk'
-  });
-  expect(sidebar).toMatchSnapshot();
-});
-
-it('reset function should work correctly with view and visualizations', () => {
-  const sidebar = shallowRender({
-    query: { view: 'visualizations', visualization: 'bugs' },
-    view: 'visualizations',
-    visualization: 'bugs'
+    query: { size: '3', reliability: '2' },
   });
 
-  expect(sidebar.find('ClearAll').exists()).toBe(false);
-  sidebar.setProps({ query: { size: '3' } });
-  expect(sidebar.find('ClearAll').exists()).toBe(true);
+  const clearAllButton = screen.getByRole('button', { name: 'clear_all_filters' });
+  expect(clearAllButton).toBeInTheDocument();
+
+  await user.click(clearAllButton);
+
+  expect(onClearAll).toHaveBeenCalled();
+
+  expect(screen.getByRole('heading', { level: 2, name: 'filters' })).toHaveFocus();
 });
 
-function shallowRender(overrides: Partial<PageSidebarProps> = {}) {
-  return shallow(
-    <PageSidebar
-      applicationsEnabled={true}
-      onClearAll={jest.fn()}
-      onQueryChange={jest.fn()}
-      query={{ view: 'visualizations', visualization: 'bugs' }}
-      view="overall"
-      visualization="bugs"
-      {...overrides}
-    />
-  );
+function renderPageSidebar(overrides: Partial<PageSidebarProps> = {}, currentUser?: CurrentUser) {
+  return renderComponent(
+    <CurrentUserContext.Provider
+      value={{
+        currentUser: currentUser ?? mockCurrentUser(),
+        updateCurrentUserHomepage: jest.fn(),
+        updateDismissedNotices: jest.fn(),
+      }}
+    >
+      <PageSidebar
+        applicationsEnabled
+        loadSearchResultCount={jest.fn().mockResolvedValue({})}
+        onClearAll={jest.fn()}
+        onQueryChange={jest.fn()}
+        query={{ view: 'overall' }}
+        view="overall"
+        {...overrides}
+      />
+    </CurrentUserContext.Provider>,
+  ).container;
 }

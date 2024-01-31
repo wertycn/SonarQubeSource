@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,6 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import java.util.Collections;
 import java.util.List;
@@ -36,10 +35,10 @@ import org.sonar.ce.task.projectanalysis.formula.CreateMeasureContext;
 import org.sonar.ce.task.projectanalysis.formula.Formula;
 import org.sonar.ce.task.projectanalysis.formula.FormulaExecutorComponentVisitor;
 import org.sonar.ce.task.projectanalysis.formula.counter.IntValue;
+import org.sonar.ce.task.projectanalysis.formula.coverage.LinesAndConditionsWithUncoveredFormula;
 import org.sonar.ce.task.projectanalysis.formula.coverage.LinesAndConditionsWithUncoveredMetricKeys;
-import org.sonar.ce.task.projectanalysis.formula.coverage.LinesAndConditionsWithUncoveredVariationFormula;
+import org.sonar.ce.task.projectanalysis.formula.coverage.SingleWithUncoveredFormula;
 import org.sonar.ce.task.projectanalysis.formula.coverage.SingleWithUncoveredMetricKeys;
-import org.sonar.ce.task.projectanalysis.formula.coverage.SingleWithUncoveredVariationFormula;
 import org.sonar.ce.task.projectanalysis.measure.Measure;
 import org.sonar.ce.task.projectanalysis.measure.MeasureRepository;
 import org.sonar.ce.task.projectanalysis.metric.Metric;
@@ -57,15 +56,15 @@ import static org.sonar.api.measures.CoreMetrics.NEW_UNCOVERED_LINES_KEY;
 import static org.sonar.ce.task.projectanalysis.measure.Measure.newMeasureBuilder;
 
 /**
- * Computes measures related to the New Coverage. These measures do not have values, only variations.
+ * Computes measures related to the New Coverage.
  */
 public class NewCoverageMeasuresStep implements ComputationStep {
-
-  private static final List<Formula> FORMULAS = ImmutableList.of(
+  private static final List<Formula<?>> FORMULAS = List.of(
     // UT coverage
     new NewCoverageFormula(),
     new NewBranchCoverageFormula(),
-    new NewLineCoverageFormula());
+    new NewLineCoverageFormula()
+  );
 
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
@@ -96,7 +95,7 @@ public class NewCoverageMeasuresStep implements ComputationStep {
     return "Compute new coverage";
   }
 
-  private static class NewCoverageFormula extends LinesAndConditionsWithUncoveredVariationFormula {
+  private static class NewCoverageFormula extends LinesAndConditionsWithUncoveredFormula {
     NewCoverageFormula() {
       super(
         new LinesAndConditionsWithUncoveredMetricKeys(
@@ -106,7 +105,7 @@ public class NewCoverageMeasuresStep implements ComputationStep {
     }
   }
 
-  private static class NewBranchCoverageFormula extends SingleWithUncoveredVariationFormula {
+  private static class NewBranchCoverageFormula extends SingleWithUncoveredFormula {
     NewBranchCoverageFormula() {
       super(
         new SingleWithUncoveredMetricKeys(NEW_CONDITIONS_TO_COVER_KEY, NEW_UNCOVERED_CONDITIONS_KEY),
@@ -114,7 +113,7 @@ public class NewCoverageMeasuresStep implements ComputationStep {
     }
   }
 
-  private static class NewLineCoverageFormula extends SingleWithUncoveredVariationFormula {
+  private static class NewLineCoverageFormula extends SingleWithUncoveredFormula {
     NewLineCoverageFormula() {
       super(
         new SingleWithUncoveredMetricKeys(NEW_LINES_TO_COVER_KEY, NEW_UNCOVERED_LINES_KEY),
@@ -144,7 +143,7 @@ public class NewCoverageMeasuresStep implements ComputationStep {
     public Optional<Measure> createMeasure(NewCoverageCounter counter, CreateMeasureContext context) {
       if (counter.hasNewCode()) {
         int value = computeValueForMetric(counter, context.getMetric());
-        return Optional.of(newMeasureBuilder().setVariation(value).createNoValue());
+        return Optional.of(newMeasureBuilder().create(value));
       }
       return Optional.empty();
     }
@@ -200,7 +199,7 @@ public class NewCoverageMeasuresStep implements ComputationStep {
     @Override
     public void initialize(CounterInitializationContext context) {
       Component component = context.getLeaf();
-      if (component.getType() != Component.Type.FILE) {
+      if (component.getType() != Component.Type.FILE || component.getFileAttributes().isUnitTest()) {
         return;
       }
       Optional<Set<Integer>> newLinesSet = newLinesRepository.getNewLines(component);

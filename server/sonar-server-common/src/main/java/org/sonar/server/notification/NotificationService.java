@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,16 +29,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.notifications.Notification;
-import org.sonar.api.notifications.NotificationChannel;
 import org.sonar.api.server.ServerSide;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
-import org.sonar.core.util.stream.MoreCollectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.db.DbClient;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -46,12 +46,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 @ComputeEngineSide
 public class NotificationService {
 
-  private static final Logger LOG = Loggers.get(NotificationService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(NotificationService.class);
 
   private final List<NotificationDispatcher> dispatchers;
   private final List<NotificationHandler<? extends Notification>> handlers;
   private final DbClient dbClient;
 
+  @Autowired(required = false)
   public NotificationService(DbClient dbClient, NotificationDispatcher[] dispatchers, NotificationHandler<? extends Notification>[] handlers) {
     this.dbClient = dbClient;
     this.dispatchers = ImmutableList.copyOf(dispatchers);
@@ -59,22 +60,25 @@ public class NotificationService {
   }
 
   /**
-   * Used by Pico when there are no handler nor dispatcher.
+   * Used by the ioc container when there are no handler nor dispatcher.
    */
+  @Autowired(required = false)
   public NotificationService(DbClient dbClient) {
     this(dbClient, new NotificationDispatcher[0], new NotificationHandler[0]);
   }
 
   /**
-   * Used by Pico when there are no dispatcher.
+   * Used by the ioc container when there are no dispatcher.
    */
+  @Autowired(required = false)
   public NotificationService(DbClient dbClient, NotificationHandler[] handlers) {
     this(dbClient, new NotificationDispatcher[0], handlers);
   }
 
   /**
-   * Used by Pico when there are no handler.
+   * Used by the ioc container when there are no handler.
    */
+  @Autowired(required = false)
   public NotificationService(DbClient dbClient, NotificationDispatcher[] dispatchers) {
     this(dbClient, dispatchers, new NotificationHandler[0]);
   }
@@ -161,7 +165,7 @@ public class NotificationService {
       .filter(Optional::isPresent)
       .map(Optional::get)
       .map(NotificationDispatcherMetadata::getDispatcherKey)
-      .collect(MoreCollectors.toSet(notificationTypes.size()));
+      .collect(Collectors.toSet());
 
     return dbClient.propertiesDao().hasProjectNotificationSubscribersForDispatchers(projectUuid, dispatcherKeys);
   }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,8 +19,6 @@
  */
 package org.sonar.scanner.bootstrap;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.concurrent.Immutable;
 
@@ -33,7 +31,7 @@ public class GlobalServerSettings {
   private final Map<String, String> properties;
 
   public GlobalServerSettings(Map<String, String> properties) {
-    this.properties = Collections.unmodifiableMap(new HashMap<>(properties));
+    this.properties = Map.copyOf(properties);
   }
 
   public Map<String, String> properties() {

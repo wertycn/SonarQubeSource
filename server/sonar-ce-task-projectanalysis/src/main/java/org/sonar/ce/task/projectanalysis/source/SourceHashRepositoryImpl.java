@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,12 +43,12 @@ public class SourceHashRepositoryImpl implements SourceHashRepository {
   @Override
   public String getRawSourceHash(Component file) {
     checkComponentArgument(file);
-    if (rawSourceHashesByKey.containsKey(file.getDbKey())) {
-      return checkSourceHash(file.getDbKey(), rawSourceHashesByKey.get(file.getDbKey()));
+    if (rawSourceHashesByKey.containsKey(file.getKey())) {
+      return checkSourceHash(file.getKey(), rawSourceHashesByKey.get(file.getKey()));
     } else {
       String newSourceHash = computeRawSourceHash(file);
-      rawSourceHashesByKey.put(file.getDbKey(), newSourceHash);
-      return checkSourceHash(file.getDbKey(), newSourceHash);
+      rawSourceHashesByKey.put(file.getKey(), newSourceHash);
+      return checkSourceHash(file.getKey(), newSourceHash);
     }
   }
 

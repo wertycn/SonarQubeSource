@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,10 @@ import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.apache.commons.lang.RandomStringUtils.randomNumeric;
 
 public class AlmSettingsTesting {
+
+  private AlmSettingsTesting() {
+
+  }
 
   public static AlmSettingDto newGithubAlmSettingDto() {
     return new AlmSettingDto()
@@ -82,7 +86,7 @@ public class AlmSettingsTesting {
       .setMonorepo(false);
   }
 
-  static ProjectAlmSettingDto newGitlabProjectAlmSettingDto(AlmSettingDto gitlabAlmSetting, ProjectDto project) {
+  public static ProjectAlmSettingDto newGitlabProjectAlmSettingDto(AlmSettingDto gitlabAlmSetting, ProjectDto project) {
     return new ProjectAlmSettingDto()
       .setAlmSettingUuid(gitlabAlmSetting.getUuid())
       .setProjectUuid(project.getUuid())

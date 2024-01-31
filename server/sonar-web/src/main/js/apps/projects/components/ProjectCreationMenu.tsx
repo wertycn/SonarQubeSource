@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,22 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ButtonSecondary,
+  ChevronDownIcon,
+  Dropdown,
+  ItemDivider,
+  ItemLink,
+  PopupPlacement,
+  PopupZLevel,
+} from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import Dropdown from 'sonar-ui-common/components/controls/Dropdown';
-import DropdownIcon from 'sonar-ui-common/components/icons/DropdownIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
 import { getAlmSettings } from '../../../api/alm-settings';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
 import { IMPORT_COMPATIBLE_ALMS } from '../../../helpers/constants';
+import { translate } from '../../../helpers/l10n';
 import { hasGlobalPermission } from '../../../helpers/users';
 import { AlmKeys, AlmSettingsInstance } from '../../../types/alm-settings';
 import { Permissions } from '../../../types/permissions';
+import { LoggedInUser } from '../../../types/users';
 import ProjectCreationMenuItem from './ProjectCreationMenuItem';
 
 interface Props {
-  className?: string;
-  currentUser: T.LoggedInUser;
+  currentUser: LoggedInUser;
 }
 
 interface State {
@@ -42,9 +48,9 @@ interface State {
 const almSettingsValidators = {
   [AlmKeys.Azure]: (settings: AlmSettingsInstance) => !!settings.url,
   [AlmKeys.BitbucketServer]: (_: AlmSettingsInstance) => true,
-  [AlmKeys.BitbucketCloud]: (_: AlmSettingsInstance) => false,
+  [AlmKeys.BitbucketCloud]: (_: AlmSettingsInstance) => true,
   [AlmKeys.GitHub]: (_: AlmSettingsInstance) => true,
-  [AlmKeys.GitLab]: (settings: AlmSettingsInstance) => !!settings.url
+  [AlmKeys.GitLab]: (settings: AlmSettingsInstance) => !!settings.url,
 };
 
 export class ProjectCreationMenu extends React.PureComponent<Props, State> {
@@ -76,28 +82,24 @@ export class ProjectCreationMenu extends React.PureComponent<Props, State> {
 
     const almSettings: AlmSettingsInstance[] = await getAlmSettings().catch(() => []);
 
-    // Import is only available if exactly one binding is configured
-    const boundAlms = IMPORT_COMPATIBLE_ALMS.filter(key => {
-      let currentAlmSettings: AlmSettingsInstance[];
-      if (key === AlmKeys.BitbucketServer || key === AlmKeys.BitbucketCloud) {
-        currentAlmSettings = almSettings.filter(
-          s => s.alm === AlmKeys.BitbucketCloud || s.alm === AlmKeys.BitbucketServer
-        );
-      } else {
-        currentAlmSettings = almSettings.filter(s => s.alm === key);
-      }
-      return currentAlmSettings.length === 1 && this.almSettingIsValid(currentAlmSettings[0]);
+    const boundAlms = IMPORT_COMPATIBLE_ALMS.filter((key) => {
+      const currentAlmSettings = almSettings.filter((s) => s.alm === key);
+      return (
+        currentAlmSettings.length > 0 &&
+        key === currentAlmSettings[0].alm &&
+        this.almSettingIsValid(currentAlmSettings[0])
+      );
     });
 
     if (this.mounted) {
       this.setState({
-        boundAlms
+        boundAlms,
       });
     }
   };
 
   render() {
-    const { className, currentUser } = this.props;
+    const { currentUser } = this.props;
     const { boundAlms } = this.state;
 
     const canCreateProject = hasGlobalPermission(currentUser, Permissions.ProjectCreation);
@@ -108,24 +110,35 @@ export class ProjectCreationMenu extends React.PureComponent<Props, State> {
 
     return (
       <Dropdown
-        className={className}
-        onOpen={this.fetchAlmBindings}
+        id="project-creation-menu"
+        size="auto"
+        placement={PopupPlacement.BottomRight}
+        zLevel={PopupZLevel.Global}
         overlay={
-          <ul className="menu">
-            {[...boundAlms, 'manual'].map(alm => (
-              <li key={alm}>
-                <ProjectCreationMenuItem alm={alm} />
-              </li>
+          <>
+            {[...boundAlms, 'manual'].map((alm) => (
+              <ProjectCreationMenuItem alm={alm} key={alm} />
             ))}
-          </ul>
-        }>
-        <Button className="button-primary">
+            {boundAlms.length < IMPORT_COMPATIBLE_ALMS.length && (
+              <>
+                <ItemDivider />
+                <ItemLink to={{ pathname: '/projects/create' }}>
+                  {boundAlms.length === 0
+                    ? translate('my_account.add_project.more')
+                    : translate('my_account.add_project.more_others')}
+                </ItemLink>
+              </>
+            )}
+          </>
+        }
+      >
+        <ButtonSecondary>
           {translate('projects.add')}
-          <DropdownIcon className="spacer-left " />
-        </Button>
+          <ChevronDownIcon className="sw-ml-1" />
+        </ButtonSecondary>
       </Dropdown>
     );
   }
 }
 
-export default withCurrentUser(ProjectCreationMenu);
+export default withCurrentUserContext(ProjectCreationMenu);

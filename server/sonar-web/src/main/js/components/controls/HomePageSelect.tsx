@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,88 +17,76 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import * as classNames from 'classnames';
-import * as React from 'react';
-import { connect } from 'react-redux';
-import { ButtonLink } from 'sonar-ui-common/components/controls/buttons';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import HomeIcon from 'sonar-ui-common/components/icons/HomeIcon';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { isLoggedIn } from '../../helpers/users';
-import { getCurrentUser, Store } from '../../store/rootReducer';
-import { setHomePage } from '../../store/users';
+import { ButtonSecondary, DiscreetInteractiveIcon, HomeFillIcon, HomeIcon } from 'design-system';
+import React from 'react';
+import { useIntl } from 'react-intl';
+import { setHomePage } from '../../api/users';
+import { CurrentUserContextInterface } from '../../app/components/current-user/CurrentUserContext';
+import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
+import { isSameHomePage } from '../../helpers/users';
+import { HomePage, isLoggedIn } from '../../types/users';
+import Tooltip from './Tooltip';
 
-interface StateProps {
-  currentUser: T.CurrentUser;
-}
-
-interface DispatchProps {
-  setHomePage: (homepage: T.HomePage) => void;
-}
-
-interface Props extends StateProps, DispatchProps {
+interface Props
+  extends Pick<CurrentUserContextInterface, 'currentUser' | 'updateCurrentUserHomepage'> {
   className?: string;
-  currentPage: T.HomePage;
+  currentPage: HomePage;
+  type?: 'button' | 'icon';
 }
 
-export const DEFAULT_HOMEPAGE: T.HomePage = { type: 'PROJECTS' };
+export const DEFAULT_HOMEPAGE: HomePage = { type: 'PROJECTS' };
 
-export class HomePageSelect extends React.PureComponent<Props> {
-  handleClick = () => {
-    this.props.setHomePage(this.props.currentPage);
-  };
+export function HomePageSelect(props: Readonly<Props>) {
+  const { currentPage, className, type = 'icon', currentUser, updateCurrentUserHomepage } = props;
+  const intl = useIntl();
 
-  handleReset = () => {
-    this.props.setHomePage(DEFAULT_HOMEPAGE);
-  };
-
-  render() {
-    const { currentPage, currentUser } = this.props;
-
-    if (!isLoggedIn(currentUser)) {
-      return null;
-    }
-
-    const { homepage } = currentUser;
-    const isChecked = homepage !== undefined && isSameHomePage(homepage, currentPage);
-    const isDefault = isChecked && isSameHomePage(currentPage, DEFAULT_HOMEPAGE);
-    const tooltip = isChecked
-      ? translate(isDefault ? 'homepage.current.is_default' : 'homepage.current')
-      : translate('homepage.check');
-
-    return (
-      <Tooltip overlay={tooltip}>
-        {isDefault ? (
-          <span
-            aria-label={tooltip}
-            className={classNames('display-inline-block', this.props.className)}>
-            <HomeIcon filled={isChecked} />
-          </span>
-        ) : (
-          <ButtonLink
-            aria-label={tooltip}
-            className={classNames('link-no-underline', 'set-homepage-link', this.props.className)}
-            onClick={isChecked ? this.handleReset : this.handleClick}>
-            <HomeIcon filled={isChecked} />
-          </ButtonLink>
-        )}
-      </Tooltip>
-    );
+  if (!isLoggedIn(currentUser)) {
+    return null;
   }
-}
 
-const mapStateToProps = (state: Store): StateProps => ({
-  currentUser: getCurrentUser(state)
-});
+  const isChecked =
+    currentUser.homepage !== undefined && isSameHomePage(currentUser.homepage, currentPage);
+  const isDefault = isChecked && isSameHomePage(currentPage, DEFAULT_HOMEPAGE);
 
-const mapDispatchToProps: DispatchProps = { setHomePage };
+  const setCurrentUserHomepage = async (homepage: HomePage) => {
+    if (isLoggedIn(currentUser)) {
+      await setHomePage(homepage);
 
-export default connect(mapStateToProps, mapDispatchToProps)(HomePageSelect);
+      updateCurrentUserHomepage(homepage);
+    }
+  };
 
-function isSameHomePage(a: T.HomePage, b: T.HomePage) {
+  const tooltip = isChecked
+    ? intl.formatMessage({ id: isDefault ? 'homepage.current.is_default' : 'homepage.current' })
+    : intl.formatMessage({ id: 'homepage.check' });
+
+  const handleClick = () => setCurrentUserHomepage?.(isChecked ? DEFAULT_HOMEPAGE : currentPage);
+
+  const Icon = isChecked ? HomeFillIcon : HomeIcon;
+
   return (
-    a.type === b.type &&
-    (a as any).branch === (b as any).branch &&
-    (a as any).component === (b as any).component
+    <Tooltip overlay={tooltip}>
+      {type === 'icon' ? (
+        <DiscreetInteractiveIcon
+          aria-label={tooltip}
+          className={className}
+          disabled={isDefault}
+          Icon={Icon}
+          onClick={handleClick}
+        />
+      ) : (
+        <ButtonSecondary
+          aria-label={tooltip}
+          icon={<Icon />}
+          className={className}
+          disabled={isDefault}
+          onClick={handleClick}
+        >
+          {intl.formatMessage({ id: 'overview.set_as_homepage' })}
+        </ButtonSecondary>
+      )}
+    </Tooltip>
   );
 }
+
+export default withCurrentUserContext(HomePageSelect);

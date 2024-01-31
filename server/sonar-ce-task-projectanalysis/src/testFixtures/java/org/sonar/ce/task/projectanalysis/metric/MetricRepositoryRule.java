@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.ce.task.projectanalysis.metric;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.rules.ExternalResource;
@@ -111,5 +112,10 @@ public class MetricRepositoryRule extends ExternalResource implements MetricRepo
   @Override
   public Iterable<Metric> getAll() {
     return metricsByKey.values();
+  }
+
+  @Override
+  public List<Metric> getMetricsByType(Metric.MetricType type) {
+    return metricsByKey.values().stream().filter(m -> m.getType() == type).toList();
   }
 }

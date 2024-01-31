@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,6 @@ import java.util.Set;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 import org.sonar.api.CoreProperties;
-import org.sonar.core.util.UuidFactory;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.sonar.core.platform.ServerId.Format.DEPRECATED;
@@ -120,9 +119,6 @@ public final class ServerId {
     return new ServerId(databaseId, datasetId);
   }
 
-  public static ServerId create(UuidFactory uuidFactory) {
-    return new ServerId(null, uuidFactory.create());
-  }
 
   /**
    * Checks whether the specified value is a date according to the old format of the {@link CoreProperties#SERVER_ID}.

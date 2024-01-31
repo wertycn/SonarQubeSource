@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,23 +17,26 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonSecondary } from 'design-system';
 import * as React from 'react';
-import { Button } from 'sonar-ui-common/components/controls/buttons';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getComponentNavigation } from '../../../api/nav';
+import { getComponentNavigation } from '../../../api/navigation';
+import withAppStateContext from '../../../app/components/app-state/withAppStateContext';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
 import CreateApplicationForm from '../../../app/components/extensions/CreateApplicationForm';
-import { withAppState } from '../../../components/hoc/withAppState';
-import { withCurrentUser } from '../../../components/hoc/withCurrentUser';
 import { Router, withRouter } from '../../../components/hoc/withRouter';
+import { throwGlobalError } from '../../../helpers/error';
+import { translate } from '../../../helpers/l10n';
 import { getComponentAdminUrl, getComponentOverviewUrl } from '../../../helpers/urls';
 import { hasGlobalPermission } from '../../../helpers/users';
+import { AppState } from '../../../types/appstate';
 import { ComponentQualifier } from '../../../types/component';
 import { Permissions } from '../../../types/permissions';
+import { LoggedInUser } from '../../../types/users';
 
 export interface ApplicationCreationProps {
-  appState: Pick<T.AppState, 'qualifiers'>;
+  appState: AppState;
   className?: string;
-  currentUser: T.LoggedInUser;
+  currentUser: LoggedInUser;
   router: Router;
 }
 
@@ -52,26 +55,28 @@ export function ApplicationCreation(props: ApplicationCreationProps) {
 
   const handleComponentCreate = ({
     key,
-    qualifier
+    qualifier,
   }: {
     key: string;
     qualifier: ComponentQualifier;
   }) => {
-    return getComponentNavigation({ component: key }).then(({ configuration }) => {
-      if (configuration && configuration.showSettings) {
-        router.push(getComponentAdminUrl(key, qualifier));
-      } else {
-        router.push(getComponentOverviewUrl(key, qualifier));
-      }
-      setShowForm(false);
-    });
+    return getComponentNavigation({ component: key })
+      .then(({ configuration }) => {
+        if (configuration?.showSettings) {
+          router.push(getComponentAdminUrl(key, qualifier));
+        } else {
+          router.push(getComponentOverviewUrl(key, qualifier));
+        }
+        setShowForm(false);
+      })
+      .catch(throwGlobalError);
   };
 
   return (
-    <div className={className}>
-      <Button className="button-primary" onClick={() => setShowForm(true)}>
+    <>
+      <ButtonSecondary onClick={() => setShowForm(true)} className={className}>
         {translate('projects.create_application')}
-      </Button>
+      </ButtonSecondary>
 
       {showForm && (
         <CreateApplicationForm
@@ -79,8 +84,8 @@ export function ApplicationCreation(props: ApplicationCreationProps) {
           onCreate={handleComponentCreate}
         />
       )}
-    </div>
+    </>
   );
 }
 
-export default withAppState(withCurrentUser(withRouter(ApplicationCreation)));
+export default withCurrentUserContext(withRouter(withAppStateContext(ApplicationCreation)));

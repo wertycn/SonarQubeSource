@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,11 @@ import org.sonar.server.issue.index.AsyncIssueIndexing;
 public class NoAsyncIssueIndexing implements AsyncIssueIndexing {
   @Override
   public void triggerOnIndexCreation() {
+    throw new IllegalStateException("Async issue indexing should not be triggered in Compute Engine");
+  }
+
+  @Override
+  public void triggerForProject(String projectUuid) {
     throw new IllegalStateException("Async issue indexing should not be triggered in Compute Engine");
   }
 }

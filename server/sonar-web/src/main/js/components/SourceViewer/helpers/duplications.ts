@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Duplication, DuplicationBlock } from '../../../types/types';
+
 // TODO Test this function, but I don't get the logic behind it
-export function filterDuplicationBlocksByLine(blocks: T.DuplicationBlock[], line: number) {
+export function filterDuplicationBlocksByLine(blocks: DuplicationBlock[], line: number) {
   /* eslint-disable no-underscore-dangle */
   let foundOne = false;
-  return blocks.filter(b => {
+  return blocks.filter((b) => {
     const outOfBounds = b.from > line || b.from + b.size < line;
     const currentFile = b._ref === '1';
     const shouldDisplayForCurrentFile = outOfBounds || foundOne;
@@ -36,12 +38,12 @@ export function filterDuplicationBlocksByLine(blocks: T.DuplicationBlock[], line
 }
 
 export function getDuplicationBlocksForIndex(
-  duplications: T.Duplication[] | undefined,
-  index: number
+  duplications: Duplication[] | undefined,
+  index: number,
 ) {
   return (duplications && duplications[index] && duplications[index].blocks) || [];
 }
 
-export function isDuplicationBlockInRemovedComponent(blocks: T.DuplicationBlock[]) {
-  return blocks.some(b => b._ref === undefined); // eslint-disable-line no-underscore-dangle
+export function isDuplicationBlockInRemovedComponent(blocks: DuplicationBlock[]) {
+  return blocks.some((b) => b._ref === undefined); // eslint-disable-line no-underscore-dangle
 }

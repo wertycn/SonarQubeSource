@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,28 +17,56 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { Dict } from './types';
+
 export const enum SettingsKey {
+  AuditHouseKeeping = 'sonar.dbcleaner.auditHousekeeping',
   DaysBeforeDeletingInactiveBranchesAndPRs = 'sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAndPRs',
   DefaultProjectVisibility = 'projects.default.visibility',
   ServerBaseUrl = 'sonar.core.serverBaseURL',
-  PluginRiskConsent = 'sonar.plugins.risk.consent'
+  PluginRiskConsent = 'sonar.plugins.risk.consent',
+  LicenceRemainingLocNotificationThreshold = 'sonar.license.notifications.remainingLocThreshold',
+  TokenMaxAllowedLifetime = 'sonar.auth.token.max.allowed.lifetime',
+  QPAdminCanDisableInheritedRules = 'sonar.qualityProfiles.allowDisableInheritedRules',
 }
 
-export type Setting = SettingValue & { definition: SettingDefinition };
+export enum GlobalSettingKeys {
+  LogoUrl = 'sonar.lf.logoUrl',
+  LogoWidth = 'sonar.lf.logoWidthPx',
+  EnableGravatar = 'sonar.lf.enableGravatar',
+  GravatarServerUrl = 'sonar.lf.gravatarServerUrl',
+  RatingGrid = 'sonar.technicalDebt.ratingGrid',
+  DeveloperAggregatedInfoDisabled = 'sonar.developerAggregatedInfo.disabled',
+  UpdatecenterActivated = 'sonar.updatecenter.activate',
+  DisplayAnnouncementMessage = 'sonar.announcement.displayMessage',
+  AnnouncementMessage = 'sonar.announcement.message',
+  MainBranchName = 'sonar.projectCreation.mainBranchName',
+}
 
-export type SettingType =
-  | 'STRING'
-  | 'TEXT'
-  | 'JSON'
-  | 'PASSWORD'
-  | 'BOOLEAN'
-  | 'FLOAT'
-  | 'INTEGER'
-  | 'LICENSE'
-  | 'LONG'
-  | 'SINGLE_SELECT_LIST'
-  | 'PROPERTY_SET';
+export type SettingDefinitionAndValue = {
+  definition: ExtendedSettingDefinition;
+  settingValue?: SettingValue;
+};
 
+export type Setting = SettingValue & { definition: SettingDefinition; hasValue: boolean };
+export type SettingWithCategory = Setting & { definition: ExtendedSettingDefinition };
+
+export enum SettingType {
+  STRING = 'STRING',
+  TEXT = 'TEXT',
+  JSON = 'JSON',
+  PASSWORD = 'PASSWORD',
+  BOOLEAN = 'BOOLEAN',
+  FLOAT = 'FLOAT',
+  INTEGER = 'INTEGER',
+  LICENSE = 'LICENSE',
+  LONG = 'LONG',
+  SINGLE_SELECT_LIST = 'SINGLE_SELECT_LIST',
+  PROPERTY_SET = 'PROPERTY_SET',
+  FORMATTED_TEXT = 'FORMATTED_TEXT',
+  REGULAR_EXPRESSION = 'REGULAR_EXPRESSION',
+  USER_LOGIN = 'USER_LOGIN',
+}
 export interface SettingDefinition {
   description?: string;
   key: string;
@@ -49,11 +77,10 @@ export interface SettingDefinition {
 }
 
 export interface SettingFieldDefinition extends SettingDefinition {
-  description: string;
   name: string;
 }
 
-export interface SettingCategoryDefinition extends SettingDefinition {
+export interface ExtendedSettingDefinition extends SettingDefinition {
   category: string;
   defaultValue?: string;
   deprecatedKey?: string;
@@ -62,11 +89,25 @@ export interface SettingCategoryDefinition extends SettingDefinition {
   subCategory: string;
 }
 
+export interface DefinitionV2 {
+  name: string;
+  key: string;
+  description?: string;
+  secured: boolean;
+  multiValues?: boolean;
+  type?: SettingType;
+}
+
+export interface SettingValueResponse {
+  settings: SettingValue[];
+  setSecuredSettings: string[];
+}
+
 export interface SettingValue {
-  fieldValues?: Array<T.Dict<string>>;
+  fieldValues?: Array<Dict<string>>;
   inherited?: boolean;
   key: string;
-  parentFieldValues?: Array<T.Dict<string>>;
+  parentFieldValues?: Array<Dict<string>>;
   parentValue?: string;
   parentValues?: string[];
   value?: string;

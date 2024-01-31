@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,14 +21,13 @@ package org.sonar.server.almsettings.ws;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
-
 import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.alm.setting.ALM;
 import org.sonar.db.alm.setting.AlmSettingDto;
 import org.sonar.db.project.ProjectDto;
 import org.sonar.server.component.ComponentFinder;
@@ -44,6 +43,7 @@ import static org.sonar.server.ws.WsUtils.writeProtobuf;
 public class ListAction implements AlmSettingsWsAction {
 
   private static final String PARAM_PROJECT = "project";
+  private static final String BITBUCKETCLOUD_ROOT_URL = "https://bitbucket.org/";
 
   private final DbClient dbClient;
   private final UserSession userSession;
@@ -58,10 +58,10 @@ public class ListAction implements AlmSettingsWsAction {
   @Override
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction("list")
-      .setDescription("List ALM setting available for a given project, sorted by ALM key<br/>" +
+      .setDescription("List DevOps Platform setting available for a given project, sorted by DevOps Platform key<br/>" +
         "Requires the 'Administer project' permission if the '" + PARAM_PROJECT + "' parameter is provided, requires the 'Create Projects' permission otherwise.")
       .setSince("8.1")
-      .setResponseExample(getClass().getResource("list-example.json"))
+      .setResponseExample(getClass().getResource("example-list.json"))
       .setHandler(this);
 
     action
@@ -86,7 +86,7 @@ public class ListAction implements AlmSettingsWsAction {
       Request.StringParam projectKey = request.getParam(PARAM_PROJECT);
       if (projectKey.isPresent()) {
         ProjectDto project = componentFinder.getProjectByKey(dbSession, projectKey.getValue());
-        userSession.checkProjectPermission(ADMIN, project);
+        userSession.checkEntityPermission(ADMIN, project);
       } else {
         userSession.checkPermission(PROVISION_PROJECTS);
       }
@@ -99,10 +99,16 @@ public class ListAction implements AlmSettingsWsAction {
           AlmSetting.Builder almSettingBuilder = AlmSetting.newBuilder()
             .setKey(almSetting.getKey())
             .setAlm(AlmSettingsSupport.toAlmWs(almSetting.getAlm()));
-          ofNullable(almSetting.getUrl()).ifPresent(almSettingBuilder::setUrl);
+
+          if (almSetting.getAlm() == ALM.BITBUCKET_CLOUD) {
+            almSettingBuilder.setUrl(BITBUCKETCLOUD_ROOT_URL + almSetting.getAppId() + "/");
+          } else {
+            ofNullable(almSetting.getUrl()).ifPresent(almSettingBuilder::setUrl);
+          }
+
           return almSettingBuilder.build();
         })
-        .collect(Collectors.toList());
+        .toList();
       return ListWsResponse.newBuilder()
         .addAllAlmSettings(wsAlmSettings).build();
     }

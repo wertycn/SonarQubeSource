@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,20 +21,22 @@ package org.sonar.scanner.sensor;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.core.util.logs.Profiler;
 import org.sonar.scanner.bootstrap.ScannerPluginRepository;
 
 public class ProjectSensorsExecutor {
-  private static final Logger LOG = Loggers.get(ProjectSensorsExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProjectSensorsExecutor.class);
   private static final Profiler profiler = Profiler.create(LOG);
-  private final ProjectSensorExtensionDictionnary selector;
+  private final ProjectSensorExtensionDictionary selector;
   private final ScannerPluginRepository pluginRepo;
+  private final ExecutingSensorContext executingSensorCtx;
 
-  public ProjectSensorsExecutor(ProjectSensorExtensionDictionnary selector, ScannerPluginRepository pluginRepo) {
+  public ProjectSensorsExecutor(ProjectSensorExtensionDictionary selector, ScannerPluginRepository pluginRepo, ExecutingSensorContext executingSensorCtx) {
     this.selector = selector;
     this.pluginRepo = pluginRepo;
+    this.executingSensorCtx = executingSensorCtx;
   }
 
   public void execute() {
@@ -44,20 +46,19 @@ public class ProjectSensorsExecutor {
       .map(Object::toString)
       .collect(Collectors.joining(" -> ")));
     for (ProjectSensorWrapper sensor : sensors) {
-      String sensorName = getSensorName(sensor);
-      profiler.startInfo("Sensor " + sensorName);
+      SensorId sensorId = getSensorId(sensor);
+      executingSensorCtx.setSensorExecuting(sensorId);
+      profiler.startInfo("Sensor " + sensorId);
       sensor.analyse();
       profiler.stopInfo();
+      executingSensorCtx.clearExecutingSensor();
     }
   }
 
-  private String getSensorName(ProjectSensorWrapper sensor) {
+  private SensorId getSensorId(ProjectSensorWrapper sensor) {
     ClassLoader cl = getSensorClassLoader(sensor);
     String pluginKey = pluginRepo.getPluginKey(cl);
-    if (pluginKey != null) {
-      return sensor.toString() + " [" + pluginKey + "]";
-    }
-    return sensor.toString();
+    return new SensorId(pluginKey, sensor.toString());
   }
 
   private static ClassLoader getSensorClassLoader(ProjectSensorWrapper sensor) {

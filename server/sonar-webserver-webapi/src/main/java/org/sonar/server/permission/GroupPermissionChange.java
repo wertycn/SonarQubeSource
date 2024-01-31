@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,20 +19,34 @@
  */
 package org.sonar.server.permission;
 
+import java.util.Optional;
 import javax.annotation.Nullable;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
+import org.sonar.db.user.GroupDto;
+import org.sonar.server.common.permission.Operation;
 
 public class GroupPermissionChange extends PermissionChange {
 
-  private final GroupUuidOrAnyone group;
+  private final GroupDto groupDto;
 
-  public GroupPermissionChange(Operation operation, String permission, @Nullable ComponentDto project,
-    GroupUuidOrAnyone group, PermissionService permissionService) {
-    super(operation, permission, project, permissionService);
-    this.group = group;
+  public GroupPermissionChange(Operation operation, String permission, @Nullable EntityDto entityDto,
+    @Nullable GroupDto groupDto, PermissionService permissionService) {
+    super(operation, permission, entityDto, permissionService);
+    this.groupDto = groupDto;
   }
 
   public GroupUuidOrAnyone getGroupUuidOrAnyone() {
-    return group;
+    return GroupUuidOrAnyone.from(groupDto);
   }
+
+  public Optional<String> getGroupName() {
+    return Optional.ofNullable(groupDto).map(GroupDto::getName);
+  }
+
+  @Override
+  public String getUuidOfGrantee() {
+    return getGroupUuidOrAnyone().getUuid();
+  }
+
+
 }

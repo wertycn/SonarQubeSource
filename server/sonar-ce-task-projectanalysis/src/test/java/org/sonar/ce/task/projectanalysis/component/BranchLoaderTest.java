@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,21 +21,21 @@ package org.sonar.ce.task.projectanalysis.component;
 
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.sonar.api.utils.MessageException;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolderRule;
 import org.sonar.ce.task.projectanalysis.analysis.Branch;
-import org.sonar.db.component.BranchDto;
 import org.sonar.scanner.protocol.output.ScannerReport;
+import org.sonar.server.project.DefaultBranchNameResolver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.sonar.db.component.BranchDto.DEFAULT_MAIN_BRANCH_NAME;
 
 public class BranchLoaderTest {
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
   @Rule
   public AnalysisMetadataHolderRule metadataHolder = new AnalysisMetadataHolderRule();
@@ -46,24 +46,25 @@ public class BranchLoaderTest {
       .setBranchName("bar")
       .build();
 
-    expectedException.expect(MessageException.class);
-    expectedException.expectMessage("Current edition does not support branch feature");
-
-    new BranchLoader(metadataHolder).load(metadata);
+    assertThatThrownBy(() -> new BranchLoader(metadataHolder, mock(DefaultBranchNameResolver.class)).load(metadata))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("Current edition does not support branch feature");
   }
 
   @Test
   public void regular_analysis_of_project_is_enabled_if_delegate_is_absent() {
     ScannerReport.Metadata metadata = ScannerReport.Metadata.newBuilder()
       .build();
+    DefaultBranchNameResolver branchNameResolver = mock(DefaultBranchNameResolver.class);
+    when(branchNameResolver.getEffectiveMainBranchName()).thenReturn(DEFAULT_MAIN_BRANCH_NAME);
 
-    new BranchLoader(metadataHolder).load(metadata);
+    new BranchLoader(metadataHolder, branchNameResolver).load(metadata);
 
     assertThat(metadataHolder.getBranch()).isNotNull();
 
     Branch branch = metadataHolder.getBranch();
     assertThat(branch.isMain()).isTrue();
-    assertThat(branch.getName()).isEqualTo(BranchDto.DEFAULT_MAIN_BRANCH_NAME);
+    assertThat(branch.getName()).isEqualTo(DEFAULT_MAIN_BRANCH_NAME);
   }
 
   @Test
@@ -72,7 +73,7 @@ public class BranchLoaderTest {
       .build();
     BranchLoaderDelegate delegate = mock(BranchLoaderDelegate.class);
 
-    new BranchLoader(metadataHolder, delegate).load(metadata);
+    new BranchLoader(metadataHolder, delegate, mock(DefaultBranchNameResolver.class)).load(metadata);
 
     verify(delegate, times(1)).load(metadata);
   }

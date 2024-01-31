@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,6 @@ package org.sonar.server.almintegration.ws.bitbucketserver;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.sonar.alm.client.bitbucketserver.BitbucketServerRestClient;
 import org.sonar.alm.client.bitbucketserver.Project;
 import org.sonar.alm.client.bitbucketserver.ProjectList;
@@ -63,12 +62,13 @@ public class ListBitbucketServerProjectsAction implements AlmIntegrationsWsActio
         "Requires the 'Create Projects' permission")
       .setPost(false)
       .setSince("8.2")
+      .setResponseExample(getClass().getResource("example-list_bitbucketserver_projects.json"))
       .setHandler(this);
 
     action.createParam(PARAM_ALM_SETTING)
       .setRequired(true)
       .setMaximumLength(200)
-      .setDescription("ALM setting key");
+      .setDescription("DevOps Platform setting key");
   }
 
   @Override
@@ -85,14 +85,14 @@ public class ListBitbucketServerProjectsAction implements AlmIntegrationsWsActio
       String almSettingKey = request.mandatoryParam(PARAM_ALM_SETTING);
       String userUuid = requireNonNull(userSession.getUuid(), "User UUID is not null");
       AlmSettingDto almSettingDto = dbClient.almSettingDao().selectByKey(dbSession, almSettingKey)
-        .orElseThrow(() -> new NotFoundException(String.format("ALM Setting '%s' not found", almSettingKey)));
+        .orElseThrow(() -> new NotFoundException(String.format("DevOps Platform Setting '%s' not found", almSettingKey)));
       Optional<AlmPatDto> almPatDto = dbClient.almPatDao().selectByUserAndAlmSetting(dbSession, userUuid, almSettingDto);
       String pat = almPatDto.map(AlmPatDto::getPersonalAccessToken).orElseThrow(() -> new IllegalArgumentException("No personal access token found"));
 
       String url = requireNonNull(almSettingDto.getUrl(), "URL cannot be null");
       ProjectList projectList = bitbucketServerRestClient.getProjects(url, pat);
 
-      List<AlmProject> values = projectList.getValues().stream().map(ListBitbucketServerProjectsAction::toAlmProject).collect(Collectors.toList());
+      List<AlmProject> values = projectList.getValues().stream().map(ListBitbucketServerProjectsAction::toAlmProject).toList();
       ListBitbucketserverProjectsWsResponse.Builder builder = ListBitbucketserverProjectsWsResponse.newBuilder()
         .addAllProjects(values);
       return builder.build();

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,7 @@ public class CreateRequest {
   private String description;
   private String key;
   private String name;
-  private String qualifier;
+  private String parent;
   private String visibility;
 
   /**
@@ -71,21 +71,14 @@ public class CreateRequest {
   }
 
   /**
-   * Possible values:
-   * <ul>
-   *   <li>"VW"</li>
-   *   <li>"APP"</li>
-   * </ul>
-   * @deprecated since 7.3
    */
-  @Deprecated
-  public CreateRequest setQualifier(String qualifier) {
-    this.qualifier = qualifier;
+  public CreateRequest setParent(String parent) {
+    this.parent = parent;
     return this;
   }
 
-  public String getQualifier() {
-    return qualifier;
+  public String getParent() {
+    return parent;
   }
 
   /**

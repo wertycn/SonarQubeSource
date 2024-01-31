@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,7 +19,7 @@
  */
 package org.sonar.ce.task.projectanalysis.step;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
 import java.util.Optional;
 import org.sonar.ce.task.projectanalysis.component.CrawlerDepthLimit;
 import org.sonar.ce.task.projectanalysis.component.PathAwareCrawler;
@@ -52,15 +52,16 @@ public class CommentMeasuresStep implements ComputationStep {
   private final TreeRootHolder treeRootHolder;
   private final MetricRepository metricRepository;
   private final MeasureRepository measureRepository;
-  private final ImmutableList<Formula> formulas;
+  private final List<Formula<?>> formulas;
 
   public CommentMeasuresStep(TreeRootHolder treeRootHolder, MetricRepository metricRepository, MeasureRepository measureRepository) {
     this.treeRootHolder = treeRootHolder;
     this.metricRepository = metricRepository;
     this.measureRepository = measureRepository;
-    this.formulas = ImmutableList.of(
+    this.formulas = List.of(
       new DocumentationFormula(),
-      new CommentDensityFormula());
+      new CommentDensityFormula()
+    );
   }
 
   @Override
@@ -107,8 +108,8 @@ public class CommentMeasuresStep implements ComputationStep {
           double nclocs = nclocsOpt.get().getIntValue();
           double comments = commentsOpt.get();
           double divisor = nclocs + comments;
-          if (divisor > 0d) {
-            double value = 100d * (comments / divisor);
+          if (divisor > 0D) {
+            double value = 100D * (comments / divisor);
             return Optional.of(Measure.newMeasureBuilder().create(value, context.getMetric().getDecimalScale()));
           }
         }
@@ -152,9 +153,9 @@ public class CommentMeasuresStep implements ComputationStep {
         && counter.getPublicUndocumentedApiValue().isPresent()) {
         double publicApis = counter.getPublicApiValue().get();
         double publicUndocumentedApis = counter.getPublicUndocumentedApiValue().get();
-        if (publicApis > 0d) {
+        if (publicApis > 0D) {
           double documentedAPI = publicApis - publicUndocumentedApis;
-          double value = 100d * (documentedAPI / publicApis);
+          double value = 100D * (documentedAPI / publicApis);
           return Optional.of(Measure.newMeasureBuilder().create(value, context.getMetric().getDecimalScale()));
         }
       }

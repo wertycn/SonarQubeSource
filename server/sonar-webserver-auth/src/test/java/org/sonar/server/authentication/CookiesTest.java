@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,12 @@
  */
 package org.sonar.server.authentication;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.server.http.Cookie;
+import org.sonar.api.server.http.HttpRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonar.server.authentication.Cookies.findCookie;
@@ -35,10 +34,8 @@ public class CookiesTest {
 
   private static final String HTTPS_HEADER = "X-Forwarded-Proto";
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
 
-  private HttpServletRequest request = mock(HttpServletRequest.class);
+  private HttpRequest request = mock(HttpRequest.class);
 
   @Test
   public void create_cookie() {
@@ -47,7 +44,7 @@ public class CookiesTest {
     assertThat(cookie.getValue()).isEqualTo("value");
     assertThat(cookie.isHttpOnly()).isTrue();
     assertThat(cookie.getMaxAge()).isEqualTo(10);
-    assertThat(cookie.getSecure()).isFalse();
+    assertThat(cookie.isSecure()).isFalse();
     assertThat(cookie.getPath()).isEqualTo("/");
   }
 
@@ -66,7 +63,7 @@ public class CookiesTest {
     assertThat(cookie.getValue()).isEqualTo("value");
     assertThat(cookie.isHttpOnly()).isTrue();
     assertThat(cookie.getMaxAge()).isEqualTo(10);
-    assertThat(cookie.getSecure()).isFalse();
+    assertThat(cookie.isSecure()).isFalse();
     assertThat(cookie.getPath()).isEqualTo("/sonarqube");
   }
 
@@ -74,21 +71,21 @@ public class CookiesTest {
   public void create_not_secured_cookie_when_header_is_not_http() {
     when(request.getHeader(HTTPS_HEADER)).thenReturn("http");
     Cookie cookie = newCookieBuilder(request).setName("name").setValue("value").setHttpOnly(true).setExpiry(10).build();
-    assertThat(cookie.getSecure()).isFalse();
+    assertThat(cookie.isSecure()).isFalse();
   }
 
   @Test
   public void create_secured_cookie_when_X_Forwarded_Proto_header_is_https() {
     when(request.getHeader(HTTPS_HEADER)).thenReturn("https");
     Cookie cookie = newCookieBuilder(request).setName("name").setValue("value").setHttpOnly(true).setExpiry(10).build();
-    assertThat(cookie.getSecure()).isTrue();
+    assertThat(cookie.isSecure()).isTrue();
   }
 
   @Test
   public void create_secured_cookie_when_X_Forwarded_Proto_header_is_HTTPS() {
     when(request.getHeader(HTTPS_HEADER)).thenReturn("HTTPS");
     Cookie cookie = newCookieBuilder(request).setName("name").setValue("value").setHttpOnly(true).setExpiry(10).build();
-    assertThat(cookie.getSecure()).isTrue();
+    assertThat(cookie.isSecure()).isTrue();
   }
 
   @Test
@@ -108,14 +105,14 @@ public class CookiesTest {
 
   @Test
   public void fail_with_NPE_when_cookie_name_is_null() {
-    expectedException.expect(NullPointerException.class);
-    newCookieBuilder(request).setName(null);
+    assertThatThrownBy(() -> newCookieBuilder(request).setName(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
   @Test
   public void fail_with_NPE_when_cookie_has_no_name() {
-    expectedException.expect(NullPointerException.class);
-    newCookieBuilder(request).setName(null);
+    assertThatThrownBy(() -> newCookieBuilder(request).setName(null))
+      .isInstanceOf(NullPointerException.class);
   }
 
 }

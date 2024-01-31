@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,10 +23,10 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
-import org.picocontainer.Startable;
+import org.sonar.api.Startable;
 import org.sonar.api.utils.MessageException;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
 import org.sonar.scanner.bootstrap.GlobalAnalysisMode;
 import org.sonar.scanner.report.CeTaskReportDataHolder;
@@ -42,7 +42,7 @@ import org.sonarqube.ws.client.WsResponse;
 
 public class QualityGateCheck implements Startable {
 
-  private static final Logger LOG = Loggers.get(QualityGateCheck.class);
+  private static final Logger LOG = LoggerFactory.getLogger(QualityGateCheck.class);
   private static final EnumSet<TaskStatus> TASK_TERMINAL_STATUSES = EnumSet.of(TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELED);
   private static final int POLLING_INTERVAL_IN_MS = 5000;
 

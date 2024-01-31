@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,9 @@
  */
 import * as React from 'react';
 import { SettingType } from '../../../../types/settings';
-import {
-  DefaultInputProps,
-  DefaultSpecializedInputProps,
-  getUniqueName,
-  isDefaultOrInherited
-} from '../../utils';
+import { DefaultSpecializedInputProps } from '../../utils';
 import InputForBoolean from './InputForBoolean';
+import InputForFormattedText from './InputForFormattedText';
 import InputForJSON from './InputForJSON';
 import InputForNumber from './InputForNumber';
 import InputForPassword from './InputForPassword';
@@ -33,42 +29,35 @@ import InputForSingleSelectList from './InputForSingleSelectList';
 import InputForString from './InputForString';
 import InputForText from './InputForText';
 
-const typeMapping: {
-  [type in SettingType]?: React.ComponentType<DefaultSpecializedInputProps>;
-} = {
-  STRING: InputForString,
-  TEXT: InputForText,
-  JSON: InputForJSON,
-  PASSWORD: InputForPassword,
-  BOOLEAN: InputForBoolean,
-  INTEGER: InputForNumber,
-  LONG: InputForNumber,
-  FLOAT: InputForNumber
-};
-
-interface Props extends DefaultInputProps {
-  name?: string;
+function withOptions(
+  options: string[],
+): React.ComponentType<React.PropsWithChildren<DefaultSpecializedInputProps>> {
+  return function Wrapped(props: DefaultSpecializedInputProps) {
+    return <InputForSingleSelectList options={options} {...props} />;
+  };
 }
 
-export default class PrimitiveInput extends React.PureComponent<Props> {
-  render() {
-    const { setting, ...other } = this.props;
-    const { definition } = setting;
+export default function PrimitiveInput(props: DefaultSpecializedInputProps) {
+  const { setting, name, isDefault, ...other } = props;
+  const { definition } = setting;
+  const typeMapping: {
+    [type in SettingType]?: React.ComponentType<
+      React.PropsWithChildren<DefaultSpecializedInputProps>
+    >;
+  } = {
+    STRING: InputForString,
+    TEXT: InputForText,
+    JSON: InputForJSON,
+    PASSWORD: InputForPassword,
+    BOOLEAN: InputForBoolean,
+    INTEGER: InputForNumber,
+    LONG: InputForNumber,
+    FLOAT: InputForNumber,
+    SINGLE_SELECT_LIST: withOptions(definition.options),
+    FORMATTED_TEXT: InputForFormattedText,
+  };
 
-    const name = this.props.name || getUniqueName(definition);
+  const InputComponent = (definition.type && typeMapping[definition.type]) || InputForString;
 
-    if (definition.type === 'SINGLE_SELECT_LIST') {
-      return (
-        <InputForSingleSelectList
-          isDefault={isDefaultOrInherited(setting)}
-          name={name}
-          options={definition.options}
-          {...other}
-        />
-      );
-    }
-
-    const InputComponent = (definition.type && typeMapping[definition.type]) || InputForString;
-    return <InputComponent isDefault={isDefaultOrInherited(setting)} name={name} {...other} />;
-  }
+  return <InputComponent isDefault={isDefault} name={name} setting={setting} {...other} />;
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,9 @@
  */
 package org.sonar.api.impl.utils;
 
-import java.util.Random;
+import java.security.SecureRandom;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 import org.sonar.api.utils.System2;
 
 import static org.sonar.api.utils.Preconditions.checkArgument;
@@ -34,12 +34,13 @@ import static org.sonar.api.utils.Preconditions.checkArgument;
  * </p>
  */
 public class AlwaysIncreasingSystem2 extends System2 {
+  private static final SecureRandom rnd = new SecureRandom();
   private final AtomicLong now;
   private final long increment;
 
-  private AlwaysIncreasingSystem2(Supplier<Long> initialValueSupplier, long increment) {
+  private AlwaysIncreasingSystem2(LongSupplier initialValueSupplier, long increment) {
     checkArgument(increment > 0, "increment must be > 0");
-    long initialValue = initialValueSupplier.get();
+    long initialValue = initialValueSupplier.getAsLong();
     checkArgument(initialValue >= 0, "Initial value must be >= 0");
     this.now = new AtomicLong(initialValue);
     this.increment = increment;
@@ -66,6 +67,6 @@ public class AlwaysIncreasingSystem2 extends System2 {
   }
 
   private static long randomInitialValue() {
-    return Math.abs(new Random().nextInt(2_000_000));
+    return Math.abs(rnd.nextInt(2_000_000));
   }
 }

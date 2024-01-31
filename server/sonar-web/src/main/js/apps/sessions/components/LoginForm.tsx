@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,17 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import {
+  ButtonPrimary,
+  ButtonSecondary,
+  FormField,
+  InputField,
+  Link,
+  Spinner,
+} from 'design-system';
 import * as React from 'react';
-import { SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { getBaseUrl } from 'sonar-ui-common/helpers/urls';
-import './LoginForm.css';
+import { translate } from '../../../helpers/l10n';
 
 interface Props {
   collapsed?: boolean;
   onSubmit: (login: string, password: string) => Promise<void>;
-  returnTo: string;
 }
 
 interface State {
@@ -37,6 +40,9 @@ interface State {
   password: string;
 }
 
+const LOGIN_INPUT_ID = 'login-input';
+const PASSWORD_INPUT_ID = 'password-input';
+
 export default class LoginForm extends React.PureComponent<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -44,7 +50,7 @@ export default class LoginForm extends React.PureComponent<Props, State> {
       collapsed: Boolean(props.collapsed),
       loading: false,
       login: '',
-      password: ''
+      password: '',
     };
   }
 
@@ -60,8 +66,7 @@ export default class LoginForm extends React.PureComponent<Props, State> {
       .then(this.stopLoading, this.stopLoading);
   };
 
-  handleMoreOptionsClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
+  handleMoreOptionsClick = () => {
     this.setState({ collapsed: false });
   };
 
@@ -74,61 +79,50 @@ export default class LoginForm extends React.PureComponent<Props, State> {
   render() {
     if (this.state.collapsed) {
       return (
-        <div className="text-center">
-          <a
-            className="small text-muted js-more-options"
-            href="#"
-            onClick={this.handleMoreOptionsClick}>
-            {translate('login.more_options')}
-          </a>
-        </div>
+        <ButtonSecondary
+          className="sw-w-full sw-justify-center"
+          aria-expanded={false}
+          onClick={this.handleMoreOptionsClick}
+        >
+          {translate('login.more_options')}
+        </ButtonSecondary>
       );
     }
     return (
-      <form className="login-form" onSubmit={this.handleSubmit}>
-        <div className="big-spacer-bottom">
-          <label className="login-label" htmlFor="login">
-            {translate('login')}
-          </label>
-          <input
-            autoFocus={true}
-            className="login-input"
-            id="login"
+      <form className="sw-w-full" onSubmit={this.handleSubmit}>
+        <FormField label={translate('login')} htmlFor={LOGIN_INPUT_ID} required>
+          <InputField
+            autoFocus
+            id={LOGIN_INPUT_ID}
             maxLength={255}
             name="login"
             onChange={this.handleLoginChange}
-            placeholder={translate('login')}
-            required={true}
+            required
             type="text"
             value={this.state.login}
+            size="full"
           />
-        </div>
+        </FormField>
 
-        <div className="big-spacer-bottom">
-          <label className="login-label" htmlFor="password">
-            {translate('password')}
-          </label>
-          <input
-            className="login-input"
-            id="password"
+        <FormField label={translate('password')} htmlFor={PASSWORD_INPUT_ID} required>
+          <InputField
+            id={PASSWORD_INPUT_ID}
             name="password"
             onChange={this.handlePwdChange}
-            placeholder={translate('password')}
-            required={true}
+            required
             type="password"
             value={this.state.password}
+            size="full"
           />
-        </div>
+        </FormField>
 
         <div>
-          <div className="text-right overflow-hidden">
-            <DeferredSpinner className="spacer-right" loading={this.state.loading} />
-            <SubmitButton disabled={this.state.loading}>
+          <div className="sw-overflow-hidden sw-flex sw-items-center sw-justify-end sw-gap-3">
+            <Spinner loading={this.state.loading} />
+            <Link to="/">{translate('go_back')}</Link>
+            <ButtonPrimary disabled={this.state.loading} type="submit">
               {translate('sessions.log_in')}
-            </SubmitButton>
-            <a className="spacer-left" href={`${getBaseUrl()}/`}>
-              {translate('cancel')}
-            </a>
+            </ButtonPrimary>
           </div>
         </div>
       </form>

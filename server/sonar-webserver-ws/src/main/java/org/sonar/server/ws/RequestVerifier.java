@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -36,12 +36,14 @@ public class RequestVerifier {
         if (action.isPost()) {
           throw new ServerException(SC_METHOD_NOT_ALLOWED, "HTTP method POST is required");
         }
-        return;
-      case "PUT":
-      case "DELETE":
-        throw new ServerException(SC_METHOD_NOT_ALLOWED, String.format("HTTP method %s is not allowed", request.method()));
+        break;
+      case "POST":
+        if (!action.isPost()) {
+          throw new ServerException(SC_METHOD_NOT_ALLOWED, "HTTP method GET is required");
+        }
+        break;
       default:
-        // Nothing to do
+        throw new ServerException(SC_METHOD_NOT_ALLOWED, String.format("HTTP method %s is not allowed", request.method()));
     }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,66 +17,80 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-const cssLoader = () => ({
-  loader: 'css-loader',
-  options: {
-    importLoaders: 1,
-    modules: 'global',
-    url: false
-  }
-});
-
-const customProperties = {};
-const parseCustomProperties = theme => {
-  Object.keys(theme).forEach(key => {
-    if (typeof theme[key] === 'object') {
-      parseCustomProperties(theme[key]);
-    } else if (typeof theme[key] === 'string') {
-      if (!customProperties[`--${key}`]) {
-        customProperties[`--${key}`] = theme[key];
-      } else {
-        console.error(
-          `Custom CSS property "${key}" already exists with value "${
-            customProperties[`--${key}`]
-          }".`
-        );
-        process.exit(1);
+/* eslint-disable no-console */
+function getCustomProperties() {
+  const customProperties = {};
+  const parseCustomProperties = (theme) => {
+    Object.keys(theme).forEach((key) => {
+      if (typeof theme[key] === 'object') {
+        parseCustomProperties(theme[key]);
+      } else if (typeof theme[key] === 'string') {
+        if (!customProperties[`--${key}`]) {
+          customProperties[`--${key}`] = theme[key];
+        } else {
+          console.error(
+            `Custom CSS property "${key}" already exists with value "${
+              customProperties[`--${key}`]
+            }".`
+          );
+          process.exit(1);
+        }
       }
-    }
-  });
-};
-
-parseCustomProperties(require('../src/main/js/app/theme'));
-
-const postcssLoader = production => ({
-  loader: 'postcss-loader',
-  options: {
-    ident: 'postcss',
-    plugins: () => [
-      require('autoprefixer'),
-      require('postcss-custom-properties')({ importFrom: { customProperties }, preserve: false }),
-      require('postcss-calc'),
-      ...(production ? [require('cssnano')({ calc: false, svgo: false })] : [])
-    ]
-  }
-});
-
-const minifyParams = ({ production }) =>
-  production && {
-    removeComments: true,
-    collapseWhitespace: true,
-    removeRedundantAttributes: true,
-    useShortDoctype: true,
-    removeEmptyAttributes: true,
-    removeStyleLinkTypeAttributes: true,
-    keepClosingSlash: true,
-    minifyJS: true,
-    minifyCSS: true,
-    minifyURLs: true
+    });
   };
+  parseCustomProperties(require('../src/main/js/app/theme'));
+
+  return customProperties;
+}
+
+// See https://github.com/evanw/esbuild/issues/337
+function importAsGlobals(mapping) {
+  const escRe = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const filter = new RegExp(
+    Object.keys(mapping)
+      .map((moduleName) => `^${escRe(moduleName)}$`)
+      .join('|')
+  );
+
+  return {
+    name: 'import-as-globals',
+    setup(build) {
+      build.onResolve({ filter }, (args) => {
+        if (!mapping[args.path]) {
+          throw new Error('Unknown global: ' + args.path);
+        }
+        return {
+          path: args.path,
+          namespace: 'external-global',
+        };
+      });
+
+      build.onLoad(
+        {
+          filter,
+          namespace: 'external-global',
+        },
+        (args) => {
+          const globalName = mapping[args.path];
+          return {
+            contents: `module.exports = ${globalName};`,
+            loader: 'js',
+          };
+        }
+      );
+    },
+  };
+}
 
 module.exports = {
-  cssLoader,
-  postcssLoader,
-  minifyParams
+  getCustomProperties,
+  importAsGlobals,
+  // NOTE: esbuild will transpile the _syntax_ down to what the TARGET_BROWSERS understand.
+  // It will _not_, however, polyfill missing API methods, such as String.prototype.replaceAll
+  // This is why we also import core-js.
+  //
+  // This browser version list is based on our requirements to support ES6
+  // and javascript module via script tag (See https://caniuse.com/?search=modules%20es6)
+  ESBUILD_TARGET_BROWSERS: ['chrome61', 'firefox60', 'safari11', 'edge18'],
+  AUTOPREFIXER_BROWSER_LIST: ['chrome>=61', 'firefox>=60', 'safari>=11', 'edge>=18'],
 };

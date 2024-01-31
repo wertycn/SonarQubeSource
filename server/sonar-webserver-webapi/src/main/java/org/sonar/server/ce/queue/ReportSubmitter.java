@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,17 +38,21 @@ import org.sonar.db.ce.CeTaskTypes;
 import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.permission.GlobalPermission;
+import org.sonar.server.almsettings.ws.DevOpsProjectCreator;
+import org.sonar.server.almsettings.ws.DevOpsProjectCreatorFactory;
+import org.sonar.server.component.ComponentCreationData;
 import org.sonar.server.component.ComponentUpdater;
-import org.sonar.server.component.NewComponent;
 import org.sonar.server.exceptions.BadRequestException;
+import org.sonar.server.management.ManagedInstanceService;
 import org.sonar.server.permission.PermissionTemplateService;
-import org.sonar.server.project.ProjectDefaultVisibility;
-import org.sonar.server.project.Visibility;
+import org.sonar.server.project.ws.ProjectCreator;
 import org.sonar.server.user.UserSession;
 
 import static java.lang.String.format;
 import static org.apache.commons.lang.StringUtils.defaultIfBlank;
-import static org.sonar.server.component.NewComponent.newComponentBuilder;
+import static org.sonar.db.permission.GlobalPermission.SCAN;
+import static org.sonar.db.project.CreationMethod.SCANNER_API;
+import static org.sonar.db.project.CreationMethod.SCANNER_API_DEVOPS_AUTO_CONFIG;
 import static org.sonar.server.user.AbstractUserSession.insufficientPrivilegesException;
 
 @ServerSide
@@ -56,27 +60,32 @@ public class ReportSubmitter {
 
   private final CeQueue queue;
   private final UserSession userSession;
+
+  private final ProjectCreator projectCreator;
   private final ComponentUpdater componentUpdater;
   private final PermissionTemplateService permissionTemplateService;
   private final DbClient dbClient;
   private final BranchSupport branchSupport;
-  private final ProjectDefaultVisibility projectDefaultVisibility;
+  private final DevOpsProjectCreatorFactory devOpsProjectCreatorFactory;
+  private final ManagedInstanceService managedInstanceService;
 
-  public ReportSubmitter(CeQueue queue, UserSession userSession, ComponentUpdater componentUpdater,
+  public ReportSubmitter(CeQueue queue, UserSession userSession, ProjectCreator projectCreator, ComponentUpdater componentUpdater,
     PermissionTemplateService permissionTemplateService, DbClient dbClient, BranchSupport branchSupport,
-    ProjectDefaultVisibility projectDefaultVisibility) {
+    DevOpsProjectCreatorFactory devOpsProjectCreatorFactory, ManagedInstanceService managedInstanceService) {
     this.queue = queue;
     this.userSession = userSession;
+    this.projectCreator = projectCreator;
     this.componentUpdater = componentUpdater;
     this.permissionTemplateService = permissionTemplateService;
     this.dbClient = dbClient;
     this.branchSupport = branchSupport;
-    this.projectDefaultVisibility = projectDefaultVisibility;
+    this.devOpsProjectCreatorFactory = devOpsProjectCreatorFactory;
+    this.managedInstanceService = managedInstanceService;
   }
 
   public CeTask submit(String projectKey, @Nullable String projectName, Map<String, String> characteristics, InputStream reportInput) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      boolean projectCreated = false;
+      ComponentCreationData componentCreationData = null;
       // Note: when the main branch is analyzed, the characteristics may or may not have the branch name, so componentKey#isMainBranch is not
       // reliable!
       BranchSupport.ComponentKey componentKey = branchSupport.createComponentKey(projectKey, characteristics);
@@ -87,28 +96,31 @@ public class ReportSubmitter {
         mainBranchComponent = mainBranchComponentOpt.get();
         validateProject(dbSession, mainBranchComponent, projectKey);
       } else {
-        mainBranchComponent = createProject(dbSession, componentKey.getMainBranchComponentKey(), projectName);
-        projectCreated = true;
+        componentCreationData = createProject(projectKey, projectName, characteristics, dbSession, componentKey);
+        mainBranchComponent = componentCreationData.mainBranchComponent();
       }
 
-      BranchDto mainBranch = dbClient.branchDao().selectByUuid(dbSession, mainBranchComponent.projectUuid())
+      BranchDto mainBranch = dbClient.branchDao().selectByUuid(dbSession, mainBranchComponent.branchUuid())
         .orElseThrow(() -> new IllegalStateException("Couldn't find the main branch of the project"));
       ComponentDto branchComponent;
       if (isMainBranch(componentKey, mainBranch)) {
         branchComponent = mainBranchComponent;
+      } else if (componentKey.getBranchName().isPresent()) {
+        branchComponent = dbClient.componentDao().selectByKeyAndBranch(dbSession, componentKey.getKey(), componentKey.getBranchName().get())
+          .orElseGet(() -> branchSupport.createBranchComponent(dbSession, componentKey, mainBranchComponent, mainBranch));
       } else {
-        branchComponent = dbClient.componentDao().selectByKey(dbSession, componentKey.getDbKey())
+        branchComponent = dbClient.componentDao().selectByKeyAndPullRequest(dbSession, componentKey.getKey(), componentKey.getPullRequestKey().get())
           .orElseGet(() -> branchSupport.createBranchComponent(dbSession, componentKey, mainBranchComponent, mainBranch));
       }
 
-      if (projectCreated) {
-        componentUpdater.commitAndIndex(dbSession, mainBranchComponent);
+      if (componentCreationData != null) {
+        componentUpdater.commitAndIndex(dbSession, componentCreationData);
       } else {
         dbSession.commit();
       }
 
       checkScanPermission(branchComponent);
-      return submitReport(dbSession, reportInput, branchComponent, characteristics);
+      return submitReport(dbSession, reportInput, branchComponent, mainBranch, characteristics);
     }
   }
 
@@ -137,11 +149,11 @@ public class ReportSubmitter {
     if (!Qualifiers.PROJECT.equals(component.qualifier()) || !Scopes.PROJECT.equals(component.scope())) {
       errors.add(format("Component '%s' is not a project", rawProjectKey));
     }
-    if (!component.projectUuid().equals(component.uuid())) {
+    if (!component.branchUuid().equals(component.uuid())) {
       // Project key is already used as a module of another project
-      ComponentDto anotherBaseProject = dbClient.componentDao().selectOrFailByUuid(dbSession, component.projectUuid());
+      ComponentDto anotherBaseProject = dbClient.componentDao().selectOrFailByUuid(dbSession, component.branchUuid());
       errors.add(format("The project '%s' is already defined in SonarQube but as a module of project '%s'. "
-        + "If you really want to stop directly analysing project '%s', please first delete it from SonarQube and then relaunch the analysis of project '%s'.",
+                        + "If you really want to stop directly analysing project '%s', please first delete it from SonarQube and then relaunch the analysis of project '%s'.",
         rawProjectKey, anotherBaseProject.getKey(), anotherBaseProject.getKey(), rawProjectKey));
     }
     if (!errors.isEmpty()) {
@@ -149,39 +161,44 @@ public class ReportSubmitter {
     }
   }
 
-  private ComponentDto createProject(DbSession dbSession, BranchSupport.ComponentKey componentKey, @Nullable String projectName) {
+  private ComponentCreationData createProject(String projectKey, @Nullable String projectName, Map<String, String> characteristics,
+    DbSession dbSession, BranchSupport.ComponentKey componentKey) {
     userSession.checkPermission(GlobalPermission.PROVISION_PROJECTS);
-    String userUuid = userSession.getUuid();
 
-    boolean wouldCurrentUserHaveScanPermission = permissionTemplateService.wouldUserHaveScanPermissionWithDefaultTemplate(
-      dbSession, userUuid, componentKey.getDbKey());
-    if (!wouldCurrentUserHaveScanPermission) {
+    DevOpsProjectCreator devOpsProjectCreator = devOpsProjectCreatorFactory.getDevOpsProjectCreator(dbSession, characteristics).orElse(null);
+
+    throwIfCurrentUserWouldNotHaveScanPermission(projectKey, dbSession, devOpsProjectCreator);
+
+    if (devOpsProjectCreator != null) {
+      return devOpsProjectCreator.createProjectAndBindToDevOpsPlatform(dbSession, SCANNER_API_DEVOPS_AUTO_CONFIG, projectKey);
+    }
+    return projectCreator.createProject(dbSession, componentKey.getKey(), defaultIfBlank(projectName, projectKey), null, SCANNER_API);
+  }
+
+  private void throwIfCurrentUserWouldNotHaveScanPermission(String projectKey, DbSession dbSession, @Nullable DevOpsProjectCreator devOpsProjectCreator) {
+    if (!wouldCurrentUserHaveScanPermission(projectKey, dbSession, devOpsProjectCreator)) {
       throw insufficientPrivilegesException();
     }
-
-    NewComponent newProject = newComponentBuilder()
-      .setKey(componentKey.getKey())
-      .setName(defaultIfBlank(projectName, componentKey.getKey()))
-      .setQualifier(Qualifiers.PROJECT)
-      .setPrivate(getDefaultVisibility(dbSession).isPrivate())
-      .build();
-    return componentUpdater.createWithoutCommit(dbSession, newProject, userUuid, c -> {
-    });
   }
 
-  private Visibility getDefaultVisibility(DbSession dbSession) {
-    return projectDefaultVisibility.get(dbSession);
+  private boolean wouldCurrentUserHaveScanPermission(String projectKey, DbSession dbSession, @Nullable DevOpsProjectCreator devOpsProjectCreator) {
+    if (userSession.hasPermission(SCAN)) {
+      return true;
+    }
+    if (managedInstanceService.isInstanceExternallyManaged() && devOpsProjectCreator != null) {
+      return devOpsProjectCreator.isScanAllowedUsingPermissionsFromDevopsPlatform();
+    }
+    return permissionTemplateService.wouldUserHaveScanPermissionWithDefaultTemplate(dbSession, userSession.getUuid(), projectKey);
   }
 
-  private CeTask submitReport(DbSession dbSession, InputStream reportInput, ComponentDto project, Map<String, String> characteristics) {
+  private CeTask submitReport(DbSession dbSession, InputStream reportInput, ComponentDto branch, BranchDto mainBranch, Map<String, String> characteristics) {
     CeTaskSubmit.Builder submit = queue.prepareSubmit();
 
     // the report file must be saved before submitting the task
     dbClient.ceTaskInputDao().insert(dbSession, submit.getUuid(), reportInput);
     dbSession.commit();
-
     submit.setType(CeTaskTypes.REPORT);
-    submit.setComponent(CeTaskSubmit.Component.fromDto(project));
+    submit.setComponent(CeTaskSubmit.Component.fromDto(branch.uuid(), mainBranch.getProjectUuid()));
     submit.setSubmitterUuid(userSession.getUuid());
     submit.setCharacteristics(characteristics);
     return queue.submit(submit.build());

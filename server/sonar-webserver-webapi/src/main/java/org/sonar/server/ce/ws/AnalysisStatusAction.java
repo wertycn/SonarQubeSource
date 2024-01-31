@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,7 +20,6 @@
 package org.sonar.server.ce.ws;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
@@ -96,7 +95,7 @@ public class AnalysisStatusAction implements CeWsAction {
   private void doHandle(Request request, Response response, String projectKey, @Nullable String branchKey, @Nullable String pullRequestKey) {
     try (DbSession dbSession = dbClient.openSession(false)) {
       ProjectDto project = componentFinder.getProjectByKey(dbSession, projectKey);
-      userSession.checkProjectPermission(UserRole.USER, project);
+      userSession.checkEntityPermission(UserRole.USER, project);
       BranchDto branch = componentFinder.getBranchOrPullRequest(dbSession, project, branchKey, pullRequestKey);
 
       AnalysisStatusWsResponse.Builder responseBuilder = AnalysisStatusWsResponse.newBuilder();
@@ -127,9 +126,9 @@ public class AnalysisStatusAction implements CeWsAction {
     List<CeTaskMessageDto> warnings;
     String userUuid = userSession.getUuid();
     if (userUuid != null) {
-      warnings = dbClient.ceTaskMessageDao().selectNonDismissedByUserAndTask(dbSession, lastActivity.getUuid(), userUuid);
+      warnings =  dbClient.ceTaskMessageDao().selectNonDismissedByUserAndTask(dbSession, lastActivity.getUuid(), userUuid);
     } else {
-      warnings = dbClient.ceTaskMessageDao().selectByTask(dbSession, lastActivity.getUuid());
+      warnings = lastActivity.getCeTaskMessageDtos();
     }
 
     List<AnalysisStatusWsResponse.Warning> result = warnings.stream().map(dto -> AnalysisStatusWsResponse.Warning.newBuilder()
@@ -137,7 +136,7 @@ public class AnalysisStatusAction implements CeWsAction {
       .setMessage(dto.getMessage())
       .setDismissable(dto.getType().isDismissible())
       .build())
-      .collect(Collectors.toList());
+      .toList();
     builder.addAllWarnings(result);
     return builder.build();
   }

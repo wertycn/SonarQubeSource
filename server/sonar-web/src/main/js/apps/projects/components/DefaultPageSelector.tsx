@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,98 +18,84 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { get } from 'sonar-ui-common/helpers/storage';
+import { useNavigate } from 'react-router-dom';
 import { searchProjects } from '../../../api/components';
-import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
-import { isLoggedIn } from '../../../helpers/users';
+import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
+import { useLocation } from '../../../components/hoc/withRouter';
+import { get } from '../../../helpers/storage';
+import { hasGlobalPermission } from '../../../helpers/users';
+import { CurrentUser, isLoggedIn } from '../../../types/users';
 import { PROJECTS_ALL, PROJECTS_DEFAULT_FILTER, PROJECTS_FAVORITE } from '../utils';
-import AllProjectsContainer from './AllProjectsContainer';
+import AllProjects from './AllProjects';
 
-interface Props {
-  currentUser: T.CurrentUser;
-  location: Pick<Location, 'pathname' | 'query'>;
-  router: Pick<Router, 'replace'>;
+export interface DefaultPageSelectorProps {
+  currentUser: CurrentUser;
 }
 
-interface State {
-  shouldBeRedirected?: boolean;
-  shouldForceSorting?: string;
-}
+export function DefaultPageSelector(props: DefaultPageSelectorProps) {
+  const [checking, setChecking] = React.useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-export class DefaultPageSelector extends React.PureComponent<Props, State> {
-  state: State = {};
+  React.useEffect(
+    () => {
+      async function checkRedirect() {
+        const { currentUser } = props;
+        const setting = get(PROJECTS_DEFAULT_FILTER);
 
-  componentDidMount() {
-    this.defineIfShouldBeRedirected();
-  }
-
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.location !== this.props.location) {
-      this.defineIfShouldBeRedirected();
-    } else if (this.state.shouldBeRedirected === true) {
-      this.props.router.replace({ ...this.props.location, pathname: '/projects/favorite' });
-    } else if (this.state.shouldForceSorting != null) {
-      this.props.router.replace({
-        ...this.props.location,
-        query: {
-          ...this.props.location.query,
-          sort: this.state.shouldForceSorting
+        // 1. Don't have to redirect if:
+        //   1.1 User is anonymous
+        //   1.2 There's a query, which means the user is interacting with the current page
+        //   1.3 The last interaction with the filter was to set it to "all"
+        if (
+          !isLoggedIn(currentUser) ||
+          Object.keys(location.query).length > 0 ||
+          setting === PROJECTS_ALL
+        ) {
+          setChecking(false);
+          return;
         }
-      });
-    }
-  }
 
-  isFavoriteSet = (): boolean => {
-    const setting = get(PROJECTS_DEFAULT_FILTER);
-    return setting === PROJECTS_FAVORITE;
-  };
+        // 2. Redirect to the favorites page if:
+        //   2.1 The last interaction with the filter was to set it to "favorites"
+        //   2.2 The user has starred some projects
+        if (
+          setting === PROJECTS_FAVORITE ||
+          (await searchProjects({ filter: 'isFavorite', ps: 1 })).paging.total > 0
+        ) {
+          navigate('/projects/favorite', { replace: true });
+          return;
+        }
 
-  isAllSet = (): boolean => {
-    const setting = get(PROJECTS_DEFAULT_FILTER);
-    return setting === PROJECTS_ALL;
-  };
+        // 3. Redirect to the create project page if:
+        //   3.1 The user has permission to provision projects, AND there are 0 projects on the instance
+        if (
+          hasGlobalPermission(currentUser, 'provisioning') &&
+          (await searchProjects({ ps: 1 })).paging.total === 0
+        ) {
+          navigate('/projects/create', { replace: true });
+          return;
+        }
 
-  defineIfShouldBeRedirected() {
-    if (Object.keys(this.props.location.query).length > 0) {
-      // show ALL projects when there are some filters
-      this.setState({ shouldBeRedirected: false, shouldForceSorting: undefined });
-    } else if (!isLoggedIn(this.props.currentUser)) {
-      // show ALL projects if user is anonymous
-      if (!this.props.location.query || !this.props.location.query.sort) {
-        // force default sorting to last analysis date
-        this.setState({ shouldBeRedirected: false, shouldForceSorting: '-analysis_date' });
-      } else {
-        this.setState({ shouldBeRedirected: false, shouldForceSorting: undefined });
+        // None of the above apply. Do not redirect, and stay on this page.
+        setChecking(false);
       }
-    } else if (this.isFavoriteSet()) {
-      // show FAVORITE projects if "favorite" setting is explicitly set
-      this.setState({ shouldBeRedirected: true, shouldForceSorting: undefined });
-    } else if (this.isAllSet()) {
-      // show ALL projects if "all" setting is explicitly set
-      this.setState({ shouldBeRedirected: false, shouldForceSorting: undefined });
-    } else {
-      // otherwise, request favorites
-      this.setState({ shouldBeRedirected: undefined, shouldForceSorting: undefined });
-      searchProjects({ filter: 'isFavorite', ps: 1 }).then(r => {
-        // show FAVORITE projects if there are any
-        this.setState({ shouldBeRedirected: r.paging.total > 0, shouldForceSorting: undefined });
-      });
-    }
-  }
 
-  render() {
-    const { shouldBeRedirected, shouldForceSorting } = this.state;
+      checkRedirect();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      /* run only once on mount*/
+    ],
+  );
 
-    if (
-      shouldBeRedirected !== undefined &&
-      shouldBeRedirected !== true &&
-      shouldForceSorting === undefined
-    ) {
-      return <AllProjectsContainer isFavorite={false} />;
-    }
-
+  if (checking) {
+    // We don't return a loader here, on purpose. We don't want to show anything
+    // just yet.
     return null;
   }
+
+  return <AllProjects isFavorite={false} />;
 }
 
-export default withRouter(DefaultPageSelector);
+export default withCurrentUserContext(DefaultPageSelector);

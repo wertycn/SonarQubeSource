@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,70 +17,108 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ButtonPrimary, FlagMessage, FormField, InputField, Modal } from 'design-system';
 import * as React from 'react';
-import { ResetButtonLink, SubmitButton } from 'sonar-ui-common/components/controls/buttons';
-import Modal from 'sonar-ui-common/components/controls/Modal';
-import MandatoryFieldMarker from 'sonar-ui-common/components/ui/MandatoryFieldMarker';
-import MandatoryFieldsExplanation from 'sonar-ui-common/components/ui/MandatoryFieldsExplanation';
-import { translate, translateWithParameters } from 'sonar-ui-common/helpers/l10n';
-import { Profile } from '../types';
+import MandatoryFieldsExplanation from '../../../components/ui/MandatoryFieldsExplanation';
+import { KeyboardKeys } from '../../../helpers/keycodes';
+import { translate, translateWithParameters } from '../../../helpers/l10n';
+import useKeyDown from '../../../hooks/useKeydown';
+import { useProfileInheritanceQuery } from '../../../queries/quality-profiles';
+import { Dict } from '../../../types/types';
+import { Profile, ProfileActionModals } from '../types';
 
 export interface ProfileModalFormProps {
-  btnLabelKey: string;
-  headerKey: string;
+  action: ProfileActionModals.Copy | ProfileActionModals.Extend | ProfileActionModals.Rename;
   loading: boolean;
   onClose: () => void;
   onSubmit: (name: string) => void;
   profile: Profile;
 }
 
+const LABELS_FOR_ACTION: Dict<{ button: string; header: string }> = {
+  [ProfileActionModals.Copy]: { button: 'copy', header: 'quality_profiles.copy_x_title' },
+  [ProfileActionModals.Rename]: { button: 'rename', header: 'quality_profiles.rename_x_title' },
+  [ProfileActionModals.Extend]: { button: 'extend', header: 'quality_profiles.extend_x_title' },
+};
+
 export default function ProfileModalForm(props: ProfileModalFormProps) {
-  const { btnLabelKey, headerKey, loading, profile } = props;
-  const [name, setName] = React.useState<string | undefined>(undefined);
+  const { action, loading, profile, onSubmit } = props;
+  const [name, setName] = React.useState('');
 
   const submitDisabled = loading || !name || name === profile.name;
-  const header = translateWithParameters(headerKey, profile.name, profile.languageName);
+  const labels = LABELS_FOR_ACTION[action];
+
+  const { data: { ancestors } = {} } = useProfileInheritanceQuery(props.profile);
+
+  const handleSubmit = React.useCallback(() => {
+    if (name) {
+      onSubmit(name);
+    }
+  }, [name, onSubmit]);
+
+  useKeyDown(handleSubmit, [KeyboardKeys.Enter]);
+
+  const extendsBuiltIn = ancestors?.some((profile) => profile.isBuiltIn);
+  const showBuiltInWarning =
+    (action === ProfileActionModals.Copy && !extendsBuiltIn) ||
+    (action === ProfileActionModals.Extend && !profile.isBuiltIn && !extendsBuiltIn);
 
   return (
-    <Modal contentLabel={header} onRequestClose={props.onClose} size="small">
-      <form
-        onSubmit={(e: React.SyntheticEvent<HTMLFormElement>) => {
-          e.preventDefault();
-          if (name) {
-            props.onSubmit(name);
-          }
-        }}>
-        <div className="modal-head">
-          <h2>{header}</h2>
-        </div>
-        <div className="modal-body">
-          <MandatoryFieldsExplanation className="modal-field" />
-          <div className="modal-field">
-            <label htmlFor="profile-name">
-              {translate('quality_profiles.new_name')}
-              <MandatoryFieldMarker />
-            </label>
-            <input
-              autoFocus={true}
-              id="profile-name"
-              maxLength={100}
+    <Modal
+      headerTitle={translateWithParameters(labels.header, profile.name, profile.languageName)}
+      onClose={props.onClose}
+      isOverflowVisible
+      loading={loading}
+      body={
+        <>
+          {showBuiltInWarning && (
+            <FlagMessage variant="info" className="sw-mb-4">
+              <div className="sw-flex sw-flex-col">
+                {translate('quality_profiles.no_built_in_updates_warning.new_profile')}
+                <span className="sw-mt-2">
+                  {translate('quality_profiles.no_built_in_updates_warning.new_profile.2')}
+                </span>
+              </div>
+            </FlagMessage>
+          )}
+
+          {action === ProfileActionModals.Copy && (
+            <p className="sw-mb-8">
+              {translateWithParameters('quality_profiles.copy_help', profile.name)}
+            </p>
+          )}
+          {action === ProfileActionModals.Extend && (
+            <p className="sw-mb-8">
+              {translateWithParameters('quality_profiles.extend_help', profile.name)}
+            </p>
+          )}
+
+          <MandatoryFieldsExplanation />
+
+          <FormField
+            className="sw-mt-2"
+            htmlFor="quality-profile-new-name"
+            label={translate('quality_profiles.new_name')}
+            required
+          >
+            <InputField
+              id="quality-profile-new-name"
               name="name"
-              onChange={(e: React.SyntheticEvent<HTMLInputElement>) => {
-                setName(e.currentTarget.value);
-              }}
-              required={true}
-              size={50}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+              required
+              size="full"
               type="text"
-              value={name ?? profile.name}
+              value={name}
             />
-          </div>
-        </div>
-        <div className="modal-foot">
-          {loading && <i className="spinner spacer-right" />}
-          <SubmitButton disabled={submitDisabled}>{translate(btnLabelKey)}</SubmitButton>
-          <ResetButtonLink onClick={props.onClose}>{translate('cancel')}</ResetButtonLink>
-        </div>
-      </form>
-    </Modal>
+          </FormField>
+        </>
+      }
+      primaryButton={
+        <ButtonPrimary onClick={handleSubmit} disabled={submitDisabled}>
+          {translate(labels.button)}
+        </ButtonPrimary>
+      }
+      secondaryButtonLabel={translate('cancel')}
+    />
   );
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.ce.task.projectanalysis.component;
 
 import org.apache.commons.lang.StringUtils;
+import org.sonar.api.resources.Qualifiers;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -46,7 +47,7 @@ public class ProjectPersister {
 
     ProjectDto dbProjectDto = dbClient.projectDao().selectProjectByKey(dbSession, treeRootHolder.getRoot().getKey())
       .orElseThrow(() -> new IllegalStateException("Project has been deleted by end-user during analysis"));
-    ProjectDto projectDto = toProjectDto(treeRootHolder.getRoot());
+    ProjectDto projectDto = toProjectDto(treeRootHolder.getRoot(), dbProjectDto);
 
     if (hasChanged(dbProjectDto, projectDto)) {
       // insert or update in projects table
@@ -63,12 +64,15 @@ public class ProjectPersister {
       !StringUtils.equals(dbProject.getDescription(), newProject.getDescription());
   }
 
-  private ProjectDto toProjectDto(Component root) {
+  private ProjectDto toProjectDto(Component root, ProjectDto projectDtoFromDatabase) {
     ProjectDto projectDto = new ProjectDto();
-    projectDto.setUuid(root.getUuid());
+    // Component has different uuid from project
+    projectDto.setUuid(projectDtoFromDatabase.getUuid());
     projectDto.setName(root.getName());
     projectDto.setDescription(root.getDescription());
     projectDto.setUpdatedAt(system2.now());
+    projectDto.setKey(root.getKey());
+    projectDto.setQualifier(root.getType().equals(Component.Type.PROJECT) ? Qualifiers.PROJECT : Qualifiers.APP);
     return projectDto;
   }
 }

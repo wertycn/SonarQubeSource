@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,10 +19,12 @@
  */
 package org.sonar.server.setting.ws;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.util.Optional;
+import java.util.Set;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.web.UserRole;
-import org.sonar.db.component.ComponentDto;
+import org.sonar.db.entity.EntityDto;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.process.ProcessProperties;
 import org.sonar.server.user.UserSession;
@@ -34,6 +36,8 @@ import static org.sonar.api.web.UserRole.ADMIN;
 @ServerSide
 public class SettingsWsSupport {
   public static final String DOT_SECURED = ".secured";
+  @VisibleForTesting
+  static final Set<String> ADMIN_ONLY_SETTINGS = Set.of("sonar.auth.bitbucket.workspaces", "sonar.auth.github.organizations");
 
   private final UserSession userSession;
 
@@ -50,27 +54,35 @@ public class SettingsWsSupport {
       });
   }
 
-  boolean isVisible(String key, Optional<ComponentDto> component) {
-    return hasPermission(GlobalPermission.SCAN, UserRole.SCAN, component) || verifySecuredSetting(key, component);
+  boolean isVisible(String key, Optional<EntityDto> component) {
+    if (isAdmin(component)) {
+      return true;
+    }
+    return hasPermission(GlobalPermission.SCAN, UserRole.SCAN, component) || !isProtected(key);
+  }
+
+  private boolean isAdmin(Optional<EntityDto> component) {
+    return userSession.isSystemAdministrator() || hasPermission(GlobalPermission.ADMINISTER, ADMIN, component);
+  }
+
+  private static boolean isProtected(String key) {
+    return isSecured(key) || isAdminOnly(key);
   }
 
   static boolean isSecured(String key) {
     return key.endsWith(DOT_SECURED);
   }
 
-  private boolean verifySecuredSetting(String key, Optional<ComponentDto> component) {
-    return (!isSecured(key) || hasPermission(GlobalPermission.ADMINISTER, ADMIN, component));
+  private static boolean isAdminOnly(String key) {
+    return ADMIN_ONLY_SETTINGS.contains(key);
   }
 
-  private boolean hasPermission(GlobalPermission orgPermission, String projectPermission, Optional<ComponentDto> component) {
-    if (userSession.isSystemAdministrator()) {
-      return true;
-    }
+  private boolean hasPermission(GlobalPermission orgPermission, String projectPermission, Optional<EntityDto> component) {
     if (userSession.hasPermission(orgPermission)) {
       return true;
     }
     return component
-      .map(c -> userSession.hasPermission(orgPermission) || userSession.hasComponentPermission(projectPermission, c))
+      .map(c -> userSession.hasEntityPermission(projectPermission, c))
       .orElse(false);
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -23,13 +23,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.sonar.api.utils.log.Logger;
-import org.sonar.api.utils.log.Loggers;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sonar.ce.task.projectanalysis.analysis.AnalysisMetadataHolder;
 import org.sonar.ce.task.projectanalysis.batch.BatchReportReader;
 import org.sonar.ce.task.projectanalysis.component.Component;
-import org.sonar.ce.task.projectanalysis.component.Component.Status;
-import org.sonar.ce.task.projectanalysis.source.SourceHashRepository;
+import org.sonar.ce.task.projectanalysis.component.FileStatuses;
 import org.sonar.ce.task.projectanalysis.source.SourceLinesDiff;
 import org.sonar.scanner.protocol.output.ScannerReport;
 
@@ -37,22 +38,22 @@ import static java.util.Objects.requireNonNull;
 
 public class ScmInfoRepositoryImpl implements ScmInfoRepository {
 
-  private static final Logger LOGGER = Loggers.get(ScmInfoRepositoryImpl.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ScmInfoRepositoryImpl.class);
 
   private final BatchReportReader scannerReportReader;
   private final Map<Component, Optional<ScmInfo>> scmInfoCache = new HashMap<>();
   private final ScmInfoDbLoader scmInfoDbLoader;
   private final AnalysisMetadataHolder analysisMetadata;
   private final SourceLinesDiff sourceLinesDiff;
-  private final SourceHashRepository sourceHashRepository;
+  private final FileStatuses fileStatuses;
 
   public ScmInfoRepositoryImpl(BatchReportReader scannerReportReader, AnalysisMetadataHolder analysisMetadata, ScmInfoDbLoader scmInfoDbLoader,
-    SourceLinesDiff sourceLinesDiff, SourceHashRepository sourceHashRepository) {
+    SourceLinesDiff sourceLinesDiff, FileStatuses fileStatuses) {
     this.scannerReportReader = scannerReportReader;
     this.analysisMetadata = analysisMetadata;
     this.scmInfoDbLoader = scmInfoDbLoader;
     this.sourceLinesDiff = sourceLinesDiff;
-    this.sourceHashRepository = sourceHashRepository;
+    this.fileStatuses = fileStatuses;
   }
 
   @Override
@@ -70,7 +71,7 @@ public class ScmInfoRepositoryImpl implements ScmInfoRepository {
     ScannerReport.Changesets changesets = scannerReportReader.readChangesets(component.getReportAttributes().getRef());
 
     if (changesets == null) {
-      LOGGER.trace("No SCM info for file '{}'", component.getDbKey());
+      LOGGER.trace("No SCM info for file '{}'", component.getKey());
       // SCM not available. It might have been available before - copy information for unchanged lines but don't keep author and revision.
       return generateAndMergeDb(component, false);
     }
@@ -83,7 +84,7 @@ public class ScmInfoRepositoryImpl implements ScmInfoRepository {
   }
 
   private static Optional<ScmInfo> getScmInfoFromReport(Component file, ScannerReport.Changesets changesets) {
-    LOGGER.trace("Reading SCM info from report for file '{}'", file.getDbKey());
+    LOGGER.trace("Reading SCM info from report for file '{}'", file.getKey());
     return Optional.of(ReportScmInfo.create(changesets));
   }
 
@@ -101,7 +102,12 @@ public class ScmInfoRepositoryImpl implements ScmInfoRepository {
     return new ScmInfoImpl(changesets);
   }
 
-  private static Changeset removeAuthorAndRevision(Changeset changeset) {
+  @CheckForNull
+  private static Changeset removeAuthorAndRevision(@Nullable Changeset changeset) {
+    // some changesets might be null if they are missing in the DB or if they contained no date
+    if (changeset == null) {
+      return null;
+    }
     return Changeset.newChangesetBuilder().setDate(changeset.getDate()).build();
   }
 
@@ -113,14 +119,12 @@ public class ScmInfoRepositoryImpl implements ScmInfoRepository {
    */
   private Optional<ScmInfo> generateAndMergeDb(Component file, boolean keepAuthorAndRevision) {
     Optional<DbScmInfo> dbInfoOpt = scmInfoDbLoader.getScmInfo(file);
-    if (!dbInfoOpt.isPresent()) {
+    if (dbInfoOpt.isEmpty()) {
       return generateScmInfoForAllFile(file);
     }
 
     ScmInfo scmInfo = keepAuthorAndRevision ? dbInfoOpt.get() : removeAuthorAndRevision(dbInfoOpt.get());
-    boolean fileUnchanged = file.getStatus() == Status.SAME && sourceHashRepository.getRawSourceHash(file).equals(dbInfoOpt.get().fileHash());
-
-    if (fileUnchanged) {
+    if (fileStatuses.isUnchanged(file)) {
       return Optional.of(scmInfo);
     }
 

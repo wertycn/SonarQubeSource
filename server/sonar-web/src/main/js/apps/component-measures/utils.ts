@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,20 +18,36 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { groupBy, memoize, sortBy, toPairs } from 'lodash';
-import { getLocalizedMetricName } from 'sonar-ui-common/helpers/l10n';
-import { cleanQuery, parseAsString, serializeString } from 'sonar-ui-common/helpers/query';
 import { enhanceMeasure } from '../../components/measure/utils';
 import { isBranch, isPullRequest } from '../../helpers/branch-like';
-import { getDisplayMetrics, isDiffMetric } from '../../helpers/measures';
+import { HIDDEN_METRICS } from '../../helpers/constants';
+import { getLocalizedMetricName } from '../../helpers/l10n';
+import { MEASURES_REDIRECTION, getDisplayMetrics, isDiffMetric } from '../../helpers/measures';
+import {
+  cleanQuery,
+  parseAsOptionalBoolean,
+  parseAsString,
+  serializeString,
+} from '../../helpers/query';
 import { BranchLike } from '../../types/branch-like';
 import { ComponentQualifier } from '../../types/component';
+import { MeasurePageView } from '../../types/measures';
+import { MetricKey, MetricType } from '../../types/metrics';
+import {
+  ComponentMeasure,
+  ComponentMeasureEnhanced,
+  Dict,
+  Measure,
+  MeasureEnhanced,
+  Metric,
+  RawQuery,
+} from '../../types/types';
 import { bubbles } from './config/bubbles';
 import { domains } from './config/domains';
 
-export type View = 'list' | 'tree' | 'treemap';
-
+export const BUBBLES_FETCH_LIMIT = 500;
 export const PROJECT_OVERVEW = 'project_overview';
-export const DEFAULT_VIEW: View = 'tree';
+export const DEFAULT_VIEW = MeasurePageView.tree;
 export const DEFAULT_METRIC = PROJECT_OVERVEW;
 export const KNOWN_DOMAINS = [
   'Releasability',
@@ -42,45 +58,33 @@ export const KNOWN_DOMAINS = [
   'Coverage',
   'Duplications',
   'Size',
-  'Complexity'
-];
-const BANNED_MEASURES = [
-  'blocker_violations',
-  'new_blocker_violations',
-  'critical_violations',
-  'new_critical_violations',
-  'major_violations',
-  'new_major_violations',
-  'minor_violations',
-  'new_minor_violations',
-  'info_violations',
-  'new_info_violations'
+  'Complexity',
 ];
 
-export function filterMeasures(measures: T.MeasureEnhanced[]): T.MeasureEnhanced[] {
-  return measures.filter(measure => !BANNED_MEASURES.includes(measure.metric.key));
+export function filterMeasures(measures: MeasureEnhanced[]): MeasureEnhanced[] {
+  return measures.filter((measure) => !HIDDEN_METRICS.includes(measure.metric.key as MetricKey));
 }
 
 export function sortMeasures(
   domainName: string,
-  measures: Array<T.MeasureEnhanced | string>
-): Array<T.MeasureEnhanced | string> {
+  measures: Array<MeasureEnhanced | string>,
+): Array<MeasureEnhanced | string> {
   const config = domains[domainName] || {};
   const configOrder = config.order || [];
   return sortBy(measures, [
-    (item: T.MeasureEnhanced | string) => {
+    (item: MeasureEnhanced | string) => {
       if (typeof item === 'string') {
         return configOrder.indexOf(item);
       }
       const idx = configOrder.indexOf(item.metric.key);
       return idx >= 0 ? idx : configOrder.length;
     },
-    (item: T.MeasureEnhanced | string) =>
-      typeof item === 'string' ? item : getLocalizedMetricName(item.metric)
+    (item: MeasureEnhanced | string) =>
+      typeof item === 'string' ? item : getLocalizedMetricName(item.metric),
   ]);
 }
 
-export function addMeasureCategories(domainName: string, measures: T.MeasureEnhanced[]) {
+export function addMeasureCategories(domainName: string, measures: MeasureEnhanced[]) {
   const categories = domains[domainName] && domains[domainName].categories;
   if (categories && categories.length > 0) {
     return [...categories, ...measures];
@@ -89,74 +93,73 @@ export function addMeasureCategories(domainName: string, measures: T.MeasureEnha
 }
 
 export function enhanceComponent(
-  component: T.ComponentMeasure,
-  metric: Pick<T.Metric, 'key'> | undefined,
-  metrics: T.Dict<T.Metric>
-): T.ComponentMeasureEnhanced {
+  component: ComponentMeasure,
+  metric: Pick<Metric, 'key'> | undefined,
+  metrics: Dict<Metric>,
+): ComponentMeasureEnhanced {
   if (!component.measures) {
     return { ...component, measures: [] };
   }
 
-  const enhancedMeasures = component.measures.map(measure => enhanceMeasure(measure, metrics));
-  const measure = metric && enhancedMeasures.find(measure => measure.metric.key === metric.key);
+  const enhancedMeasures = component.measures.map((measure) => enhanceMeasure(measure, metrics));
+  const measure = metric && enhancedMeasures.find((measure) => measure.metric.key === metric.key);
   const value = measure && measure.value;
   const leak = measure && measure.leak;
   return { ...component, value, leak, measures: enhancedMeasures };
 }
 
-export function isFileType(component: T.ComponentMeasure): boolean {
-  return [ComponentQualifier.File, ComponentQualifier.TestFile].includes(
-    component.qualifier as ComponentQualifier
-  );
-}
-
-export function isViewType(component: T.ComponentMeasure): boolean {
+export function isSecurityReviewMetric(metricKey: MetricKey | string): boolean {
   return [
-    ComponentQualifier.Portfolio,
-    ComponentQualifier.SubPortfolio,
-    ComponentQualifier.Application
-  ].includes(component.qualifier as ComponentQualifier);
+    MetricKey.security_hotspots,
+    MetricKey.security_hotspots_reviewed,
+    MetricKey.security_review_rating,
+    MetricKey.new_security_hotspots,
+    MetricKey.new_security_hotspots_reviewed,
+    MetricKey.new_security_review_rating,
+  ].includes(metricKey as MetricKey);
 }
 
-export function banQualityGateMeasure({
-  measures = [],
-  qualifier
-}: T.ComponentMeasure): T.Measure[] {
+export function banQualityGateMeasure({ measures = [], qualifier }: ComponentMeasure): Measure[] {
   const bannedMetrics: string[] = [];
   if (ComponentQualifier.Portfolio !== qualifier && ComponentQualifier.SubPortfolio !== qualifier) {
-    bannedMetrics.push('alert_status');
+    bannedMetrics.push(MetricKey.alert_status);
   }
   if (qualifier === ComponentQualifier.Application) {
-    bannedMetrics.push('releasability_rating', 'releasability_effort');
+    bannedMetrics.push(MetricKey.releasability_rating, MetricKey.releasability_effort);
   }
-  return measures.filter(measure => !bannedMetrics.includes(measure.metric));
+  return measures.filter((measure) => !bannedMetrics.includes(measure.metric));
 }
 
-export const groupByDomains = memoize((measures: T.MeasureEnhanced[]) => {
-  const domains = toPairs(groupBy(measures, measure => measure.metric.domain)).map(r => ({
+export const groupByDomains = memoize((measures: MeasureEnhanced[]) => {
+  const domains = toPairs(groupBy(measures, (measure) => measure.metric.domain)).map((r) => ({
     name: r[0],
-    measures: r[1]
+    measures: r[1],
   }));
 
   return sortBy(domains, [
-    (domain: { name: string; measures: T.MeasureEnhanced[] }) => {
+    (domain: { name: string; measures: MeasureEnhanced[] }) => {
       const idx = KNOWN_DOMAINS.indexOf(domain.name);
       return idx >= 0 ? idx : KNOWN_DOMAINS.length;
     },
-    'name'
+    'name',
   ]);
 });
 
 export function hasList(metric: string): boolean {
-  return !['releasability_rating', 'releasability_effort'].includes(metric);
+  return ![MetricKey.releasability_rating, MetricKey.releasability_effort].includes(
+    metric as MetricKey,
+  );
 }
 
 export function hasTree(metric: string): boolean {
-  return metric !== 'alert_status';
+  return metric !== MetricKey.alert_status;
 }
 
 export function hasTreemap(metric: string, type: string): boolean {
-  return ['PERCENT', 'RATING', 'LEVEL'].includes(type) && hasTree(metric);
+  return (
+    [MetricType.Percent, MetricType.Rating, MetricType.Level].includes(type as MetricType) &&
+    hasTree(metric)
+  );
 }
 
 export function hasBubbleChart(domainName: string): boolean {
@@ -164,30 +167,30 @@ export function hasBubbleChart(domainName: string): boolean {
 }
 
 export function hasFacetStat(metric: string): boolean {
-  return metric !== 'alert_status';
+  return metric !== MetricKey.alert_status;
 }
 
 export function hasFullMeasures(branch?: BranchLike) {
   return !branch || isBranch(branch);
 }
 
-export function getMeasuresPageMetricKeys(metrics: T.Dict<T.Metric>, branch?: BranchLike) {
-  const metricKeys = getDisplayMetrics(Object.values(metrics)).map(metric => metric.key);
+export function getMeasuresPageMetricKeys(metrics: Dict<Metric>, branch?: BranchLike) {
+  const metricKeys = getDisplayMetrics(Object.values(metrics)).map((metric) => metric.key);
 
   if (isPullRequest(branch)) {
-    return metricKeys.filter(key => isDiffMetric(key));
-  } else {
-    return metricKeys;
+    return metricKeys.filter((key) => isDiffMetric(key));
   }
+
+  return metricKeys;
 }
 
-export function getBubbleMetrics(domain: string, metrics: T.Dict<T.Metric>) {
+export function getBubbleMetrics(domain: string, metrics: Dict<Metric>) {
   const conf = bubbles[domain];
   return {
     x: metrics[conf.x],
     y: metrics[conf.y],
     size: metrics[conf.size],
-    colors: conf.colors && conf.colors.map(color => metrics[color])
+    colors: conf.colors && conf.colors.map((color) => metrics[color]),
   };
 }
 
@@ -199,12 +202,12 @@ export function isProjectOverview(metric: string) {
   return metric === PROJECT_OVERVEW;
 }
 
-function parseView(metric: string, rawView?: string): View {
-  const view = (parseAsString(rawView) || DEFAULT_VIEW) as View;
+function parseView(metric: MetricKey, rawView?: string): MeasurePageView {
+  const view = (parseAsString(rawView) || DEFAULT_VIEW) as MeasurePageView;
   if (!hasTree(metric)) {
-    return 'list';
-  } else if (view === 'list' && !hasList(metric)) {
-    return 'tree';
+    return MeasurePageView.list;
+  } else if (view === MeasurePageView.list && !hasList(metric)) {
+    return MeasurePageView.tree;
   }
   return view;
 }
@@ -212,24 +215,25 @@ function parseView(metric: string, rawView?: string): View {
 export interface Query {
   metric: string;
   selected?: string;
-  view: View;
+  view: MeasurePageView;
+  asc?: boolean;
 }
 
-export const parseQuery = memoize(
-  (urlQuery: T.RawQuery): Query => {
-    const metric = parseAsString(urlQuery['metric']) || DEFAULT_METRIC;
-    return {
-      metric,
-      selected: parseAsString(urlQuery['selected']),
-      view: parseView(metric, urlQuery['view'])
-    };
-  }
-);
+export const parseQuery = memoize((urlQuery: RawQuery): Query => {
+  const parsedMetric = parseAsString<MetricKey>(urlQuery['metric']) || DEFAULT_METRIC;
+  const metric = MEASURES_REDIRECTION[parsedMetric] ?? parsedMetric;
+  return {
+    metric,
+    selected: parseAsString(urlQuery['selected']),
+    view: parseView(metric, urlQuery['view']),
+    asc: parseAsOptionalBoolean(urlQuery['asc']),
+  };
+});
 
 export const serializeQuery = memoize((query: Query) => {
   return cleanQuery({
     metric: query.metric === DEFAULT_METRIC ? undefined : serializeString(query.metric),
     selected: serializeString(query.selected),
-    view: query.view === DEFAULT_VIEW ? undefined : serializeString(query.view)
+    view: query.view === DEFAULT_VIEW ? undefined : serializeString(query.view),
   });
 });

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,17 +19,17 @@
  */
 package org.sonar.server.permission.ws;
 
-import java.util.Optional;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
-import org.sonar.server.permission.PermissionChange;
+import org.sonar.db.entity.EntityDto;
+import org.sonar.db.user.UserId;
+import org.sonar.server.common.management.ManagedInstanceChecker;
+import org.sonar.server.common.permission.Operation;
 import org.sonar.server.permission.PermissionService;
 import org.sonar.server.permission.PermissionUpdater;
-import org.sonar.server.permission.UserId;
 import org.sonar.server.permission.UserPermissionChange;
 import org.sonar.server.user.UserSession;
 
@@ -45,19 +45,21 @@ public class RemoveUserAction implements PermissionsWsAction {
 
   private final DbClient dbClient;
   private final UserSession userSession;
-  private final PermissionUpdater permissionUpdater;
+  private final PermissionUpdater<UserPermissionChange> permissionUpdater;
   private final PermissionWsSupport wsSupport;
   private final WsParameters wsParameters;
   private final PermissionService permissionService;
+  private final ManagedInstanceChecker managedInstanceChecker;
 
-  public RemoveUserAction(DbClient dbClient, UserSession userSession, PermissionUpdater permissionUpdater, PermissionWsSupport wsSupport,
-                          WsParameters wsParameters, PermissionService permissionService) {
+  public RemoveUserAction(DbClient dbClient, UserSession userSession, PermissionUpdater<UserPermissionChange> permissionUpdater, PermissionWsSupport wsSupport,
+    WsParameters wsParameters, PermissionService permissionService, ManagedInstanceChecker managedInstanceChecker) {
     this.dbClient = dbClient;
     this.userSession = userSession;
     this.permissionUpdater = permissionUpdater;
     this.wsSupport = wsSupport;
     this.wsParameters = wsParameters;
     this.permissionService = permissionService;
+    this.managedInstanceChecker = managedInstanceChecker;
   }
 
   @Override
@@ -82,14 +84,22 @@ public class RemoveUserAction implements PermissionsWsAction {
   @Override
   public void handle(Request request, Response response) throws Exception {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      UserId user = wsSupport.findUser(dbSession, request.mandatoryParam(PARAM_USER_LOGIN));
-      Optional<ComponentDto> project = wsSupport.findProject(dbSession, request);
-      wsSupport.checkPermissionManagementAccess(userSession, project.orElse(null));
-      PermissionChange change = new UserPermissionChange(
-        PermissionChange.Operation.REMOVE,
-        request.mandatoryParam(PARAM_PERMISSION),
-        project.orElse(null),
-        user, permissionService);
+      UserId userIdDto = wsSupport.findUser(dbSession, request.mandatoryParam(PARAM_USER_LOGIN));
+      String permission = request.mandatoryParam(PARAM_PERMISSION);
+      wsSupport.checkRemovingOwnAdminRight(userSession, userIdDto, permission);
+
+      EntityDto entityDto = wsSupport.findEntity(dbSession, request);
+      wsSupport.checkRemovingOwnBrowsePermissionOnPrivateProject(userSession, entityDto, permission, userIdDto);
+      wsSupport.checkPermissionManagementAccess(userSession, entityDto);
+      if (entityDto != null && entityDto.isProject()) {
+        managedInstanceChecker.throwIfUserAndProjectAreManaged(dbSession, userIdDto.getUuid(), entityDto.getUuid());
+      }
+      UserPermissionChange change = new UserPermissionChange(
+        Operation.REMOVE,
+        permission,
+        entityDto,
+        userIdDto,
+        permissionService);
       permissionUpdater.apply(dbSession, singletonList(change));
       response.noContent();
     }

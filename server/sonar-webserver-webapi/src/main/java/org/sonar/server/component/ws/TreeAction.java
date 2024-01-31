@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,8 +29,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.resources.Qualifiers;
@@ -42,9 +42,9 @@ import org.sonar.api.server.ws.WebService.Param;
 import org.sonar.api.utils.Paging;
 import org.sonar.api.web.UserRole;
 import org.sonar.core.i18n.I18n;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.ComponentTreeQuery;
 import org.sonar.db.component.ComponentTreeQuery.Strategy;
@@ -57,9 +57,7 @@ import org.sonarqube.ws.Components.TreeWsResponse;
 import static java.lang.String.CASE_INSENSITIVE_ORDER;
 import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
-import static java.util.Optional.ofNullable;
 import static org.sonar.api.utils.Paging.offset;
-import static org.sonar.core.util.stream.MoreCollectors.toList;
 import static org.sonar.db.component.ComponentTreeQuery.Strategy.CHILDREN;
 import static org.sonar.db.component.ComponentTreeQuery.Strategy.LEAVES;
 import static org.sonar.server.component.ws.ComponentDtoToWsComponent.componentDtoToWsComponent;
@@ -93,14 +91,13 @@ public class TreeAction implements ComponentsWsAction {
   private static final String PATH_SORT = "path";
   private static final String QUALIFIER_SORT = "qualifier";
   private static final Set<String> SORTS = ImmutableSortedSet.of(NAME_SORT, PATH_SORT, QUALIFIER_SORT);
+  private static final Set<String> PROJECT_OR_APP_QUALIFIERS = ImmutableSortedSet.of(Qualifiers.PROJECT, Qualifiers.APP);
 
   private final DbClient dbClient;
   private final ComponentFinder componentFinder;
   private final ResourceTypes resourceTypes;
   private final UserSession userSession;
   private final I18n i18n;
-
-  private static final Set<String> PROJECT_OR_APP_QUALIFIERS = ImmutableSortedSet.of(Qualifiers.PROJECT, Qualifiers.APP);
 
   public TreeAction(DbClient dbClient, ComponentFinder componentFinder, ResourceTypes resourceTypes, UserSession userSession, I18n i18n) {
     this.dbClient = dbClient;
@@ -114,12 +111,14 @@ public class TreeAction implements ComponentsWsAction {
   public void define(WebService.NewController context) {
     WebService.NewAction action = context.createAction(ACTION_TREE)
       .setDescription(format("Navigate through components based on the chosen strategy.<br>" +
-        "Requires the following permission: 'Browse' on the specified project.<br>" +
-        "When limiting search with the %s parameter, directories are not returned.",
+          "Requires the following permission: 'Browse' on the specified project.<br>" +
+          "When limiting search with the %s parameter, directories are not returned.",
         Param.TEXT_QUERY))
       .setSince("5.4")
       .setResponseExample(getClass().getResource("tree-example.json"))
       .setChangelog(
+        new Change("10.1", String.format("The use of module keys in parameter '%s' is removed", PARAM_COMPONENT)),
+        new Change("10.1", String.format("The use of 'BRC' as value for parameter '%s' is removed", PARAM_QUALIFIERS)),
         new Change("7.6", String.format("The use of 'BRC' as value for parameter '%s' is deprecated", PARAM_QUALIFIERS)),
         new Change("7.6", String.format("The use of module keys in parameter '%s' is deprecated", PARAM_COMPONENT)))
       .setHandler(this)
@@ -178,15 +177,20 @@ public class TreeAction implements ComponentsWsAction {
 
       ComponentTreeQuery query = toComponentTreeQuery(treeRequest, baseComponent);
       List<ComponentDto> components = dbClient.componentDao().selectDescendants(dbSession, query);
+      components = filterAuthorizedComponents(components);
+
       int total = components.size();
       components = sortComponents(components, treeRequest);
       components = paginateComponents(components, treeRequest);
 
       Map<String, ComponentDto> referenceComponentsByUuid = searchReferenceComponentsByUuid(dbSession, components);
-
-      return buildResponse(dbSession, baseComponent, components, referenceComponentsByUuid,
-        Paging.forPageIndex(treeRequest.getPage()).withPageSize(treeRequest.getPageSize()).andTotal(total));
+      Paging paging = Paging.forPageIndex(treeRequest.getPage()).withPageSize(treeRequest.getPageSize()).andTotal(total);
+      return buildResponse(dbSession, baseComponent, components, referenceComponentsByUuid, paging, treeRequest);
     }
+  }
+
+  private List<ComponentDto> filterAuthorizedComponents(List<ComponentDto> components) {
+    return userSession.keepAuthorizedComponents(UserRole.USER, components);
   }
 
   private ComponentDto loadComponent(DbSession dbSession, Request request) {
@@ -198,15 +202,15 @@ public class TreeAction implements ComponentsWsAction {
 
   private Map<String, ComponentDto> searchReferenceComponentsByUuid(DbSession dbSession, List<ComponentDto> components) {
     List<String> referenceComponentIds = components.stream()
-      .map(ComponentDto::getCopyResourceUuid)
+      .map(ComponentDto::getCopyComponentUuid)
       .filter(Objects::nonNull)
-      .collect(toList());
+      .toList();
     if (referenceComponentIds.isEmpty()) {
       return emptyMap();
     }
 
     return dbClient.componentDao().selectByUuids(dbSession, referenceComponentIds).stream()
-      .collect(MoreCollectors.uniqueIndex(ComponentDto::uuid));
+      .collect(Collectors.toMap(ComponentDto::uuid, java.util.function.Function.identity()));
   }
 
   private void checkPermissions(ComponentDto baseComponent) {
@@ -214,7 +218,7 @@ public class TreeAction implements ComponentsWsAction {
   }
 
   private TreeWsResponse buildResponse(DbSession dbSession, ComponentDto baseComponent, List<ComponentDto> components,
-    Map<String, ComponentDto> referenceComponentsByUuid, Paging paging) {
+    Map<String, ComponentDto> referenceComponentsByUuid, Paging paging, Request request) {
     TreeWsResponse.Builder response = TreeWsResponse.newBuilder();
     response.getPagingBuilder()
       .setPageIndex(paging.pageIndex())
@@ -222,29 +226,41 @@ public class TreeAction implements ComponentsWsAction {
       .setTotal(paging.total())
       .build();
 
-    response.setBaseComponent(toWsComponent(dbSession, baseComponent, referenceComponentsByUuid));
+    Map<String, String> branchKeyByReferenceUuid = dbClient.branchDao().selectByUuids(dbSession, referenceComponentsByUuid.keySet())
+      .stream()
+      .filter(b -> !b.isMain())
+      .collect(Collectors.toMap(BranchDto::getUuid, BranchDto::getBranchKey));
+
+    boolean isMainBranch = dbClient.branchDao().selectByUuid(dbSession, baseComponent.branchUuid()).map(BranchDto::isMain).orElse(true);
+    response.setBaseComponent(toWsComponent(dbSession, baseComponent, isMainBranch, referenceComponentsByUuid, branchKeyByReferenceUuid, request));
     for (ComponentDto dto : components) {
-      response.addComponents(toWsComponent(dbSession, dto, referenceComponentsByUuid));
+      response.addComponents(toWsComponent(dbSession, dto, isMainBranch, referenceComponentsByUuid, branchKeyByReferenceUuid, request));
     }
 
     return response.build();
   }
 
-  private Components.Component.Builder toWsComponent(DbSession dbSession, ComponentDto component,
-    Map<String, ComponentDto> referenceComponentsByUuid) {
+  private Components.Component.Builder toWsComponent(DbSession dbSession, ComponentDto component, boolean isMainBranch,
+    Map<String, ComponentDto> referenceComponentsByUuid, Map<String, String> branchKeyByReferenceUuid, Request request) {
+
+    ComponentDto referenceComponent = referenceComponentsByUuid.get(component.getCopyComponentUuid());
 
     Components.Component.Builder wsComponent;
-    if (component.getMainBranchProjectUuid() == null && component.isRootProject() &&
-      PROJECT_OR_APP_QUALIFIERS.contains(component.qualifier())) {
+    if (isMainBranch && component.isRootProject() && PROJECT_OR_APP_QUALIFIERS.contains(component.qualifier())) {
       ProjectDto projectDto = componentFinder.getProjectOrApplicationByKey(dbSession, component.getKey());
       wsComponent = projectOrAppToWsComponent(projectDto, null);
     } else {
-      Optional<ProjectDto> parentProject = dbClient.projectDao().selectByUuid(dbSession,
-        ofNullable(component.getMainBranchProjectUuid()).orElse(component.projectUuid()));
-      wsComponent = componentDtoToWsComponent(component, parentProject.orElse(null), null);
+      ProjectDto parentProject = dbClient.projectDao().selectByBranchUuid(dbSession, component.branchUuid()).orElse(null);
+
+      if (referenceComponent != null) {
+        wsComponent = componentDtoToWsComponent(component, parentProject, null, false, branchKeyByReferenceUuid.get(referenceComponent.uuid()), null);
+      } else if (!isMainBranch) {
+        wsComponent = componentDtoToWsComponent(component, parentProject, null, false, request.branch, request.pullRequest);
+      } else {
+        wsComponent = componentDtoToWsComponent(component, parentProject, null, true, null, null);
+      }
     }
 
-    ComponentDto referenceComponent = referenceComponentsByUuid.get(component.getCopyResourceUuid());
     if (referenceComponent != null) {
       wsComponent.setRefId(referenceComponent.uuid());
       wsComponent.setRefKey(referenceComponent.getKey());
@@ -306,7 +322,7 @@ public class TreeAction implements ComponentsWsAction {
 
   private static List<ComponentDto> paginateComponents(List<ComponentDto> components, Request wsRequest) {
     return components.stream().skip(offset(wsRequest.getPage(), wsRequest.getPageSize()))
-      .limit(wsRequest.getPageSize()).collect(toList());
+      .limit(wsRequest.getPageSize()).toList();
   }
 
   private static List<ComponentDto> sortComponents(List<ComponentDto> components, Request wsRequest) {

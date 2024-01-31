@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,17 +19,16 @@
  */
 package org.sonar.core.metric;
 
-import com.google.common.collect.ImmutableSet;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.concurrent.Immutable;
 import org.sonar.api.ce.ComputeEngineSide;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.measures.Metrics;
 import org.sonar.api.scanner.ScannerSide;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.sonar.api.measures.CoreMetrics.CLASSES;
 import static org.sonar.api.measures.CoreMetrics.COGNITIVE_COMPLEXITY;
@@ -53,19 +52,17 @@ import static org.sonar.api.measures.CoreMetrics.TESTS;
 import static org.sonar.api.measures.CoreMetrics.TEST_ERRORS;
 import static org.sonar.api.measures.CoreMetrics.TEST_EXECUTION_TIME;
 import static org.sonar.api.measures.CoreMetrics.TEST_FAILURES;
-import static org.sonar.core.util.stream.MoreCollectors.toSet;
 
 /**
  * This class is used to know the list of metrics that can be sent in the analysis report.
  * <p/>
  * Scanners should not send other metrics, and the Compute Engine should not allow other metrics.
  */
-@Immutable
 @ComputeEngineSide
 @ScannerSide
 public class ScannerMetrics {
 
-  private static final Set<Metric> ALLOWED_CORE_METRICS = ImmutableSet.of(
+  private static final Set<Metric> ALLOWED_CORE_METRICS = Set.of(
     GENERATED_LINES,
     NCLOC,
     NCLOC_DATA,
@@ -94,14 +91,17 @@ public class ScannerMetrics {
 
     EXECUTABLE_LINES_DATA);
 
-  private final Set<Metric> metrics;
+  private Set<Metric> metrics;
 
+  @Autowired(required = false)
   public ScannerMetrics() {
     this.metrics = ALLOWED_CORE_METRICS;
   }
 
-  public ScannerMetrics(Metrics[] metricsRepositories) {
-    this.metrics = Stream.concat(getPluginMetrics(metricsRepositories), ALLOWED_CORE_METRICS.stream()).collect(toSet());
+  @Autowired(required = false)
+  public ScannerMetrics(List<Metrics> metricsRepositories) {
+    this.metrics = ALLOWED_CORE_METRICS;
+    addPluginMetrics(metricsRepositories);
   }
 
   /**
@@ -112,8 +112,15 @@ public class ScannerMetrics {
     return metrics;
   }
 
-  private static Stream<Metric> getPluginMetrics(Metrics[] metricsRepositories) {
-    return Arrays.stream(metricsRepositories)
+  /**
+   * Adds the given metrics to the set of allowed metrics
+   */
+  public void addPluginMetrics(List<Metrics> metricsRepositories) {
+    this.metrics = Stream.concat(getPluginMetrics(metricsRepositories.stream()), this.metrics.stream()).collect(Collectors.toSet());
+  }
+
+  private static Stream<Metric> getPluginMetrics(Stream<Metrics> metricsStream) {
+    return metricsStream
       .map(Metrics::getMetrics)
       .filter(Objects::nonNull)
       .flatMap(List::stream);

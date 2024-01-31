@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,10 @@
  */
 package org.sonar.server.qualitygate;
 
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.sonar.server.qualitygate.Condition.Operator.GREATER_THAN;
 import static org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus.ERROR;
 import static org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus.OK;
@@ -31,25 +30,20 @@ import static org.sonar.server.qualitygate.EvaluatedCondition.EvaluationStatus.O
 public class EvaluatedConditionTest {
   private static final Condition CONDITION_1 = new Condition("metricKey", GREATER_THAN, "2");
 
-  @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-
   private EvaluatedCondition underTest = new EvaluatedCondition(CONDITION_1, ERROR, "value");
 
   @Test
   public void constructor_throws_NPE_if_condition_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("condition can't be null");
-
-    new EvaluatedCondition(null, ERROR, "value");
+    assertThatThrownBy(() -> new EvaluatedCondition(null, ERROR, "value"))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("condition can't be null");
   }
 
   @Test
   public void constructor_throws_NPE_if_EvaluationStatus_is_null() {
-    expectedException.expect(NullPointerException.class);
-    expectedException.expectMessage("status can't be null");
-
-    new EvaluatedCondition(CONDITION_1, null, "value");
+    assertThatThrownBy(() -> new EvaluatedCondition(CONDITION_1, null, "value"))
+      .isInstanceOf(NullPointerException.class)
+      .hasMessage("status can't be null");
   }
 
   @Test
@@ -70,7 +64,7 @@ public class EvaluatedConditionTest {
 
   @Test
   public void override_toString() {
-    assertThat(underTest.toString()).isEqualTo("EvaluatedCondition{condition=" +
+    assertThat(underTest).hasToString("EvaluatedCondition{condition=" +
       "Condition{metricKey='metricKey', operator=GREATER_THAN, errorThreshold='2'}, " +
       "status=ERROR, value='value'}");
   }
@@ -79,32 +73,33 @@ public class EvaluatedConditionTest {
   public void toString_does_not_quote_null_value() {
     EvaluatedCondition underTest = new EvaluatedCondition(CONDITION_1, ERROR, null);
 
-    assertThat(underTest.toString()).isEqualTo("EvaluatedCondition{condition=" +
+    assertThat(underTest).hasToString("EvaluatedCondition{condition=" +
       "Condition{metricKey='metricKey', operator=GREATER_THAN, errorThreshold='2'}, " +
       "status=ERROR, value=null}");
   }
 
   @Test
   public void equals_is_based_on_all_fields() {
-    assertThat(underTest).isEqualTo(underTest);
-    assertThat(underTest).isEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "value"));
-    assertThat(underTest).isNotEqualTo(null);
-    assertThat(underTest).isNotEqualTo(new Object());
-    assertThat(underTest).isNotEqualTo(new EvaluatedCondition(new Condition("other_metric", GREATER_THAN, "a"), ERROR, "value"));
-    assertThat(underTest).isNotEqualTo(new EvaluatedCondition(CONDITION_1, OK, "value"));
-    assertThat(underTest).isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, null));
-    assertThat(underTest).isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "other_value"));
+    assertThat(underTest)
+      .isEqualTo(underTest)
+      .isEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "value"))
+      .isNotNull()
+      .isNotEqualTo(new Object())
+      .isNotEqualTo(new EvaluatedCondition(new Condition("other_metric", GREATER_THAN, "a"), ERROR, "value"))
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, OK, "value"))
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, null))
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "other_value"));
   }
 
   @Test
   public void hashcode_is_based_on_all_fields() {
-    assertThat(underTest.hashCode()).isEqualTo(underTest.hashCode());
-    assertThat(underTest.hashCode()).isEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "value").hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(null);
-    assertThat(underTest.hashCode()).isNotEqualTo(new Object().hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new EvaluatedCondition(new Condition("other_metric", GREATER_THAN, "a"), ERROR, "value").hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new EvaluatedCondition(CONDITION_1, OK, "value").hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, null).hashCode());
-    assertThat(underTest.hashCode()).isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "other_value").hashCode());
+    assertThat(underTest)
+      .hasSameHashCodeAs(underTest)
+      .hasSameHashCodeAs(new EvaluatedCondition(CONDITION_1, ERROR, "value"));
+    assertThat(underTest.hashCode()).isNotEqualTo(new Object().hashCode())
+      .isNotEqualTo(new EvaluatedCondition(new Condition("other_metric", GREATER_THAN, "a"), ERROR, "value").hashCode())
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, OK, "value").hashCode())
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, null).hashCode())
+      .isNotEqualTo(new EvaluatedCondition(CONDITION_1, ERROR, "other_value").hashCode());
   }
 }

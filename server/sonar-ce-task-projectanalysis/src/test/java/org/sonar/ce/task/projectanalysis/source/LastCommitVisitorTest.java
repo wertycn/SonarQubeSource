@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -218,12 +218,12 @@ public class LastCommitVisitorTest {
     underTest.visit(file);
 
     Optional<Measure> measure = measureRepository.getAddedRawMeasure(FILE_1_REF, LAST_COMMIT_DATE_KEY);
-    assertThat(measure.isPresent()).isFalse();
+    assertThat(measure).isEmpty();
   }
 
   private void assertDate(int componentRef, long expectedDate) {
     Optional<Measure> measure = measureRepository.getAddedRawMeasure(componentRef, LAST_COMMIT_DATE_KEY);
-    assertThat(measure.isPresent()).isTrue();
+    assertThat(measure).isPresent();
     assertThat(measure.get().getLongValue()).isEqualTo(expectedDate);
   }
 

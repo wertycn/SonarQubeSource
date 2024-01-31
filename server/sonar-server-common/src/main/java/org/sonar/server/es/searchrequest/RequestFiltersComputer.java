@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -33,7 +33,6 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.server.es.searchrequest.TopAggregationDefinition.FilterScope;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -82,7 +81,7 @@ public class RequestFiltersComputer {
     Set<FilterScope> enabledStickyTopAggregationtedFieldNames = topAggregations.stream()
       .filter(TopAggregationDefinition::isSticky)
       .map(TopAggregationDefinition::getFilterScope)
-      .collect(MoreCollectors.toSet(topAggregations.size()));
+      .collect(Collectors.toSet());
 
     // use LinkedHashMap over MoreCollectors.uniqueIndex to preserve order and write UTs more easily
     Map<FilterNameAndScope, QueryBuilder> res = new LinkedHashMap<>();
@@ -162,7 +161,7 @@ public class RequestFiltersComputer {
     List<QueryBuilder> selectQueryBuilders = queryFilters.entrySet().stream()
       .filter(e -> predicate.test(e.getKey(), e.getValue()))
       .map(Map.Entry::getValue)
-      .collect(Collectors.toList());
+      .toList();
     if (selectQueryBuilders.isEmpty()) {
       return empty();
     }

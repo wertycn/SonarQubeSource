@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -31,7 +31,6 @@ import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.ComponentDto;
 
 import static com.google.common.base.Preconditions.checkState;
-import static org.sonar.db.component.ComponentDto.removeBranchAndPullRequestFromKey;
 
 /**
  * Cache a map between component keys and uuids in the reference branch
@@ -69,7 +68,7 @@ public class ReferenceBranchComponentUuids {
     hasReferenceBranchAnalysis = dbClient.snapshotDao().selectLastAnalysisByRootComponentUuid(dbSession, referenceBranchUuid).isPresent();
 
     if (hasReferenceBranchAnalysis) {
-      List<ComponentDto> components = dbClient.componentDao().selectByProjectUuid(referenceBranchUuid, dbSession);
+      List<ComponentDto> components = dbClient.componentDao().selectByBranchUuid(referenceBranchUuid, dbSession);
       for (ComponentDto dto : components) {
         referenceBranchComponentsUuidsByKey.put(dto.getKey(), dto.uuid());
       }
@@ -87,9 +86,8 @@ public class ReferenceBranchComponentUuids {
   }
 
   @CheckForNull
-  public String getComponentUuid(String dbKey) {
+  public String getComponentUuid(String key) {
     lazyInit();
-    String cleanComponentKey = removeBranchAndPullRequestFromKey(dbKey);
-    return referenceBranchComponentsUuidsByKey.get(cleanComponentKey);
+    return referenceBranchComponentsUuidsByKey.get(key);
   }
 }

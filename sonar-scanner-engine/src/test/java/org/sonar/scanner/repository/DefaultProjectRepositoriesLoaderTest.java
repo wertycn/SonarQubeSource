@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,18 +26,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonar.api.utils.MessageException;
 import org.sonar.scanner.WsTestUtil;
 import org.sonar.scanner.bootstrap.DefaultScannerWsClient;
-import org.sonar.api.batch.fs.internal.DefaultInputFile;
 import org.sonarqube.ws.Batch.WsProjectResponse;
 import org.sonarqube.ws.client.HttpException;
-import org.sonarqube.ws.client.WsRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
@@ -45,8 +43,6 @@ import static org.mockito.Mockito.when;
 
 public class DefaultProjectRepositoriesLoaderTest {
   private final static String PROJECT_KEY = "foo?";
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
 
   private DefaultProjectRepositoriesLoader loader;
   private DefaultScannerWsClient wsClient;
@@ -61,16 +57,16 @@ public class DefaultProjectRepositoriesLoaderTest {
 
   @Test
   public void continueOnHttp404Exception() {
-    when(wsClient.call(any(WsRequest.class))).thenThrow(new HttpException("/batch/project.protobuf?key=foo%3F", HttpURLConnection.HTTP_NOT_FOUND, ""));
+    when(wsClient.call(any())).thenThrow(new HttpException("/batch/project.protobuf?key=foo%3F", HttpURLConnection.HTTP_NOT_FOUND, ""));
     ProjectRepositories proj = loader.load(PROJECT_KEY, null);
-    assertThat(proj.exists()).isEqualTo(false);
+    assertThat(proj.exists()).isFalse();
   }
 
   @Test(expected = IllegalStateException.class)
   public void failOnNonHttp404Exception() {
-    when(wsClient.call(any(WsRequest.class))).thenThrow(IllegalStateException.class);
+    when(wsClient.call(any())).thenThrow(IllegalStateException.class);
     ProjectRepositories proj = loader.load(PROJECT_KEY, null);
-    assertThat(proj.exists()).isEqualTo(false);
+    assertThat(proj.exists()).isFalse();
   }
 
   @Test(expected = IllegalStateException.class)
@@ -91,13 +87,13 @@ public class DefaultProjectRepositoriesLoaderTest {
 
   @Test
   public void failFastHttpErrorMessageException() {
-    thrown.expect(MessageException.class);
-    thrown.expectMessage("http error");
-
     HttpException http = new HttpException("uri", 403, null);
     MessageException e = MessageException.of("http error", http);
     WsTestUtil.mockException(wsClient, e);
-    loader.load(PROJECT_KEY, null);
+
+    assertThatThrownBy(() -> loader.load(PROJECT_KEY, null))
+      .isInstanceOf(MessageException.class)
+      .hasMessage("http error");
   }
 
   @Test

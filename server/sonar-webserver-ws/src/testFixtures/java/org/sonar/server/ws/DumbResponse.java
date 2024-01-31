@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -35,7 +35,7 @@ import org.sonar.api.server.ws.Response;
 import org.sonar.api.utils.text.JsonWriter;
 import org.sonar.api.utils.text.XmlWriter;
 
-public class DumbResponse implements Response {
+public class DumbResponse implements Response, TestableResponse {
   private InMemoryStream stream;
 
   private final ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -46,15 +46,6 @@ public class DumbResponse implements Response {
     private String mediaType;
 
     private int status = 200;
-
-    @CheckForNull
-    public String mediaType() {
-      return mediaType;
-    }
-
-    public int status() {
-      return status;
-    }
 
     @Override
     public Response.Stream setMediaType(String s) {
@@ -105,6 +96,15 @@ public class DumbResponse implements Response {
 
   public String outputAsString() {
     return new String(output.toByteArray(), StandardCharsets.UTF_8);
+  }
+
+  @CheckForNull
+  public String mediaType() {
+    return stream().mediaType;
+  }
+
+  public int status() {
+    return stream().status;
   }
 
   @Override

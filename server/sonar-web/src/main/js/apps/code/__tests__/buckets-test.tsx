@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { ComponentMeasure } from '../../../types/types';
 import { addComponent, addComponentChildren, getComponent, getComponentChildren } from '../bucket';
 
-const component: T.ComponentMeasure = { key: 'frodo', name: 'frodo', qualifier: 'frodo' };
+const component: ComponentMeasure = { key: 'frodo', name: 'frodo', qualifier: 'frodo' };
 
 const componentKey: string = 'foo';
-const childrenA: T.ComponentMeasure[] = [
+const childrenA: ComponentMeasure[] = [
   { key: 'foo', name: 'foo', qualifier: 'foo' },
-  { key: 'bar', name: 'bar', qualifier: 'bar' }
+  { key: 'bar', name: 'bar', qualifier: 'bar' },
 ];
-const childrenB: T.ComponentMeasure[] = [
+const childrenB: ComponentMeasure[] = [
   { key: 'bart', name: 'bart', qualifier: 'bart' },
-  { key: 'simpson', name: 'simpson', qualifier: 'simpson' }
+  { key: 'simpson', name: 'simpson', qualifier: 'simpson' },
 ];
 
 it('should have empty bucket at start', () => {

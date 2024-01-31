@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,90 +17,162 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { withTheme } from '@emotion/react';
+import styled from '@emotion/styled';
+import { Spinner, themeColor } from 'design-system';
 import * as React from 'react';
-import DeferredSpinner from 'sonar-ui-common/components/ui/DeferredSpinner';
-import { translate } from 'sonar-ui-common/helpers/l10n';
-import { SourceViewerContext } from '../../../components/SourceViewer/SourceViewerContext';
-import SourceViewerHeaderSlim from '../../../components/SourceViewer/SourceViewerHeaderSlim';
-import { BranchLike } from '../../../types/branch-like';
+import { translate } from '../../../helpers/l10n';
 import { Hotspot } from '../../../types/security-hotspots';
+import {
+  ExpandDirection,
+  FlowLocation,
+  LinearIssueLocation,
+  SourceLine,
+  SourceViewerFile,
+} from '../../../types/types';
 import SnippetViewer from '../../issues/crossComponentSourceViewer/SnippetViewer';
+import HotspotPrimaryLocationBox from './HotspotPrimaryLocationBox';
 
 export interface HotspotSnippetContainerRendererProps {
-  branchLike?: BranchLike;
-  displayProjectName?: boolean;
   highlightedSymbols: string[];
   hotspot: Hotspot;
   loading: boolean;
-  locations: { [line: number]: T.LinearIssueLocation[] };
-  onExpandBlock: (direction: T.ExpandDirection) => Promise<void>;
+  locations: { [line: number]: LinearIssueLocation[] };
+  selectedHotspotLocation?: number;
+  onExpandBlock: (direction: ExpandDirection) => Promise<void>;
   onSymbolClick: (symbols: string[]) => void;
-  sourceLines: T.SourceLine[];
-  sourceViewerFile: T.SourceViewerFile;
+  onLocationSelect: (index: number) => void;
+  sourceLines: SourceLine[];
+  sourceViewerFile: SourceViewerFile;
+  secondaryLocations: FlowLocation[];
 }
 
 const noop = () => undefined;
+const EXPAND_ANIMATION_SPEED = 200;
+
+/* Exported for testing */
+export async function animateExpansion(
+  scrollableRef: React.RefObject<HTMLDivElement>,
+  expandBlock: (direction: ExpandDirection) => Promise<void>,
+  direction: ExpandDirection,
+) {
+  const wrapper = scrollableRef.current?.querySelector<HTMLElement>('.it__source-viewer-code');
+  const table = wrapper?.firstChild as HTMLElement;
+
+  if (!wrapper || !table) {
+    return;
+  }
+
+  // lock the wrapper's height before adding the additional rows
+  const startHeight = table.getBoundingClientRect().height;
+  wrapper.style.maxHeight = `${startHeight}px`;
+
+  await expandBlock(direction);
+
+  const targetHeight = table.getBoundingClientRect().height;
+
+  if (direction === 'up') {
+    /*
+     * Add a negative margin to keep the original alignment
+     * Remove the transition to do so instantaneously
+     */
+    table.style.transition = 'none';
+    table.style.marginTop = `${startHeight - targetHeight}px`;
+
+    setTimeout(() => {
+      /*
+       * Reset the transition to the default
+       * transition the margin back to 0 at the same time as the maxheight
+       */
+      table.style.transition = '';
+      table.style.marginTop = '0px';
+      wrapper.style.maxHeight = `${targetHeight}px`;
+    }, 0);
+  } else {
+    // False positive:
+    // eslint-disable-next-line require-atomic-updates
+    wrapper.style.maxHeight = `${targetHeight}px`;
+  }
+
+  // after the animation is done, clear the applied styles
+  setTimeout(() => {
+    table.style.marginTop = '';
+    wrapper.style.maxHeight = '';
+  }, EXPAND_ANIMATION_SPEED);
+}
 
 export default function HotspotSnippetContainerRenderer(
-  props: HotspotSnippetContainerRendererProps
+  props: Readonly<HotspotSnippetContainerRendererProps>,
 ) {
   const {
-    branchLike,
-    displayProjectName,
     highlightedSymbols,
     hotspot,
     loading,
-    locations,
+    locations: primaryLocations,
+    secondaryLocations,
+    selectedHotspotLocation,
     sourceLines,
-    sourceViewerFile
+    sourceViewerFile,
   } = props;
+
+  const scrollableRef = React.useRef<HTMLDivElement>(null);
+
+  const secondaryLocationSelected = selectedHotspotLocation !== undefined;
+
+  /* Use memo is important to not rerender and trigger additional scrolls */
+  const hotspotPrimaryLocationBox = React.useMemo(
+    () => (
+      <HotspotPrimaryLocationBox
+        hotspot={hotspot}
+        secondaryLocationSelected={secondaryLocationSelected}
+      />
+    ),
+    [hotspot, secondaryLocationSelected],
+  );
+
+  const renderHotspotBoxInLine = (line: SourceLine) =>
+    line.line === hotspot.line ? hotspotPrimaryLocationBox : undefined;
+
+  const highlightedLocation =
+    selectedHotspotLocation !== undefined
+      ? { index: selectedHotspotLocation, text: hotspot.message }
+      : undefined;
 
   return (
     <>
       {!loading && sourceLines.length === 0 && (
-        <p className="spacer-bottom">{translate('hotspots.no_associated_lines')}</p>
+        <p className="sw-my-4">{translate('hotspots.no_associated_lines')}</p>
       )}
-      <div className="bordered big-spacer-bottom">
-        <SourceViewerHeaderSlim
-          branchLike={branchLike}
-          expandable={false}
-          displayProjectName={displayProjectName}
-          linkToProject={false}
-          loading={loading}
-          onExpand={noop}
-          sourceViewerFile={sourceViewerFile}
-        />
-        <DeferredSpinner className="big-spacer" loading={loading}>
-          {sourceLines.length > 0 && (
-            <SourceViewerContext.Provider /* Used by LineOptionsPopup */
-              value={{ branchLike, file: sourceViewerFile }}>
-              <SnippetViewer
-                branchLike={branchLike}
-                component={sourceViewerFile}
-                displaySCM={false}
-                expandBlock={(_i, direction) => props.onExpandBlock(direction)}
-                handleCloseIssues={noop}
-                handleOpenIssues={noop}
-                handleSymbolClick={props.onSymbolClick}
-                highlightedLocationMessage={undefined}
-                highlightedSymbols={highlightedSymbols}
-                index={0}
-                issue={hotspot}
-                issuesByLine={{}}
-                lastSnippetOfLastGroup={false}
-                locations={[]}
-                locationsByLine={locations}
-                onIssueChange={noop}
-                onIssuePopupToggle={noop}
-                onLocationSelect={noop}
-                openIssuesByLine={{}}
-                renderDuplicationPopup={noop}
-                snippet={sourceLines}
-              />
-            </SourceViewerContext.Provider>
-          )}
-        </DeferredSpinner>
-      </div>
+
+      <SourceFileWrapper className="sw-box-border sw-w-full sw-rounded-1" ref={scrollableRef}>
+        <Spinner className="big-spacer" loading={loading} />
+
+        {!loading && sourceLines.length > 0 && (
+          <SnippetViewer
+            component={sourceViewerFile}
+            displayLineNumberOptions={false}
+            displaySCM={false}
+            expandBlock={(_i, direction) =>
+              animateExpansion(scrollableRef, props.onExpandBlock, direction)
+            }
+            handleSymbolClick={props.onSymbolClick}
+            highlightedLocationMessage={highlightedLocation}
+            highlightedSymbols={highlightedSymbols}
+            index={0}
+            locations={secondaryLocations}
+            locationsByLine={primaryLocations}
+            onLocationSelect={props.onLocationSelect}
+            renderAdditionalChildInLine={renderHotspotBoxInLine}
+            renderDuplicationPopup={noop}
+            snippet={sourceLines}
+            hideLocationIndex={secondaryLocations.length !== 0}
+          />
+        )}
+      </SourceFileWrapper>
     </>
   );
 }
+
+const SourceFileWrapper = withTheme(styled.div`
+  background-color: ${themeColor('codeLine')};
+`);

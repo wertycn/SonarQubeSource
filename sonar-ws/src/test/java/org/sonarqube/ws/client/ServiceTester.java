@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -140,14 +140,14 @@ public class ServiceTester<T extends BaseService> extends ExternalResource {
   @CheckForNull
   public GetRequest getGetRequest() {
     assertSingleGetCall();
-    return getCalls.iterator().next().getRequest();
+    return (GetRequest) getCalls.iterator().next().getRequest();
   }
 
-  public RequestAssert<GetRequest> assertThat(GetRequest getRequest) {
+  public RequestAssert<?> assertThat(GetRequest getRequest) {
     return new RequestAssert<>(getRequest);
   }
 
-  public RequestAssert<PostRequest> assertThat(PostRequest postRequest) {
+  public RequestAssert<?> assertThat(PostRequest postRequest) {
     return new RequestAssert<>(postRequest);
   }
 
@@ -163,7 +163,7 @@ public class ServiceTester<T extends BaseService> extends ExternalResource {
 
   public PostRequest getPostRequest() {
     assertSinglePostCall();
-    return postCalls.iterator().next().getRequest();
+    return (PostRequest) postCalls.iterator().next().getRequest();
   }
 
   @CheckForNull
@@ -189,7 +189,7 @@ public class ServiceTester<T extends BaseService> extends ExternalResource {
   }
 
   @Immutable
-  public static final class GetCall extends CallWithParser<GetRequest> {
+  public static final class GetCall extends CallWithParser<RequestWithoutPayload<GetRequest>> {
 
     public GetCall(GetRequest getRequest, @Nullable Parser<?> parser) {
       super(getRequest, parser);
@@ -198,7 +198,7 @@ public class ServiceTester<T extends BaseService> extends ExternalResource {
   }
 
   @Immutable
-  public static final class PostCall extends CallWithParser<PostRequest> {
+  public static final class PostCall extends CallWithParser<RequestWithPayload<PostRequest>> {
 
     public PostCall(PostRequest postRequest, @Nullable Parser<?> parser) {
       super(postRequest, parser);

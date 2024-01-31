@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -39,11 +39,13 @@ public class OpeningHtmlTagTest {
     OpeningHtmlTag openingHtmlTagWithDifferentValues = new OpeningHtmlTag(5, "tag2");
     OpeningHtmlTag openingHtmlTagWithNoCssClass = new OpeningHtmlTag(3, null);
 
-    assertThat(openingHtmlTag).isEqualTo(openingHtmlTagWithSameValues);
-    assertThat(openingHtmlTag).isEqualTo(openingHtmlTag);
-    assertThat(openingHtmlTag).isNotEqualTo(openingHtmlTagWithDifferentValues);
-    assertThat(openingHtmlTag).isNotEqualTo(openingHtmlTagWithNoCssClass);
-    assertThat(openingHtmlTag).isNotEqualTo(new OpeningHtmlTag(3, "tag"){});
+    assertThat(openingHtmlTag)
+      .isEqualTo(openingHtmlTagWithSameValues)
+      .isEqualTo(openingHtmlTag)
+      .isNotEqualTo(openingHtmlTagWithDifferentValues)
+      .isNotEqualTo(openingHtmlTagWithNoCssClass)
+      .isNotEqualTo(new OpeningHtmlTag(3, "tag") {
+      });
   }
 
   @Test
@@ -52,8 +54,9 @@ public class OpeningHtmlTagTest {
     OpeningHtmlTag openingHtmlTagWithSameValues = new OpeningHtmlTag(3, "tag");
     OpeningHtmlTag openingHtmlTagWithDifferentValue = new OpeningHtmlTag(5, "tag2");
 
-    assertThat(openingHtmlTag.hashCode()).isEqualTo(openingHtmlTagWithSameValues.hashCode());
-    assertThat(openingHtmlTag.hashCode()).isEqualTo(openingHtmlTag.hashCode());
+    assertThat(openingHtmlTag)
+      .hasSameHashCodeAs(openingHtmlTagWithSameValues)
+      .hasSameHashCodeAs(openingHtmlTag);
     assertThat(openingHtmlTag.hashCode()).isNotEqualTo(openingHtmlTagWithDifferentValue.hashCode());
   }
 }

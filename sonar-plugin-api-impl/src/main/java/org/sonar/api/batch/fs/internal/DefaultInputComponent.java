@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,6 +52,7 @@ public abstract class DefaultInputComponent implements InputComponent {
     return id;
   }
 
+
   @Override
   public int hashCode() {
     return key().hashCode();
@@ -68,5 +69,6 @@ public abstract class DefaultInputComponent implements InputComponent {
 
   public boolean hasMeasureFor(Metric metric) {
     return storedMetricKeys.contains(metric.key());
+
   }
 }

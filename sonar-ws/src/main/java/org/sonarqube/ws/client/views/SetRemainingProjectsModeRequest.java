@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,7 +30,19 @@ import javax.annotation.Generated;
 @Generated("sonar-ws-generator")
 public class SetRemainingProjectsModeRequest {
 
+  private String branch;
   private String portfolio;
+
+  /**
+   */
+  public SetRemainingProjectsModeRequest setBranch(String branch) {
+    this.branch = branch;
+    return this;
+  }
+
+  public String getBranch() {
+    return branch;
+  }
 
   /**
    * This is a mandatory parameter.
@@ -43,5 +55,4 @@ public class SetRemainingProjectsModeRequest {
   public String getPortfolio() {
     return portfolio;
   }
-
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
 import org.sonar.application.es.EsInstallation;
@@ -48,12 +47,9 @@ import static org.mockito.Mockito.when;
 public class CommandFactoryImplTest {
 
   @Rule
-  public ExpectedException expectedException = ExpectedException.none();
-  @Rule
   public TemporaryFolder temp = new TemporaryFolder();
 
   private System2 system2 = Mockito.mock(System2.class);
-  private JavaVersion javaVersion = Mockito.mock(JavaVersion.class);
   private File homeDir;
   private File tempDir;
   private File logsDir;
@@ -77,7 +73,7 @@ public class CommandFactoryImplTest {
   public void constructor_logs_no_warning_if_env_variable_JAVA_TOOL_OPTIONS_is_not_set() {
     attachMemoryAppenderToLoggerOf(CommandFactoryImpl.class);
 
-    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2, javaVersion);
+    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2);
 
     assertThat(listAppender.getLogs()).isEmpty();
   }
@@ -87,7 +83,7 @@ public class CommandFactoryImplTest {
     when(system2.getenv("JAVA_TOOL_OPTIONS")).thenReturn("sds");
     attachMemoryAppenderToLoggerOf(CommandFactoryImpl.class);
 
-    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2, javaVersion);
+    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2);
 
     assertThat(listAppender.getLogs())
       .extracting(ILoggingEvent::getMessage)
@@ -101,21 +97,13 @@ public class CommandFactoryImplTest {
     when(system2.getenv("ES_JAVA_OPTS")).thenReturn("xyz");
     attachMemoryAppenderToLoggerOf(CommandFactoryImpl.class);
 
-    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2, javaVersion);
+    new CommandFactoryImpl(new Props(new Properties()), tempDir, system2);
 
     assertThat(listAppender.getLogs())
       .extracting(ILoggingEvent::getMessage)
       .containsOnly(
         "ES_JAVA_OPTS is defined but will be ignored. " +
           "Use properties sonar.search.javaOpts and/or sonar.search.javaAdditionalOpts in sonar.properties to change SQ JVM processes options");
-  }
-
-  @Test
-  public void createEsCommand_throws_ISE_if_es_binary_is_not_found() {
-    expectedException.expect(IllegalStateException.class);
-    expectedException.expectMessage("Cannot find elasticsearch binary");
-
-    newFactory(new Properties()).createEsCommand();
   }
 
   @Test
@@ -126,72 +114,28 @@ public class CommandFactoryImplTest {
     Properties props = new Properties();
     props.setProperty("sonar.search.host", "localhost");
 
-    AbstractCommand command = newFactory(props, system2).createEsCommand();
-    assertThat(command).isInstanceOf(EsScriptCommand.class);
-    EsScriptCommand esCommand = (EsScriptCommand) command;
+    JavaCommand<?> esCommand = newFactory(props, system2).createEsCommand();
     EsInstallation esConfig = esCommand.getEsInstallation();
 
     assertThat(esConfig.getHost()).isNotEmpty();
     assertThat(esConfig.getHttpPort()).isEqualTo(9001);
     assertThat(esConfig.getEsJvmOptions().getAll())
       // enforced values
-      .contains("-XX:+UseConcMarkSweepGC", "-Dfile.encoding=UTF-8")
+      .contains("-XX:+UseG1GC")
+      .contains("-Dfile.encoding=UTF-8")
       // default settings
       .contains("-Xms512m", "-Xmx512m", "-XX:+HeapDumpOnOutOfMemoryError");
     assertThat(esConfig.getEsYmlSettings()).isNotNull();
     assertThat(esConfig.getLog4j2Properties())
       .contains(entry("appender.file_es.fileName", new File(logsDir, "es.log").getAbsolutePath()));
 
-    File esConfDir = new File(tempDir, "conf/es");
     assertThat(esCommand.getEnvVariables())
-      .contains(entry("ES_PATH_CONF", esConfDir.getAbsolutePath()))
-      .contains(entry("ES_JVM_OPTIONS", new File(esConfDir, "jvm.options").getAbsolutePath()))
-      .containsKey("JAVA_HOME");
-    assertThat(esCommand.getSuppressedEnvVariables()).containsOnly("JAVA_TOOL_OPTIONS", "ES_JAVA_OPTS");
+      .containsKey("ES_JAVA_HOME");
 
-    assertThat(esConfig.getEsJvmOptions().getAll())
-      .contains("-Djava.io.tmpdir=" + tempDir.getAbsolutePath());
-  }
-
-  @Test
-  public void createEsCommand_for_windows_returns_command_for_default_settings() throws Exception {
-    when(system2.isOsWindows()).thenReturn(true);
-    prepareEsFileSystem();
-
-    Properties props = new Properties();
-    props.setProperty("sonar.search.host", "localhost");
-
-    AbstractCommand command = newFactory(props, system2).createEsCommand();
-    assertThat(command).isInstanceOf(JavaCommand.class);
-    JavaCommand<?> esCommand = (JavaCommand<?>) command;
-    EsInstallation esConfig = esCommand.getEsInstallation();
-
-    assertThat(esConfig.getHost()).isNotEmpty();
-    assertThat(esConfig.getHttpPort()).isEqualTo(9001);
-    assertThat(esConfig.getEsJvmOptions().getAll())
-      // enforced values
-      .contains("-XX:+UseConcMarkSweepGC", "-Dfile.encoding=UTF-8")
-      // default settings
-      .contains("-Xms512m", "-Xmx512m", "-XX:+HeapDumpOnOutOfMemoryError");
-    assertThat(esConfig.getEsYmlSettings()).isNotNull();
-
-    assertThat(esConfig.getLog4j2Properties())
-      .contains(entry("appender.file_es.fileName", new File(logsDir, "es.log").getAbsolutePath()));
-
-    File esConfDir = new File(tempDir, "conf/es");
-    assertThat(esCommand.getArguments()).isEmpty();
-    assertThat(esCommand.getEnvVariables())
-      .contains(entry("ES_JVM_OPTIONS", new File(esConfDir, "jvm.options").getAbsolutePath()))
-      .containsKey("JAVA_HOME");
-    assertThat(esCommand.getSuppressedEnvVariables()).containsOnly("JAVA_TOOL_OPTIONS", "ES_JAVA_OPTS");
-
-    assertThat(esConfig.getEsJvmOptions().getAll())
-      .contains("-Djava.io.tmpdir=" + tempDir.getAbsolutePath());
     assertThat(esCommand.getJvmOptions().getAll())
-      .containsAll(esConfig.getEsJvmOptions().getAll())
-      .contains("-Delasticsearch")
-      .contains("-Des.path.home=" + new File(homeDir, "elasticsearch"))
-      .contains("-Des.path.conf=" + esConfDir.getAbsolutePath());
+      .contains("-Xms4m", "-Xmx64m", "-XX:+UseSerialGC", "-Dcli.name=server", "-Dcli.script=./bin/elasticsearch",
+        "-Dcli.libs=lib/tools/server-cli", "-Des.path.home=" + esConfig.getHomeDirectory().getAbsolutePath(),
+        "-Des.path.conf=" + esConfig.getConfDirectory().getAbsolutePath(), "-Des.distribution.type=tar");
   }
 
   @Test
@@ -210,7 +154,8 @@ public class CommandFactoryImplTest {
     assertThat(esConfig.getHttpPort()).isEqualTo(1234);
     assertThat(esConfig.getEsJvmOptions().getAll())
       // enforced values
-      .contains("-XX:+UseConcMarkSweepGC", "-Dfile.encoding=UTF-8")
+      .contains("-XX:+UseG1GC")
+      .contains("-Dfile.encoding=UTF-8")
       .contains("-Djava.io.tmpdir=" + tempDir.getAbsolutePath())
       // user settings
       .contains("-Xms10G", "-Xmx10G")
@@ -321,7 +266,7 @@ public class CommandFactoryImplTest {
     ServiceLoaderWrapper serviceLoaderWrapper = mock(ServiceLoaderWrapper.class);
     when(serviceLoaderWrapper.load()).thenReturn(ImmutableSet.of());
     new ProcessProperties(serviceLoaderWrapper).completeDefaults(props);
-    return new CommandFactoryImpl(props, tempDir, system2, javaVersion);
+    return new CommandFactoryImpl(props, tempDir, system2);
   }
 
   private <T> void attachMemoryAppenderToLoggerOf(Class<T> loggerClass) {

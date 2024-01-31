@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,78 +19,65 @@
  */
 package org.sonar.server.component;
 
-import java.util.Set;
-import org.sonar.api.resources.Qualifiers;
-import org.sonar.api.resources.Scopes;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.web.UserRole;
-import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDto;
-import org.sonar.db.component.ComponentKeyUpdaterDao;
-import org.sonar.db.component.ResourceDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.server.es.ProjectIndexer;
-import org.sonar.server.es.ProjectIndexers;
+import org.sonar.db.pushevent.PushEventDto;
+import org.sonar.server.es.Indexers;
 import org.sonar.server.project.Project;
 import org.sonar.server.project.ProjectLifeCycleListeners;
 import org.sonar.server.project.RekeyedProject;
 import org.sonar.server.user.UserSession;
 
-import static java.util.Collections.emptyList;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.sonar.core.component.ComponentKeys.checkProjectKey;
 
 @ServerSide
 public class ComponentService {
+  private static final Gson GSON = new GsonBuilder().create();
+
   private final DbClient dbClient;
   private final UserSession userSession;
-  private final ProjectIndexers projectIndexers;
+  private final Indexers indexers;
   private final ProjectLifeCycleListeners projectLifeCycleListeners;
 
-  public ComponentService(DbClient dbClient, UserSession userSession, ProjectIndexers projectIndexers, ProjectLifeCycleListeners projectLifeCycleListeners) {
+  public ComponentService(DbClient dbClient, UserSession userSession, Indexers indexers, ProjectLifeCycleListeners projectLifeCycleListeners) {
     this.dbClient = dbClient;
     this.userSession = userSession;
-    this.projectIndexers = projectIndexers;
+    this.indexers = indexers;
     this.projectLifeCycleListeners = projectLifeCycleListeners;
   }
 
   public void updateKey(DbSession dbSession, ProjectDto project, String newKey) {
-    userSession.checkProjectPermission(UserRole.ADMIN, project);
+    userSession.checkEntityPermission(UserRole.ADMIN, project);
     checkProjectKey(newKey);
-    dbClient.componentKeyUpdaterDao().updateKey(dbSession, project.getUuid(), newKey);
-    projectIndexers.commitAndIndexProjects(dbSession, singletonList(project), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
+    dbClient.componentKeyUpdaterDao().updateKey(dbSession, project.getUuid(), project.getKey(), newKey);
+    indexers.commitAndIndexEntities(dbSession, singletonList(project), Indexers.EntityEvent.PROJECT_KEY_UPDATE);
     Project newProject = new Project(project.getUuid(), newKey, project.getName(), project.getDescription(), project.getTags());
     projectLifeCycleListeners.onProjectsRekeyed(singleton(new RekeyedProject(newProject, project.getKey())));
+    persistEvent(project, newKey);
   }
 
-  public void bulkUpdateKey(DbSession dbSession, ProjectDto project, String stringToReplace, String replacementString) {
-    Set<ComponentKeyUpdaterDao.RekeyedResource> rekeyedProjects = dbClient.componentKeyUpdaterDao().bulkUpdateKey(
-      dbSession, project.getUuid(), stringToReplace, replacementString,
-      ComponentService::isMainProject);
-    projectIndexers.commitAndIndexProjects(dbSession, singletonList(project), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
-    if (!rekeyedProjects.isEmpty()) {
-      projectLifeCycleListeners.onProjectsRekeyed(rekeyedProjects.stream()
-        .map(ComponentService::toRekeyedProject)
-        .collect(MoreCollectors.toSet(rekeyedProjects.size())));
+  private void persistEvent(ProjectDto project, String newProjectKey) {
+    ProjectKeyChangedEvent event = new ProjectKeyChangedEvent(project.getKey(), newProjectKey);
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      PushEventDto eventDto = new PushEventDto()
+        .setName("ProjectKeyChanged")
+        .setProjectUuid(project.getUuid())
+        .setPayload(serializeIssueToPushEvent(event));
+      dbClient.pushEventDao().insert(dbSession, eventDto);
+      dbSession.commit();
     }
   }
 
-  private static boolean isMainProject(ComponentKeyUpdaterDao.RekeyedResource rekeyedResource) {
-    ResourceDto resource = rekeyedResource.getResource();
-    String resourceKey = resource.getKey();
-    return Scopes.PROJECT.equals(resource.getScope())
-      && Qualifiers.PROJECT.equals(resource.getQualifier())
-      && !resourceKey.contains(ComponentDto.BRANCH_KEY_SEPARATOR)
-      && !resourceKey.contains(ComponentDto.PULL_REQUEST_SEPARATOR);
-  }
-
-  private static RekeyedProject toRekeyedProject(ComponentKeyUpdaterDao.RekeyedResource rekeyedResource) {
-    ResourceDto resource = rekeyedResource.getResource();
-    Project project = new Project(resource.getUuid(), resource.getKey(), resource.getName(), resource.getDescription(), emptyList());
-    return new RekeyedProject(project, rekeyedResource.getOldKey());
+  private static byte[] serializeIssueToPushEvent(ProjectKeyChangedEvent event) {
+    return GSON.toJson(event).getBytes(UTF_8);
   }
 
 }

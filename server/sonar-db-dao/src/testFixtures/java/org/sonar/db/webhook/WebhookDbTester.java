@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@
 package org.sonar.db.webhook;
 
 import java.util.Optional;
+import javax.annotation.Nullable;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.project.ProjectDto;
@@ -36,16 +37,16 @@ public class WebhookDbTester {
   }
 
   public WebhookDto insertGlobalWebhook() {
-    return insert(newGlobalWebhook());
+    return insert(newGlobalWebhook(), null, null);
   }
 
   public WebhookDto insertWebhook(ProjectDto project) {
-    return insert(newWebhook(project));
+    return insert(newWebhook(project), project.getKey(), project.getName());
   }
 
-  public WebhookDto insert(WebhookDto dto) {
+  public WebhookDto insert(WebhookDto dto, @Nullable String projectKey, @Nullable String projectName) {
     DbSession dbSession = dbTester.getSession();
-    dbTester.getDbClient().webhookDao().insert(dbSession, dto);
+    dbTester.getDbClient().webhookDao().insert(dbSession, dto, projectKey, projectName);
     dbSession.commit();
     return dto;
   }

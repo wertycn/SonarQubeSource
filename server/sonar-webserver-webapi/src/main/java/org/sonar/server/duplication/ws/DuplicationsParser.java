@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,16 +37,16 @@ import org.codehaus.staxmate.in.SMHierarchicCursor;
 import org.codehaus.staxmate.in.SMInputCursor;
 import org.sonar.api.server.ServerSide;
 import org.sonar.db.DbSession;
-import org.sonar.db.component.ComponentDao;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.server.component.ComponentFinder;
 
 @ServerSide
 public class DuplicationsParser {
   private static final BlockComparator BLOCK_COMPARATOR = new BlockComparator();
-  private final ComponentDao componentDao;
+  private final ComponentFinder componentFinder;
 
-  public DuplicationsParser(ComponentDao componentDao) {
-    this.componentDao = componentDao;
+  public DuplicationsParser(ComponentFinder componentFinder) {
+    this.componentFinder = componentFinder;
   }
 
   public List<Block> parse(DbSession session, ComponentDto component, @Nullable String branch, @Nullable String pullRequest, @Nullable String duplicationsData) {
@@ -56,7 +56,7 @@ public class DuplicationsParser {
       return blocks;
     }
 
-    DuplicationComparator duplicationComparator = new DuplicationComparator(component.uuid(), component.projectUuid());
+    DuplicationComparator duplicationComparator = new DuplicationComparator(component.uuid(), component.branchUuid());
 
     try {
       SMInputFactory inputFactory = initStax();
@@ -113,17 +113,11 @@ public class DuplicationsParser {
 
   @CheckForNull
   private ComponentDto loadComponent(DbSession session, String componentKey, @Nullable String branch, @Nullable String pullRequest) {
-    if (branch != null) {
-      return componentDao.selectByKeyAndBranch(session, componentKey, branch).orElse(null);
-    } else if (pullRequest != null) {
-      return componentDao.selectByKeyAndPullRequest(session, componentKey, pullRequest).orElse(null);
-    } else {
-      return componentDao.selectByKey(session, componentKey).orElse(null);
-    }
+    return componentFinder.getOptionalByKeyAndOptionalBranchOrPullRequest(session, componentKey, branch, pullRequest).orElse(null);
   }
 
   private static String convertToKey(String dbKey) {
-    return new ComponentDto().setDbKey(dbKey).getKey();
+    return new ComponentDto().setKey(dbKey).getKey();
   }
 
   private static SMInputFactory initStax() {
@@ -191,7 +185,7 @@ public class DuplicationsParser {
     }
 
     private boolean sameProject(@Nullable ComponentDto otherDto) {
-      return otherDto == null || StringUtils.equals(otherDto.projectUuid(), projectUuid);
+      return otherDto == null || StringUtils.equals(otherDto.branchUuid(), projectUuid);
     }
   }
 

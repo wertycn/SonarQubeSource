@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,6 +19,8 @@
  */
 package org.sonar.xoo.rule;
 
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import org.sonar.api.batch.fs.FilePredicates;
 import org.sonar.api.batch.fs.FileSystem;
 import org.sonar.api.batch.fs.InputFile;
@@ -28,10 +30,12 @@ import org.sonar.api.batch.sensor.Sensor;
 import org.sonar.api.batch.sensor.SensorContext;
 import org.sonar.api.batch.sensor.SensorDescriptor;
 import org.sonar.api.batch.sensor.issue.NewIssue;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rule.RuleKey;
-import org.sonar.api.utils.Version;
 import org.sonar.xoo.Xoo;
 import org.sonar.xoo.Xoo2;
+
+import static org.sonar.xoo.rule.XooRulesDefinition.AVAILABLE_CONTEXTS;
 
 public class OneIssuePerLineSensor implements Sensor {
 
@@ -44,7 +48,8 @@ public class OneIssuePerLineSensor implements Sensor {
     descriptor
       .name("One Issue Per Line")
       .onlyOnLanguages(Xoo.KEY, Xoo2.KEY)
-      .createIssuesForRuleRepositories(XooRulesDefinition.XOO_REPOSITORY, XooRulesDefinition.XOO2_REPOSITORY);
+      .createIssuesForRuleRepositories(XooRulesDefinition.XOO_REPOSITORY, XooRulesDefinition.XOO2_REPOSITORY)
+      .processesFilesIndependently();
   }
 
   @Override
@@ -63,22 +68,44 @@ public class OneIssuePerLineSensor implements Sensor {
 
   private void createIssues(InputFile file, SensorContext context, String repo) {
     RuleKey ruleKey = RuleKey.of(repo, RULE_KEY);
-    String severity = context.config().get(FORCE_SEVERITY_PROPERTY).orElse(null);
+    String severityStr = context.config().get(FORCE_SEVERITY_PROPERTY).orElse(null);
     for (int line = 1; line <= file.lines(); line++) {
       NewIssue newIssue = context.newIssue();
+      Severity severity = severityStr != null ? Severity.valueOf(severityStr) : null;
+      org.sonar.api.issue.impact.Severity impactSeverity = mapSeverity(severity);
       newIssue
         .forRule(ruleKey)
         .at(newIssue.newLocation()
           .on(file)
           .at(file.selectLine(line))
           .message("This issue is generated on each line"))
-        .overrideSeverity(severity != null ? Severity.valueOf(severity) : null);
-      if (context.getSonarQubeVersion().isGreaterThanOrEqual(Version.create(5, 5))) {
-        newIssue.gap(context.config().getDouble(EFFORT_TO_FIX_PROPERTY).orElse(null));
-      } else {
-        newIssue.gap(context.config().getDouble(EFFORT_TO_FIX_PROPERTY).orElse(null));
+        .overrideSeverity(severity)
+        .setRuleDescriptionContextKey(AVAILABLE_CONTEXTS[0])
+        .gap(context.config().getDouble(EFFORT_TO_FIX_PROPERTY).orElse(null));
+
+      if (impactSeverity != null) {
+        newIssue.overrideImpact(SoftwareQuality.MAINTAINABILITY, impactSeverity);
       }
       newIssue.save();
+    }
+  }
+
+  @CheckForNull
+  org.sonar.api.issue.impact.Severity mapSeverity(@Nullable Severity severity) {
+    if (severity == null) {
+      return null;
+    }
+    switch (severity) {
+      case CRITICAL:
+      case BLOCKER:
+        return org.sonar.api.issue.impact.Severity.HIGH;
+      case MAJOR:
+        return org.sonar.api.issue.impact.Severity.MEDIUM;
+      case MINOR:
+      case INFO:
+        return org.sonar.api.issue.impact.Severity.LOW;
+      default:
+        return null;
     }
   }
 

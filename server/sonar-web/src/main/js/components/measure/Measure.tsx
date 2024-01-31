@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,11 +18,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import Tooltip from 'sonar-ui-common/components/controls/Tooltip';
-import Level from 'sonar-ui-common/components/ui/Level';
-import Rating from 'sonar-ui-common/components/ui/Rating';
-import { formatMeasure } from 'sonar-ui-common/helpers/measures';
-import { getRatingTooltip } from './utils';
+import Tooltip from '../../components/controls/Tooltip';
+import Level from '../../components/ui/Level';
+import Rating from '../../components/ui/Rating';
+import { formatMeasure } from '../../helpers/measures';
+import { MetricType } from '../../types/metrics';
+import RatingTooltipContent from './RatingTooltipContent';
 
 interface Props {
   className?: string;
@@ -30,7 +31,8 @@ interface Props {
   metricKey: string;
   metricType: string;
   small?: boolean;
-  value: string | undefined;
+  value: string | number | undefined;
+  ratingComponent?: JSX.Element;
 }
 
 export default function Measure({
@@ -39,26 +41,28 @@ export default function Measure({
   metricKey,
   metricType,
   small,
-  value
+  value,
+  ratingComponent,
 }: Props) {
   if (value === undefined) {
-    return <span className={className}>–</span>;
+    return <span className={className}>—</span>;
   }
 
-  if (metricType === 'LEVEL') {
-    return <Level className={className} level={value} small={small} />;
+  if (metricType === MetricType.Level) {
+    return <Level className={className} level={value?.toString()} small={small} />;
   }
 
-  if (metricType !== 'RATING') {
+  if (metricType !== MetricType.Rating) {
     const formattedValue = formatMeasure(value, metricType, {
       decimals,
-      omitExtraDecimalZeros: metricType === 'PERCENT'
+      omitExtraDecimalZeros: metricType === MetricType.Percent,
     });
-    return <span className={className}>{formattedValue != null ? formattedValue : '–'}</span>;
+    return <span className={className}>{formattedValue ?? '—'}</span>;
   }
 
-  const tooltip = getRatingTooltip(metricKey, Number(value));
-  const rating = <Rating small={small} value={value} />;
+  const tooltip = <RatingTooltipContent metricKey={metricKey} value={value} />;
+  const rating = ratingComponent ?? <Rating value={value} />;
+
   if (tooltip) {
     return (
       <Tooltip overlay={tooltip}>

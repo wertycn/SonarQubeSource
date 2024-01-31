@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,7 @@ public class SettingsWsModule extends Module {
       org.sonar.server.setting.ws.SetAction.class,
       SettingsWsSupport.class,
       ListDefinitionsAction.class,
+      LoginMessageAction.class,
       ValuesAction.class,
       ResetAction.class,
       EncryptAction.class,

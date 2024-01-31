@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,9 @@
  */
 package org.sonar.scanner.issue;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
 import javax.annotation.concurrent.ThreadSafe;
-
 import org.sonar.api.scan.issue.filter.FilterableIssue;
 import org.sonar.api.scan.issue.filter.IssueFilter;
 import org.sonar.api.scan.issue.filter.IssueFilterChain;
@@ -34,7 +31,7 @@ public class DefaultIssueFilterChain implements IssueFilterChain {
   private final List<IssueFilter> filters;
 
   public DefaultIssueFilterChain(IssueFilter... filters) {
-    this.filters = Collections.unmodifiableList(Arrays.asList(filters));
+    this.filters = List.of(filters);
   }
 
   public DefaultIssueFilterChain() {

@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@ import {
   getExtensionFromCache,
   getWebAnalyticsPageHandlerFromCache,
   installExtensionsHandler,
-  installWebAnalyticsHandler
+  installWebAnalyticsHandler,
 } from '../extensionsHandler';
 
 describe('installExtensionsHandler & extensions.getExtensionFromCache', () => {
@@ -31,8 +31,8 @@ describe('installExtensionsHandler & extensions.getExtensionFromCache', () => {
     expect((window as any).registerExtension).toEqual(expect.any(Function));
 
     const start = jest.fn();
-    (window as any).registerExtension('foo', start);
-    expect(getExtensionFromCache('foo')).toBe(start);
+    (window as any).registerExtension('foo', start, true);
+    expect(getExtensionFromCache('foo')).toEqual({ start, providesCSSFile: true });
   });
 });
 

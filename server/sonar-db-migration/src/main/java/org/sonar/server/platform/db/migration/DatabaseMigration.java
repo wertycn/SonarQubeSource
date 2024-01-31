@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,10 +25,6 @@ public interface DatabaseMigration {
    * Starts the migration status and returns immediately.
    * <p>
    * Migration can not be started twice but calling this method wont raise an error.
-   * </p>
-   * <p>
-   * <strong>This method should be named {@code start} but it can not be because it will be called by the pico container
-   * and this will cause unwanted behavior</strong>
    * </p>
    */
   void startIt();

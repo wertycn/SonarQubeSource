@@ -1,6 +1,6 @@
 /*
  * SonarQube
- * Copyright (C) 2009-2021 SonarSource SA
+ * Copyright (C) 2009-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,39 +17,46 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { CodeSnippet, ContentCell, Link } from 'design-system';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { queryToSearch } from '../../../helpers/urls';
+import { PermissionTemplate } from '../../../types/types';
 import { PERMISSION_TEMPLATES_PATH } from '../utils';
 import Defaults from './Defaults';
 
 interface Props {
-  template: T.PermissionTemplate;
+  template: PermissionTemplate;
 }
 
 export default function NameCell({ template }: Props) {
   const pathname = PERMISSION_TEMPLATES_PATH;
 
   return (
-    <td className="little-padded-left little-padded-right">
-      <Link to={{ pathname, query: { id: template.id } }}>
-        <strong className="js-name">{template.name}</strong>
-      </Link>
+    <ContentCell>
+      <div className="sw-flex sw-flex-col">
+        <span>
+          <Link to={{ pathname, search: queryToSearch({ id: template.id }) }}>
+            <span className="js-name">{template.name}</span>
+          </Link>
+        </span>
 
-      {template.defaultFor.length > 0 && (
-        <div className="spacer-top js-defaults">
-          <Defaults template={template} />
-        </div>
-      )}
+        {template.defaultFor.length > 0 && (
+          <div className="js-defaults sw-mt-2">
+            <Defaults template={template} />
+          </div>
+        )}
 
-      {!!template.description && (
-        <div className="spacer-top js-description">{template.description}</div>
-      )}
+        {!!template.description && (
+          <div className="js-description sw-mt-2">{template.description}</div>
+        )}
 
-      {!!template.projectKeyPattern && (
-        <div className="spacer-top js-project-key-pattern">
-          Project Key Pattern: <code>{template.projectKeyPattern}</code>
-        </div>
-      )}
-    </td>
+        {!!template.projectKeyPattern && (
+          <div className="js-project-key-pattern sw-mt-2">
+            Project Key Pattern:{' '}
+            <CodeSnippet snippet={template.projectKeyPattern} isOneLine noCopy />
+          </div>
+        )}
+      </div>
+    </ContentCell>
   );
 }
