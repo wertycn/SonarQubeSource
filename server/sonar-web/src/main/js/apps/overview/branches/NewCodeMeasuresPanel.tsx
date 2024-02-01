@@ -34,11 +34,7 @@ import { getLeakValue } from '../../../components/measure/utils';
 import { DEFAULT_ISSUES_QUERY } from '../../../components/shared/utils';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { findMeasure, formatMeasure } from '../../../helpers/measures';
-import {
-  getComponentDrilldownUrl,
-  getComponentIssuesUrl,
-  getComponentSecurityHotspotsUrl,
-} from '../../../helpers/urls';
+import { getComponentIssuesUrl, getComponentSecurityHotspotsUrl } from '../../../helpers/urls';
 import { Branch } from '../../../types/branch-like';
 import { isApplication } from '../../../types/component';
 import { IssueStatus } from '../../../types/issues';
@@ -47,14 +43,8 @@ import { QualityGateStatus } from '../../../types/quality-gates';
 import { Component, MeasureEnhanced } from '../../../types/types';
 import { IssueMeasuresCardInner } from '../components/IssueMeasuresCardInner';
 import MeasuresCardNumber from '../components/MeasuresCardNumber';
-import MeasuresCardPercent from '../components/MeasuresCardPercent';
-import {
-  MeasurementType,
-  MeasuresTabs,
-  Status,
-  getConditionRequiredLabel,
-  getMeasurementMetricKey,
-} from '../utils';
+import { MeasuresTabs, Status, getConditionRequiredLabel } from '../utils';
+import MeasuresPanelPercentCards from './MeasuresPanelPercentCards';
 
 interface Props {
   branch?: Branch;
@@ -68,6 +58,7 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
   const intl = useIntl();
   const isApp = isApplication(component.qualifier);
 
+  const conditions = qgStatuses?.flatMap((qg) => qg.conditions) ?? [];
   const failedConditions = qgStatuses?.flatMap((qg) => qg.failedConditions) ?? [];
 
   const newIssues = getLeakValue(findMeasure(measures, MetricKey.new_violations));
@@ -92,12 +83,32 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
     );
   }
 
+  let acceptedIssuesFooter = null;
+  if (!newAcceptedIssues) {
+    acceptedIssuesFooter = (
+      <StyledInfoMessage className="sw-rounded-2 sw-text-xs sw-p-4 sw-flex sw-gap-1 sw-flex-wrap">
+        <span>{intl.formatMessage({ id: 'overview.project.no_data' })}</span>
+        <span>
+          {intl.formatMessage({
+            id: `overview.run_analysis_to_compute.${component.qualifier}`,
+          })}
+        </span>
+      </StyledInfoMessage>
+    );
+  } else {
+    acceptedIssuesFooter = (
+      <TextSubdued className="sw-body-xs">
+        {intl.formatMessage({ id: 'overview.accepted_issues.help' })}
+      </TextSubdued>
+    );
+  }
+
   return (
     <div className="sw-mt-6" id={getTabPanelId(MeasuresTabs.New)}>
       <LightGreyCard className="sw-flex sw-rounded-2 sw-gap-4">
         <IssueMeasuresCardInner
-          data-test="overview__measures-new_issues"
-          linkDisabled={component.needIssueSync}
+          data-testid="overview__measures-new_issues"
+          disabled={component.needIssueSync}
           className="sw-w-1/2"
           metric={MetricKey.new_violations}
           value={formatMeasure(newIssues, MetricType.ShortInteger)}
@@ -115,8 +126,8 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
         />
         <StyledCardSeparator />
         <IssueMeasuresCardInner
-          data-test="overview__measures-accepted_issues"
-          linkDisabled={component.needIssueSync}
+          data-testid="overview__measures-accepted_issues"
+          disabled={Boolean(component.needIssueSync) || !newAcceptedIssues}
           className="sw-w-1/2"
           metric={MetricKey.new_accepted_issues}
           value={formatMeasure(newAcceptedIssues, MetricType.ShortInteger)}
@@ -128,11 +139,7 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
             issueStatuses: IssueStatus.Accepted,
             inNewCodePeriod: 'true',
           })}
-          footer={
-            <TextSubdued className="sw-body-xs">
-              {intl.formatMessage({ id: 'overview.accepted_issues.help' })}
-            </TextSubdued>
-          }
+          footer={acceptedIssuesFooter}
           icon={
             <SnoozeCircleIcon
               color={
@@ -142,45 +149,16 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
           }
         />
       </LightGreyCard>
+
+      <MeasuresPanelPercentCards
+        useDiffMetric
+        branch={branch}
+        component={component}
+        measures={measures}
+        failedConditions={failedConditions}
+      />
+
       <div className="sw-grid sw-grid-cols-2 sw-gap-4 sw-mt-4">
-        <MeasuresCardPercent
-          branchLike={branch}
-          componentKey={component.key}
-          conditions={failedConditions}
-          measures={measures}
-          measurementType={MeasurementType.Coverage}
-          label="overview.quality_gate.coverage"
-          url={getComponentDrilldownUrl({
-            componentKey: component.key,
-            metric: getMeasurementMetricKey(MeasurementType.Coverage, true),
-            branchLike: branch,
-            listView: true,
-          })}
-          conditionMetric={MetricKey.new_coverage}
-          linesMetric={MetricKey.new_lines_to_cover}
-          useDiffMetric
-          showRequired={!isApp}
-        />
-
-        <MeasuresCardPercent
-          branchLike={branch}
-          componentKey={component.key}
-          conditions={failedConditions}
-          measures={measures}
-          measurementType={MeasurementType.Duplication}
-          label="overview.quality_gate.duplications"
-          url={getComponentDrilldownUrl({
-            componentKey: component.key,
-            metric: getMeasurementMetricKey(MeasurementType.Duplication, true),
-            branchLike: branch,
-            listView: true,
-          })}
-          conditionMetric={MetricKey.new_duplicated_lines_density}
-          linesMetric={MetricKey.new_lines}
-          useDiffMetric
-          showRequired={!isApp}
-        />
-
         <MeasuresCardNumber
           label={
             newSecurityHotspots === '1'
@@ -191,7 +169,8 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
             ...getBranchLikeQuery(branch),
           })}
           value={newSecurityHotspots}
-          conditions={failedConditions}
+          metric={MetricKey.new_security_hotspots}
+          conditions={conditions}
           conditionMetric={MetricKey.new_security_hotspots_reviewed}
           showRequired={!isApp}
         />
@@ -203,4 +182,8 @@ export default function NewCodeMeasuresPanel(props: Readonly<Props>) {
 const StyledCardSeparator = styled.div`
   width: 1px;
   background-color: ${themeColor('projectCardBorder')};
+`;
+
+const StyledInfoMessage = styled.div`
+  background-color: ${themeColor('projectCardInfo')};
 `;

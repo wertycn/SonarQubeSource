@@ -25,10 +25,12 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import org.sonar.api.issue.Issue;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.rules.RuleType;
+import org.sonar.server.measure.ImpactMeasureBuilder;
 import org.sonar.server.measure.Rating;
 
 import static java.util.Arrays.asList;
@@ -57,6 +59,15 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
     new MeasureUpdateFormula(CoreMetrics.SECURITY_HOTSPOTS, false, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolvedByType(RuleType.SECURITY_HOTSPOT, false))),
 
+    new MeasureUpdateFormula(CoreMetrics.RELIABILITY_ISSUES, false, true, new ImpactAddChildren(),
+      (context, issues) -> context.setValue(issues.getBySoftwareQuality(SoftwareQuality.RELIABILITY))),
+
+    new MeasureUpdateFormula(CoreMetrics.MAINTAINABILITY_ISSUES, false, true, new ImpactAddChildren(),
+      (context, issues) -> context.setValue(issues.getBySoftwareQuality(SoftwareQuality.MAINTAINABILITY))),
+
+    new MeasureUpdateFormula(CoreMetrics.SECURITY_ISSUES, false, true, new ImpactAddChildren(),
+      (context, issues) -> context.setValue(issues.getBySoftwareQuality(SoftwareQuality.SECURITY))),
+
     new MeasureUpdateFormula(CoreMetrics.VIOLATIONS, false, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolved(false))),
 
@@ -81,7 +92,7 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
     new MeasureUpdateFormula(CoreMetrics.ACCEPTED_ISSUES, false, new AddChildren(),
       (context, issues) -> context.setValue(issues.countByResolution(Issue.RESOLUTION_WONT_FIX, false))),
 
-    new MeasureUpdateFormula(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, false, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, false, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countHighImpactAccepted(false))),
 
     new MeasureUpdateFormula(CoreMetrics.OPEN_ISSUES, false, new AddChildren(),
@@ -102,17 +113,17 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
     new MeasureUpdateFormula(CoreMetrics.SECURITY_REMEDIATION_EFFORT, false, new AddChildren(),
       (context, issues) -> context.setValue(issues.sumEffortOfUnresolved(RuleType.VULNERABILITY, false))),
 
-    new MeasureUpdateFormula(CoreMetrics.SQALE_DEBT_RATIO, false,
+    new MeasureUpdateFormula(CoreMetrics.SQALE_DEBT_RATIO, false, false,
       (context, formula) -> context.setValue(100.0 * debtDensity(context)),
       (context, issues) -> context.setValue(100.0 * debtDensity(context)),
       asList(CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
 
-    new MeasureUpdateFormula(CoreMetrics.SQALE_RATING, false,
+    new MeasureUpdateFormula(CoreMetrics.SQALE_RATING, false, false,
       (context, issues) -> context.setValue(context.getDebtRatingGrid().getRatingForDensity(debtDensity(context))),
       (context, issues) -> context.setValue(context.getDebtRatingGrid().getRatingForDensity(debtDensity(context))),
       asList(CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
 
-    new MeasureUpdateFormula(CoreMetrics.EFFORT_TO_REACH_MAINTAINABILITY_RATING_A, false,
+    new MeasureUpdateFormula(CoreMetrics.EFFORT_TO_REACH_MAINTAINABILITY_RATING_A, false, false,
       (context, formula) -> context.setValue(effortToReachMaintainabilityRatingA(context)),
       (context, issues) -> context.setValue(effortToReachMaintainabilityRatingA(context)), asList(CoreMetrics.TECHNICAL_DEBT, CoreMetrics.DEVELOPMENT_COST)),
 
@@ -177,7 +188,7 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
     new MeasureUpdateFormula(CoreMetrics.NEW_INFO_VIOLATIONS, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countUnresolvedBySeverity(Severity.INFO, true))),
 
-    new MeasureUpdateFormula(CoreMetrics.NEW_ACCEPTED_ISSUES, true, new AddChildren(),
+    new MeasureUpdateFormula(CoreMetrics.NEW_ACCEPTED_ISSUES, true, true, new AddChildren(),
       (context, issues) -> context.setValue(issues.countByResolution(Issue.RESOLUTION_WONT_FIX, true))),
 
     new MeasureUpdateFormula(CoreMetrics.NEW_TECHNICAL_DEBT, true, new AddChildren(),
@@ -226,12 +237,12 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
         context.setValue(computeRating(percent.orElse(null)));
       }),
 
-    new MeasureUpdateFormula(CoreMetrics.NEW_SQALE_DEBT_RATIO, true,
+    new MeasureUpdateFormula(CoreMetrics.NEW_SQALE_DEBT_RATIO, true, false,
       (context, formula) -> context.setValue(100.0D * newDebtDensity(context)),
       (context, issues) -> context.setValue(100.0D * newDebtDensity(context)),
       asList(CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST)),
 
-    new MeasureUpdateFormula(CoreMetrics.NEW_MAINTAINABILITY_RATING, true,
+    new MeasureUpdateFormula(CoreMetrics.NEW_MAINTAINABILITY_RATING, true, false,
       (context, formula) -> context.setValue(context.getDebtRatingGrid().getRatingForDensity(newDebtDensity(context))),
       (context, issues) -> context.setValue(context.getDebtRatingGrid().getRatingForDensity(newDebtDensity(context))),
       asList(CoreMetrics.NEW_TECHNICAL_DEBT, CoreMetrics.NEW_DEVELOPMENT_COST)));
@@ -279,6 +290,18 @@ public class MeasureUpdateFormulaFactoryImpl implements MeasureUpdateFormulaFact
         int currentRating = context.getValue(formula.getMetric()).map(Double::intValue).orElse(Rating.A.getIndex());
         context.setValue(Rating.valueOf(Math.max(currentRating, max.getAsInt())));
       }
+    }
+  }
+
+  private static class ImpactAddChildren implements BiConsumer<MeasureUpdateFormula.Context, MeasureUpdateFormula> {
+    @Override
+    public void accept(MeasureUpdateFormula.Context context, MeasureUpdateFormula formula) {
+      ImpactMeasureBuilder impactMeasureBuilder = ImpactMeasureBuilder.createEmpty();
+      context.getChildrenTextValues().stream()
+        .map(ImpactMeasureBuilder::fromString)
+        .forEach(impactMeasureBuilder::add);
+      context.getText(formula.getMetric()).ifPresent(value -> impactMeasureBuilder.add(ImpactMeasureBuilder.fromString(value)));
+      context.setValue(impactMeasureBuilder.buildAsString());
     }
   }
 

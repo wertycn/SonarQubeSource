@@ -20,8 +20,9 @@
 import { keyBy } from 'lodash';
 import { isDiffMetric } from '../../../helpers/measures';
 import { mockMeasure } from '../../../helpers/testMocks';
+import { SoftwareImpactSeverity } from '../../../types/clean-code-taxonomy';
 import { IssueDeprecatedStatus, IssueType, RawIssue } from '../../../types/issues';
-import { MetricKey } from '../../../types/metrics';
+import { MetricKey, MetricType } from '../../../types/metrics';
 import { Measure } from '../../../types/types';
 import { ComponentTree } from './components';
 import { IssueData } from './issues';
@@ -54,6 +55,39 @@ function mockComponentMeasure(tree: ComponentTree, issueList: IssueData[], metri
       return mockMeasure({
         metric: metricKey,
         value: 'java=10000;javascript=5000;css=1000',
+      });
+
+    case MetricKey.security_issues:
+      return mockMeasure({
+        metric: metricKey,
+        value: JSON.stringify({
+          total: 1,
+          [SoftwareImpactSeverity.High]: 0,
+          [SoftwareImpactSeverity.Medium]: 1,
+          [SoftwareImpactSeverity.Low]: 0,
+        }),
+      });
+
+    case MetricKey.reliability_issues:
+      return mockMeasure({
+        metric: metricKey,
+        value: JSON.stringify({
+          total: 3,
+          [SoftwareImpactSeverity.High]: 0,
+          [SoftwareImpactSeverity.Medium]: 2,
+          [SoftwareImpactSeverity.Low]: 1,
+        }),
+      });
+
+    case MetricKey.maintainability_issues:
+      return mockMeasure({
+        metric: metricKey,
+        value: JSON.stringify({
+          total: 2,
+          [SoftwareImpactSeverity.High]: 0,
+          [SoftwareImpactSeverity.Medium]: 0,
+          [SoftwareImpactSeverity.Low]: 1,
+        }),
       });
   }
 
@@ -195,6 +229,23 @@ function mockComponentMeasure(tree: ComponentTree, issueList: IssueData[], metri
     metric: metricKey,
     period: undefined,
   });
+}
+
+export function getMetricTypeFromKey(metricKey: string) {
+  if (/(coverage|duplication)$/.test(metricKey)) {
+    return MetricType.Percent;
+  } else if (/_rating$/.test(metricKey)) {
+    return MetricType.Rating;
+  } else if (
+    [
+      MetricKey.reliability_issues,
+      MetricKey.security_issues,
+      MetricKey.maintainability_issues,
+    ].includes(metricKey as MetricKey)
+  ) {
+    return MetricType.Data;
+  }
+  return MetricType.Integer;
 }
 
 function isIssueType(metricKey: MetricKey) {

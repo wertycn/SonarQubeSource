@@ -57,3 +57,10 @@ export interface SoftwareImpact {
   softwareQuality: SoftwareQuality;
   severity: SoftwareImpactSeverity;
 }
+
+export interface SoftwareImpactMeasureData {
+  total: number;
+  [SoftwareImpactSeverity.High]: number;
+  [SoftwareImpactSeverity.Medium]: number;
+  [SoftwareImpactSeverity.Low]: number;
+}

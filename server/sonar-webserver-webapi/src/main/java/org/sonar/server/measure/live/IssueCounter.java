@@ -26,11 +26,15 @@ import java.util.Map;
 import java.util.Optional;
 import javax.annotation.Nullable;
 import org.sonar.api.issue.IssueStatus;
-import org.sonar.api.rule.Severity;
+import org.sonar.api.issue.impact.Severity;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.rules.RuleType;
 import org.sonar.db.issue.IssueGroupDto;
+import org.sonar.db.issue.IssueImpactGroupDto;
 import org.sonar.db.rule.SeverityUtil;
+import org.sonar.server.measure.ImpactMeasureBuilder;
 
+import static org.sonar.api.rule.Severity.INFO;
 import static org.sonar.api.rules.RuleType.SECURITY_HOTSPOT;
 
 class IssueCounter {
@@ -44,14 +48,18 @@ class IssueCounter {
   private final Map<String, Count> hotspotsByStatus = new HashMap<>();
   private final Count unresolved = new Count();
   private final Count highImpactAccepted = new Count();
+  private final Map<SoftwareQuality, Map<Severity, Count>> bySoftwareQualityAndSeverity = new EnumMap<>(SoftwareQuality.class);
 
-  IssueCounter(Collection<IssueGroupDto> groups) {
+  IssueCounter(Collection<IssueGroupDto> groups, Collection<IssueImpactGroupDto> impactGroups) {
     for (IssueGroupDto group : groups) {
       if (RuleType.valueOf(group.getRuleType()).equals(SECURITY_HOTSPOT)) {
         processHotspotGroup(group);
       } else {
         processGroup(group);
       }
+    }
+    for (IssueImpactGroupDto group : impactGroups) {
+      processImpactGroup(group);
     }
   }
 
@@ -88,14 +96,26 @@ class IssueCounter {
       byResolution
         .computeIfAbsent(group.getResolution(), k -> new Count())
         .add(group);
-      if (IssueStatus.ACCEPTED.equals(IssueStatus.of(group.getStatus(), group.getResolution())) && group.hasHighImpactSeverity()) {
-        highImpactAccepted.add(group);
-      }
     }
     if (group.getStatus() != null) {
       byStatus
         .computeIfAbsent(group.getStatus(), k -> new Count())
         .add(group);
+    }
+  }
+
+  private void processImpactGroup(IssueImpactGroupDto group) {
+    IssueStatus issueStatus = IssueStatus.of(group.getStatus(), group.getResolution());
+
+    if (IssueStatus.OPEN == issueStatus || IssueStatus.CONFIRMED == issueStatus) {
+      bySoftwareQualityAndSeverity
+        .computeIfAbsent(group.getSoftwareQuality(), k -> new EnumMap<>(Severity.class))
+        .computeIfAbsent(group.getSeverity(), k -> new Count())
+        .add(group);
+    }
+
+    if (Severity.HIGH == group.getSeverity() && IssueStatus.ACCEPTED == issueStatus) {
+      highImpactAccepted.add(group);
     }
   }
 
@@ -147,6 +167,23 @@ class IssueCounter {
     return onlyInLeak ? count.leak : count.absolute;
   }
 
+  public String getBySoftwareQuality(SoftwareQuality softwareQuality) {
+    Map<Severity, Count> severityToCount = bySoftwareQualityAndSeverity.get(softwareQuality);
+
+    ImpactMeasureBuilder impactMeasureBuilder;
+    if (severityToCount != null) {
+      impactMeasureBuilder = ImpactMeasureBuilder.newInstance();
+      for (Severity severity : Severity.values()) {
+        impactMeasureBuilder = impactMeasureBuilder.setSeverity(severity, Optional.ofNullable(severityToCount.get(severity)).map(count -> count.absolute).orElse(0L));
+      }
+      impactMeasureBuilder = impactMeasureBuilder.setTotal(severityToCount.values().stream().mapToLong(count -> count.absolute).sum());
+    } else {
+      impactMeasureBuilder = ImpactMeasureBuilder.createEmpty();
+    }
+
+    return impactMeasureBuilder.buildAsString();
+  }
+
   private static class Count {
     private long absolute = 0L;
     private long leak = 0L;
@@ -156,6 +193,10 @@ class IssueCounter {
       if (group.isInLeak()) {
         leak += group.getCount();
       }
+    }
+
+    public void add(IssueImpactGroupDto group) {
+      absolute += group.getCount();
     }
   }
 
@@ -172,8 +213,8 @@ class IssueCounter {
   }
 
   private static class HighestSeverity {
-    private int absolute = SeverityUtil.getOrdinalFromSeverity(Severity.INFO);
-    private int leak = SeverityUtil.getOrdinalFromSeverity(Severity.INFO);
+    private int absolute = SeverityUtil.getOrdinalFromSeverity(INFO);
+    private int leak = SeverityUtil.getOrdinalFromSeverity(INFO);
 
     void add(IssueGroupDto group) {
       int severity = SeverityUtil.getOrdinalFromSeverity(group.getSeverity());

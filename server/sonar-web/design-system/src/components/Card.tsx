@@ -56,10 +56,10 @@ const CardStyled = styled.div`
   ${tw`sw-rounded-1`};
 `;
 
-const GreyCardStyled = styled(CardStyled)`
-  border: ${themeBorder('default', 'almCardBorder')};
-`;
-
 const LightGreyCardStyled = styled(CardStyled)`
   border: ${themeBorder('default')};
+`;
+
+const GreyCardStyled = styled(CardStyled)`
+  border: ${themeBorder('default', 'almCardBorder')};
 `;

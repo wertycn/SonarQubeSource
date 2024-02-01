@@ -20,19 +20,18 @@
 import { memoize } from 'lodash';
 import React from 'react';
 import { IntlShape } from 'react-intl';
-import CoverageRating from '../../components/ui/CoverageRating';
-import DuplicationsRating from '../../components/ui/DuplicationsRating';
 import { ISSUETYPE_METRIC_KEYS_MAP } from '../../helpers/issues';
 import { translate } from '../../helpers/l10n';
 import { formatMeasure } from '../../helpers/measures';
 import { parseAsString } from '../../helpers/query';
+import { SoftwareQuality } from '../../types/clean-code-taxonomy';
 import { IssueType } from '../../types/issues';
 import { MetricKey } from '../../types/metrics';
 import { AnalysisMeasuresVariations, MeasureHistory } from '../../types/project-activity';
 import { QualityGateStatusConditionEnhanced } from '../../types/quality-gates';
 import { Dict, RawQuery } from '../../types/types';
 
-export const METRICS: string[] = [
+export const BRANCH_OVERVIEW_METRICS: string[] = [
   // quality gate
   MetricKey.alert_status,
   MetricKey.quality_gate_details, // TODO: still relevant?
@@ -42,6 +41,9 @@ export const METRICS: string[] = [
   MetricKey.accepted_issues,
   MetricKey.new_accepted_issues,
   MetricKey.high_impact_accepted_issues,
+  MetricKey.maintainability_issues,
+  MetricKey.reliability_issues,
+  MetricKey.security_issues,
 
   // bugs
   MetricKey.bugs,
@@ -148,24 +150,10 @@ const MEASUREMENTS_MAP = {
   [MeasurementType.Coverage]: {
     metric: MetricKey.coverage,
     newMetric: MetricKey.new_coverage,
-    linesMetric: MetricKey.lines_to_cover,
-    newLinesMetric: MetricKey.new_lines_to_cover,
-    afterMergeMetric: MetricKey.coverage,
-    labelKey: 'metric.coverage.name',
-    expandedLabelKey: 'overview.coverage_on_X_lines',
-    newLinesExpandedLabelKey: 'overview.coverage_on_X_new_lines',
-    iconClass: CoverageRating,
   },
   [MeasurementType.Duplication]: {
     metric: MetricKey.duplicated_lines_density,
     newMetric: MetricKey.new_duplicated_lines_density,
-    linesMetric: MetricKey.ncloc,
-    newLinesMetric: MetricKey.new_lines,
-    afterMergeMetric: MetricKey.duplicated_lines_density,
-    labelKey: 'metric.duplicated_lines_density.short_name',
-    expandedLabelKey: 'overview.duplications_on_X_lines',
-    newLinesExpandedLabelKey: 'overview.duplications_on_X_new_lines',
-    iconClass: DuplicationsRating,
   },
 };
 
@@ -198,12 +186,12 @@ export const METRICS_REPORTED_IN_OVERVIEW_CARDS = [
   MetricKey.duplicated_lines_density,
 ];
 
-export function getIssueRatingName(type: IssueType) {
-  return translate('metric_domain', ISSUETYPE_METRIC_KEYS_MAP[type].ratingName);
+export function softwareQualityToMeasure(softwareQuality: SoftwareQuality): MetricKey {
+  return (softwareQuality.toLowerCase() + '_issues') as MetricKey;
 }
 
-export function getIssueIconClass(type: IssueType) {
-  return ISSUETYPE_METRIC_KEYS_MAP[type].iconClass;
+export function getIssueRatingName(type: IssueType) {
+  return translate('metric_domain', ISSUETYPE_METRIC_KEYS_MAP[type].ratingName);
 }
 
 export function getIssueMetricKey(type: IssueType, useDiffMetric: boolean) {
@@ -218,29 +206,8 @@ export function getIssueRatingMetricKey(type: IssueType, useDiffMetric: boolean)
     : ISSUETYPE_METRIC_KEYS_MAP[type].rating;
 }
 
-export function getMeasurementIconClass(type: MeasurementType) {
-  return MEASUREMENTS_MAP[type].iconClass;
-}
-
 export function getMeasurementMetricKey(type: MeasurementType, useDiffMetric: boolean) {
   return useDiffMetric ? MEASUREMENTS_MAP[type].newMetric : MEASUREMENTS_MAP[type].metric;
-}
-
-export function getMeasurementAfterMergeMetricKey(type: MeasurementType) {
-  return MEASUREMENTS_MAP[type].afterMergeMetric;
-}
-
-export function getMeasurementLinesMetricKey(type: MeasurementType, useDiffMetric: boolean) {
-  return useDiffMetric ? MEASUREMENTS_MAP[type].newLinesMetric : MEASUREMENTS_MAP[type].linesMetric;
-}
-
-export function getMeasurementLabelKeys(type: MeasurementType, useDiffMetric: boolean) {
-  return {
-    expandedLabelKey: useDiffMetric
-      ? MEASUREMENTS_MAP[type].newLinesExpandedLabelKey
-      : MEASUREMENTS_MAP[type].expandedLabelKey,
-    labelKey: MEASUREMENTS_MAP[type].labelKey,
-  };
 }
 
 export const parseQuery = memoize((urlQuery: RawQuery): { codeScope: string } => {

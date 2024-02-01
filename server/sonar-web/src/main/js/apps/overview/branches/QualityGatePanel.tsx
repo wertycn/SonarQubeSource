@@ -23,12 +23,12 @@ import { ComponentQualifier, isApplication } from '../../../types/component';
 import { QualityGateStatus } from '../../../types/quality-gates';
 import { CaycStatus, Component, QualityGate } from '../../../types/types';
 import IgnoredConditionWarning from '../components/IgnoredConditionWarning';
-import QualityGateStatusHeader from '../components/QualityGateStatusHeader';
-import QualityGateStatusPassedView from '../components/QualityGateStatusPassedView';
-import { QualityGateStatusTitle } from '../components/QualityGateStatusTitle';
 import ApplicationNonCaycProjectWarning from './ApplicationNonCaycProjectWarning';
 import CleanAsYouCodeWarning from './CleanAsYouCodeWarning';
 import QualityGatePanelSection from './QualityGatePanelSection';
+import QualityGateStatusHeader from './QualityGateStatusHeader';
+import QualityGateStatusPassedView from './QualityGateStatusPassedView';
+import { QualityGateStatusTitle } from './QualityGateStatusTitle';
 
 export interface QualityGatePanelProps {
   component: Pick<Component, 'key' | 'qualifier' | 'qualityGate'>;
@@ -67,7 +67,7 @@ export function QualityGatePanel(props: QualityGatePanelProps) {
     qgStatuses.some((p) => Boolean(p.ignoredConditions));
 
   return (
-    <div data-test="overview__quality-gate-panel">
+    <div data-testid="overview__quality-gate-panel">
       <QualityGateStatusTitle />
       <div className="sw-pt-5">
         <Spinner loading={loading}>

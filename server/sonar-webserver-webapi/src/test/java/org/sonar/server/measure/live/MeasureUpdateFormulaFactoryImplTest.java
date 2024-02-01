@@ -19,6 +19,8 @@
  */
 package org.sonar.server.measure.live;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -31,17 +33,25 @@ import java.util.Set;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import org.sonar.api.issue.Issue;
+import org.sonar.api.issue.impact.SoftwareQuality;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.Metric;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.rules.RuleType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueGroupDto;
+import org.sonar.db.issue.IssueImpactGroupDto;
 import org.sonar.server.measure.DebtRatingGrid;
 import org.sonar.server.measure.Rating;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.sonar.api.issue.impact.Severity.HIGH;
+import static org.sonar.api.issue.impact.Severity.LOW;
+import static org.sonar.api.issue.impact.Severity.MEDIUM;
+import static org.sonar.api.issue.impact.SoftwareQuality.MAINTAINABILITY;
+import static org.sonar.api.issue.impact.SoftwareQuality.RELIABILITY;
+import static org.sonar.api.issue.impact.SoftwareQuality.SECURITY;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_REVIEWED_STATUS;
 import static org.sonar.api.measures.CoreMetrics.NEW_SECURITY_HOTSPOTS_TO_REVIEW_STATUS;
@@ -50,9 +60,11 @@ import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_REVIEWED;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_REVIEWED_STATUS;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_HOTSPOTS_TO_REVIEW_STATUS;
 import static org.sonar.api.measures.CoreMetrics.SECURITY_REVIEW_RATING;
+import static org.sonar.test.JsonAssert.assertJson;
 
 public class MeasureUpdateFormulaFactoryImplTest {
 
+  public static final Gson GSON = new GsonBuilder().create();
   private final MeasureUpdateFormulaFactoryImpl underTest = new MeasureUpdateFormulaFactoryImpl();
 
   @Test
@@ -318,29 +330,6 @@ public class MeasureUpdateFormulaFactoryImplTest {
       .assertThatValueIs(CoreMetrics.CONFIRMED_ISSUES, 3 + 5)
       .assertThatValueIs(CoreMetrics.OPEN_ISSUES, 9 + 11)
       .assertThatValueIs(CoreMetrics.REOPENED_ISSUES, 7);
-  }
-
-  @Test
-  public void test_high_impact_accepted_issues() {
-    withNoIssues()
-      .assertThatValueIs(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, 0);
-
-    with(
-      newGroup(RuleType.CODE_SMELL).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_FALSE_POSITIVE)
-        .setHasHighImpactSeverity(true).setCount(3),
-      newGroup(RuleType.CODE_SMELL).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_WONT_FIX)
-        .setHasHighImpactSeverity(true).setCount(4),
-      newGroup(RuleType.CODE_SMELL).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_WONT_FIX)
-        .setHasHighImpactSeverity(false).setCount(5),
-      newGroup(RuleType.BUG).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_FALSE_POSITIVE)
-        .setHasHighImpactSeverity(true).setCount(30),
-      newGroup(RuleType.BUG).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_WONT_FIX)
-        .setHasHighImpactSeverity(true).setCount(40),
-      newGroup(RuleType.BUG).setStatus(Issue.STATUS_RESOLVED).setResolution(Issue.RESOLUTION_WONT_FIX)
-        .setHasHighImpactSeverity(false).setCount(50),
-      // exclude security hotspot
-      newGroup(RuleType.SECURITY_HOTSPOT).setResolution(Issue.RESOLUTION_WONT_FIX).setHasHighImpactSeverity(true).setCount(40))
-      .assertThatValueIs(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, 4 + 40);
   }
 
   @Test
@@ -919,7 +908,67 @@ public class MeasureUpdateFormulaFactoryImplTest {
       .assertThatLeakValueIs(CoreMetrics.NEW_MAINTAINABILITY_RATING, Rating.A);
   }
 
+  @Test
+  public void compute_shouldComputeHighImpactAcceptedIssues() {
+    withNoIssues()
+      .assertThatValueIs(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, 0);
+
+    with(
+      newImpactGroup(RELIABILITY, HIGH, 3),
+      newImpactGroup(RELIABILITY, MEDIUM, 4),
+      newImpactGroup(RELIABILITY, LOW, 1),
+      newImpactGroup(SECURITY, HIGH, 3),
+      newImpactGroup(SECURITY, HIGH, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 4),
+      newImpactGroup(SECURITY, MEDIUM, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 5),
+      newImpactGroup(SECURITY, LOW, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 6),
+      newImpactGroup(SECURITY, HIGH, Issue.STATUS_RESOLVED, Issue.RESOLUTION_FALSE_POSITIVE, 7),
+      newImpactGroup(RELIABILITY, HIGH, Issue.STATUS_RESOLVED, Issue.RESOLUTION_WONT_FIX, 8))
+      .assertThatValueIs(CoreMetrics.HIGH_IMPACT_ACCEPTED_ISSUES, 4 + 8);
+  }
+
+  @Test
+  public void computeHierarchy_shouldComputeImpactMeasures() {
+    new HierarchyTester(CoreMetrics.RELIABILITY_ISSUES)
+      .withValue(impactMeasureToJson(6, 1, 2, 3))
+      .withChildrenValues(impactMeasureToJson(6, 1, 2, 3), impactMeasureToJson(10, 5, 3, 2))
+      .expectedJsonResult(impactMeasureToJson(22, 7, 7, 8));
+
+    new HierarchyTester(CoreMetrics.RELIABILITY_ISSUES)
+      .withValue(impactMeasureToJson(6, 1, 2, 3))
+      .expectedJsonResult(impactMeasureToJson(6, 1, 2, 3));
+  }
+
+  @Test
+  public void compute_shouldComputeImpactMeasures() {
+    with(
+      newImpactGroup(RELIABILITY, HIGH, 3),
+      newImpactGroup(RELIABILITY, MEDIUM, 4),
+      newImpactGroup(RELIABILITY, LOW, 1),
+      newImpactGroup(MAINTAINABILITY, MEDIUM, 10),
+      newImpactGroup(MAINTAINABILITY, LOW, 11),
+      newImpactGroup(SECURITY, HIGH, 3))
+      .assertThatJsonValueIs(CoreMetrics.RELIABILITY_ISSUES, impactMeasureToJson(8, 3, 4, 1))
+      .assertThatJsonValueIs(CoreMetrics.MAINTAINABILITY_ISSUES, impactMeasureToJson(21, 0, 10, 11))
+      .assertThatJsonValueIs(CoreMetrics.SECURITY_ISSUES, impactMeasureToJson(3, 3, 0, 0));
+  }
+
+  @Test
+  public void compute_whenNoIssues_shouldComputeImpactMeasures() {
+    withNoIssues()
+      .assertThatJsonValueIs(CoreMetrics.RELIABILITY_ISSUES, impactMeasureToJson(0, 0, 0, 0))
+      .assertThatJsonValueIs(CoreMetrics.MAINTAINABILITY_ISSUES, impactMeasureToJson(0, 0, 0, 0))
+      .assertThatJsonValueIs(CoreMetrics.SECURITY_ISSUES, impactMeasureToJson(0, 0, 0, 0));
+  }
+
+  private static String impactMeasureToJson(long total, long high, long medium, long low) {
+    return GSON.toJson(Map.of("total", total, "HIGH", high, "MEDIUM", medium, "LOW", low));
+  }
+
   private Verifier with(IssueGroupDto... groups) {
+    return new Verifier(groups);
+  }
+
+  private Verifier with(IssueImpactGroupDto... groups) {
     return new Verifier(groups);
   }
 
@@ -936,11 +985,16 @@ public class MeasureUpdateFormulaFactoryImplTest {
   }
 
   private class Verifier {
-    private final IssueGroupDto[] groups;
+    private IssueGroupDto[] groups = {};
+    private IssueImpactGroupDto[] impactGroups = {};
     private final InitialValues initialValues = new InitialValues();
 
     private Verifier(IssueGroupDto[] groups) {
       this.groups = groups;
+    }
+
+    private Verifier(IssueImpactGroupDto[] impactGroups) {
+      this.impactGroups = impactGroups;
     }
 
     Verifier and(Metric metric, double value) {
@@ -949,13 +1003,19 @@ public class MeasureUpdateFormulaFactoryImplTest {
     }
 
     Verifier andText(Metric metric, String value) {
-      this.initialValues.text.put(metric, value);
+      this.initialValues.textValues.put(metric, value);
       return this;
     }
 
     Verifier assertThatValueIs(Metric metric, double expectedValue) {
       TestContext context = run(metric, false);
       assertThat(context.doubleValue).isNotNull().isEqualTo(expectedValue);
+      return this;
+    }
+
+    Verifier assertThatJsonValueIs(Metric metric, String expectedValue) {
+      TestContext context = run(metric, false);
+      assertJson(context.stringValue).isSimilarTo(expectedValue);
       return this;
     }
 
@@ -996,13 +1056,13 @@ public class MeasureUpdateFormulaFactoryImplTest {
         .get();
       assertThat(formula.isOnLeak()).isEqualTo(expectLeakFormula);
       TestContext context = new TestContext(formula.getDependentMetrics(), initialValues);
-      formula.compute(context, newIssueCounter(groups));
+      formula.compute(context, newIssueCounter(groups, impactGroups));
       return context;
     }
   }
 
-  private static IssueCounter newIssueCounter(IssueGroupDto... issues) {
-    return new IssueCounter(asList(issues));
+  private static IssueCounter newIssueCounter(IssueGroupDto[] groups, IssueImpactGroupDto[] impactGroups) {
+    return new IssueCounter(asList(groups), asList(impactGroups));
   }
 
   private static IssueGroupDto newGroup() {
@@ -1021,6 +1081,21 @@ public class MeasureUpdateFormulaFactoryImplTest {
     return dto;
   }
 
+  private static IssueImpactGroupDto newImpactGroup(SoftwareQuality softwareQuality, org.sonar.api.issue.impact.Severity severity,
+                                                    String status, @Nullable String resolution, long count) {
+    IssueImpactGroupDto dto = new IssueImpactGroupDto();
+    dto.setSoftwareQuality(softwareQuality);
+    dto.setSeverity(severity);
+    dto.setStatus(status);
+    dto.setResolution(resolution);
+    dto.setCount(count);
+    return dto;
+  }
+
+  private static IssueImpactGroupDto newImpactGroup(SoftwareQuality softwareQuality, org.sonar.api.issue.impact.Severity severity, long count) {
+    return newImpactGroup(softwareQuality, severity, Issue.STATUS_OPEN, null, count);
+  }
+
   private static IssueGroupDto newResolvedGroup(RuleType ruleType) {
     return newGroup(ruleType).setResolution(Issue.RESOLUTION_FALSE_POSITIVE).setStatus(Issue.STATUS_CLOSED);
   }
@@ -1034,6 +1109,7 @@ public class MeasureUpdateFormulaFactoryImplTest {
     private final InitialValues initialValues;
     private Double doubleValue;
     private Rating ratingValue;
+    private String stringValue;
 
     private TestContext(Collection<Metric> dependentMetrics, InitialValues initialValues) {
       this.dependentMetrics = new HashSet<>(dependentMetrics);
@@ -1043,6 +1119,11 @@ public class MeasureUpdateFormulaFactoryImplTest {
     @Override
     public List<Double> getChildrenValues() {
       return initialValues.childrenValues;
+    }
+
+    @Override
+    public List<String> getChildrenTextValues() {
+      return initialValues.childrenTextValues;
     }
 
     @Override
@@ -1088,8 +1169,8 @@ public class MeasureUpdateFormulaFactoryImplTest {
 
     @Override
     public Optional<String> getText(Metric metric) {
-      if (initialValues.text.containsKey(metric)) {
-        return Optional.of(initialValues.text.get(metric));
+      if (initialValues.textValues.containsKey(metric)) {
+        return Optional.of(initialValues.textValues.get(metric));
       }
       return Optional.empty();
     }
@@ -1103,12 +1184,18 @@ public class MeasureUpdateFormulaFactoryImplTest {
     public void setValue(Rating value) {
       this.ratingValue = value;
     }
+
+    @Override
+    public void setValue(String value) {
+      this.stringValue = value;
+    }
   }
 
   private class InitialValues {
     private final Map<Metric, Double> values = new HashMap<>();
     private final List<Double> childrenValues = new ArrayList<>();
-    private final Map<Metric, String> text = new HashMap<>();
+    private final Map<Metric, String> textValues = new HashMap<>();
+    private final List<String> childrenTextValues = new ArrayList<>();
     private long childrenHotspotsReviewed = 0;
     private long childrenNewHotspotsReviewed = 0;
     private long childrenHotspotsToReview = 0;
@@ -1132,6 +1219,11 @@ public class MeasureUpdateFormulaFactoryImplTest {
       return this;
     }
 
+    public HierarchyTester withValue(Metric metric, String value) {
+      this.initialValues.textValues.put(metric, value);
+      return this;
+    }
+
     public HierarchyTester withChildrenHotspotsCounts(long childrenHotspotsReviewed, long childrenNewHotspotsReviewed, long childrenHotspotsToReview,
       long childrenNewHotspotsToReview) {
       this.initialValues.childrenHotspotsReviewed = childrenHotspotsReviewed;
@@ -1145,14 +1237,29 @@ public class MeasureUpdateFormulaFactoryImplTest {
       return withValue(metric, value);
     }
 
+    public HierarchyTester withValue(String value) {
+      return withValue(metric, value);
+    }
+
     public HierarchyTester withChildrenValues(Double... values) {
       this.initialValues.childrenValues.addAll(asList(values));
+      return this;
+    }
+
+    public HierarchyTester withChildrenValues(String... values) {
+      this.initialValues.childrenTextValues.addAll(asList(values));
       return this;
     }
 
     public HierarchyTester expectedResult(@Nullable Double expected) {
       TestContext ctx = run();
       assertThat(ctx.doubleValue).isEqualTo(expected);
+      return this;
+    }
+
+    public HierarchyTester expectedJsonResult(@Nullable String expected) {
+      TestContext ctx = run();
+      assertJson(ctx.stringValue).isSimilarTo(expected);
       return this;
     }
 
@@ -1166,7 +1273,7 @@ public class MeasureUpdateFormulaFactoryImplTest {
       List<Metric> deps = new LinkedList<>(formula.getDependentMetrics());
       deps.add(formula.getMetric());
       deps.addAll(initialValues.values.keySet());
-      deps.addAll(initialValues.text.keySet());
+      deps.addAll(initialValues.textValues.keySet());
       TestContext context = new TestContext(deps, initialValues);
       formula.computeHierarchy(context);
       return context;
